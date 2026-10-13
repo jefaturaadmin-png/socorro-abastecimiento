@@ -73,6 +73,7 @@ legend { padding: 0; margin-bottom: 8px }
 .resultados button:first-child { border-top: 0 }
 .resultados button:hover, .resultados button:focus-visible { background: var(--accent-soft) }
 .resultados code { color: var(--muted); font-size: 13px; min-width: 52px }
+.resultados small { margin-left: auto; padding-left: 8px; font-family: var(--f-mono); font-size: 12px; color: var(--muted); white-space: nowrap }
 .resultados .vacio { padding: 10px 12px; color: var(--muted) }
 
 .sel { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--bg); display: flex; flex-direction: column; gap: 4px }

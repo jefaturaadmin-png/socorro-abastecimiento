@@ -44,6 +44,8 @@ export const MOTIVOS_BLOQUEO = [
   { texto: "No rota en esta farmacia", clase: "m-norota" },
   { texto: "Descontinuado", clase: "m-desc" },
   { texto: "Quiebre de laboratorio", clase: "m-quiebre" },
+  { texto: "Cambio de presentación", clase: "m-sobre" },
+  { texto: "Código duplicado", clase: "m-norota" },
   { texto: "Otro", clase: "m-otro" }
 ];
 

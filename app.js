@@ -46,7 +46,7 @@ async function cargarCatalogo() {
   try {
     const r = await fetch("catalogo.json", { cache: "no-cache" });
     if (!r.ok) throw new Error();
-    S.catalogo = (await r.json()).map(p => ({ c: String(p.c), n: String(p.n), k: norm(p.c + " " + p.n) }));
+    S.catalogo = (await r.json()).map(p => ({ c: String(p.c), n: String(p.n), l: String(p.l || ""), k: norm(p.c + " " + p.n + " " + (p.l || "")) }));
     S.catIdx = new Map(S.catalogo.map(p => [p.c, p]));
   } catch {
     const a = $("avisoGlobal"); a.hidden = false;
@@ -166,7 +166,7 @@ function pintarSel(pre) {
   if (!p) { box.hidden = true; btn.disabled = true; return; }
   const farm = farmDeForm(pre), b = estadoEn(p.c, farm);
   box.hidden = false;
-  box.innerHTML = `<span class="cod">${esc(p.c)}</span><b>${esc(p.n)}</b>` +
+  box.innerHTML = `<span class="cod">${esc(p.c)}${p.l ? " · Lab. " + esc(p.l) : ""}</span><b>${esc(p.n)}</b>` +
     (b ? `<span class="est mal">Ya está bloqueado${b.farmacia === "TODAS" ? " en todas las farmacias" : ""}: ${esc(b.motivo)}</span>`
        : `<span class="est ok">Se abastece a ${esc(corto(farm))}</span>`);
   btn.disabled = !!b;
@@ -178,7 +178,7 @@ function cablearBuscador(pre) {
     const r = buscarCat(inp.value);
     res.hidden = !inp.value.trim();
     res.innerHTML = r.length
-      ? r.map(p => `<button type="button" data-c="${esc(p.c)}"><code>${esc(p.c)}</code><span>${esc(p.n)}</span></button>`).join("")
+      ? r.map(p => `<button type="button" data-c="${esc(p.c)}"><code>${esc(p.c)}</code><span>${esc(p.n)}</span><small>${esc(p.l)}</small></button>`).join("")
       : `<div class="vacio">Ningún producto coincide.</div>`;
   });
   inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); res.querySelector("button")?.click(); } if (e.key === "Escape") res.hidden = true; });
@@ -202,12 +202,12 @@ async function enviarBloqueo(e) {
   const ahora = serverTimestamp(), quien = { porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario };
   const lote = writeBatch(db);
   lote.set(doc(db, "bloqueos", `${farm}__${p.c}`), {
-    farmacia: farm, codpro: p.c, producto: p.n, estado: "bloqueado",
+    farmacia: farm, codpro: p.c, producto: p.n, laboratorio: p.l || "", estado: "bloqueado",
     alcance: farm === "TODAS" ? "todas" : "farmacia",
     motivo, comentario, revisar, desde: ahora, solicitud: null, ...quien
   });
   lote.set(doc(collection(db, "historial")), {
-    farmacia: farm, codpro: p.c, producto: p.n, tipo: "bloqueo", motivo, comentario, fecha: ahora, ...quien
+    farmacia: farm, codpro: p.c, producto: p.n, laboratorio: p.l || "", tipo: "bloqueo", motivo, comentario, fecha: ahora, ...quien
   });
   $(pre + "Btn").disabled = true;
   try {
@@ -232,12 +232,12 @@ function etiquetaSolicitud(d) {
 function pintarQuimico() {
   const q = norm($("qFil").value).trim();
   const lista = [...S.bloqueos.values()].filter(d => d.estado === "bloqueado")
-    .filter(d => !q || q.split(/\s+/).every(w => norm(d.codpro + " " + d.producto).includes(w)))
+    .filter(d => !q || q.split(/\s+/).every(w => norm(d.codpro + " " + d.producto + " " + (d.laboratorio || "")).includes(w)))
     .sort((a, b) => (aFecha(b.desde) || 0) - (aFecha(a.desde) || 0));
   $("qCount").textContent = [...S.bloqueos.values()].filter(d => d.estado === "bloqueado").length;
   $("qTabla").innerHTML = `<thead><tr><th>Producto</th><th>Motivo</th><th>Desde</th><th class="der">Acción</th></tr></thead><tbody>` +
     (lista.length ? lista.map(d => `<tr>
-      <td class="p"><b>${esc(d.producto)}</b><code>${esc(d.codpro)} · por ${esc(d.porNombre)}</code></td>
+      <td class="p"><b>${esc(d.producto)}</b><code>${esc(d.codpro)}${d.laboratorio ? " · " + esc(d.laboratorio) : ""} · por ${esc(d.porNombre)}</code></td>
       <td>${tagMotivo(d.motivo, d.farmacia === "TODAS" ? " · todas" : "")} ${etiquetaSolicitud(d)}</td>
       <td class="f">${fmtF(d.desde)}</td>
       <td class="der"><button class="btn sm" type="button" data-ficha="${esc(d.id)}">${d.farmacia === "TODAS" ? "Ver" : (d.solicitud?.estado === "pendiente" ? "Ver solicitud" : "Pedir reactivación")}</button></td>
@@ -246,7 +246,7 @@ function pintarQuimico() {
 $("qTabla").addEventListener("click", e => { const b = e.target.closest("[data-ficha]"); if (b) abrirFicha(b.dataset.ficha); });
 
 /* ===================== vista admin ===================== */
-["aMot", "aEst", "aQ"].forEach(id => $(id).addEventListener("input", () => { S.af.motivo = $("aMot").value; S.af.estado = $("aEst").value; S.af.q = $("aQ").value; pintarAdmin(); }));
+["aMot", "aEst", "aQ", "aLab"].forEach(id => $(id).addEventListener("input", () => { S.af.motivo = $("aMot").value; S.af.estado = $("aEst").value; S.af.q = $("aQ").value; S.af.lab = $("aLab").value; pintarAdmin(); }));
 $("aChips").addEventListener("click", e => { const b = e.target.closest("[data-farm]"); if (b) { S.af.farm = b.dataset.farm; pintarAdmin(); } });
 
 function pintarAdmin() {
@@ -274,20 +274,25 @@ function pintarAdmin() {
   $("aChips").innerHTML = [["", "Todas", act.length], ["TODAS", "Bloqueo general", cuenta("TODAS")], ...FARMACIAS.map(f => [f, corto(f), cuenta(f)])]
     .map(([v, t, n]) => `<button type="button" data-farm="${esc(v)}" aria-pressed="${S.af.farm === v}">${esc(t)}<span>${n}</span></button>`).join("");
 
+  // laboratorios presentes en los bloqueos
+  const labs = [...new Set(todos.map(d => d.laboratorio).filter(Boolean))].sort();
+  $("aLab").innerHTML = `<option value="">Todos</option>` + labs.map(l => `<option ${l === S.af.lab ? "selected" : ""}>${esc(l)}</option>`).join("");
+
   // tabla
   const q = norm(S.af.q).trim();
   const lista = todos
     .filter(d => !S.af.farm || d.farmacia === S.af.farm)
+    .filter(d => !S.af.lab || d.laboratorio === S.af.lab)
     .filter(d => !S.af.estado || d.estado === S.af.estado)
     .filter(d => !S.af.motivo || d.motivo === S.af.motivo)
-    .filter(d => !q || q.split(/\s+/).every(w => norm(d.codpro + " " + d.producto).includes(w)))
+    .filter(d => !q || q.split(/\s+/).every(w => norm(d.codpro + " " + d.producto + " " + (d.laboratorio || "")).includes(w)))
     .sort((a, b) => (aFecha(b.desde) || 0) - (aFecha(a.desde) || 0));
   $("aTit").textContent = (S.af.farm ? corto(S.af.farm) : "Todas las farmacias") + ` · ${lista.length}`;
   $("aTabla").innerHTML = `<thead><tr><th>Producto</th><th>Farmacia</th><th>Motivo</th><th>Por</th><th>Desde</th><th>Revisar</th></tr></thead><tbody>` +
     (lista.length ? lista.map(d => {
       const vencida = d.estado === "bloqueado" && d.revisar && d.revisar <= hoy;
       return `<tr class="clic ${vencida ? "revisar" : ""}" data-ficha="${esc(d.id)}" tabindex="0">
-        <td class="p"><b>${esc(d.producto)}</b><code>${esc(d.codpro)}</code></td>
+        <td class="p"><b>${esc(d.producto)}</b><code>${esc(d.codpro)}${d.laboratorio ? " · " + esc(d.laboratorio) : ""}</code></td>
         <td>${esc(corto(d.farmacia))}</td>
         <td>${d.estado === "activo" ? `<span class="tag t-ok">Reactivado</span>` : tagMotivo(d.motivo)} ${d.estado === "bloqueado" ? etiquetaSolicitud(d) : ""}</td>
         <td>${esc(d.porNombre)}</td>
@@ -348,7 +353,7 @@ async function cargarHistorial() {
 function pintarFicha() {
   const d = S.bloqueos.get(S.ficha); if (!d) return;
   $("fVolver").textContent = "← Volver";
-  $("fEyebrow").innerHTML = `<code>${esc(d.codpro)}</code> · ${esc(corto(d.farmacia))}`;
+  $("fEyebrow").innerHTML = `<code>${esc(d.codpro)}</code>${d.laboratorio ? " · Lab. " + esc(d.laboratorio) : ""} · ${esc(corto(d.farmacia))}`;
   $("fTitulo").textContent = d.producto;
   $("fEstado").innerHTML = d.estado === "bloqueado"
     ? `<span class="estado ${claseMotivo(d.motivo)}">Bloqueado desde el ${fmtF(d.desde)}</span>`
@@ -449,8 +454,8 @@ $("fUsr").addEventListener("submit", async e => {
 $("aCsv").addEventListener("click", () => {
   const filas = [...S.bloqueos.values()].filter(d => d.estado === "bloqueado");
   const c = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const csv = ["farmacia,codpro,producto,motivo,alcance,desde,por,revisar,solicitud",
-    ...filas.map(d => [d.farmacia, d.codpro, d.producto, d.motivo, d.alcance, fmtF(d.desde), d.porNombre, d.revisar || "", d.solicitud?.estado || ""].map(c).join(","))].join("\n");
+  const csv = ["farmacia,codpro,producto,laboratorio,motivo,alcance,desde,por,revisar,solicitud",
+    ...filas.map(d => [d.farmacia, d.codpro, d.producto, d.laboratorio || "", d.motivo, d.alcance, fmtF(d.desde), d.porNombre, d.revisar || "", d.solicitud?.estado || ""].map(c).join(","))].join("\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
   a.download = `bloqueos_${hoyISO()}.csv`; a.click();
