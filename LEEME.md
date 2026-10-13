@@ -36,3 +36,7 @@ Cada químico bloquea los productos que no se deben abastecer a su farmacia y, s
 ## Actualizar el catálogo
 
 Cuando haya productos nuevos, vuelve a correr la celda de Colab que genera `catalogo.json` y súbelo al repositorio reemplazando el anterior.
+
+## Al publicar cambios
+
+En `index.html` los archivos llevan `?v=AAAAMMDDHHMM` (y `app.js` también al importar `config.js`). Cambia ese número en cada publicación para que los navegadores descarguen los archivos nuevos en vez de usar los guardados.

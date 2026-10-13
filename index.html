@@ -6,7 +6,7 @@
 <title>Socorro · Abastecimiento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=202610132140">
 </head>
 <body>
 
@@ -27,7 +27,7 @@
     <div class="marca"><b>Socorro</b><span>Abastecimiento</span></div>
     <nav class="nav" id="nav" aria-label="Secciones"></nav>
     <div class="quien">
-      <span class="avatar" aria-hidden="true"><svg><use href="#i-usuario"/></svg></span>
+      <span class="avatar" aria-hidden="true"><svg width="18" height="18"><use href="#i-usuario"/></svg></span>
       <div><b id="uNombre"></b><small id="uRol"></small></div>
       <button class="btn" id="salir" type="button">Salir</button>
     </div>
@@ -61,19 +61,19 @@
         <h1>Bloqueos de abastecimiento</h1>
         <p class="muted">Mientras un producto esté bloqueado no se incluirá en las entregas a tu farmacia. Para volver a abastecerlo, pide la reactivación.</p>
       </div>
-      <span class="farm-pill"><svg><use href="#i-tienda"/></svg><span id="qFarm"></span></span>
+      <span class="farm-pill"><svg width="18" height="18"><use href="#i-tienda"/></svg><span id="qFarm"></span></span>
     </div>
     <div class="wrap cuerpo">
       <div class="grid-q">
         <form class="card bloque" id="bqForm" data-pre="bq">
-          <h2><svg><use href="#i-candado"/></svg>Bloquear nuevo producto</h2>
+          <h2><svg width="18" height="18"><use href="#i-candado"/></svg>Bloquear nuevo producto</h2>
           <div class="bq-top">
             <div class="col">
               <div class="campo buscador">
                 <label for="bqBus" class="sr">Producto</label>
                 <div class="con-icono">
                   <input id="bqBus" type="search" autocomplete="off" placeholder="Ej. 26375, provita o ABBO">
-                  <svg><use href="#i-buscar"/></svg>
+                  <svg width="18" height="18"><use href="#i-buscar"/></svg>
                 </div>
                 <div class="resultados" id="bqRes" hidden></div>
               </div>
@@ -87,20 +87,20 @@
         </form>
 
         <aside class="card resumen">
-          <h2><svg><use href="#i-grafico"/></svg>Estado rápido</h2>
+          <h2><svg width="18" height="18"><use href="#i-grafico"/></svg>Estado rápido</h2>
           <ul class="estados">
             <li><i class="pt rojo">!</i>Bloqueados activos: <b id="qK1">0</b></li>
             <li><i class="pt ambar">!</i>Reactivaciones pendientes: <b id="qK2">0</b></li>
             <li><i class="pt gris">!</i>Reactivaciones rechazadas: <b id="qK3">0</b></li>
           </ul>
-          <button class="btn ancho" id="qCsv" type="button"><svg><use href="#i-bajar"/></svg>Exportar reporte</button>
+          <button class="btn ancho" id="qCsv" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Exportar reporte</button>
         </aside>
       </div>
 
       <section class="card lista">
         <div class="lh">
-          <h2><svg><use href="#i-lista"/></svg>Productos bloqueados actualmente <span class="num" id="qCount"></span></h2>
-          <label class="con-icono busca-tabla"><span class="sr">Filtrar</span><input id="qFil" type="search" placeholder="Buscar en la tabla…"><svg><use href="#i-buscar"/></svg></label>
+          <h2><svg width="18" height="18"><use href="#i-lista"/></svg>Productos bloqueados actualmente <span class="num" id="qCount"></span></h2>
+          <label class="con-icono busca-tabla"><span class="sr">Filtrar</span><input id="qFil" type="search" placeholder="Buscar en la tabla…"><svg width="18" height="18"><use href="#i-buscar"/></svg></label>
         </div>
         <div class="tabla-wrap"><table class="tabla" id="qTabla"></table></div>
       </section>
@@ -129,13 +129,13 @@
       </section>
 
       <form class="card bloque" id="abForm" data-pre="ab">
-        <h2><svg><use href="#i-candado"/></svg>Bloquear producto</h2>
+        <h2><svg width="18" height="18"><use href="#i-candado"/></svg>Bloquear producto</h2>
         <div class="bloque-grid">
           <div class="col">
             <div class="campo"><label for="abFarm">Farmacia</label><select id="abFarm"></select></div>
             <div class="campo buscador">
               <label for="abBus">Producto (código, nombre o laboratorio)</label>
-              <div class="con-icono"><input id="abBus" type="search" autocomplete="off" placeholder="Ej. 26375, provita o ABBO"><svg><use href="#i-buscar"/></svg></div>
+              <div class="con-icono"><input id="abBus" type="search" autocomplete="off" placeholder="Ej. 26375, provita o ABBO"><svg width="18" height="18"><use href="#i-buscar"/></svg></div>
               <div class="resultados" id="abRes" hidden></div>
             </div>
             <div class="sel" id="abSel" hidden></div>
@@ -159,7 +159,7 @@
             <label class="filtro">Motivo <select id="aMot"><option value="">Todos</option></select></label>
             <label class="filtro">Estado <select id="aEst"><option value="bloqueado">Bloqueados</option><option value="activo">Reactivados</option><option value="">Todos</option></select></label>
             <label class="filtro">Buscar <input id="aQ" type="search" placeholder="Código o nombre"></label>
-            <button class="btn" id="aCsv" type="button"><svg><use href="#i-bajar"/></svg>Descargar CSV</button>
+            <button class="btn" id="aCsv" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar CSV</button>
           </div>
         </div>
         <div class="tabla-wrap"><table class="tabla" id="aTabla"></table></div>
@@ -177,7 +177,7 @@
     </div>
     <div class="wrap cuerpo">
       <form class="card bloque" id="fUsr">
-        <h2><svg><use href="#i-usuario"/></svg>Crear usuario</h2>
+        <h2><svg width="18" height="18"><use href="#i-usuario"/></svg>Crear usuario</h2>
         <div class="bloque-grid">
           <div class="col">
             <div class="campo"><label for="uUsr">Usuario</label><input id="uUsr" required pattern="[a-z0-9._-]{3,30}" placeholder="ej. mercado"><small class="ayuda">Minúsculas, sin espacios. Es lo que escribirá para ingresar.</small></div>
@@ -225,6 +225,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js"></script>
+<script type="module" src="app.js?v=202610132140"></script>
 </body>
 </html>
