@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Socorro · Abastecimiento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="top" id="top" hidden>
+  <div class="wrap top-in">
+    <div class="marca"><i></i>Socorro · Abastecimiento</div>
+    <nav class="nav" id="nav" aria-label="Secciones"></nav>
+    <div class="quien">
+      <div><b id="uNombre"></b><small id="uRol"></small></div>
+      <button class="btn" id="salir" type="button">Salir</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="aviso error" id="avisoGlobal" hidden></div>
+
+  <!-- ============ INGRESO ============ -->
+  <section id="vLogin" class="login" hidden>
+    <form class="card login-card" id="fLogin">
+      <div class="marca grande"><i></i>Socorro · Abastecimiento</div>
+      <p class="lead">Ingresa con el usuario y contraseña que te dio Abastecimiento.</p>
+      <div class="campo"><label for="lUser">Usuario</label><input id="lUser" autocomplete="username" required></div>
+      <div class="campo"><label for="lPass">Contraseña</label><input id="lPass" type="password" autocomplete="current-password" required></div>
+      <div class="msg error" id="lErr" hidden></div>
+      <button class="btn primario" type="submit" id="lBtn">Ingresar</button>
+    </form>
+  </section>
+
+  <!-- ============ QUÍMICO ============ -->
+  <section id="vQuimico" hidden>
+    <div class="head">
+      <div>
+        <div class="eyebrow" id="qFarm"></div>
+        <h1>Productos que no se abastecen a esta farmacia</h1>
+        <p class="lead">Mientras un producto esté bloqueado, la droguería no lo incluirá en las entregas a tu farmacia. Para volver a abastecerlo, pide la reactivación: la aprueba Abastecimiento.</p>
+      </div>
+    </div>
+    <div class="cols">
+      <form class="card form" id="bqForm" data-pre="bq">
+        <h2>Bloquear un producto</h2>
+        <div class="campo buscador">
+          <label for="bqBus">Producto (código o nombre)</label>
+          <input id="bqBus" type="search" autocomplete="off" placeholder="Ej. 26375 o provita">
+          <div class="resultados" id="bqRes" hidden></div>
+        </div>
+        <div class="sel" id="bqSel" hidden></div>
+        <fieldset><legend>Motivo</legend><div class="pills" id="bqMot"></div></fieldset>
+        <div class="campo"><label for="bqCom">Comentario (opcional)</label><textarea id="bqCom" rows="3"></textarea></div>
+        <div class="campo"><label for="bqRev">Revisar de nuevo el (opcional)</label><input id="bqRev" type="date"></div>
+        <div class="msg" id="bqMsg" hidden></div>
+        <button class="btn primario" type="submit" id="bqBtn" disabled>Bloquear en mi farmacia</button>
+      </form>
+
+      <section class="card lista">
+        <div class="lh">
+          <h2>Bloqueados ahora <span class="num" id="qCount"></span></h2>
+          <label class="filtro">Filtrar <input id="qFil" type="search" placeholder="Código o nombre"></label>
+        </div>
+        <div class="tabla-wrap"><table class="tabla" id="qTabla"></table></div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ============ ADMIN: PANEL ============ -->
+  <section id="vAdmin" hidden>
+    <div class="head">
+      <div><div class="eyebrow">Todas las farmacias</div><h1>Bloqueos de abastecimiento</h1></div>
+      <button class="btn" id="aCsv" type="button">Descargar bloqueos activos (CSV)</button>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><span>Bloqueos activos</span><b id="k1">–</b><small id="k1s"></small></div>
+      <div class="kpi"><span>Solicitudes por aprobar</span><b id="k2" class="acc">–</b><small>reactivaciones pedidas</small></div>
+      <div class="kpi"><span>Para revisar</span><b id="k3" class="mal">–</b><small>fecha de revisión vencida</small></div>
+      <div class="kpi"><span>Reactivados</span><b id="k4">–</b><small>últimos 30 días</small></div>
+    </div>
+
+    <section class="card" id="aSolCard">
+      <div class="lh"><h2>Solicitudes de reactivación</h2></div>
+      <div id="aSol"></div>
+    </section>
+
+    <div class="cols">
+      <form class="card form" id="abForm" data-pre="ab">
+        <h2>Bloquear producto</h2>
+        <div class="campo"><label for="abFarm">Farmacia</label><select id="abFarm"></select></div>
+        <div class="campo buscador">
+          <label for="abBus">Producto (código o nombre)</label>
+          <input id="abBus" type="search" autocomplete="off">
+          <div class="resultados" id="abRes" hidden></div>
+        </div>
+        <div class="sel" id="abSel" hidden></div>
+        <fieldset><legend>Motivo</legend><div class="pills" id="abMot"></div></fieldset>
+        <div class="campo"><label for="abCom">Comentario (opcional)</label><textarea id="abCom" rows="2"></textarea></div>
+        <div class="campo"><label for="abRev">Revisar de nuevo el (opcional)</label><input id="abRev" type="date"></div>
+        <div class="msg" id="abMsg" hidden></div>
+        <button class="btn primario" type="submit" id="abBtn" disabled>Bloquear</button>
+      </form>
+
+      <section class="card lista">
+        <div class="chips" id="aChips"></div>
+        <div class="lh">
+          <h2 id="aTit">Bloqueos</h2>
+          <div class="filtros">
+            <label class="filtro">Motivo <select id="aMot"><option value="">Todos</option></select></label>
+            <label class="filtro">Estado <select id="aEst"><option value="bloqueado">Bloqueados</option><option value="activo">Reactivados</option><option value="">Todos</option></select></label>
+            <label class="filtro">Buscar <input id="aQ" type="search" placeholder="Código o nombre"></label>
+          </div>
+        </div>
+        <div class="tabla-wrap"><table class="tabla" id="aTabla"></table></div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ============ ADMIN: USUARIOS ============ -->
+  <section id="vUsuarios" hidden>
+    <div class="head"><div><div class="eyebrow">Administración</div><h1>Usuarios</h1></div></div>
+    <div class="cols">
+      <form class="card form" id="fUsr">
+        <h2>Crear usuario</h2>
+        <div class="campo"><label for="uUsr">Usuario</label><input id="uUsr" required pattern="[a-z0-9._-]{3,30}" placeholder="ej. mercado"><small class="ayuda">Minúsculas, sin espacios. Es lo que escribirá para ingresar.</small></div>
+        <div class="campo"><label for="uNom">Nombre</label><input id="uNom" required placeholder="Q.F. Nombre Apellido"></div>
+        <div class="campo"><label for="uRolSel">Rol</label><select id="uRolSel"><option value="quimico">Químico de farmacia</option><option value="admin">Administrador (abastecimiento)</option></select></div>
+        <div class="campo"><label for="uFarm">Farmacia</label><select id="uFarm"></select></div>
+        <div class="campo"><label for="uPass">Contraseña inicial</label><input id="uPass" required minlength="6"><small class="ayuda">Mínimo 6 caracteres. Entrégasela al químico.</small></div>
+        <div class="msg" id="uMsg" hidden></div>
+        <button class="btn primario" type="submit" id="uBtn">Crear usuario</button>
+      </form>
+      <section class="card lista">
+        <div class="lh"><h2>Usuarios registrados</h2></div>
+        <div class="tabla-wrap"><table class="tabla" id="uTabla"></table></div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ============ FICHA DE PRODUCTO ============ -->
+  <section id="vFicha" hidden>
+    <div class="head">
+      <div>
+        <button class="volver" id="fVolver" type="button">← Volver</button>
+        <div class="eyebrow" id="fEyebrow"></div>
+        <h1 id="fTitulo"></h1>
+      </div>
+      <div id="fEstado"></div>
+    </div>
+    <div class="cols">
+      <section class="card form">
+        <h2>Historial en esta farmacia</h2>
+        <div id="fHist"><p class="muted">Cargando…</p></div>
+        <p class="nota">Nada se borra: cada bloqueo, solicitud y reactivación queda con fecha, motivo y quién lo hizo.</p>
+      </section>
+      <section class="card form accion" id="fAccion"></section>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

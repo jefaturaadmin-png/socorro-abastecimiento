@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- quién es el usuario ----------
+    function perfil() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+    function conPerfil() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && perfil().get('activo', true) == true;
+    }
+    function esAdmin()    { return conPerfil() && perfil().rol == 'admin'; }
+    function esQuimico()  { return conPerfil() && perfil().rol == 'quimico'; }
+    function miFarmacia() { return perfil().farmacia; }
+
+    // ---------- usuarios: solo el administrador los crea o cambia ----------
+    match /usuarios/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || esAdmin());
+      allow write: if esAdmin();
+    }
+
+    // ---------- estado actual de cada producto en cada farmacia ----------
+    // id del documento: "<FARMACIA>__<codpro>"  (o "TODAS__<codpro>")
+    match /bloqueos/{id} {
+
+      // El químico solo crea bloqueos de SU farmacia, a su nombre.
+      function nuevoBloqueoQuimico() {
+        let d = request.resource.data;
+        return d.farmacia == miFarmacia()
+          && id == miFarmacia() + '__' + d.codpro
+          && d.estado == 'bloqueado'
+          && d.alcance == 'farmacia'
+          && d.porUid == request.auth.uid;
+      }
+
+      // El químico solo puede agregar una solicitud de reactivación pendiente.
+      function soloSolicitud() {
+        let s = request.resource.data.solicitud;
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['solicitud'])
+          && s.estado == 'pendiente'
+          && s.porUid == request.auth.uid;
+      }
+
+      allow read: if esAdmin()
+        || (esQuimico() && (resource.data.farmacia == miFarmacia() || resource.data.farmacia == 'TODAS'));
+
+      allow create: if esAdmin() || (esQuimico() && nuevoBloqueoQuimico());
+
+      // Reactivar (estado -> activo) solo lo hace el administrador.
+      allow update: if esAdmin()
+        || (esQuimico() && resource.data.farmacia == miFarmacia() && (
+              (resource.data.estado == 'activo' && nuevoBloqueoQuimico())
+           || (resource.data.estado == 'bloqueado' && soloSolicitud())
+           ));
+
+      allow delete: if false;   // nada se borra
+    }
+
+    // ---------- historial: solo se agrega, nunca se cambia ni se borra ----------
+    match /historial/{id} {
+      allow read: if esAdmin()
+        || (esQuimico() && (resource.data.farmacia == miFarmacia() || resource.data.farmacia == 'TODAS'));
+
+      allow create: if (esAdmin() && request.resource.data.porUid == request.auth.uid)
+        || (esQuimico()
+            && request.resource.data.porUid == request.auth.uid
+            && request.resource.data.farmacia == miFarmacia()
+            && request.resource.data.tipo in ['bloqueo', 'solicitud']);
+
+      allow update, delete: if false;
+    }
+  }
+}
