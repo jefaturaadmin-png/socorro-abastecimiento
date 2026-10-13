@@ -198,7 +198,7 @@ async function enviarBloqueo(e) {
   if (!p) return msg(pre + "Msg", "Elige un producto.", true);
   if (!motivo) return msg(pre + "Msg", "Elige el motivo del bloqueo.", true);
   if (estadoEn(p.c, farm)) return msg(pre + "Msg", "Ese producto ya está bloqueado.", true);
-  const comentario = $(pre + "Com").value.trim(), revisar = $(pre + "Rev").value || null;
+  const comentario = $(pre + "Com").value.trim(), revisar = $(pre + "Rev")?.value || null;
   const ahora = serverTimestamp(), quien = { porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario };
   const lote = writeBatch(db);
   lote.set(doc(db, "bloqueos", `${farm}__${p.c}`), {
@@ -213,7 +213,7 @@ async function enviarBloqueo(e) {
   try {
     await lote.commit();
     toast(`${p.n} bloqueado en ${corto(farm)}`);
-    S.sel[pre] = null; $(pre + "Com").value = ""; $(pre + "Rev").value = "";
+    S.sel[pre] = null; $(pre + "Com").value = ""; if ($(pre + "Rev")) $(pre + "Rev").value = "";
     document.querySelectorAll(`input[name="${pre}Motivo"]`).forEach(r => r.checked = false);
     msg(pre + "Msg", ""); pintarSel(pre);
   } catch (err) { msg(pre + "Msg", textoError(err), true); pintarSel(pre); }
