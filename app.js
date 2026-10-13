@@ -6,7 +6,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, onSnapshot, query, where,
   serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610132300";
+import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610132330";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -233,7 +233,18 @@ function cablearBuscador(pre) {
       : `<div class="vacio">Ningún producto coincide.</div>`) +
       `<button type="button" class="agregar" data-manual>+ Agregar producto que no está en la lista</button>`;
   });
-  inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); res.querySelector("button")?.click(); } if (e.key === "Escape") res.hidden = true; });
+  // Flechas ↑/↓ recorren los resultados; Enter elige el marcado (o el primero); Esc cierra.
+  inp.addEventListener("keydown", e => {
+    const ops = [...res.querySelectorAll("button")];
+    let i = ops.findIndex(b => b.classList.contains("activo"));
+    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !res.hidden && ops.length) {
+      e.preventDefault();
+      i = e.key === "ArrowDown" ? (i + 1) % ops.length : (i <= 0 ? ops.length - 1 : i - 1);
+      ops.forEach((b, k) => b.classList.toggle("activo", k === i));
+      ops[i].scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter") { e.preventDefault(); if (!res.hidden) (ops[i] || ops[0])?.click(); }
+    else if (e.key === "Escape") res.hidden = true;
+  });
   res.addEventListener("click", e => {
     if (e.target.closest("[data-manual]")) {
       const t = inp.value.trim(), esCod = /^\d+$/.test(t);

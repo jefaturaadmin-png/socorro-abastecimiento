@@ -113,7 +113,8 @@ legend { padding: 0; margin-bottom: 8px }
 
 .resultados { border: 1px solid var(--line); border-radius: 10px; background: #fff; max-height: 300px; overflow-y: auto; box-shadow: 0 12px 28px rgba(31,26,23,.12); position: absolute; top: 100%; left: 0; right: 0; z-index: 10; margin-top: 4px; padding: 4px }
 .resultados button { display: flex; gap: 10px; width: 100%; text-align: left; font: inherit; font-size: 13.5px; background: none; border: 0; border-radius: 6px; padding: 9px 10px; cursor: pointer; color: var(--fg) }
-.resultados button:hover, .resultados button:focus-visible { background: var(--brand-soft) }
+.resultados button:hover, .resultados button:focus-visible, .resultados button.activo { background: var(--brand-soft) }
+.resultados button.activo { box-shadow: inset 3px 0 0 var(--brand) }
 .resultados code { color: var(--fg-2); min-width: 48px }
 .resultados small { margin-left: auto; padding-left: 8px; font-size: 11.5px; font-weight: 600; color: var(--muted); white-space: nowrap }
 .resultados .vacio { padding: 10px; color: var(--muted) }
