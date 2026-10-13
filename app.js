@@ -6,7 +6,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where,
   serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610140200";
+import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610140300";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -19,7 +19,10 @@ const hoyISO = () => new Date().toISOString().slice(0, 10);
 const aFecha = v => v?.toDate ? v.toDate() : (typeof v === "string" && v ? new Date(v + "T12:00:00") : null);
 const fmtF = v => { const d = aFecha(v); return d ? d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "–"; };
 const fmtFH = v => { const d = aFecha(v); return d ? d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) + "<br>" + d.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" }) : "ahora"; };
-const nombreFarm = f => "Sucursal " + String(f || "").replace(/^ALMACEN /, "").toLowerCase().replace(/(^|[\s.])\p{L}/gu, c => c.toUpperCase());
+// "ALMACEN HUANCAS" -> "Sucursal Huancas"; los que no son almacén (DROGUERIA FS) se muestran tal cual.
+const nombreFarm = f => /^ALMACEN /.test(f || "")
+  ? "Sucursal " + f.replace(/^ALMACEN /, "").toLowerCase().replace(/(^|[\s.])\p{L}/gu, c => c.toUpperCase())
+  : String(f || "");
 const corto = f => f === "TODAS" ? "Todas las farmacias" : f.replace(/^ALMACEN /, "");
 // Productos fuera del catálogo sin código: se guardan con una clave "SC-NOMBRE".
 const SIN_COD = "SC-";
@@ -553,6 +556,53 @@ $("uTabla").addEventListener("click", async e => {
 });
 // Contraseña inicial fácil de dictar: Socorro + 4 números (la cambian en su primer ingreso).
 $("uGen").addEventListener("click", () => { $("uPass").value = "Socorro" + String(crypto.getRandomValues(new Uint32Array(1))[0] % 9000 + 1000); });
+/* ----- crear varios usuarios: una línea por usuario "usuario - ALMACEN - contraseña" ----- */
+function leerLote() {
+  const existentes = new Set(S.usuarios.map(u => u.usuario)), vistos = new Set();
+  return $("lTxt").value.split(/\n/).map(l => l.trim()).filter(Boolean).map(linea => {
+    const [u = "", f = "", c = ""] = linea.split(/\s*[,;\t|]\s*|\s+-\s+/);
+    const usuario = u.toLowerCase(), F = f.trim().toUpperCase().replace(/\s+/g, " ");
+    const farmacia = FARMACIAS.find(x => x === F || x === "ALMACEN " + F) || "";
+    const problema = !/^[a-z0-9._-]{3,30}$/.test(usuario) ? "Usuario inválido (3 a 30 letras o números, sin espacios)"
+      : !farmacia ? `Sucursal no reconocida: "${f}"`
+      : c.length < 6 ? "La contraseña debe tener al menos 6 caracteres"
+      : existentes.has(usuario) ? "Ya existe"
+      : vistos.has(usuario) ? "Repetido en la lista" : "";
+    vistos.add(usuario);
+    return { usuario, farmacia, clave: c, estado: problema || "Listo para crear", ok: !problema };
+  });
+}
+function pintarLote(filas) {
+  $("lTabla").innerHTML = `<thead><tr><th>Usuario</th><th>Sucursal</th><th>Contraseña inicial</th><th>Estado</th></tr></thead><tbody>` +
+    filas.map(f => `<tr><td class="f">${esc(f.usuario)}</td><td>${esc(f.farmacia ? corto(f.farmacia) : "–")}</td><td class="f">${esc(f.clave)}</td>
+      <td><span class="tag ${f.creado ? "t-ok" : f.ok ? "t-pend" : "t-rech"}">${esc(f.estado)}</span></td></tr>`).join("") + "</tbody>";
+  const n = filas.filter(f => f.ok && !f.creado).length;
+  $("lCrear").hidden = !n; $("lCrear").textContent = `Crear ${n} usuario${n === 1 ? "" : "s"}`;
+}
+$("lRevisar").addEventListener("click", () => { S.lote = leerLote(); pintarLote(S.lote); msg("lMsg", S.lote.length ? "" : "Pega la lista primero.", !S.lote.length); });
+$("lCrear").addEventListener("click", async () => {
+  const filas = (S.lote || []).filter(f => f.ok && !f.creado); if (!filas.length) return;
+  $("lCrear").disabled = $("lRevisar").disabled = true;
+  // Una segunda conexión crea los usuarios sin cerrar tu sesión.
+  const app2 = initializeApp(firebaseConfig, "lote-" + Date.now()), auth2 = getAuth(app2);
+  let hechos = 0;
+  for (const f of filas) {
+    f.estado = "Creando…"; pintarLote(S.lote);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth2, `${f.usuario}@${DOMINIO}`, f.clave);
+      await setDoc(doc(db, "usuarios", cred.user.uid), { usuario: f.usuario, nombre: "", rol: "quimico", farmacia: f.farmacia, activo: true, cambiarClave: true });
+      f.creado = true; f.estado = "Creado"; hechos++;
+    } catch (err) {
+      f.ok = false;
+      f.estado = err?.code === "auth/email-already-in-use" ? "Ya existe en Authentication" : textoError(err);
+    }
+  }
+  await signOut(auth2).catch(() => {});
+  pintarLote(S.lote);
+  msg("lMsg", `Se crearon ${hechos} de ${filas.length} usuarios.` + (hechos < filas.length ? " Revisa los que quedaron en rojo." : " Entrega a cada una su usuario y contraseña inicial."), hechos < filas.length);
+  $("lCrear").disabled = $("lRevisar").disabled = false;
+});
+
 $("fUsr").addEventListener("submit", async e => {
   e.preventDefault();
   const usuario = $("uUsr").value.trim().toLowerCase(), rol = $("uRolSel").value;

@@ -33,7 +33,8 @@ export const FARMACIAS = [
   "ALMACEN PIOPATA",
   "ALMACEN CONCEPCION",
   "ALMACEN LIBERTAD",
-  "ALMACEN ANDALUZ"
+  "ALMACEN ANDALUZ",
+  "DROGUERIA FS"
 ];
 
 // Motivos para bloquear. "clase" define el color de la etiqueta.

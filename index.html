@@ -6,7 +6,7 @@
 <title>Socorro · Abastecimiento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610140200">
+<link rel="stylesheet" href="styles.css?v=202610140300">
 </head>
 <body>
 
@@ -213,6 +213,14 @@
           </div>
         </div>
       </form>
+      <section class="card bloque" id="lCard">
+        <h2><svg width="18" height="18"><use href="#i-lista"/></svg>Crear varios usuarios</h2>
+        <p class="muted" style="margin:0">Pega una línea por químico: <b>usuario - sucursal - contraseña inicial</b>. Ej.: <code>mily - ALMACEN HUANCAS - Socorro1234</code>. Pulsa <b>Revisar</b>, comprueba la tabla y luego <b>Crear</b>.</p>
+        <div class="campo"><label for="lTxt" class="sr">Lista de usuarios</label><textarea id="lTxt" rows="8" spellcheck="false" placeholder="mily - ALMACEN HUANCAS - Socorro1234"></textarea></div>
+        <div class="fila"><button class="btn" type="button" id="lRevisar">Revisar</button><button class="btn primario" type="button" id="lCrear" hidden>Crear</button></div>
+        <div class="msg" id="lMsg" hidden></div>
+        <div class="tabla-wrap"><table class="tabla" id="lTabla"></table></div>
+      </section>
       <section class="card lista">
         <div class="lh"><h2>Usuarios registrados</h2></div>
         <div class="tabla-wrap"><table class="tabla" id="uTabla"></table></div>
@@ -244,6 +252,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610140200"></script>
+<script type="module" src="app.js?v=202610140300"></script>
 </body>
 </html>
