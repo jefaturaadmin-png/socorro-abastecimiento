@@ -175,6 +175,8 @@ legend { padding: 0; margin-bottom: 8px }
 
 /* ---------- ingreso ---------- */
 .login-card { width: min(420px, 100%); margin: -32px auto 64px; padding: 28px; display: flex; flex-direction: column; gap: 16px; position: relative }
+.enlace { background: none; border: 0; padding: 4px 0; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer; text-decoration: underline }
+.enlace:hover { color: var(--brand-deep) }
 
 @media (max-width: 860px) {
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) }

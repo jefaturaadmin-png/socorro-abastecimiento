@@ -2,6 +2,8 @@
 
 Cada químico bloquea los productos que no se deben abastecer a su farmacia y, si cambia la situación, pide la reactivación. Solo el administrador (Abastecimiento) reactiva o rechaza.
 
+**Ingreso de las sucursales (por ahora sin usuario ni contraseña):** al abrir la página cada persona escribe su nombre y elige su sucursal. Eso queda guardado (quién ingresó, de qué sucursal y cuándo) y cada bloqueo o solicitud lleva su nombre. El equipo recuerda el último nombre y sucursal para que solo tenga que confirmar. El administrador sigue entrando con usuario y contraseña desde el enlace *"Soy de Abastecimiento"*.
+
 ## Archivos
 
 | Archivo | Para qué |
@@ -14,8 +16,9 @@ Cada químico bloquea los productos que no se deben abastecer a su farmacia y, s
 ## Puesta en marcha (una sola vez)
 
 1. **Verifica `config.js`**: abre Firebase → ⚙ Configuración del proyecto → Tus apps → `abastecimiento`, copia el bloque `firebaseConfig` y reemplázalo en `config.js` (así te aseguras de que la `apiKey` esté exacta).
-2. **Reglas**: Firebase → Firestore Database → pestaña **Reglas** → borra todo, pega el contenido de `firestore.rules` → **Publicar**.
-3. **Tu usuario administrador** (solo este se crea a mano):
+2. **Activar el ingreso por sucursal**: Firebase → Authentication → **Método de acceso** (Sign-in method) → **Anónimo** → Habilitar → Guardar. Sin esto las sucursales no podrán ingresar.
+3. **Reglas**: Firebase → Firestore Database → pestaña **Reglas** → borra todo, pega el contenido de `firestore.rules` → **Publicar**.
+4. **Tu usuario administrador** (solo este se crea a mano):
    1. Firebase → Authentication → **Usuarios** → **Agregar usuario**: correo `carlos@socorro.app`, una contraseña. Copia el **UID** que aparece.
    2. Firestore Database → **Iniciar colección** → ID `usuarios` → ID del documento: pega el **UID** → campos:
       - `usuario` (string): `carlos`
@@ -23,15 +26,15 @@ Cada químico bloquea los productos que no se deben abastecer a su farmacia y, s
       - `rol` (string): `admin`
       - `farmacia` (string): vacío
       - `activo` (boolean): `true`
-4. **GitHub**: sube todos los archivos (incluido `catalogo.json`) a la raíz del repositorio → Settings → Pages → Branch `main`, carpeta `/ (root)` → Save. En unos minutos tendrás la dirección `https://<tu-usuario>.github.io/<repositorio>/`.
-5. **Dominio autorizado**: Firebase → Authentication → Configuración → **Dominios autorizados** → agrega `<tu-usuario>.github.io`.
-6. Entra a la página con `carlos` y tu contraseña → pestaña **Usuarios** → crea un usuario por farmacia (por ejemplo `mercado`, `tupac`…), elige su farmacia y entrégale su contraseña.
+5. **GitHub**: sube todos los archivos (incluido `catalogo.json`) a la raíz del repositorio → Settings → Pages → Branch `main`, carpeta `/ (root)` → Save. En unos minutos tendrás la dirección `https://<tu-usuario>.github.io/<repositorio>/`.
+6. **Dominio autorizado**: Firebase → Authentication → Configuración → **Dominios autorizados** → agrega `<tu-usuario>.github.io`.
+7. Entra a la página con el enlace *"Soy de Abastecimiento"*, usuario `carlos` y tu contraseña. Las sucursales no necesitan usuario: solo comparte la dirección de la página. En la pestaña **Usuarios** verás quién ingresó y desde qué sucursal (y, si algún día lo necesitas, puedes crear usuarios con contraseña).
 
 ## Uso diario
 
-- **Químico**: busca el producto, elige el motivo y lo bloquea. Para volver a abastecerlo pulsa **Pedir reactivación**.
+- **Químico**: abre la página, escribe su nombre y elige su sucursal → **Ingresar**. Busca el producto, elige el motivo y lo bloquea. Para volver a abastecerlo pulsa **Pedir reactivación**.
 - **Administrador**: en **Bloqueos** ve las solicitudes pendientes (Aprobar / Rechazar), todos los bloqueos con filtros, puede bloquear en una farmacia o en **todas**, y **Descargar bloqueos activos (CSV)** para cruzarlo con la reposición.
-- Si un químico se va: en **Usuarios** pulsa **Deshabilitar**. Para cambiarle la contraseña, bórralo en Authentication y créalo de nuevo con el mismo usuario (su historial se mantiene).
+- Si un químico se va: en **Usuarios** pulsa **Deshabilitar** (para las sucursales sin usuario esto bloquea ese equipo/navegador). Para cambiarle la contraseña, bórralo en Authentication y créalo de nuevo con el mismo usuario (su historial se mantiene).
 
 ## Actualizar el catálogo
 

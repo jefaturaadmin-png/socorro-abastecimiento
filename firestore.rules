@@ -15,10 +15,41 @@ service cloud.firestore {
     function esQuimico()  { return conPerfil() && perfil().rol == 'quimico'; }
     function miFarmacia() { return perfil().farmacia; }
 
-    // ---------- usuarios: solo el administrador los crea o cambia ----------
+    // ---------- ingreso por sucursal (sin usuario ni contraseña) ----------
+    // La persona escribe su nombre y elige su sucursal; entra con una sesión anónima.
+    function esAnonimo() {
+      return request.auth != null && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+    function datosSucursalValidos(d) {
+      return d.nombre is string && d.nombre.size() >= 2 && d.nombre.size() <= 60
+        && d.farmacia is string && d.farmacia.size() > 0 && d.farmacia != 'TODAS';
+    }
+
+    // ---------- usuarios ----------
+    // El administrador crea o cambia cualquiera. Una sesión de sucursal solo crea su propio
+    // perfil de químico y después solo puede cambiar su nombre, sucursal y último ingreso.
     match /usuarios/{uid} {
       allow read: if request.auth != null && (request.auth.uid == uid || esAdmin());
-      allow write: if esAdmin();
+      allow create: if esAdmin()
+        || (esAnonimo() && request.auth.uid == uid
+            && datosSucursalValidos(request.resource.data)
+            && request.resource.data.rol == 'quimico'
+            && request.resource.data.anonimo == true
+            && request.resource.data.activo == true);
+      allow update: if esAdmin()
+        || (esAnonimo() && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nombre', 'farmacia', 'ultimoIngreso'])
+            && datosSucursalValidos(request.resource.data));
+      allow delete: if esAdmin();
+    }
+
+    // ---------- registro de ingresos: solo se agrega ----------
+    match /ingresos/{id} {
+      allow read: if esAdmin();
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && datosSucursalValidos(request.resource.data);
+      allow update, delete: if false;
     }
 
     // ---------- estado actual de cada producto en cada farmacia ----------

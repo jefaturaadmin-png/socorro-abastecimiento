@@ -1,10 +1,10 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
 import {
-  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword
+  getAuth, signInWithEmailAndPassword, signInAnonymously, signOut, onAuthStateChanged, createUserWithEmailAndPassword
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
 import {
-  getFirestore, collection, doc, getDoc, getDocs, setDoc, onSnapshot, query, where,
-  serverTimestamp, writeBatch
+  getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, query, where,
+  orderBy, limit, serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js";
 
@@ -33,7 +33,7 @@ function textoError(e) {
 
 /* ===================== estado ===================== */
 const S = {
-  perfil: null, catalogo: [], catIdx: new Map(), bloqueos: new Map(), usuarios: [],
+  perfil: null, catalogo: [], catIdx: new Map(), bloqueos: new Map(), usuarios: [], ingresos: [], ingresando: false,
   subs: [], vista: null, origen: null, sel: {}, ficha: null,
   af: { farm: "", motivo: "", estado: "bloqueado", q: "" }
 };
@@ -62,6 +62,47 @@ function buscarCat(texto) {
 }
 
 /* ===================== ingreso ===================== */
+// Las sucursales ingresan sin usuario: nombre + sucursal, con una sesión anónima de Firebase.
+// El nombre y la sucursal se recuerdan en este equipo para no escribirlos cada vez.
+const RECUERDO = "socorro.ingreso";
+const leerRecuerdo = () => { try { return JSON.parse(localStorage.getItem(RECUERDO)) || {}; } catch { return {}; } };
+const guardarRecuerdo = v => { try { localStorage.setItem(RECUERDO, JSON.stringify(v)); } catch {} };
+
+$("iFarm").innerHTML = `<option value="">Elige tu sucursal…</option>` + FARMACIAS.map(f => `<option value="${esc(f)}">${esc(corto(f))}</option>`).join("");
+function mostrarLogin(modoAdmin = false) {
+  const r = leerRecuerdo();
+  if (!$("iNom").value) $("iNom").value = r.nombre || "";
+  if (!$("iFarm").value && FARMACIAS.includes(r.farmacia)) $("iFarm").value = r.farmacia;
+  $("fIngreso").hidden = modoAdmin; $("fLogin").hidden = !modoAdmin;
+  $("top").hidden = true; mostrar("vLogin");
+}
+$("verAdmin").addEventListener("click", () => mostrarLogin(true));
+$("verSucursal").addEventListener("click", () => mostrarLogin(false));
+function errIngreso(id, t) { $(id).textContent = t; $(id).hidden = !t; }
+
+$("fIngreso").addEventListener("submit", async e => {
+  e.preventDefault();
+  const nombre = $("iNom").value.trim().replace(/\s+/g, " "), farmacia = $("iFarm").value;
+  if (nombre.length < 2) return errIngreso("iErr", "Escribe tu nombre.");
+  if (!FARMACIAS.includes(farmacia)) return errIngreso("iErr", "Elige tu sucursal.");
+  $("iBtn").disabled = true; errIngreso("iErr", "");
+  S.ingresando = true;
+  try {
+    const user = auth.currentUser?.isAnonymous ? auth.currentUser : (await signInAnonymously(auth)).user;
+    const ref = doc(db, "usuarios", user.uid), ahora = serverTimestamp();
+    const previo = await getDoc(ref);
+    if (previo.exists()) await updateDoc(ref, { nombre, farmacia, ultimoIngreso: ahora });
+    else await setDoc(ref, { usuario: "", nombre, farmacia, rol: "quimico", anonimo: true, activo: true, ultimoIngreso: ahora });
+    await addDoc(collection(db, "ingresos"), { uid: user.uid, nombre, farmacia, fecha: ahora });
+    guardarRecuerdo({ nombre, farmacia });
+    await entrar(user, "iErr");
+  } catch (err) {
+    errIngreso("iErr", err?.code === "auth/operation-not-allowed"
+      ? "El ingreso por sucursal no está activado en Firebase. Avisa a Abastecimiento."
+      : textoError(err));
+  } finally { S.ingresando = false; $("iBtn").disabled = false; }
+});
+
 $("fLogin").addEventListener("submit", async e => {
   e.preventDefault();
   const u = $("lUser").value.trim().toLowerCase();
@@ -71,33 +112,45 @@ $("fLogin").addEventListener("submit", async e => {
   catch { $("lErr").textContent = "Usuario o contraseña incorrectos."; $("lErr").hidden = false; }
   finally { $("lBtn").disabled = false; }
 });
-$("salir").addEventListener("click", () => signOut(auth));
+
+function cerrarVistas() { S.subs.forEach(u => u()); S.subs = []; S.bloqueos = new Map(); S.perfil = null; S.sel = {}; }
+// Las sucursales no cierran la sesión anónima: así conservan su identificador y su historial.
+$("salir").addEventListener("click", () => {
+  if (auth.currentUser?.isAnonymous) { cerrarVistas(); mostrarLogin(false); }
+  else signOut(auth);
+});
 
 onAuthStateChanged(auth, async user => {
-  S.subs.forEach(u => u()); S.subs = []; S.bloqueos = new Map(); S.perfil = null;
-  if (!user) { mostrar("vLogin"); $("top").hidden = true; return; }
+  cerrarVistas();
+  if (!user) return mostrarLogin(false);
+  // Una sesión de sucursal siempre vuelve a pedir nombre y sucursal al abrir la página.
+  if (user.isAnonymous) { if (!S.ingresando) mostrarLogin(false); return; }
+  await entrar(user, "lErr");
+});
+
+async function entrar(user, errId) {
   try {
     const snap = await getDoc(doc(db, "usuarios", user.uid));
     if (!snap.exists() || snap.data().activo === false) {
-      await signOut(auth);
-      $("lErr").textContent = "Tu usuario no está habilitado. Consulta con Abastecimiento."; $("lErr").hidden = false;
+      if (!user.isAnonymous) await signOut(auth);
+      errIngreso(errId, "Tu ingreso no está habilitado. Consulta con Abastecimiento.");
       return;
     }
     S.perfil = { uid: user.uid, ...snap.data() };
   } catch (e) {
-    await signOut(auth);
-    $("lErr").textContent = textoError(e); $("lErr").hidden = false;
+    if (!user.isAnonymous) await signOut(auth);
+    errIngreso(errId, textoError(e));
     return;
   }
   await cargarCatalogo();
   iniciar();
-});
+}
 
 /* ===================== arranque por rol ===================== */
 function iniciar() {
   $("top").hidden = false;
   $("uNombre").textContent = S.perfil.nombre || S.perfil.usuario;
-  $("uRol").textContent = esAdmin() ? "Abastecimiento" : S.perfil.farmacia;
+  $("uRol").textContent = esAdmin() ? "Abastecimiento" : corto(S.perfil.farmacia);
   montarMotivos("bqMot", "bqMotivo"); montarMotivos("abMot", "abMotivo");
 
   if (esAdmin()) {
@@ -110,6 +163,10 @@ function iniciar() {
     }, e => avisar(e)));
     S.subs.push(onSnapshot(collection(db, "usuarios"), snap => {
       S.usuarios = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+      if (S.vista === "vUsuarios") pintarUsuarios();
+    }, e => avisar(e)));
+    S.subs.push(onSnapshot(query(collection(db, "ingresos"), orderBy("fecha", "desc"), limit(100)), snap => {
+      S.ingresos = snap.docs.map(d => d.data());
       if (S.vista === "vUsuarios") pintarUsuarios();
     }, e => avisar(e)));
     ir("vAdmin");
@@ -415,13 +472,18 @@ $("fAccion").addEventListener("click", async e => {
 $("uRolSel").addEventListener("change", () => { $("uFarm").disabled = $("uRolSel").value === "admin"; });
 function pintarUsuarios() {
   const lista = [...S.usuarios].sort((a, b) => (a.rol + a.farmacia + a.usuario).localeCompare(b.rol + b.farmacia + b.usuario));
-  $("uTabla").innerHTML = `<thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Farmacia</th><th class="der">Estado</th></tr></thead><tbody>` +
+  $("uTabla").innerHTML = `<thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Farmacia</th><th>Último ingreso</th><th class="der">Estado</th></tr></thead><tbody>` +
     (lista.length ? lista.map(u => `<tr>
-      <td class="f">${esc(u.usuario)}</td><td>${esc(u.nombre)}</td>
+      <td class="f">${u.anonimo ? '<span class="muted">Sin usuario</span>' : esc(u.usuario)}</td><td>${esc(u.nombre)}</td>
       <td>${u.rol === "admin" ? "Administrador" : "Químico"}</td><td>${esc(u.farmacia ? corto(u.farmacia) : "–")}</td>
+      <td class="f">${u.ultimoIngreso ? fmtFH(u.ultimoIngreso) : "–"}</td>
       <td class="der">${u.uid === S.perfil.uid ? '<span class="muted">Tú</span>' :
         `<button class="btn sm" type="button" data-toggle="${esc(u.uid)}">${u.activo === false ? "Habilitar" : "Deshabilitar"}</button>`}</td>
-    </tr>`).join("") : `<tr class="vacia"><td colspan="5">Sin usuarios.</td></tr>`) + "</tbody>";
+    </tr>`).join("") : `<tr class="vacia"><td colspan="6">Sin usuarios.</td></tr>`) + "</tbody>";
+  $("iTabla").innerHTML = `<thead><tr><th>Fecha</th><th>Nombre</th><th>Sucursal</th></tr></thead><tbody>` +
+    (S.ingresos.length ? S.ingresos.map(i => `<tr>
+      <td class="f">${fmtFH(i.fecha)}</td><td>${esc(i.nombre)}</td><td>${esc(corto(i.farmacia || ""))}</td>
+    </tr>`).join("") : `<tr class="vacia"><td colspan="3">Aún no hay ingresos registrados.</td></tr>`) + "</tbody>";
 }
 $("uTabla").addEventListener("click", async e => {
   const b = e.target.closest("[data-toggle]"); if (!b) return;
