@@ -38,8 +38,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .cabeza { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: flex-end; justify-content: space-between; padding-block: 26px 18px }
 .cabeza h1 { margin: 0; font-size: clamp(22px, 2.6vw, 28px); font-weight: 700; letter-spacing: -.02em; text-wrap: balance }
 .cabeza p { margin: 6px 0 0; max-width: 72ch; font-size: 14px }
-.farm-pill { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border: 1px solid var(--field); border-radius: 10px; background: var(--card); font-weight: 600; font-size: 14px; box-shadow: var(--sombra) }
-.farm-pill svg { color: var(--brand) }
+.farm-pill { display: inline-flex; align-items: center; gap: 12px; padding: 12px 20px; border: 1px solid var(--field); border-radius: 12px; background: var(--card); font-weight: 700; font-size: 19px; box-shadow: var(--sombra) }
+.farm-pill svg { color: var(--brand); width: 30px; height: 30px }
 .cabeza.ficha .eyebrow { margin-bottom: 4px }
 .cabeza #fEstado { margin-top: 12px }
 .volver { background: none; border: 0; color: var(--brand-deep); font: inherit; font-weight: 600; font-size: 13.5px; cursor: pointer; padding: 4px 0; margin-bottom: 8px }

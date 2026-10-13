@@ -6,7 +6,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, onSnapshot, query, where,
   serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610132140";
+import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610132200";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -19,7 +19,7 @@ const hoyISO = () => new Date().toISOString().slice(0, 10);
 const aFecha = v => v?.toDate ? v.toDate() : (typeof v === "string" && v ? new Date(v + "T12:00:00") : null);
 const fmtF = v => { const d = aFecha(v); return d ? d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "–"; };
 const fmtFH = v => { const d = aFecha(v); return d ? d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) + "<br>" + d.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" }) : "ahora"; };
-const nombreFarm = f => "Almacén " + String(f || "").replace(/^ALMACEN /, "").toLowerCase().replace(/(^|[\s.])\p{L}/gu, c => c.toUpperCase());
+const nombreFarm = f => "Sucursal " + String(f || "").replace(/^ALMACEN /, "").toLowerCase().replace(/(^|[\s.])\p{L}/gu, c => c.toUpperCase());
 const corto = f => f === "TODAS" ? "Todas las farmacias" : f.replace(/^ALMACEN /, "");
 const claseMotivo = m => (MOTIVOS_BLOQUEO.find(x => x.texto === m)?.clase) || "m-otro";
 const tagMotivo = (m, extra = "") => `<span class="tag ${claseMotivo(m)}">${esc(m)}${extra}</span>`;
@@ -243,7 +243,7 @@ function etiquetaSolicitud(d) {
 }
 function pintarQuimico() {
   const q = norm($("qFil").value).trim();
-  const activos = [...S.bloqueos.values()].filter(d => d.estado === "bloqueado");
+  const activos = [...S.bloqueos.values()].filter(d => d.estado === "bloqueado" && d.farmacia === miFarm());
   const lista = activos
     .filter(d => !q || q.split(/\s+/).every(w => norm(d.codpro + " " + d.producto + " " + (d.laboratorio || "")).includes(w)))
     .sort((a, b) => (aFecha(b.desde) || 0) - (aFecha(a.desde) || 0));
@@ -259,7 +259,7 @@ function pintarQuimico() {
   $("qTabla").innerHTML = `<thead><tr><th>Producto</th><th>Motivo</th><th>Desde</th><th>Estado</th><th class="der">Acción</th></tr></thead><tbody>` +
     (lista.length ? lista.map(d => `<tr>
       <td class="p"><b>${esc(d.codpro)} - ${esc(d.producto)}</b><code>${d.laboratorio ? esc(d.laboratorio) + " · " : ""}por ${esc(d.porNombre)}</code></td>
-      <td>${tagMotivo(d.motivo, d.farmacia === "TODAS" ? " · todas" : "")}</td>
+      <td>${tagMotivo(d.motivo)}</td>
       <td class="f">${fmtF(d.desde)}</td>
       <td>${estado(d)}</td>
       <td class="der"><button class="btn sm" type="button" data-ficha="${esc(d.id)}">${accion(d)}</button></td>
@@ -484,4 +484,3 @@ function descargarCsv(filas, nombre) {
 }
 const bloqueadosAhora = () => [...S.bloqueos.values()].filter(d => d.estado === "bloqueado");
 $("aCsv").addEventListener("click", () => descargarCsv(bloqueadosAhora(), "bloqueos"));
-$("qCsv").addEventListener("click", () => descargarCsv(bloqueadosAhora(), "bloqueos_" + corto(miFarm()).replace(/\W+/g, "_").toLowerCase()));
