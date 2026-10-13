@@ -46,7 +46,7 @@ async function cargarCatalogo() {
   try {
     const r = await fetch("catalogo.json", { cache: "no-cache" });
     if (!r.ok) throw new Error();
-    S.catalogo = (await r.json()).map(p => ({ c: String(p.c), n: String(p.n), l: String(p.l || ""), k: norm(p.c + " " + p.n + " " + (p.l || "")) }));
+    S.catalogo = (await r.json()).map(p => ({ c: String(p.c), n: String(p.n), l: String(p.l || ""), ln: String(p.ln || ""), k: norm([p.c, p.n, p.l, p.ln].join(" ")) }));
     S.catIdx = new Map(S.catalogo.map(p => [p.c, p]));
   } catch {
     const a = $("avisoGlobal"); a.hidden = false;
