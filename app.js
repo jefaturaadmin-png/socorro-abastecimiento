@@ -6,7 +6,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where,
   serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610140300";
+import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610140400";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -124,12 +124,18 @@ $("fClave").addEventListener("submit", async e => {
   if (nombre.length < 3) return err("Escribe tu nombre completo.");
   if (nueva.length < 6) return err("La contraseña debe tener al menos 6 caracteres.");
   if (nueva !== $("cRepite").value) return err("Las dos contraseñas no coinciden.");
-  if (S.claveIngreso && nueva === S.claveIngreso) return err("Debe ser distinta a la contraseña que te dio Abastecimiento.");
+  if (S.claveIngreso && nueva === S.claveIngreso && nueva !== S.claveNueva) return err("Debe ser distinta a la contraseña con la que ingresaste.");
   $("cBtn").disabled = true; err("");
   try {
-    await updatePassword(auth.currentUser, nueva);
-    await updateDoc(doc(db, "usuarios", S.perfil.uid), { nombre, cambiarClave: false, claveCambiada: serverTimestamp() });
-    S.perfil.cambiarClave = false; S.perfil.nombre = nombre; S.claveIngreso = ""; e.target.reset();
+    // Si en un intento anterior la contraseña ya se cambió y solo falló guardar el nombre, no se cambia de nuevo.
+    if (S.claveNueva !== nueva) { await updatePassword(auth.currentUser, nueva); S.claveNueva = nueva; }
+    try {
+      await updateDoc(doc(db, "usuarios", S.perfil.uid), { nombre, cambiarClave: false, claveCambiada: serverTimestamp() });
+    } catch (x) {
+      err("Tu contraseña nueva ya quedó guardada (úsala para ingresar), pero no se pudo guardar tu nombre. " + textoError(x));
+      return;
+    }
+    S.perfil.cambiarClave = false; S.perfil.nombre = nombre; S.claveIngreso = S.claveNueva = ""; e.target.reset();
     toast("Contraseña guardada. Úsala desde ahora para ingresar.");
     await entrar();
   } catch (x) {
