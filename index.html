@@ -30,23 +30,15 @@
       <div class="wrap">
         <div class="marca blanca"><i></i>socorro<span>abastecimiento</span></div>
         <h1>Abastecimiento<br>de farmacias</h1>
-        <p>Escribe tu nombre y elige tu sucursal para ingresar.</p>
+        <p>Ingresa con el usuario y contraseña que te dio Abastecimiento.</p>
       </div>
     </div>
     <div class="wrap">
-      <form class="card login-card" id="fIngreso">
-        <div class="campo"><label for="iNom">Tu nombre</label><input id="iNom" autocomplete="name" required minlength="2" maxlength="60" placeholder="Ej. Q.F. María Pérez"></div>
-        <div class="campo"><label for="iFarm">Sucursal</label><select id="iFarm" required></select></div>
-        <div class="msg error" id="iErr" hidden></div>
-        <button class="btn primario" type="submit" id="iBtn">Ingresar</button>
-        <button class="enlace" type="button" id="verAdmin">Soy de Abastecimiento (ingreso con contraseña)</button>
-      </form>
-      <form class="card login-card" id="fLogin" hidden>
+      <form class="card login-card" id="fLogin">
         <div class="campo"><label for="lUser">Usuario</label><input id="lUser" autocomplete="username" required></div>
         <div class="campo"><label for="lPass">Contraseña</label><input id="lPass" type="password" autocomplete="current-password" required></div>
         <div class="msg error" id="lErr" hidden></div>
         <button class="btn primario" type="submit" id="lBtn">Ingresar</button>
-        <button class="enlace" type="button" id="verSucursal">← Volver al ingreso por sucursal</button>
       </form>
     </div>
   </section>
@@ -155,7 +147,7 @@
     <div class="hero">
       <div class="wrap">
         <h1>Usuarios</h1>
-        <p>Quién ingresó y desde qué sucursal. Por ahora las sucursales entran solo con su nombre; si más adelante quieres darle contraseña a alguien, créale un usuario aquí.</p>
+        <p>Crea un usuario por farmacia y entrégale su contraseña. Puedes deshabilitarlo cuando ya no corresponda.</p>
       </div>
     </div>
     <div class="wrap cuerpo">
@@ -180,10 +172,6 @@
       <section class="card lista">
         <div class="lh"><h2>Usuarios registrados</h2></div>
         <div class="tabla-wrap"><table class="tabla" id="uTabla"></table></div>
-      </section>
-      <section class="card lista">
-        <div class="lh"><h2>Ingresos recientes</h2></div>
-        <div class="tabla-wrap"><table class="tabla" id="iTabla"></table></div>
       </section>
     </div>
   </section>
