@@ -6,7 +6,7 @@
 <title>Socorro · Abastecimiento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610132330">
+<link rel="stylesheet" href="styles.css?v=202610140100">
 </head>
 <body>
 
@@ -54,6 +54,24 @@
     </div>
   </section>
 
+  <!-- ============ PRIMER INGRESO: CAMBIAR CONTRASEÑA ============ -->
+  <section id="vClave" hidden>
+    <div class="login-wrap">
+      <form class="card login-card" id="fClave">
+        <div class="marca grande"><b>Socorro</b><span>Abastecimiento</span></div>
+        <div>
+          <h1>Crea tu contraseña</h1>
+          <p class="muted">Es tu primer ingreso. Cambia la contraseña que te dio Abastecimiento por una que solo tú conozcas.</p>
+        </div>
+        <div class="campo"><label for="cNueva">Nueva contraseña</label><input id="cNueva" type="password" autocomplete="new-password" required minlength="6"><small class="ayuda">Mínimo 6 caracteres.</small></div>
+        <div class="campo"><label for="cRepite">Repite la nueva contraseña</label><input id="cRepite" type="password" autocomplete="new-password" required minlength="6"></div>
+        <div class="msg error" id="cErr" hidden></div>
+        <button class="btn primario" type="submit" id="cBtn">Guardar y entrar</button>
+        <button class="enlace" type="button" id="cSalir">Salir</button>
+      </form>
+    </div>
+  </section>
+
   <!-- ============ QUÍMICO ============ -->
   <section id="vQuimico" hidden>
     <div class="wrap cabeza">
@@ -93,6 +111,7 @@
             <li><i class="pt ambar">!</i>Reactivaciones pendientes: <b id="qK2">0</b></li>
             <li><i class="pt gris">!</i>Reactivaciones rechazadas: <b id="qK3">0</b></li>
           </ul>
+          <button class="btn ancho" id="qXls" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Exportar a Excel</button>
         </aside>
       </div>
 
@@ -158,7 +177,7 @@
             <label class="filtro">Motivo <select id="aMot"><option value="">Todos</option></select></label>
             <label class="filtro">Estado <select id="aEst"><option value="bloqueado">Bloqueados</option><option value="activo">Reactivados</option><option value="">Todos</option></select></label>
             <label class="filtro">Buscar <input id="aQ" type="search" placeholder="Código o nombre"></label>
-            <button class="btn" id="aCsv" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar CSV</button>
+            <button class="btn" id="aCsv" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button>
           </div>
         </div>
         <div class="tabla-wrap"><table class="tabla" id="aTabla"></table></div>
@@ -171,7 +190,7 @@
     <div class="wrap cabeza">
       <div>
         <h1>Usuarios</h1>
-        <p class="muted">Crea un usuario por farmacia y entrégale su contraseña. Puedes deshabilitarlo cuando ya no corresponda.</p>
+        <p class="muted">Crea un usuario por químico y entrégale su contraseña inicial: en su primer ingreso deberá cambiarla por una propia. Puedes deshabilitarlo cuando ya no corresponda.</p>
       </div>
     </div>
     <div class="wrap cuerpo">
@@ -187,7 +206,7 @@
             <div class="campo"><label for="uFarm">Farmacia</label><select id="uFarm"></select></div>
           </div>
           <div class="col">
-            <div class="campo"><label for="uPass">Contraseña inicial</label><input id="uPass" required minlength="6"><small class="ayuda">Mínimo 6 caracteres.</small></div>
+            <div class="campo"><label for="uPass">Contraseña inicial</label><div class="fila"><input id="uPass" required minlength="6"><button class="btn" type="button" id="uGen">Generar</button></div><small class="ayuda">Al ingresar por primera vez se le pedirá cambiarla.</small></div>
             <div class="msg" id="uMsg" hidden></div>
             <button class="btn primario" type="submit" id="uBtn">Crear usuario</button>
           </div>
@@ -224,6 +243,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610132330"></script>
+<script type="module" src="app.js?v=202610140100"></script>
 </body>
 </html>

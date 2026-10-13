@@ -1,12 +1,12 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
 import {
-  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updatePassword
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
 import {
-  getFirestore, collection, doc, getDoc, getDocs, setDoc, onSnapshot, query, where,
+  getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where,
   serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610132330";
+import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610140100";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -75,7 +75,8 @@ $("fLogin").addEventListener("submit", async e => {
   const u = $("lUser").value.trim().toLowerCase();
   const email = u.includes("@") ? u : `${u}@${DOMINIO}`;
   $("lBtn").disabled = true; $("lErr").hidden = true;
-  try { await signInWithEmailAndPassword(auth, email, $("lPass").value); }
+  S.claveIngreso = $("lPass").value;
+  try { await signInWithEmailAndPassword(auth, email, $("lPass").value); $("lPass").value = ""; }
   catch { $("lErr").textContent = "Usuario o contraseña incorrectos."; $("lErr").hidden = false; }
   finally { $("lBtn").disabled = false; }
 });
@@ -98,9 +99,35 @@ onAuthStateChanged(auth, async user => {
     $("lErr").textContent = textoError(e); $("lErr").hidden = false;
     return;
   }
+  // Primer ingreso (o contraseña restablecida): debe crear su propia contraseña antes de seguir.
+  if (S.perfil.cambiarClave === true) { $("top").hidden = true; mostrar("vClave"); $("cNueva").focus(); return; }
+  await entrar();
+});
+async function entrar() {
   await cargarCatalogo();
   iniciar();
   revisarPerfil();
+}
+
+$("cSalir").addEventListener("click", () => signOut(auth));
+$("fClave").addEventListener("submit", async e => {
+  e.preventDefault();
+  const nueva = $("cNueva").value, err = t => { $("cErr").textContent = t; $("cErr").hidden = !t; };
+  if (nueva.length < 6) return err("La contraseña debe tener al menos 6 caracteres.");
+  if (nueva !== $("cRepite").value) return err("Las dos contraseñas no coinciden.");
+  if (S.claveIngreso && nueva === S.claveIngreso) return err("Debe ser distinta a la contraseña que te dio Abastecimiento.");
+  $("cBtn").disabled = true; err("");
+  try {
+    await updatePassword(auth.currentUser, nueva);
+    await updateDoc(doc(db, "usuarios", S.perfil.uid), { cambiarClave: false, claveCambiada: serverTimestamp() });
+    S.perfil.cambiarClave = false; S.claveIngreso = ""; e.target.reset();
+    toast("Contraseña guardada. Úsala desde ahora para ingresar.");
+    await entrar();
+  } catch (x) {
+    err(x?.code === "auth/requires-recent-login" ? "Por seguridad, sal y vuelve a ingresar con la contraseña inicial para cambiarla."
+      : x?.code === "auth/weak-password" ? "La contraseña es muy débil. Usa al menos 6 caracteres."
+      : textoError(x));
+  } finally { $("cBtn").disabled = false; }
 });
 
 // Si el perfil se creó a mano con algún dato mal escrito, Firebase rechazará lo que se guarde: avisarlo claro.
@@ -156,7 +183,7 @@ function pintarNav() {
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vQuimico", "vAdmin", "vUsuarios", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vQuimico", "vAdmin", "vUsuarios", "vFicha"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) { S.vista = vista; mostrar(vista); render(); scrollTo({ top: 0 }); }
 function render() {
   if (!S.perfil) return;
@@ -503,13 +530,14 @@ $("fAccion").addEventListener("click", async e => {
 $("uRolSel").addEventListener("change", () => { $("uFarm").disabled = $("uRolSel").value === "admin"; });
 function pintarUsuarios() {
   const lista = [...S.usuarios].sort((a, b) => (a.rol + a.farmacia + a.usuario).localeCompare(b.rol + b.farmacia + b.usuario));
-  $("uTabla").innerHTML = `<thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Farmacia</th><th class="der">Estado</th></tr></thead><tbody>` +
+  $("uTabla").innerHTML = `<thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Farmacia</th><th>Contraseña</th><th class="der">Estado</th></tr></thead><tbody>` +
     (lista.length ? lista.map(u => `<tr>
       <td class="f">${esc(u.usuario)}</td><td>${esc(u.nombre)}</td>
       <td>${u.rol === "admin" ? "Administrador" : "Químico"}</td><td>${esc(u.farmacia ? corto(u.farmacia) : "–")}</td>
+      <td>${u.cambiarClave === true ? '<span class="tag t-pend">Aún no cambia su contraseña</span>' : '<span class="tag t-ok">Contraseña propia</span>'}</td>
       <td class="der">${u.uid === S.perfil.uid ? '<span class="muted">Tú</span>' :
         `<button class="btn sm" type="button" data-toggle="${esc(u.uid)}">${u.activo === false ? "Habilitar" : "Deshabilitar"}</button>`}</td>
-    </tr>`).join("") : `<tr class="vacia"><td colspan="5">Sin usuarios.</td></tr>`) + "</tbody>";
+    </tr>`).join("") : `<tr class="vacia"><td colspan="6">Sin usuarios.</td></tr>`) + "</tbody>";
 }
 $("uTabla").addEventListener("click", async e => {
   const b = e.target.closest("[data-toggle]"); if (!b) return;
@@ -517,6 +545,8 @@ $("uTabla").addEventListener("click", async e => {
   try { await setDoc(doc(db, "usuarios", u.uid), { activo: u.activo === false }, { merge: true }); toast(u.activo === false ? "Usuario habilitado" : "Usuario deshabilitado"); }
   catch (err) { toast(textoError(err)); }
 });
+// Contraseña inicial fácil de dictar: Socorro + 4 números (la cambian en su primer ingreso).
+$("uGen").addEventListener("click", () => { $("uPass").value = "Socorro" + String(crypto.getRandomValues(new Uint32Array(1))[0] % 9000 + 1000); });
 $("fUsr").addEventListener("submit", async e => {
   e.preventDefault();
   const usuario = $("uUsr").value.trim().toLowerCase(), rol = $("uRolSel").value;
@@ -527,9 +557,9 @@ $("fUsr").addEventListener("submit", async e => {
   const app2 = initializeApp(firebaseConfig, "crear-" + Date.now()), auth2 = getAuth(app2);
   try {
     const cred = await createUserWithEmailAndPassword(auth2, `${usuario}@${DOMINIO}`, $("uPass").value);
-    await setDoc(doc(db, "usuarios", cred.user.uid), { usuario, nombre: $("uNom").value.trim(), rol, farmacia, activo: true });
+    await setDoc(doc(db, "usuarios", cred.user.uid), { usuario, nombre: $("uNom").value.trim(), rol, farmacia, activo: true, cambiarClave: true });
     await signOut(auth2);
-    msg("uMsg", `Usuario "${usuario}" creado. Entrégale su usuario y contraseña.`);
+    msg("uMsg", `Usuario "${usuario}" creado con la contraseña inicial "${$("uPass").value}". Entrégasela: al ingresar deberá cambiarla.`);
     e.target.reset(); $("uFarm").disabled = false;
   } catch (err) {
     const t = err?.code === "auth/email-already-in-use" ? "Ese usuario ya existe en Authentication."
@@ -538,15 +568,37 @@ $("fUsr").addEventListener("submit", async e => {
   } finally { $("uBtn").disabled = false; }
 });
 
-/* ===================== exportar CSV ===================== */
-function descargarCsv(filas, nombre) {
-  const c = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const csv = ["farmacia,codpro,producto,en_lista,laboratorio,motivo,alcance,desde,por,revisar,solicitud",
-    ...filas.map(d => [d.farmacia, String(d.codpro).startsWith(SIN_COD) ? "" : d.codpro, d.producto, d.fueraCatalogo ? "no" : "si", d.laboratorio || "", d.motivo, d.alcance, fmtF(d.desde), d.porNombre, d.revisar || "", d.solicitud?.estado || ""].map(c).join(","))].join("\n");
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
-  a.download = `${nombre}_${hoyISO()}.csv`; a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+/* ===================== exportar a Excel ===================== */
+let XLSX = null;
+async function descargarExcel(filas, nombre, conFarmacia) {
+  try { XLSX ??= await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm"); }
+  catch { return toast("No se pudo preparar el Excel. Revisa tu internet e inténtalo de nuevo."); }
+  const estado = d => d.solicitud?.estado === "pendiente" ? "Reactivación pedida" : d.solicitud?.estado === "rechazada" ? "Reactivación rechazada" : "Bloqueado";
+  const datos = filas.sort((a, b) => (a.farmacia + a.producto).localeCompare(b.farmacia + b.producto)).map(d => ({
+    ...(conFarmacia ? { Farmacia: corto(d.farmacia) } : {}),
+    "Código": String(d.codpro).startsWith(SIN_COD) ? "" : d.codpro,
+    Producto: d.producto,
+    Laboratorio: d.laboratorio || "",
+    Motivo: d.motivo,
+    Comentario: d.comentario || "",
+    Desde: aFecha(d.desde) || "",
+    "Bloqueado por": d.porNombre || "",
+    Estado: estado(d),
+    "En la lista": d.fueraCatalogo ? "No" : "Sí",
+    ...(conFarmacia ? { Revisar: d.revisar || "" } : {})
+  }));
+  const hoja = XLSX.utils.json_to_sheet(datos, { cellDates: true, dateNF: "dd/mm/yyyy" });
+  const cols = Object.keys(datos[0] || { Producto: "" });
+  hoja["!cols"] = cols.map(c => ({ wch: Math.min(48, Math.max(c.length, ...datos.map(d => String(d[c] instanceof Date ? "00/00/0000" : d[c]).length)) + 2) }));
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, "Bloqueados");
+  XLSX.writeFile(libro, `${nombre}_${hoyISO()}.xlsx`);
 }
 const bloqueadosAhora = () => [...S.bloqueos.values()].filter(d => d.estado === "bloqueado");
-$("aCsv").addEventListener("click", () => descargarCsv(bloqueadosAhora(), "bloqueos"));
+$("aCsv").addEventListener("click", () => {
+  const filas = bloqueadosAhora().filter(d => !S.af.farm || d.farmacia === S.af.farm);
+  descargarExcel(filas, "bloqueos_" + (S.af.farm ? corto(S.af.farm) : "todas").replace(/\W+/g, "_").toLowerCase(), true);
+});
+// La sucursal solo exporta los productos bloqueados en su propia farmacia.
+$("qXls").addEventListener("click", () => descargarExcel(bloqueadosAhora().filter(d => d.farmacia === miFarm()),
+  "bloqueos_" + corto(miFarm()).replace(/\W+/g, "_").toLowerCase(), false));

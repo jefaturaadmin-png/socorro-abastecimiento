@@ -29,8 +29,8 @@ Cada químico bloquea los productos que no se deben abastecer a su farmacia y, s
 
 ## Uso diario
 
-- **Químico**: busca el producto, elige el motivo y lo bloquea. Para volver a abastecerlo pulsa **Pedir reactivación**.
-- **Administrador**: en **Bloqueos** ve las solicitudes pendientes (Aprobar / Rechazar), todos los bloqueos con filtros, puede bloquear en una farmacia o en **todas**, y **Descargar bloqueos activos (CSV)** para cruzarlo con la reposición.
+- **Químico**: entra con su usuario y la contraseña inicial que le diste; en ese primer ingreso la página le pide crear su propia contraseña. Busca el producto (con ↑/↓ y Enter, o agregándolo si no está en la lista), elige el motivo y lo bloquea. Para volver a abastecerlo pulsa **Pedir reactivación**. Puede **Exportar a Excel** los productos bloqueados de su sucursal.
+- **Administrador**: en **Bloqueos** ve las solicitudes pendientes (Aprobar / Rechazar), todos los bloqueos con filtros, puede bloquear en una farmacia o en **todas**, y **Descargar Excel** (de todas o de la farmacia elegida en los filtros) para cruzarlo con la reposición. En **Usuarios** ves quién ya cambió su contraseña inicial; el botón **Generar** propone una contraseña inicial.
 - Si un químico se va: en **Usuarios** pulsa **Deshabilitar**. Para cambiarle la contraseña, bórralo en Authentication y créalo de nuevo con el mismo usuario (su historial se mantiene).
 
 ## Actualizar el catálogo
