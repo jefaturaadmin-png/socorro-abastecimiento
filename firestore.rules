@@ -6,13 +6,16 @@ service cloud.firestore {
     function perfil() {
       return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
     }
+    // "activo" puede faltar (cuenta como activo); se acepta true o "true" por si se escribió como texto.
     function conPerfil() {
       return request.auth != null
         && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
-        && perfil().get('activo', true) == true;
+        && perfil().get('activo', true) in [true, 'true'];
     }
-    function esAdmin()    { return conPerfil() && perfil().rol == 'admin'; }
-    function esQuimico()  { return conPerfil() && perfil().rol == 'quimico'; }
+    // "rol" sin importar mayúsculas ni espacios sobrantes.
+    function rol()        { return string(perfil().get('rol', '')).trim().lower(); }
+    function esAdmin()    { return conPerfil() && rol() == 'admin'; }
+    function esQuimico()  { return conPerfil() && rol() == 'quimico'; }
     function miFarmacia() { return perfil().farmacia; }
 
     // ---------- usuarios: solo el administrador los crea o cambia ----------

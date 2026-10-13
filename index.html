@@ -5,16 +5,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Socorro · Abastecimiento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
+<!-- íconos (trazo, usan el color del texto) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-candado" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-grafico" viewBox="0 0 24 24"><path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/></symbol>
+  <symbol id="i-lista" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></symbol>
+  <symbol id="i-buscar" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+  <symbol id="i-bajar" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-usuario" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-tienda" viewBox="0 0 24 24"><path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M10 20v-6h4v6"/></symbol>
+  <symbol id="i-mas" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+</svg>
+
 <header class="top" id="top" hidden>
   <div class="wrap top-in">
-    <div class="marca"><i></i>socorro<span>abastecimiento</span></div>
+    <div class="marca"><b>Socorro</b><span>Abastecimiento</span></div>
     <nav class="nav" id="nav" aria-label="Secciones"></nav>
     <div class="quien">
+      <span class="avatar" aria-hidden="true"><svg><use href="#i-usuario"/></svg></span>
       <div><b id="uNombre"></b><small id="uRol"></small></div>
       <button class="btn" id="salir" type="button">Salir</button>
     </div>
@@ -26,15 +39,13 @@
 
   <!-- ============ INGRESO ============ -->
   <section id="vLogin" hidden>
-    <div class="hero">
-      <div class="wrap">
-        <div class="marca blanca"><i></i>socorro<span>abastecimiento</span></div>
-        <h1>Abastecimiento<br>de farmacias</h1>
-        <p>Ingresa con el usuario y contraseña que te dio Abastecimiento.</p>
-      </div>
-    </div>
-    <div class="wrap">
+    <div class="login-wrap">
       <form class="card login-card" id="fLogin">
+        <div class="marca grande"><b>Socorro</b><span>Abastecimiento</span></div>
+        <div>
+          <h1>Ingresar</h1>
+          <p class="muted">Usa el usuario y contraseña que te dio Abastecimiento.</p>
+        </div>
         <div class="campo"><label for="lUser">Usuario</label><input id="lUser" autocomplete="username" required></div>
         <div class="campo"><label for="lPass">Contraseña</label><input id="lPass" type="password" autocomplete="current-password" required></div>
         <div class="msg error" id="lErr" hidden></div>
@@ -45,37 +56,51 @@
 
   <!-- ============ QUÍMICO ============ -->
   <section id="vQuimico" hidden>
-    <div class="hero">
-      <div class="wrap">
-        <h1>Productos que no se abastecen a <span class="farm" id="qFarm"></span></h1>
-        <p>Mientras un producto esté bloqueado, la droguería no lo incluirá en las entregas a tu farmacia. Para volver a abastecerlo, pide la reactivación: la aprueba Abastecimiento.</p>
+    <div class="wrap cabeza">
+      <div>
+        <h1>Bloqueos de abastecimiento</h1>
+        <p class="muted">Mientras un producto esté bloqueado no se incluirá en las entregas a tu farmacia. Para volver a abastecerlo, pide la reactivación.</p>
       </div>
+      <span class="farm-pill"><svg><use href="#i-tienda"/></svg><span id="qFarm"></span></span>
     </div>
     <div class="wrap cuerpo">
-      <form class="card bloque" id="bqForm" data-pre="bq">
-        <h2>Bloquear un producto</h2>
-        <div class="bloque-grid">
-          <div class="col">
-            <div class="campo buscador">
-              <label for="bqBus">Producto (código, nombre o laboratorio)</label>
-              <input id="bqBus" type="search" autocomplete="off" placeholder="Ej. 26375, provita o ABBO">
-              <div class="resultados" id="bqRes" hidden></div>
+      <div class="grid-q">
+        <form class="card bloque" id="bqForm" data-pre="bq">
+          <h2><svg><use href="#i-candado"/></svg>Bloquear nuevo producto</h2>
+          <div class="bq-top">
+            <div class="col">
+              <div class="campo buscador">
+                <label for="bqBus" class="sr">Producto</label>
+                <div class="con-icono">
+                  <input id="bqBus" type="search" autocomplete="off" placeholder="Ej. 26375, provita o ABBO">
+                  <svg><use href="#i-buscar"/></svg>
+                </div>
+                <div class="resultados" id="bqRes" hidden></div>
+              </div>
+              <div class="sel" id="bqSel" hidden></div>
             </div>
-            <div class="sel" id="bqSel" hidden></div>
+            <fieldset class="col"><legend>Motivo</legend><div class="pills" id="bqMot"></div></fieldset>
           </div>
-          <fieldset class="col"><legend>Motivo</legend><div class="pills" id="bqMot"></div></fieldset>
-          <div class="col">
-            <div class="campo"><label for="bqCom">Comentario (opcional)</label><textarea id="bqCom" rows="4"></textarea></div>
-            <div class="msg" id="bqMsg" hidden></div>
-            <button class="btn primario" type="submit" id="bqBtn" disabled>Bloquear en mi farmacia</button>
-          </div>
-        </div>
-      </form>
+          <div class="campo"><label for="bqCom" class="sr">Comentario</label><textarea id="bqCom" rows="2" placeholder="Escribe una nota breve (opcional)…"></textarea></div>
+          <div class="msg" id="bqMsg" hidden></div>
+          <div class="pie"><button class="btn primario mas" type="submit" id="bqBtn" disabled>Bloquear en mi farmacia</button></div>
+        </form>
+
+        <aside class="card resumen">
+          <h2><svg><use href="#i-grafico"/></svg>Estado rápido</h2>
+          <ul class="estados">
+            <li><i class="pt rojo">!</i>Bloqueados activos: <b id="qK1">0</b></li>
+            <li><i class="pt ambar">!</i>Reactivaciones pendientes: <b id="qK2">0</b></li>
+            <li><i class="pt gris">!</i>Reactivaciones rechazadas: <b id="qK3">0</b></li>
+          </ul>
+          <button class="btn ancho" id="qCsv" type="button"><svg><use href="#i-bajar"/></svg>Exportar reporte</button>
+        </aside>
+      </div>
 
       <section class="card lista">
         <div class="lh">
-          <h2>Bloqueados ahora <span class="num" id="qCount"></span></h2>
-          <label class="filtro">Filtrar <input id="qFil" type="search" placeholder="Código, nombre o laboratorio"></label>
+          <h2><svg><use href="#i-lista"/></svg>Productos bloqueados actualmente <span class="num" id="qCount"></span></h2>
+          <label class="con-icono busca-tabla"><span class="sr">Filtrar</span><input id="qFil" type="search" placeholder="Buscar en la tabla…"><svg><use href="#i-buscar"/></svg></label>
         </div>
         <div class="tabla-wrap"><table class="tabla" id="qTabla"></table></div>
       </section>
@@ -84,18 +109,18 @@
 
   <!-- ============ ADMIN: PANEL ============ -->
   <section id="vAdmin" hidden>
-    <div class="hero">
-      <div class="wrap">
+    <div class="wrap cabeza">
+      <div>
         <h1>Bloqueos de abastecimiento</h1>
-        <p>Todas las farmacias. Aprueba las reactivaciones, bloquea productos y revisa lo que pidieron los químicos.</p>
+        <p class="muted">Todas las farmacias. Aprueba las reactivaciones, bloquea productos y revisa lo que pidieron los químicos.</p>
       </div>
     </div>
     <div class="wrap cuerpo">
       <div class="kpis">
-        <div class="kpi"><span>Bloqueos activos</span><b id="k1">–</b><small id="k1s"></small></div>
-        <div class="kpi"><span>Solicitudes por aprobar</span><b id="k2" class="acc">–</b><small>reactivaciones pedidas</small></div>
-        <div class="kpi"><span>Para revisar</span><b id="k3" class="mal">–</b><small>fecha de revisión vencida</small></div>
-        <div class="kpi"><span>Reactivados</span><b id="k4">–</b><small>últimos 30 días</small></div>
+        <div class="card kpi"><span><i class="pt rojo">!</i>Bloqueos activos</span><b id="k1">–</b><small id="k1s"></small></div>
+        <div class="card kpi"><span><i class="pt ambar">!</i>Solicitudes por aprobar</span><b id="k2" class="acc">–</b><small>reactivaciones pedidas</small></div>
+        <div class="card kpi"><span><i class="pt rojo">!</i>Para revisar</span><b id="k3" class="mal">–</b><small>fecha de revisión vencida</small></div>
+        <div class="card kpi"><span><i class="pt verde">✓</i>Reactivados</span><b id="k4">–</b><small>últimos 30 días</small></div>
       </div>
 
       <section class="card" id="aSolCard">
@@ -104,23 +129,23 @@
       </section>
 
       <form class="card bloque" id="abForm" data-pre="ab">
-        <h2>Bloquear producto</h2>
+        <h2><svg><use href="#i-candado"/></svg>Bloquear producto</h2>
         <div class="bloque-grid">
           <div class="col">
             <div class="campo"><label for="abFarm">Farmacia</label><select id="abFarm"></select></div>
             <div class="campo buscador">
               <label for="abBus">Producto (código, nombre o laboratorio)</label>
-              <input id="abBus" type="search" autocomplete="off">
+              <div class="con-icono"><input id="abBus" type="search" autocomplete="off" placeholder="Ej. 26375, provita o ABBO"><svg><use href="#i-buscar"/></svg></div>
               <div class="resultados" id="abRes" hidden></div>
             </div>
             <div class="sel" id="abSel" hidden></div>
           </div>
           <fieldset class="col"><legend>Motivo</legend><div class="pills" id="abMot"></div></fieldset>
           <div class="col">
-            <div class="campo"><label for="abCom">Comentario (opcional)</label><textarea id="abCom" rows="3"></textarea></div>
+            <div class="campo"><label for="abCom">Comentario (opcional)</label><textarea id="abCom" rows="3" placeholder="Escribe una nota breve…"></textarea></div>
             <div class="campo"><label for="abRev">Revisar de nuevo el (opcional)</label><input id="abRev" type="date"></div>
             <div class="msg" id="abMsg" hidden></div>
-            <button class="btn primario" type="submit" id="abBtn" disabled>Bloquear</button>
+            <button class="btn primario mas" type="submit" id="abBtn" disabled>Bloquear</button>
           </div>
         </div>
       </form>
@@ -134,7 +159,7 @@
             <label class="filtro">Motivo <select id="aMot"><option value="">Todos</option></select></label>
             <label class="filtro">Estado <select id="aEst"><option value="bloqueado">Bloqueados</option><option value="activo">Reactivados</option><option value="">Todos</option></select></label>
             <label class="filtro">Buscar <input id="aQ" type="search" placeholder="Código o nombre"></label>
-            <button class="btn" id="aCsv" type="button">Descargar CSV</button>
+            <button class="btn" id="aCsv" type="button"><svg><use href="#i-bajar"/></svg>Descargar CSV</button>
           </div>
         </div>
         <div class="tabla-wrap"><table class="tabla" id="aTabla"></table></div>
@@ -144,15 +169,15 @@
 
   <!-- ============ ADMIN: USUARIOS ============ -->
   <section id="vUsuarios" hidden>
-    <div class="hero">
-      <div class="wrap">
+    <div class="wrap cabeza">
+      <div>
         <h1>Usuarios</h1>
-        <p>Crea un usuario por farmacia y entrégale su contraseña. Puedes deshabilitarlo cuando ya no corresponda.</p>
+        <p class="muted">Crea un usuario por farmacia y entrégale su contraseña. Puedes deshabilitarlo cuando ya no corresponda.</p>
       </div>
     </div>
     <div class="wrap cuerpo">
       <form class="card bloque" id="fUsr">
-        <h2>Crear usuario</h2>
+        <h2><svg><use href="#i-usuario"/></svg>Crear usuario</h2>
         <div class="bloque-grid">
           <div class="col">
             <div class="campo"><label for="uUsr">Usuario</label><input id="uUsr" required pattern="[a-z0-9._-]{3,30}" placeholder="ej. mercado"><small class="ayuda">Minúsculas, sin espacios. Es lo que escribirá para ingresar.</small></div>
@@ -178,8 +203,8 @@
 
   <!-- ============ FICHA DE PRODUCTO ============ -->
   <section id="vFicha" hidden>
-    <div class="hero">
-      <div class="wrap">
+    <div class="wrap cabeza ficha">
+      <div>
         <button class="volver" id="fVolver" type="button">← Volver</button>
         <div class="eyebrow" id="fEyebrow"></div>
         <h1 id="fTitulo"></h1>

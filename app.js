@@ -19,6 +19,7 @@ const hoyISO = () => new Date().toISOString().slice(0, 10);
 const aFecha = v => v?.toDate ? v.toDate() : (typeof v === "string" && v ? new Date(v + "T12:00:00") : null);
 const fmtF = v => { const d = aFecha(v); return d ? d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "–"; };
 const fmtFH = v => { const d = aFecha(v); return d ? d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) + "<br>" + d.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" }) : "ahora"; };
+const nombreFarm = f => "Almacén " + String(f || "").replace(/^ALMACEN /, "").toLowerCase().replace(/(^|[\s.])\p{L}/gu, c => c.toUpperCase());
 const corto = f => f === "TODAS" ? "Todas las farmacias" : f.replace(/^ALMACEN /, "");
 const claseMotivo = m => (MOTIVOS_BLOQUEO.find(x => x.texto === m)?.clase) || "m-otro";
 const tagMotivo = (m, extra = "") => `<span class="tag ${claseMotivo(m)}">${esc(m)}${extra}</span>`;
@@ -26,7 +27,7 @@ const norm = s => String(s || "").toUpperCase().normalize("NFD").replace(/[̀-ͯ
 function toast(t) { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3000); }
 function msg(id, texto, error) { const el = $(id); el.hidden = !texto; el.textContent = texto || ""; el.className = "msg" + (error ? " error" : ""); }
 function textoError(e) {
-  if (e?.code === "permission-denied") return "No tienes permiso para esta acción.";
+  if (e?.code === "permission-denied") return "Firebase rechazó la acción (sin permiso). Revisa que las reglas de firestore.rules estén publicadas y que tu usuario en la colección «usuarios» tenga el rol y la farmacia correctos.";
   if (e?.code === "unavailable") return "Sin conexión. Revisa tu internet e inténtalo de nuevo.";
   return "No se pudo guardar. " + (e?.message || "");
 }
@@ -74,16 +75,17 @@ $("fLogin").addEventListener("submit", async e => {
 $("salir").addEventListener("click", () => signOut(auth));
 
 onAuthStateChanged(auth, async user => {
-  S.subs.forEach(u => u()); S.subs = []; S.bloqueos = new Map(); S.perfil = null;
+  S.subs.forEach(u => u()); S.subs = []; S.bloqueos = new Map(); S.perfil = null; $("avisoGlobal").hidden = true;
   if (!user) { mostrar("vLogin"); $("top").hidden = true; return; }
   try {
     const snap = await getDoc(doc(db, "usuarios", user.uid));
-    if (!snap.exists() || snap.data().activo === false) {
+    if (!snap.exists() || [false, "false"].includes(snap.data().activo)) {
       await signOut(auth);
       $("lErr").textContent = "Tu usuario no está habilitado. Consulta con Abastecimiento."; $("lErr").hidden = false;
       return;
     }
-    S.perfil = { uid: user.uid, ...snap.data() };
+    const datos = snap.data();
+    S.perfil = { uid: user.uid, ...datos, rol: String(datos.rol || "").trim().toLowerCase() };
   } catch (e) {
     await signOut(auth);
     $("lErr").textContent = textoError(e); $("lErr").hidden = false;
@@ -91,13 +93,23 @@ onAuthStateChanged(auth, async user => {
   }
   await cargarCatalogo();
   iniciar();
+  revisarPerfil();
 });
+
+// Si el perfil se creó a mano con algún dato mal escrito, Firebase rechazará lo que se guarde: avisarlo claro.
+function revisarPerfil() {
+  const p = S.perfil, prob = [];
+  if (!["admin", "quimico"].includes(p.rol)) prob.push(`el campo «rol» debe ser admin o quimico (ahora dice "${p.rol}")`);
+  if (p.activo !== undefined && p.activo !== true && p.activo !== "true") prob.push(`el campo «activo» debe ser boolean true`);
+  if (p.rol === "quimico" && !FARMACIAS.includes(p.farmacia)) prob.push(`el campo «farmacia» ("${p.farmacia || ""}") no coincide con ninguna farmacia de config.js`);
+  if (prob.length) avisar({ message: "Tu usuario está mal configurado en Firebase (colección usuarios): " + prob.join("; ") + "." });
+}
 
 /* ===================== arranque por rol ===================== */
 function iniciar() {
   $("top").hidden = false;
   $("uNombre").textContent = S.perfil.nombre || S.perfil.usuario;
-  $("uRol").textContent = esAdmin() ? "Abastecimiento" : S.perfil.farmacia;
+  $("uRol").textContent = esAdmin() ? "Abastecimiento" : nombreFarm(S.perfil.farmacia);
   montarMotivos("bqMot", "bqMotivo"); montarMotivos("abMot", "abMotivo");
 
   if (esAdmin()) {
@@ -114,7 +126,7 @@ function iniciar() {
     }, e => avisar(e)));
     ir("vAdmin");
   } else {
-    $("qFarm").textContent = miFarm();
+    $("qFarm").textContent = nombreFarm(miFarm());
     const mapas = { propia: new Map(), todas: new Map() };
     const escuchar = (farm, k) => onSnapshot(query(collection(db, "bloqueos"), where("farmacia", "==", farm)), snap => {
       mapas[k] = new Map(snap.docs.map(d => [d.id, { id: d.id, ...d.data() }]));
@@ -125,13 +137,13 @@ function iniciar() {
     ir("vQuimico");
   }
 }
-function avisar(e) { const a = $("avisoGlobal"); a.hidden = false; a.textContent = textoError(e); }
+function avisar(e) { const a = $("avisoGlobal"); a.hidden = false; a.textContent = e?.code ? textoError(e) : e.message; }
 
 function pintarNav() {
   const pend = [...S.bloqueos.values()].filter(d => d.estado === "bloqueado" && d.solicitud?.estado === "pendiente").length;
   const items = esAdmin()
     ? [["vAdmin", "Bloqueos" + (pend ? `<span class="badge">${pend}</span>` : "")], ["vUsuarios", "Usuarios"]]
-    : [["vQuimico", "Mi farmacia"]];
+    : [];   // el químico tiene una sola vista: no hace falta menú
   const actual = S.vista === "vFicha" ? S.origen : S.vista;
   $("nav").innerHTML = items.map(([v, t]) => `<button type="button" data-ir="${v}" ${v === actual ? 'aria-current="page"' : ""}>${t}</button>`).join("");
 }
@@ -151,7 +163,7 @@ function render() {
 
 /* ===================== formulario de bloqueo (químico y admin) ===================== */
 function montarMotivos(contId, nombre) {
-  $(contId).innerHTML = MOTIVOS_BLOQUEO.map(m => `<label><input type="radio" name="${nombre}" value="${esc(m.texto)}">${esc(m.texto)}</label>`).join("");
+  $(contId).innerHTML = MOTIVOS_BLOQUEO.map(m => `<label class="${esc(m.clase)}"><input type="radio" name="${nombre}" value="${esc(m.texto)}">${esc(m.texto)}</label>`).join("");
 }
 function farmDeForm(pre) { return pre === "bq" ? miFarm() : $("abFarm").value; }
 function estadoEn(cod, farm) {
@@ -231,17 +243,27 @@ function etiquetaSolicitud(d) {
 }
 function pintarQuimico() {
   const q = norm($("qFil").value).trim();
-  const lista = [...S.bloqueos.values()].filter(d => d.estado === "bloqueado")
+  const activos = [...S.bloqueos.values()].filter(d => d.estado === "bloqueado");
+  const lista = activos
     .filter(d => !q || q.split(/\s+/).every(w => norm(d.codpro + " " + d.producto + " " + (d.laboratorio || "")).includes(w)))
     .sort((a, b) => (aFecha(b.desde) || 0) - (aFecha(a.desde) || 0));
-  $("qCount").textContent = [...S.bloqueos.values()].filter(d => d.estado === "bloqueado").length;
-  $("qTabla").innerHTML = `<thead><tr><th>Producto</th><th>Motivo</th><th>Desde</th><th class="der">Acción</th></tr></thead><tbody>` +
+  $("qCount").textContent = activos.length;
+  $("qK1").textContent = activos.length;
+  $("qK2").textContent = activos.filter(d => d.solicitud?.estado === "pendiente").length;
+  $("qK3").textContent = activos.filter(d => d.solicitud?.estado === "rechazada").length;
+  const estado = d => d.solicitud?.estado === "pendiente" ? `<span class="tag t-pend">Reactivación pedida</span>`
+    : d.solicitud?.estado === "rechazada" ? `<span class="tag t-rech">Reactivación rechazada</span>`
+    : `<span class="tag t-bloq">Bloqueado</span>`;
+  const accion = d => d.farmacia === "TODAS" ? "Ver" : d.solicitud?.estado === "pendiente" ? "Ver solicitud"
+    : d.solicitud?.estado === "rechazada" ? "Volver a pedir" : "Pedir reactivación";
+  $("qTabla").innerHTML = `<thead><tr><th>Producto</th><th>Motivo</th><th>Desde</th><th>Estado</th><th class="der">Acción</th></tr></thead><tbody>` +
     (lista.length ? lista.map(d => `<tr>
-      <td class="p"><b>${esc(d.producto)}</b><code>${esc(d.codpro)}${d.laboratorio ? " · " + esc(d.laboratorio) : ""} · por ${esc(d.porNombre)}</code></td>
-      <td>${tagMotivo(d.motivo, d.farmacia === "TODAS" ? " · todas" : "")} ${etiquetaSolicitud(d)}</td>
+      <td class="p"><b>${esc(d.codpro)} - ${esc(d.producto)}</b><code>${d.laboratorio ? esc(d.laboratorio) + " · " : ""}por ${esc(d.porNombre)}</code></td>
+      <td>${tagMotivo(d.motivo, d.farmacia === "TODAS" ? " · todas" : "")}</td>
       <td class="f">${fmtF(d.desde)}</td>
-      <td class="der"><button class="btn sm" type="button" data-ficha="${esc(d.id)}">${d.farmacia === "TODAS" ? "Ver" : (d.solicitud?.estado === "pendiente" ? "Ver solicitud" : "Pedir reactivación")}</button></td>
-    </tr>`).join("") : `<tr class="vacia"><td colspan="4">${q ? "Ningún bloqueo coincide con el filtro." : "No hay productos bloqueados en tu farmacia."}</td></tr>`) + "</tbody>";
+      <td>${estado(d)}</td>
+      <td class="der"><button class="btn sm" type="button" data-ficha="${esc(d.id)}">${accion(d)}</button></td>
+    </tr>`).join("") : `<tr class="vacia"><td colspan="5">${q ? "Ningún bloqueo coincide con la búsqueda." : "No hay productos bloqueados en tu farmacia."}</td></tr>`) + "</tbody>";
 }
 $("qTabla").addEventListener("click", e => { const b = e.target.closest("[data-ficha]"); if (b) abrirFicha(b.dataset.ficha); });
 
@@ -451,13 +473,15 @@ $("fUsr").addEventListener("submit", async e => {
 });
 
 /* ===================== exportar CSV ===================== */
-$("aCsv").addEventListener("click", () => {
-  const filas = [...S.bloqueos.values()].filter(d => d.estado === "bloqueado");
+function descargarCsv(filas, nombre) {
   const c = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const csv = ["farmacia,codpro,producto,laboratorio,motivo,alcance,desde,por,revisar,solicitud",
     ...filas.map(d => [d.farmacia, d.codpro, d.producto, d.laboratorio || "", d.motivo, d.alcance, fmtF(d.desde), d.porNombre, d.revisar || "", d.solicitud?.estado || ""].map(c).join(","))].join("\n");
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
-  a.download = `bloqueos_${hoyISO()}.csv`; a.click();
+  a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
+  a.download = `${nombre}_${hoyISO()}.csv`; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-});
+}
+const bloqueadosAhora = () => [...S.bloqueos.values()].filter(d => d.estado === "bloqueado");
+$("aCsv").addEventListener("click", () => descargarCsv(bloqueadosAhora(), "bloqueos"));
+$("qCsv").addEventListener("click", () => descargarCsv(bloqueadosAhora(), "bloqueos_" + corto(miFarm()).replace(/\W+/g, "_").toLowerCase()));
