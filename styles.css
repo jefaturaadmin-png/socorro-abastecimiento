@@ -122,6 +122,10 @@ legend { padding: 0; margin-bottom: 8px }
 .sel .cod { font-size: 12px; font-weight: 600; color: var(--muted) }
 .sel b { font-weight: 700 }
 .sel .est { font-size: 13px; font-weight: 600 }
+.sel .manual { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 4px 0 }
+.sel .manual input { min-height: 38px; font-size: 13.5px }
+.sel .enlace { align-self: flex-start; background: none; border: 0; padding: 2px 0; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer; text-decoration: underline }
+.resultados button.agregar { color: var(--brand-deep); font-weight: 600; border-top: 1px solid var(--line-2); border-radius: 0 0 6px 6px; margin-top: 2px }
 .ok { color: var(--ok) } .mal { color: var(--bad) }
 
 /* ---------- botones ---------- */

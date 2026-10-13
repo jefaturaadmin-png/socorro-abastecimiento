@@ -6,7 +6,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, onSnapshot, query, where,
   serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610132200";
+import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610132300";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -21,6 +21,13 @@ const fmtF = v => { const d = aFecha(v); return d ? d.toLocaleDateString("es-PE"
 const fmtFH = v => { const d = aFecha(v); return d ? d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) + "<br>" + d.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" }) : "ahora"; };
 const nombreFarm = f => "Sucursal " + String(f || "").replace(/^ALMACEN /, "").toLowerCase().replace(/(^|[\s.])\p{L}/gu, c => c.toUpperCase());
 const corto = f => f === "TODAS" ? "Todas las farmacias" : f.replace(/^ALMACEN /, "");
+// Productos fuera del catálogo sin código: se guardan con una clave "SC-NOMBRE".
+const SIN_COD = "SC-";
+const codVis = c => String(c || "").startsWith(SIN_COD) ? "Sin código" : c;
+const claveManual = p => {
+  const c = p.c.trim().replace(/[\/\s]+/g, "");
+  return c || SIN_COD + norm(p.n).replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+};
 const claseMotivo = m => (MOTIVOS_BLOQUEO.find(x => x.texto === m)?.clase) || "m-otro";
 const tagMotivo = (m, extra = "") => `<span class="tag ${claseMotivo(m)}">${esc(m)}${extra}</span>`;
 const norm = s => String(s || "").toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -172,42 +179,90 @@ function estadoEn(cod, farm) {
   const propio = farm === "TODAS" ? null : S.bloqueos.get(`${farm}__${cod}`);
   return propio?.estado === "bloqueado" ? propio : null;
 }
+// Clave y datos finales del producto elegido (del catálogo o escrito a mano).
+function prodFinal(p) {
+  if (!p.manual) return p;
+  const enCat = p.c.trim() && S.catIdx.get(p.c.trim());
+  if (enCat) return enCat;
+  const n = p.n.trim().replace(/\s+/g, " ");
+  return { c: claveManual(p), n: n ? n.toUpperCase() : `PRODUCTO CÓDIGO ${p.c.trim()}`, l: "", manual: true };
+}
 function pintarSel(pre) {
   const p = S.sel[pre], box = $(pre + "Sel"), btn = $(pre + "Btn");
   if (!box) return;
-  if (!p) { box.hidden = true; btn.disabled = true; return; }
-  const farm = farmDeForm(pre), b = estadoEn(p.c, farm);
+  if (!p) { box.hidden = true; box.innerHTML = ""; btn.disabled = true; return; }
   box.hidden = false;
+  const farm = farmDeForm(pre);
+  btn.textContent = pre === "bq" ? "Bloquear en mi farmacia" : (farm === "TODAS" ? "Bloquear en todas las farmacias" : `Bloquear en ${corto(farm)}`);
+  if (p.manual) {
+    // El formulario se arma una sola vez para no perder lo que se está escribiendo.
+    if (!box.querySelector(".manual")) {
+      box.innerHTML = `<span class="cod">Producto que no está en la lista</span>
+        <div class="manual">
+          <input data-m="c" placeholder="Código (si lo tienes)" value="${esc(p.c)}" autocomplete="off">
+          <input data-m="n" placeholder="Nombre del producto" value="${esc(p.n)}" autocomplete="off">
+        </div>
+        <span class="est"></span>
+        <button class="enlace" type="button" data-quitar>Quitar</button>`;
+      box.querySelector(p.c ? '[data-m="n"]' : '[data-m="c"]').focus();
+    }
+    const listo = p.c.trim() || p.n.trim().length >= 3;
+    const f = listo ? prodFinal(p) : null, b = f && estadoEn(f.c, farm);
+    const est = box.querySelector(".est");
+    est.className = "est " + (b ? "mal" : listo ? "ok" : "muted");
+    est.textContent = !listo ? "Escribe el código o el nombre (al menos uno)."
+      : b ? `Ya está bloqueado${b.farmacia === "TODAS" ? " en todas las farmacias" : ""}: ${b.motivo}`
+      : !f.manual ? `Ese código sí está en la lista: ${f.n}`
+      : `Se registrará como: ${codVis(f.c) === "Sin código" ? "sin código" : f.c} · ${f.n}`;
+    btn.disabled = !listo || !!b;
+    return;
+  }
+  const b = estadoEn(p.c, farm);
   box.innerHTML = `<span class="cod">${esc(p.c)}${p.l ? " · Lab. " + esc(p.l) : ""}</span><b>${esc(p.n)}</b>` +
     (b ? `<span class="est mal">Ya está bloqueado${b.farmacia === "TODAS" ? " en todas las farmacias" : ""}: ${esc(b.motivo)}</span>`
        : `<span class="est ok">Se abastece a ${esc(corto(farm))}</span>`);
   btn.disabled = !!b;
-  btn.textContent = pre === "bq" ? "Bloquear en mi farmacia" : (farm === "TODAS" ? "Bloquear en todas las farmacias" : `Bloquear en ${corto(farm)}`);
 }
 function cablearBuscador(pre) {
   const inp = $(pre + "Bus"), res = $(pre + "Res");
   inp.addEventListener("input", () => {
     const r = buscarCat(inp.value);
     res.hidden = !inp.value.trim();
-    res.innerHTML = r.length
+    res.innerHTML = (r.length
       ? r.map(p => `<button type="button" data-c="${esc(p.c)}"><code>${esc(p.c)}</code><span>${esc(p.n)}</span><small>${esc(p.l)}</small></button>`).join("")
-      : `<div class="vacio">Ningún producto coincide.</div>`;
+      : `<div class="vacio">Ningún producto coincide.</div>`) +
+      `<button type="button" class="agregar" data-manual>+ Agregar producto que no está en la lista</button>`;
   });
   inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); res.querySelector("button")?.click(); } if (e.key === "Escape") res.hidden = true; });
   res.addEventListener("click", e => {
+    if (e.target.closest("[data-manual]")) {
+      const t = inp.value.trim(), esCod = /^\d+$/.test(t);
+      S.sel[pre] = { manual: true, c: esCod ? t : "", n: esCod ? "" : t };
+      inp.value = ""; res.hidden = true; msg(pre + "Msg", ""); $(pre + "Sel").innerHTML = "";
+      return pintarSel(pre);
+    }
     const b = e.target.closest("[data-c]"); if (!b) return;
     S.sel[pre] = S.catIdx.get(b.dataset.c); inp.value = ""; res.hidden = true; msg(pre + "Msg", "");
     pintarSel(pre);
   });
 }
 cablearBuscador("bq"); cablearBuscador("ab");
+["bq", "ab"].forEach(pre => {
+  $(pre + "Sel").addEventListener("input", e => {
+    const campo = e.target.dataset?.m, p = S.sel[pre]; if (!campo || !p?.manual) return;
+    p[campo] = e.target.value; pintarSel(pre);
+  });
+  $(pre + "Sel").addEventListener("click", e => { if (e.target.closest("[data-quitar]")) { S.sel[pre] = null; pintarSel(pre); } });
+});
 $("abFarm").addEventListener("change", () => pintarSel("ab"));
 
 async function enviarBloqueo(e) {
   e.preventDefault();
-  const pre = e.currentTarget.dataset.pre, p = S.sel[pre], farm = farmDeForm(pre);
+  const pre = e.currentTarget.dataset.pre, elegido = S.sel[pre], farm = farmDeForm(pre);
   const motivo = document.querySelector(`input[name="${pre}Motivo"]:checked`)?.value;
-  if (!p) return msg(pre + "Msg", "Elige un producto.", true);
+  if (!elegido) return msg(pre + "Msg", "Elige un producto.", true);
+  if (elegido.manual && !elegido.c.trim() && elegido.n.trim().length < 3) return msg(pre + "Msg", "Escribe el código o el nombre del producto.", true);
+  const p = prodFinal(elegido), extra = p.manual ? { fueraCatalogo: true } : {};
   if (!motivo) return msg(pre + "Msg", "Elige el motivo del bloqueo.", true);
   if (estadoEn(p.c, farm)) return msg(pre + "Msg", "Ese producto ya está bloqueado.", true);
   const comentario = $(pre + "Com").value.trim(), revisar = $(pre + "Rev")?.value || null;
@@ -216,10 +271,10 @@ async function enviarBloqueo(e) {
   lote.set(doc(db, "bloqueos", `${farm}__${p.c}`), {
     farmacia: farm, codpro: p.c, producto: p.n, laboratorio: p.l || "", estado: "bloqueado",
     alcance: farm === "TODAS" ? "todas" : "farmacia",
-    motivo, comentario, revisar, desde: ahora, solicitud: null, ...quien
+    motivo, comentario, revisar, desde: ahora, solicitud: null, ...extra, ...quien
   });
   lote.set(doc(collection(db, "historial")), {
-    farmacia: farm, codpro: p.c, producto: p.n, laboratorio: p.l || "", tipo: "bloqueo", motivo, comentario, fecha: ahora, ...quien
+    farmacia: farm, codpro: p.c, producto: p.n, laboratorio: p.l || "", tipo: "bloqueo", motivo, comentario, fecha: ahora, ...extra, ...quien
   });
   $(pre + "Btn").disabled = true;
   try {
@@ -258,7 +313,7 @@ function pintarQuimico() {
     : d.solicitud?.estado === "rechazada" ? "Volver a pedir" : "Pedir reactivación";
   $("qTabla").innerHTML = `<thead><tr><th>Producto</th><th>Motivo</th><th>Desde</th><th>Estado</th><th class="der">Acción</th></tr></thead><tbody>` +
     (lista.length ? lista.map(d => `<tr>
-      <td class="p"><b>${esc(d.codpro)} - ${esc(d.producto)}</b><code>${d.laboratorio ? esc(d.laboratorio) + " · " : ""}por ${esc(d.porNombre)}</code></td>
+      <td class="p"><b>${esc(codVis(d.codpro))} - ${esc(d.producto)}</b><code>${d.laboratorio ? esc(d.laboratorio) + " · " : ""}por ${esc(d.porNombre)}</code></td>
       <td>${tagMotivo(d.motivo)}</td>
       <td class="f">${fmtF(d.desde)}</td>
       <td>${estado(d)}</td>
@@ -283,7 +338,7 @@ function pintarAdmin() {
   // solicitudes
   $("aSol").innerHTML = pend.length ? pend.sort((a, b) => (aFecha(a.solicitud.fecha) || 0) - (aFecha(b.solicitud.fecha) || 0)).map(d => `
     <div class="sol" data-id="${esc(d.id)}">
-      <div class="p"><b>${esc(d.producto)}</b><code>${esc(d.codpro)} · ${esc(corto(d.farmacia))}</code><div>${tagMotivo(d.motivo)} <span class="muted">desde ${fmtF(d.desde)}</span></div></div>
+      <div class="p"><b>${esc(d.producto)}</b><code>${esc(codVis(d.codpro))} · ${esc(corto(d.farmacia))}</code><div>${tagMotivo(d.motivo)} <span class="muted">desde ${fmtF(d.desde)}</span></div></div>
       <div><b>${esc(d.solicitud.motivo)}</b><div class="muted">${esc(d.solicitud.comentario || "Sin comentario")}</div><small class="muted">${esc(d.solicitud.porNombre)} · ${fmtF(d.solicitud.fecha)}</small></div>
       <div class="acc">
         <label class="filtro">Respuesta (opcional)<input type="text" data-resp placeholder="Comentario para el químico"></label>
@@ -314,7 +369,7 @@ function pintarAdmin() {
     (lista.length ? lista.map(d => {
       const vencida = d.estado === "bloqueado" && d.revisar && d.revisar <= hoy;
       return `<tr class="clic ${vencida ? "revisar" : ""}" data-ficha="${esc(d.id)}" tabindex="0">
-        <td class="p"><b>${esc(d.producto)}</b><code>${esc(d.codpro)}${d.laboratorio ? " · " + esc(d.laboratorio) : ""}</code></td>
+        <td class="p"><b>${esc(d.producto)}</b><code>${esc(codVis(d.codpro))}${d.fueraCatalogo ? " · fuera de la lista" : ""}${d.laboratorio ? " · " + esc(d.laboratorio) : ""}</code></td>
         <td>${esc(corto(d.farmacia))}</td>
         <td>${d.estado === "activo" ? `<span class="tag t-ok">Reactivado</span>` : tagMotivo(d.motivo)} ${d.estado === "bloqueado" ? etiquetaSolicitud(d) : ""}</td>
         <td>${esc(d.porNombre)}</td>
@@ -375,7 +430,7 @@ async function cargarHistorial() {
 function pintarFicha() {
   const d = S.bloqueos.get(S.ficha); if (!d) return;
   $("fVolver").textContent = "← Volver";
-  $("fEyebrow").innerHTML = `<code>${esc(d.codpro)}</code>${d.laboratorio ? " · Lab. " + esc(d.laboratorio) : ""} · ${esc(corto(d.farmacia))}`;
+  $("fEyebrow").innerHTML = `<code>${esc(codVis(d.codpro))}</code>${d.fueraCatalogo ? " · fuera de la lista" : ""}${d.laboratorio ? " · Lab. " + esc(d.laboratorio) : ""} · ${esc(corto(d.farmacia))}`;
   $("fTitulo").textContent = d.producto;
   $("fEstado").innerHTML = d.estado === "bloqueado"
     ? `<span class="estado ${claseMotivo(d.motivo)}">Bloqueado desde el ${fmtF(d.desde)}</span>`
@@ -475,8 +530,8 @@ $("fUsr").addEventListener("submit", async e => {
 /* ===================== exportar CSV ===================== */
 function descargarCsv(filas, nombre) {
   const c = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const csv = ["farmacia,codpro,producto,laboratorio,motivo,alcance,desde,por,revisar,solicitud",
-    ...filas.map(d => [d.farmacia, d.codpro, d.producto, d.laboratorio || "", d.motivo, d.alcance, fmtF(d.desde), d.porNombre, d.revisar || "", d.solicitud?.estado || ""].map(c).join(","))].join("\n");
+  const csv = ["farmacia,codpro,producto,en_lista,laboratorio,motivo,alcance,desde,por,revisar,solicitud",
+    ...filas.map(d => [d.farmacia, String(d.codpro).startsWith(SIN_COD) ? "" : d.codpro, d.producto, d.fueraCatalogo ? "no" : "si", d.laboratorio || "", d.motivo, d.alcance, fmtF(d.desde), d.porNombre, d.revisar || "", d.solicitud?.estado || ""].map(c).join(","))].join("\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
   a.download = `${nombre}_${hoyISO()}.csv`; a.click();
