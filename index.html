@@ -6,7 +6,7 @@
 <title>Socorro · Abastecimiento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610140100">
+<link rel="stylesheet" href="styles.css?v=202610140200">
 </head>
 <body>
 
@@ -60,9 +60,10 @@
       <form class="card login-card" id="fClave">
         <div class="marca grande"><b>Socorro</b><span>Abastecimiento</span></div>
         <div>
-          <h1>Crea tu contraseña</h1>
-          <p class="muted">Es tu primer ingreso. Cambia la contraseña que te dio Abastecimiento por una que solo tú conozcas.</p>
+          <h1>Completa tus datos</h1>
+          <p class="muted">Es tu primer ingreso. Escribe tu nombre y cambia la contraseña que te dio Abastecimiento por una que solo tú conozcas.</p>
         </div>
+        <div class="campo"><label for="cNom">Tu nombre completo</label><input id="cNom" autocomplete="name" required minlength="3" maxlength="60" placeholder="Ej. Q.F. María Rojas Pérez"></div>
         <div class="campo"><label for="cNueva">Nueva contraseña</label><input id="cNueva" type="password" autocomplete="new-password" required minlength="6"><small class="ayuda">Mínimo 6 caracteres.</small></div>
         <div class="campo"><label for="cRepite">Repite la nueva contraseña</label><input id="cRepite" type="password" autocomplete="new-password" required minlength="6"></div>
         <div class="msg error" id="cErr" hidden></div>
@@ -199,7 +200,7 @@
         <div class="bloque-grid">
           <div class="col">
             <div class="campo"><label for="uUsr">Usuario</label><input id="uUsr" required pattern="[a-z0-9._-]{3,30}" placeholder="ej. mercado"><small class="ayuda">Minúsculas, sin espacios. Es lo que escribirá para ingresar.</small></div>
-            <div class="campo"><label for="uNom">Nombre</label><input id="uNom" required placeholder="Q.F. Nombre Apellido"></div>
+            <div class="campo"><label for="uNom">Nombre (opcional)</label><input id="uNom" placeholder="Q.F. Nombre Apellido"><small class="ayuda">Si lo dejas vacío, lo escribirá la química en su primer ingreso.</small></div>
           </div>
           <div class="col">
             <div class="campo"><label for="uRolSel">Rol</label><select id="uRolSel"><option value="quimico">Químico de farmacia</option><option value="admin">Administrador (abastecimiento)</option></select></div>
@@ -243,6 +244,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610140100"></script>
+<script type="module" src="app.js?v=202610140200"></script>
 </body>
 </html>

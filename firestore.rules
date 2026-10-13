@@ -22,10 +22,12 @@ service cloud.firestore {
     match /usuarios/{uid} {
       allow read: if request.auth != null && (request.auth.uid == uid || esAdmin());
       allow write: if esAdmin();
-      // Cada usuario solo puede marcar que ya cambió su contraseña inicial.
+      // En su primer ingreso cada usuario solo puede escribir su nombre y marcar que ya cambió su contraseña.
       allow update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cambiarClave', 'claveCambiada'])
-        && request.resource.data.cambiarClave == false;
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nombre', 'cambiarClave', 'claveCambiada'])
+        && request.resource.data.cambiarClave == false
+        && request.resource.data.nombre is string
+        && request.resource.data.nombre.size() >= 3 && request.resource.data.nombre.size() <= 60;
     }
 
     // ---------- estado actual de cada producto en cada farmacia ----------

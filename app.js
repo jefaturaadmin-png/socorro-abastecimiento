@@ -6,7 +6,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where,
   serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610140100";
+import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610140200";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -100,7 +100,11 @@ onAuthStateChanged(auth, async user => {
     return;
   }
   // Primer ingreso (o contraseña restablecida): debe crear su propia contraseña antes de seguir.
-  if (S.perfil.cambiarClave === true) { $("top").hidden = true; mostrar("vClave"); $("cNueva").focus(); return; }
+  if (S.perfil.cambiarClave === true) {
+    $("top").hidden = true; mostrar("vClave");
+    $("cNom").value = S.perfil.nombre || ""; ($("cNom").value ? $("cNueva") : $("cNom")).focus();
+    return;
+  }
   await entrar();
 });
 async function entrar() {
@@ -113,14 +117,16 @@ $("cSalir").addEventListener("click", () => signOut(auth));
 $("fClave").addEventListener("submit", async e => {
   e.preventDefault();
   const nueva = $("cNueva").value, err = t => { $("cErr").textContent = t; $("cErr").hidden = !t; };
+  const nombre = $("cNom").value.trim().replace(/\s+/g, " ");
+  if (nombre.length < 3) return err("Escribe tu nombre completo.");
   if (nueva.length < 6) return err("La contraseña debe tener al menos 6 caracteres.");
   if (nueva !== $("cRepite").value) return err("Las dos contraseñas no coinciden.");
   if (S.claveIngreso && nueva === S.claveIngreso) return err("Debe ser distinta a la contraseña que te dio Abastecimiento.");
   $("cBtn").disabled = true; err("");
   try {
     await updatePassword(auth.currentUser, nueva);
-    await updateDoc(doc(db, "usuarios", S.perfil.uid), { cambiarClave: false, claveCambiada: serverTimestamp() });
-    S.perfil.cambiarClave = false; S.claveIngreso = ""; e.target.reset();
+    await updateDoc(doc(db, "usuarios", S.perfil.uid), { nombre, cambiarClave: false, claveCambiada: serverTimestamp() });
+    S.perfil.cambiarClave = false; S.perfil.nombre = nombre; S.claveIngreso = ""; e.target.reset();
     toast("Contraseña guardada. Úsala desde ahora para ingresar.");
     await entrar();
   } catch (x) {
@@ -532,7 +538,7 @@ function pintarUsuarios() {
   const lista = [...S.usuarios].sort((a, b) => (a.rol + a.farmacia + a.usuario).localeCompare(b.rol + b.farmacia + b.usuario));
   $("uTabla").innerHTML = `<thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Farmacia</th><th>Contraseña</th><th class="der">Estado</th></tr></thead><tbody>` +
     (lista.length ? lista.map(u => `<tr>
-      <td class="f">${esc(u.usuario)}</td><td>${esc(u.nombre)}</td>
+      <td class="f">${esc(u.usuario)}</td><td>${u.nombre ? esc(u.nombre) : '<span class="muted">Lo escribirá al ingresar</span>'}</td>
       <td>${u.rol === "admin" ? "Administrador" : "Químico"}</td><td>${esc(u.farmacia ? corto(u.farmacia) : "–")}</td>
       <td>${u.cambiarClave === true ? '<span class="tag t-pend">Aún no cambia su contraseña</span>' : '<span class="tag t-ok">Contraseña propia</span>'}</td>
       <td class="der">${u.uid === S.perfil.uid ? '<span class="muted">Tú</span>' :
