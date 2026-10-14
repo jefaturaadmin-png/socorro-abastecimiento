@@ -6,7 +6,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where,
   serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610140400";
+import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610140500";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -105,7 +105,8 @@ onAuthStateChanged(auth, async user => {
   // Primer ingreso (o contraseña restablecida): debe crear su propia contraseña antes de seguir.
   if (S.perfil.cambiarClave === true) {
     $("top").hidden = true; mostrar("vClave");
-    $("cNom").value = S.perfil.nombre || ""; ($("cNom").value ? $("cNueva") : $("cNom")).focus();
+    // Siempre en blanco: la química escribe su propio nombre en su primer ingreso.
+    $("fClave").reset(); $("cErr").hidden = true; $("cNom").focus();
     return;
   }
   await entrar();
