@@ -6,7 +6,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where,
   serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610141000";
+import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610141100";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -207,15 +207,19 @@ function pintarNav() {
   const pend = [...S.bloqueos.values()].filter(d => d.estado === "bloqueado" && d.solicitud?.estado === "pendiente").length;
   const items = esAdmin()
     ? [["vAdmin", "Bloqueos" + (pend ? `<span class="badge">${pend}</span>` : "")],
-       ["vUsuarios", "Usuarios" + (solicitudesSucursal().length ? `<span class="badge">${solicitudesSucursal().length}</span>` : "")]]
+       ["vUsuarios", "Usuarios" + (solicitudesSucursal().length ? `<span class="badge">${solicitudesSucursal().length}</span>` : "")],
+       ["vProy", "Proyección de compras"]]
     : [];   // el químico tiene una sola vista: no hace falta menú
   const actual = S.vista === "vFicha" ? S.origen : S.vista;
   $("nav").innerHTML = items.map(([v, t]) => `<button type="button" data-ir="${v}" ${v === actual ? 'aria-current="page"' : ""}>${t}</button>`).join("");
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vQuimico", "vAdmin", "vUsuarios", "vFicha"].forEach(v => $(v).hidden = v !== id); }
-function ir(vista) { S.vista = vista; mostrar(vista); render(); scrollTo({ top: 0 }); }
+function mostrar(id) { ["vLogin", "vClave", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function ir(vista) {
+  // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
+  if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html";
+  S.vista = vista; mostrar(vista); render(); scrollTo({ top: 0 }); }
 function render() {
   if (!S.perfil) return;
   pintarNav();

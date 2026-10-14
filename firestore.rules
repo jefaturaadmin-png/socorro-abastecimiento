@@ -71,6 +71,14 @@ service cloud.firestore {
       allow delete: if false;   // nada se borra
     }
 
+    // ---------- proyección de compras: solo el administrador ----------
+    match /proy_config/{id} { allow read, write: if esAdmin(); }
+    match /proy_elecciones/{id} { allow read, write: if esAdmin(); }
+    match /proy_blobs/{id} {
+      allow read, write: if esAdmin();
+      match /partes/{parte} { allow read, write: if esAdmin(); }
+    }
+
     // ---------- historial: solo se agrega, nunca se cambia ni se borra ----------
     match /historial/{id} {
       allow read: if esAdmin()

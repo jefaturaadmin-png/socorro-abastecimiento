@@ -35,6 +35,10 @@ Cada químico bloquea los productos que no se deben abastecer a su farmacia y, s
 - **Administrador**: en **Bloqueos** ve las solicitudes pendientes (Aprobar / Rechazar), todos los bloqueos con filtros, puede bloquear en una farmacia o en **todas**, y **Descargar Excel** (de todas o de la farmacia elegida en los filtros) para cruzarlo con la reposición. En **Usuarios** ves quién ya cambió su contraseña inicial; el botón **Generar** propone una contraseña inicial.
 - Si un químico se va: en **Usuarios** pulsa **Deshabilitar**. Para cambiarle la contraseña, bórralo en Authentication y créalo de nuevo con el mismo usuario (su historial se mantiene).
 
+## Proyección de compras (solo administrador)
+
+Pestaña **Proyección de compras**: es el antiguo "Kardex Socorro" (Pronóstico, Reposición, Movimientos) en una página aparte (`proyeccion.html` + `proyeccion.js`) que se abre dentro del panel. Pulsa **Cargar pronósticos** y sube `pronosticos.json.gz` de Colab: queda guardado en Firebase (colecciones `proy_config`, `proy_blobs`, `proy_elecciones`, solo lectura/escritura del administrador). El resumen del kardex de Movimientos no se guarda; se carga en cada visita.
+
 ## Actualizar el catálogo
 
 Cuando haya productos nuevos, vuelve a correr la celda de Colab que genera `catalogo.json` y súbelo al repositorio reemplazando el anterior.

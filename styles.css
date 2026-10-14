@@ -306,3 +306,6 @@ legend { padding: 0; margin-bottom: 8px }
 .cs-form .filtro select, .cs-form .filtro input { width: 100%; min-width: 0 }
 #sCard { overflow: hidden; border-left: 4px solid #E0A11B }
 @media (max-width: 700px) { .cs-form { left: 0; right: auto } }
+
+/* ---------- proyección de compras (marco a pantalla completa bajo la cabecera) ---------- */
+.proy-frame { display: block; width: 100%; height: calc(100vh - 63px); height: calc(100dvh - 63px); border: 0; background: #f7f5f3 }
