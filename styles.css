@@ -225,10 +225,52 @@ legend { padding: 0; margin-bottom: 8px }
 .accion { border-top: 4px solid var(--ok) }
 
 /* ---------- ingreso ---------- */
-.login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px }
-.login-card { width: min(400px, 100%); padding: 30px 28px; display: flex; flex-direction: column; gap: 16px }
-.login-card h1 { margin: 6px 0 2px; font-size: 22px; font-weight: 700 }
-.login-card p { margin: 0; font-size: 14px }
+/* Pantallas de ingreso con la identidad de Farmacia Socorro (naranja, letra redondeada) */
+.ingreso { --nar: #F28C1E; --nar-2: #EA6A0C; --nar-3: #C9550A; min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(360px, 1fr); background: #fff; font-family: "Nunito", var(--f) }
+.ingreso-arte { position: relative; overflow: hidden; background: linear-gradient(150deg, #F7A23A 0%, var(--nar) 45%, var(--nar-2) 100%); color: #fff; display: flex; align-items: center; padding: 48px clamp(28px, 6vw, 80px) }
+.cruz-g { position: absolute; width: 74%; height: auto; right: -24%; top: 50%; transform: translateY(-50%); stroke: none }
+.chispa { position: absolute; font-weight: 900; line-height: 1; color: #fff; opacity: .9 }
+.s1 { top: 9%; left: 12%; font-size: 54px } .s2 { top: 22%; right: 16%; font-size: 30px } .s3 { bottom: 16%; right: 10%; font-size: 64px } .s4 { bottom: 30%; left: 7%; font-size: 26px; opacity: .7 }
+.arte-txt { position: relative; max-width: 520px }
+.lema { margin: 26px 0 0; font-size: clamp(30px, 3.6vw, 46px); line-height: 1.1; font-weight: 700; letter-spacing: -.01em; text-shadow: 0 2px 12px rgba(150,60,0,.25) }
+.lema b { font-weight: 900 }
+.arte-sub { margin: 16px 0 0; font-size: 17px; font-weight: 700; opacity: .95; text-transform: uppercase; letter-spacing: .12em }
+/* logotipo en píldora: cruz con "fs" + Farmacia Socorro */
+.fs-pill { display: inline-flex; align-items: center; gap: 10px; padding: 9px 22px 9px 12px; border-radius: 999px; background: linear-gradient(180deg, var(--nar), var(--nar-2)); color: #fff; box-shadow: 0 6px 18px rgba(150,60,0,.25); border: 2px solid rgba(255,255,255,.55) }
+.fs-cruz { display: grid; place-items: center; width: 38px; height: 38px; font-weight: 900; font-style: italic; font-size: 18px; letter-spacing: -.04em;
+  clip-path: polygon(33% 0, 67% 0, 67% 33%, 100% 33%, 100% 67%, 67% 67%, 67% 100%, 33% 100%, 33% 67%, 0 67%, 0 33%, 33% 33%); background: #fff; color: var(--nar-2) }
+.fs-nom { display: flex; flex-direction: column; line-height: 1; font-weight: 900; font-style: italic; font-size: 24px }
+.fs-nom small { font-size: 11px; font-weight: 800; font-style: italic; opacity: .95; margin-bottom: 2px }
+.fs-pill.chica { padding: 6px 16px 6px 9px; border: 0; box-shadow: 0 4px 12px rgba(234,106,12,.25) }
+.fs-pill.chica .fs-cruz { width: 28px; height: 28px; font-size: 13px }
+.fs-pill.chica .fs-nom { font-size: 18px }
+.fs-pill.chica .fs-nom small { font-size: 9px }
+/* formulario */
+.login-card { align-self: center; justify-self: center; width: min(400px, 100%); padding: 40px 28px; display: flex; flex-direction: column; gap: 16px }
+.ingreso-cab .fs-pill { display: none }
+.ingreso-cab { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 4px }
+.login-card h1 { margin: 14px 0 0; font-size: 28px; font-weight: 900; color: #2B2B2B; letter-spacing: -.01em }
+.login-card p { margin: 0; font-size: 15px }
+.ingreso label { font-size: 13.5px; font-weight: 800; color: #3B3B3B }
+.ingreso input { min-height: 48px; border-radius: 12px; font-size: 15px; border-color: #E2D9D0 }
+.ingreso input:focus { border-color: var(--nar); box-shadow: 0 0 0 3px #FDE7D1 }
+.ingreso .btn.primario { min-height: 50px; border-radius: 999px; font-size: 16px; font-weight: 800; background: linear-gradient(180deg, var(--nar), var(--nar-2)); box-shadow: 0 8px 20px rgba(234,106,12,.35) }
+.ingreso .btn.primario:hover { background: linear-gradient(180deg, var(--nar-2), var(--nar-3)) }
+.ingreso .enlace { color: #8A7F76 }
+.ingreso .enlace:hover { color: var(--nar-2) }
+@media (max-width: 820px) {
+  .ingreso { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr }
+  .ingreso-arte { padding: 32px 24px 40px }
+  .ingreso-arte .fs-pill { display: none }
+  .ingreso-cab .fs-pill { display: inline-flex }
+  .login-card { align-self: start }
+  .cruz-g { width: 60%; right: -18% }
+  .s2 { display: none }
+  .lema { margin: 0; font-size: 28px }
+  .arte-sub { font-size: 13px }
+  .s1 { font-size: 26px; top: 14%; left: auto; right: 8% } .s3 { font-size: 30px; bottom: 12%; right: 20% } .s4 { display: none }
+  .login-card { padding: 28px 20px 40px }
+}
 
 @media (max-width: 960px) {
   .grid-q { grid-template-columns: minmax(0, 1fr) }

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Socorro · Abastecimiento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610140600">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
+<link rel="stylesheet" href="styles.css?v=202610140710">
 </head>
 <body>
 
@@ -41,12 +41,21 @@
 
   <!-- ============ INGRESO ============ -->
   <section id="vLogin" hidden>
-    <div class="login-wrap">
-      <form class="card login-card" id="fLogin">
-        <div class="marca grande"><b>Socorro</b><span>Abastecimiento</span></div>
-        <div>
-          <h1>Ingresar</h1>
-          <p class="muted">Usa el usuario y contraseña que te dio Abastecimiento.</p>
+    <div class="ingreso">
+      <aside class="ingreso-arte" aria-hidden="true">
+        <svg class="cruz-g" viewBox="0 0 100 100"><g fill="#fff" opacity=".16"><rect x="33" y="0" width="34" height="100" rx="9"/><rect x="0" y="33" width="100" height="34" rx="9"/></g></svg>
+        <span class="chispa s1">+</span><span class="chispa s2">+</span><span class="chispa s3">+</span><span class="chispa s4">+</span>
+        <div class="arte-txt">
+          <div class="fs-pill"><span class="fs-cruz">fs</span><span class="fs-nom"><small>Farmacia</small>Socorro</span></div>
+          <p class="lema">Dedicados a cuidarte,<br><b>desde siempre</b></p>
+          <p class="arte-sub">Abastecimiento de farmacias</p>
+        </div>
+      </aside>
+      <form class="login-card" id="fLogin">
+        <div class="ingreso-cab">
+          <div class="fs-pill chica"><span class="fs-cruz">fs</span><span class="fs-nom"><small>Farmacia</small>Socorro</span></div>
+          <h1>¡Hola! Ingresa a tu cuenta</h1>
+          <p class="muted">Usa el usuario y la contraseña que te dio Abastecimiento.</p>
         </div>
         <div class="campo"><label for="lUser">Usuario</label><input id="lUser" autocomplete="username" required></div>
         <div class="campo"><label for="lPass">Contraseña</label><input id="lPass" type="password" autocomplete="current-password" required></div>
@@ -58,10 +67,19 @@
 
   <!-- ============ PRIMER INGRESO: CAMBIAR CONTRASEÑA ============ -->
   <section id="vClave" hidden>
-    <div class="login-wrap">
-      <form class="card login-card" id="fClave">
-        <div class="marca grande"><b>Socorro</b><span>Abastecimiento</span></div>
-        <div>
+    <div class="ingreso">
+      <aside class="ingreso-arte" aria-hidden="true">
+        <svg class="cruz-g" viewBox="0 0 100 100"><g fill="#fff" opacity=".16"><rect x="33" y="0" width="34" height="100" rx="9"/><rect x="0" y="33" width="100" height="34" rx="9"/></g></svg>
+        <span class="chispa s1">+</span><span class="chispa s2">+</span><span class="chispa s3">+</span><span class="chispa s4">+</span>
+        <div class="arte-txt">
+          <div class="fs-pill"><span class="fs-cruz">fs</span><span class="fs-nom"><small>Farmacia</small>Socorro</span></div>
+          <p class="lema">Dedicados a cuidarte,<br><b>desde siempre</b></p>
+          <p class="arte-sub">Abastecimiento de farmacias</p>
+        </div>
+      </aside>
+      <form class="login-card" id="fClave">
+        <div class="ingreso-cab">
+          <div class="fs-pill chica"><span class="fs-cruz">fs</span><span class="fs-nom"><small>Farmacia</small>Socorro</span></div>
           <h1>Completa tus datos</h1>
           <p class="muted">Es tu primer ingreso. Escribe tu nombre y cambia la contraseña que te dio Abastecimiento por una que solo tú conozcas.</p>
         </div>
@@ -256,6 +274,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610140600"></script>
+<script type="module" src="app.js?v=202610140710"></script>
 </body>
 </html>
