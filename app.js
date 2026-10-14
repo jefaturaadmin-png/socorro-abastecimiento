@@ -6,7 +6,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where,
   serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610140800";
+import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610140900";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -172,7 +172,7 @@ function iniciar() {
     }, e => avisar(e)));
     S.subs.push(onSnapshot(collection(db, "usuarios"), snap => {
       S.usuarios = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
-      if (S.vista === "vUsuarios") pintarUsuarios();
+      if (S.vista === "vUsuarios" && !S.editando) pintarUsuarios();   // no borrar lo que se está editando
     }, e => avisar(e)));
     ir("vAdmin");
   } else {
@@ -184,6 +184,11 @@ function iniciar() {
       render();
     }, e => avisar(e));
     S.subs.push(escuchar(miFarm(), "propia"), escuchar("TODAS", "todas"));
+    // Si el administrador le cambia la sucursal, el rol o la deshabilita, se recarga con los datos nuevos.
+    S.subs.push(onSnapshot(doc(db, "usuarios", S.perfil.uid), snap => {
+      const d = snap.data() || {};
+      if (d.farmacia !== S.perfil.farmacia || String(d.rol || "").trim().toLowerCase() !== S.perfil.rol || [false, "false"].includes(d.activo) || d.cambiarClave === true) location.reload();
+    }));
     ir("vQuimico");
   }
 }
@@ -551,16 +556,48 @@ $("fAccion").addEventListener("click", async e => {
 $("uRolSel").addEventListener("change", () => { $("uFarm").disabled = $("uRolSel").value === "admin"; });
 function pintarUsuarios() {
   const lista = [...S.usuarios].sort((a, b) => (a.rol + a.farmacia + a.usuario).localeCompare(b.rol + b.farmacia + b.usuario));
-  $("uTabla").innerHTML = `<thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Farmacia</th><th>Contraseña</th><th class="der">Estado</th></tr></thead><tbody>` +
-    (lista.length ? lista.map(u => `<tr>
+  const opcFarm = sel => FARMACIAS.map(f => `<option value="${esc(f)}" ${f === sel ? "selected" : ""}>${esc(corto(f))}</option>`).join("");
+  const fila = u => `<tr class="${u.activo === false ? "inactivo" : ""}">
       <td class="f">${esc(u.usuario)}</td><td>${u.nombre ? esc(u.nombre) : '<span class="muted">Lo escribirá al ingresar</span>'}</td>
       <td>${u.rol === "admin" ? "Administrador" : "Químico"}</td><td>${esc(u.farmacia ? corto(u.farmacia) : "–")}</td>
-      <td>${u.cambiarClave === true ? '<span class="tag t-pend">Aún no cambia su contraseña</span>' : '<span class="tag t-ok">Contraseña propia</span>'}</td>
-      <td class="der">${u.uid === S.perfil.uid ? '<span class="muted">Tú</span>' :
-        `<button class="btn sm" type="button" data-toggle="${esc(u.uid)}">${u.activo === false ? "Habilitar" : "Deshabilitar"}</button>`}</td>
-    </tr>`).join("") : `<tr class="vacia"><td colspan="6">Sin usuarios.</td></tr>`) + "</tbody>";
+      <td>${u.cambiarClave === true ? '<span class="tag t-pend">Aún no cambia su contraseña</span>' : '<span class="tag t-ok">Contraseña propia</span>'}${u.activo === false ? ' <span class="tag t-rech">Deshabilitado</span>' : ""}</td>
+      <td class="der"><div class="botones-fila">${u.uid === S.perfil.uid ? '<span class="muted">Tú</span>' :
+        `<button class="btn sm" type="button" data-editar="${esc(u.uid)}">Editar</button>
+         <button class="btn sm" type="button" data-toggle="${esc(u.uid)}">${u.activo === false ? "Habilitar" : "Deshabilitar"}</button>`}</div></td>
+    </tr>`;
+  // Fila de edición debajo del usuario elegido.
+  const edicion = u => `<tr class="editando"><td colspan="6">
+      <div class="edit-grid" data-uid="${esc(u.uid)}">
+        <label class="filtro">Nombre<input data-e="nombre" value="${esc(u.nombre || "")}" maxlength="60" placeholder="Nombre completo"></label>
+        <label class="filtro">Sucursal<select data-e="farmacia" ${u.rol === "admin" ? "disabled" : ""}>${opcFarm(u.farmacia)}</select></label>
+        <label class="filtro">Rol<select data-e="rol"><option value="quimico" ${u.rol !== "admin" ? "selected" : ""}>Químico</option><option value="admin" ${u.rol === "admin" ? "selected" : ""}>Administrador</option></select></label>
+        <label class="check"><input type="checkbox" data-e="cambiarClave" ${u.cambiarClave === true ? "checked" : ""}> Pedirle nombre y contraseña nueva en su próximo ingreso</label>
+        <div class="botones-fila"><button class="btn sm primario" type="button" data-guardar>Guardar cambios</button><button class="btn sm" type="button" data-cancelar>Cancelar</button></div>
+      </div>
+      <small class="ayuda">Los bloqueos ya registrados se quedan en la sucursal donde se hicieron. Si está conectada, el cambio se le aplica al instante.</small>
+    </td></tr>`;
+  $("uTabla").innerHTML = `<thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Farmacia</th><th>Contraseña</th><th class="der">Acciones</th></tr></thead><tbody>` +
+    (lista.length ? lista.map(u => fila(u) + (S.editando === u.uid ? edicion(u) : "")).join("") : `<tr class="vacia"><td colspan="6">Sin usuarios.</td></tr>`) + "</tbody>";
 }
+$("uTabla").addEventListener("change", e => {
+  // Un administrador no tiene sucursal.
+  if (e.target.dataset.e === "rol") e.target.closest(".edit-grid").querySelector('[data-e="farmacia"]').disabled = e.target.value === "admin";
+});
 $("uTabla").addEventListener("click", async e => {
+  const ed = e.target.closest("[data-editar]");
+  if (ed) { S.editando = S.editando === ed.dataset.editar ? null : ed.dataset.editar; return pintarUsuarios(); }
+  if (e.target.closest("[data-cancelar]")) { S.editando = null; return pintarUsuarios(); }
+  if (e.target.closest("[data-guardar]")) {
+    const g = e.target.closest(".edit-grid"), v = k => g.querySelector(`[data-e="${k}"]`);
+    const rol = v("rol").value, cambio = {
+      nombre: v("nombre").value.trim().replace(/\s+/g, " "),
+      rol, farmacia: rol === "admin" ? "" : v("farmacia").value,
+      cambiarClave: v("cambiarClave").checked
+    };
+    try { await setDoc(doc(db, "usuarios", g.dataset.uid), cambio, { merge: true }); S.editando = null; toast("Usuario actualizado"); pintarUsuarios(); }
+    catch (err) { toast(textoError(err)); }
+    return;
+  }
   const b = e.target.closest("[data-toggle]"); if (!b) return;
   const u = S.usuarios.find(x => x.uid === b.dataset.toggle);
   try { await setDoc(doc(db, "usuarios", u.uid), { activo: u.activo === false }, { merge: true }); toast(u.activo === false ? "Usuario habilitado" : "Usuario deshabilitado"); }
