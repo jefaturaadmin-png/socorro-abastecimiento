@@ -37,6 +37,12 @@ export const FARMACIAS = [
   "DROGUERIA FS"
 ];
 
+// Cómo se MUESTRA un almacén en la página. Por dentro y en el Excel se usa siempre el nombre del kardex.
+export const NOMBRES_VISIBLES = {
+  "ALMACEN PRINCIPAL": "ALMACEN REAL",
+  "ALMACEN SUCURSAL": "ALMACEN PUNO"
+};
+
 // Motivos para bloquear. "clase" define el color de la etiqueta.
 export const MOTIVOS_BLOQUEO = [
   { texto: "Sacado por vencimiento", clase: "m-venc" },

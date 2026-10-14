@@ -6,7 +6,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where,
   serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610140900";
+import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610141000";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -20,10 +20,12 @@ const aFecha = v => v?.toDate ? v.toDate() : (typeof v === "string" && v ? new D
 const fmtF = v => { const d = aFecha(v); return d ? d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "–"; };
 const fmtFH = v => { const d = aFecha(v); return d ? d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) + "<br>" + d.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" }) : "ahora"; };
 // "ALMACEN HUANCAS" -> "Sucursal Huancas"; los que no son almacén (DROGUERIA FS) se muestran tal cual.
-const nombreFarm = f => /^ALMACEN /.test(f || "")
-  ? "Sucursal " + f.replace(/^ALMACEN /, "").toLowerCase().replace(/(^|[\s.])\p{L}/gu, c => c.toUpperCase())
-  : String(f || "");
-const corto = f => f === "TODAS" ? "Todas las farmacias" : f.replace(/^ALMACEN /, "");
+// Nombre que se ve en pantalla (ALMACEN PRINCIPAL se ve como ALMACEN REAL, etc.).
+const visible = f => NOMBRES_VISIBLES[f] || String(f || "");
+const nombreFarm = f => /^ALMACEN /.test(visible(f))
+  ? "Sucursal " + visible(f).replace(/^ALMACEN /, "").toLowerCase().replace(/(^|[\s.])\p{L}/gu, c => c.toUpperCase())
+  : visible(f);
+const corto = f => f === "TODAS" ? "Todas las farmacias" : visible(f).replace(/^ALMACEN /, "");
 // Productos fuera del catálogo sin código: se guardan con una clave "SC-NOMBRE".
 const SIN_COD = "SC-";
 const codVis = c => String(c || "").startsWith(SIN_COD) ? "Sin código" : c;
@@ -163,15 +165,20 @@ function iniciar() {
   montarMotivos("bqMot", "bqMotivo"); montarMotivos("abMot", "abMotivo");
 
   if (esAdmin()) {
-    $("abFarm").innerHTML = `<option value="TODAS">Todas las farmacias</option>` + FARMACIAS.map(f => `<option>${esc(f)}</option>`).join("");
-    $("uFarm").innerHTML = FARMACIAS.map(f => `<option>${esc(f)}</option>`).join("");
+    const opciones = FARMACIAS.map(f => `<option value="${esc(f)}">${esc(visible(f))}</option>`).join("");
+    $("abFarm").innerHTML = `<option value="TODAS">Todas las farmacias</option>` + opciones;
+    $("uFarm").innerHTML = opciones;
     $("aMot").innerHTML = `<option value="">Todos</option>` + MOTIVOS_BLOQUEO.map(m => `<option>${esc(m.texto)}</option>`).join("");
     S.subs.push(onSnapshot(collection(db, "bloqueos"), snap => {
       S.bloqueos = new Map(snap.docs.map(d => [d.id, { id: d.id, ...d.data() }]));
       render();
     }, e => avisar(e)));
     S.subs.push(onSnapshot(collection(db, "usuarios"), snap => {
+      const antes = solicitudesSucursal().length;
       S.usuarios = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+      if (S.usuariosListos && solicitudesSucursal().length > antes) toast("Nueva solicitud de cambio de sucursal");
+      S.usuariosListos = true;
+      pintarNav(); pintarSolSucursal();
       if (S.vista === "vUsuarios" && !S.editando) pintarUsuarios();   // no borrar lo que se está editando
     }, e => avisar(e)));
     ir("vAdmin");
@@ -185,8 +192,10 @@ function iniciar() {
     }, e => avisar(e));
     S.subs.push(escuchar(miFarm(), "propia"), escuchar("TODAS", "todas"));
     // Si el administrador le cambia la sucursal, el rol o la deshabilita, se recarga con los datos nuevos.
+    pintarPedidoSucursal();
     S.subs.push(onSnapshot(doc(db, "usuarios", S.perfil.uid), snap => {
       const d = snap.data() || {};
+      S.perfil.solicitudSucursal = d.solicitudSucursal; pintarPedidoSucursal();
       if (d.farmacia !== S.perfil.farmacia || String(d.rol || "").trim().toLowerCase() !== S.perfil.rol || [false, "false"].includes(d.activo) || d.cambiarClave === true) location.reload();
     }));
     ir("vQuimico");
@@ -197,7 +206,8 @@ function avisar(e) { const a = $("avisoGlobal"); a.hidden = false; a.textContent
 function pintarNav() {
   const pend = [...S.bloqueos.values()].filter(d => d.estado === "bloqueado" && d.solicitud?.estado === "pendiente").length;
   const items = esAdmin()
-    ? [["vAdmin", "Bloqueos" + (pend ? `<span class="badge">${pend}</span>` : "")], ["vUsuarios", "Usuarios"]]
+    ? [["vAdmin", "Bloqueos" + (pend ? `<span class="badge">${pend}</span>` : "")],
+       ["vUsuarios", "Usuarios" + (solicitudesSucursal().length ? `<span class="badge">${solicitudesSucursal().length}</span>` : "")]]
     : [];   // el químico tiene una sola vista: no hace falta menú
   const actual = S.vista === "vFicha" ? S.origen : S.vista;
   $("nav").innerHTML = items.map(([v, t]) => `<button type="button" data-ir="${v}" ${v === actual ? 'aria-current="page"' : ""}>${t}</button>`).join("");
@@ -350,6 +360,37 @@ async function enviarBloqueo(e) {
 }
 $("bqForm").addEventListener("submit", enviarBloqueo);
 $("abForm").addEventListener("submit", enviarBloqueo);
+
+/* ===================== químico: pedir cambio de sucursal ===================== */
+function pintarPedidoSucursal() {
+  const s = S.perfil?.solicitudSucursal;
+  $("csPend").hidden = s?.estado !== "pendiente";
+  $("csAbrir").hidden = s?.estado === "pendiente";
+  if (s?.estado === "pendiente") $("csPendTxt").textContent = `Pediste cambiarte a ${nombreFarm(s.farmacia)}. Abastecimiento lo revisará.`;
+  // Avisar solo cuando pasa de pendiente a rechazada mientras está conectada.
+  if (S.estadoPedido === "pendiente" && s?.estado === "rechazada") toast(`Tu pedido de cambio a ${nombreFarm(s.farmacia)} fue rechazado.`);
+  S.estadoPedido = s?.estado;
+}
+$("csAbrir").addEventListener("click", () => {
+  $("csSel").innerHTML = `<option value="">Elige la sucursal…</option>` + FARMACIAS.filter(f => f !== miFarm())
+    .map(f => `<option value="${esc(f)}">${esc(nombreFarm(f))}</option>`).join("");
+  $("csForm").hidden = false; $("csAbrir").hidden = true; $("csSel").focus();
+});
+$("csCancelar").addEventListener("click", () => { $("csForm").hidden = true; msg("csMsg", ""); pintarPedidoSucursal(); });
+$("csForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const farmacia = $("csSel").value; if (!farmacia) return msg("csMsg", "Elige la sucursal.", true);
+  const sol = { farmacia, motivo: $("csMot").value.trim(), estado: "pendiente", fecha: serverTimestamp() };
+  try {
+    await updateDoc(doc(db, "usuarios", S.perfil.uid), { solicitudSucursal: sol });
+    S.perfil.solicitudSucursal = sol; e.target.reset(); $("csForm").hidden = true; msg("csMsg", "");
+    toast("Solicitud enviada a Abastecimiento"); pintarPedidoSucursal();
+  } catch (err) { msg("csMsg", textoError(err), true); }
+});
+$("csAnular").addEventListener("click", async () => {
+  try { await updateDoc(doc(db, "usuarios", S.perfil.uid), { "solicitudSucursal.estado": "cancelada" }); S.perfil.solicitudSucursal.estado = "cancelada"; pintarPedidoSucursal(); toast("Solicitud anulada"); }
+  catch (err) { toast(textoError(err)); }
+});
 
 /* ===================== vista químico ===================== */
 $("qFil").addEventListener("input", () => pintarQuimico());
@@ -605,13 +646,36 @@ $("uTabla").addEventListener("click", async e => {
 });
 // Contraseña inicial fácil de dictar: Socorro + 4 números (la cambian en su primer ingreso).
 $("uGen").addEventListener("click", () => { $("uPass").value = "Socorro" + String(crypto.getRandomValues(new Uint32Array(1))[0] % 9000 + 1000); });
+/* ----- solicitudes de cambio de sucursal (las pide la química, las resuelve el administrador) ----- */
+function solicitudesSucursal() { return S.usuarios.filter(u => u.solicitudSucursal?.estado === "pendiente"); }
+function pintarSolSucursal() {
+  const sol = solicitudesSucursal();
+  $("sCard").hidden = !sol.length;
+  $("sLista").innerHTML = sol.map(u => `<div class="sol" data-uid="${esc(u.uid)}">
+      <div class="p"><b>${esc(u.nombre || u.usuario)}</b><code>${esc(u.usuario)}</code></div>
+      <div><span class="muted">De</span> <b>${esc(corto(u.farmacia))}</b> <span class="muted">→ a</span> <b>${esc(corto(u.solicitudSucursal.farmacia))}</b>
+        <div class="muted">${esc(u.solicitudSucursal.motivo || "Sin motivo")}</div><small class="muted">${fmtF(u.solicitudSucursal.fecha)}</small></div>
+      <div class="acc"><div class="botones"><button class="btn sm verde" type="button" data-s-ok>Aprobar cambio</button><button class="btn sm" type="button" data-s-no>Rechazar</button></div></div>
+    </div>`).join("");
+}
+$("sLista").addEventListener("click", async e => {
+  const caja = e.target.closest("[data-uid]"); if (!caja) return;
+  const u = S.usuarios.find(x => x.uid === caja.dataset.uid), ok = !!e.target.closest("[data-s-ok]");
+  if (!ok && !e.target.closest("[data-s-no]")) return;
+  const resuelta = { ...u.solicitudSucursal, estado: ok ? "aprobada" : "rechazada", respondio: S.perfil.nombre || S.perfil.usuario, fechaRespuesta: serverTimestamp() };
+  try {
+    await setDoc(doc(db, "usuarios", u.uid), ok ? { farmacia: u.solicitudSucursal.farmacia, solicitudSucursal: resuelta } : { solicitudSucursal: resuelta }, { merge: true });
+    toast(ok ? `${u.nombre || u.usuario} ahora está en ${corto(u.solicitudSucursal.farmacia)}` : "Solicitud rechazada");
+  } catch (err) { toast(textoError(err)); }
+});
+
 /* ----- crear varios usuarios: una línea por usuario "usuario - ALMACEN - contraseña" ----- */
 function leerLote() {
   const existentes = new Set(S.usuarios.map(u => u.usuario)), vistos = new Set();
   return $("lTxt").value.split(/\n/).map(l => l.trim()).filter(Boolean).map(linea => {
     const [u = "", f = "", c = ""] = linea.split(/\s*[,;\t|]\s*|\s+-\s+/);
     const usuario = u.toLowerCase(), F = f.trim().toUpperCase().replace(/\s+/g, " ");
-    const farmacia = FARMACIAS.find(x => x === F || x === "ALMACEN " + F) || "";
+    const farmacia = FARMACIAS.find(x => [x, visible(x)].some(n => n === F || n === "ALMACEN " + F)) || "";
     const problema = !/^[a-z0-9._-]{3,30}$/.test(usuario) ? "Usuario inválido (3 a 30 letras o números, sin espacios)"
       : !farmacia ? `Sucursal no reconocida: "${f}"`
       : c.length < 6 ? "La contraseña debe tener al menos 6 caracteres"
@@ -680,7 +744,7 @@ async function descargarExcel(filas, nombre, conFarmacia) {
   catch { return toast("No se pudo preparar el Excel. Revisa tu internet e inténtalo de nuevo."); }
   const estado = d => d.solicitud?.estado === "pendiente" ? "Reactivación pedida" : d.solicitud?.estado === "rechazada" ? "Reactivación rechazada" : "Bloqueado";
   const datos = filas.sort((a, b) => (a.farmacia + a.producto).localeCompare(b.farmacia + b.producto)).map(d => ({
-    ...(conFarmacia ? { Farmacia: corto(d.farmacia) } : {}),
+    ...(conFarmacia ? { Farmacia: corto(d.farmacia), "Almacén (kardex)": d.farmacia } : {}),
     "Código": String(d.codpro).startsWith(SIN_COD) ? "" : d.codpro,
     Producto: d.producto,
     Laboratorio: d.laboratorio || "",

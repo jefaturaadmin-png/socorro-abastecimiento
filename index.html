@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610140900">
+<link rel="stylesheet" href="styles.css?v=202610141000">
 </head>
 <body>
 
@@ -108,7 +108,17 @@
         <h1>Bloqueos de abastecimiento</h1>
         <p class="muted">Mientras un producto esté bloqueado no se incluirá en las entregas a tu farmacia. Para volver a abastecerlo, pide la reactivación.</p>
       </div>
-      <span class="farm-pill"><svg width="18" height="18"><use href="#i-tienda"/></svg><span id="qFarm"></span></span>
+      <div class="farm-caja">
+        <span class="farm-pill"><svg width="18" height="18"><use href="#i-tienda"/></svg><span id="qFarm"></span></span>
+        <button class="btn" type="button" id="csAbrir"><svg width="18" height="18"><use href="#i-reactivar"/></svg>Solicitar cambio de sucursal</button>
+        <div class="cs-pend" id="csPend" hidden><span id="csPendTxt"></span> <button class="enlace" type="button" id="csAnular">Anular</button></div>
+        <form class="card cs-form" id="csForm" hidden>
+          <label class="filtro">Sucursal a la que te cambias<select id="csSel" required></select></label>
+          <label class="filtro">Motivo (opcional)<input id="csMot" maxlength="120" placeholder="Ej. me trasladaron desde el lunes"></label>
+          <div class="msg" id="csMsg" hidden></div>
+          <div class="botones-fila"><button class="btn sm primario" type="submit">Enviar solicitud</button><button class="btn sm" type="button" id="csCancelar">Cancelar</button></div>
+        </form>
+      </div>
     </div>
     <div class="wrap cuerpo">
       <div class="grid-q">
@@ -225,6 +235,10 @@
       </div>
     </div>
     <div class="wrap cuerpo">
+      <section class="card" id="sCard" hidden>
+        <div class="lh"><h2><svg width="18" height="18"><use href="#i-reactivar"/></svg>Solicitudes de cambio de sucursal</h2></div>
+        <div id="sLista"></div>
+      </section>
       <form class="card bloque" id="fUsr">
         <h2><svg width="18" height="18"><use href="#i-usuario"/></svg>Crear usuario</h2>
         <div class="bloque-grid">
@@ -282,6 +296,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610140900"></script>
+<script type="module" src="app.js?v=202610141000"></script>
 </body>
 </html>

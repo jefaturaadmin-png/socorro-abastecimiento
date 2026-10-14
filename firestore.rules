@@ -28,6 +28,10 @@ service cloud.firestore {
         && request.resource.data.cambiarClave == false
         && request.resource.data.nombre is string
         && request.resource.data.nombre.size() >= 3 && request.resource.data.nombre.size() <= 60;
+      // Cada usuario puede pedir (o anular) su cambio de sucursal; solo el administrador lo aprueba.
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['solicitudSucursal'])
+        && request.resource.data.solicitudSucursal.estado in ['pendiente', 'cancelada'];
     }
 
     // ---------- estado actual de cada producto en cada farmacia ----------
