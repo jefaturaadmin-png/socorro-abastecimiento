@@ -109,6 +109,7 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .cells select.msel { font-size: 12.5px; padding: 3px 6px; max-width: 150px }
 .tag { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; padding: 1px 6px; border-radius: 99px; margin-left: 6px; vertical-align: 1px }
 .tag.man { background: var(--accent-soft); color: var(--accent) }
+.tag.bloq { background: #fde2dd; color: #b6400b }
 .tag.auto { background: var(--bg); color: var(--muted); border: 1px solid var(--line) }
 .more { padding: 12px 16px; display: flex; gap: 12px; align-items: center; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); flex-wrap: wrap }
 
@@ -144,8 +145,8 @@ details.metodo ul { margin: 8px 0 0; padding-left: 20px; max-width: 95ch; displa
     <div class="seg" role="group" aria-label="Unidad">
       <button data-u="cajas" aria-pressed="true">Cajas</button><button data-u="soles" aria-pressed="false">Soles</button>
     </div>
-    <label class="btn primary" for="fPron" id="btnPron">Cargar pronósticos</label>
-    <input id="fPron" type="file" accept=".gz,.json" hidden>
+    <label class="btn primary" for="fPron" id="btnPron" title="Uno o varios archivos .TXT del kardex de LolFar. Lo repetido se descarta solo.">Subir kardex (.TXT)</label>
+    <input id="fPron" type="file" accept=".txt,.TXT,.gz,.json" multiple hidden>
   </div>
 </div>
 
@@ -224,7 +225,8 @@ details.metodo ul { margin: 8px 0 0; padding-left: 20px; max-width: 95ch; displa
       <div class="controls">
         <label class="field"><span>Farmacia</span><select id="rFarm"></select></label>
         <label class="field"><span>Mes a abastecer</span><select id="rMes"></select></label>
-        <label class="field"><span>Cobertura (días)</span><input id="rCob" type="number" min="0" max="120" value="30"></label>
+        <div class="field"><span id="rPresL">Cobertura</span><div class="seg" id="rPres" role="group" aria-label="Días a cubrir"></div></div>
+        <label class="field"><span id="rCobL">Cobertura (días)</span><input id="rCob" type="number" min="0" max="180" value="30"></label>
         <label class="field"><span>Seguridad (días)</span><input id="rSeg" type="number" min="0" max="60" value="7"></label>
         <input id="rq" type="search" placeholder="Filtrar medicamento…" aria-label="Filtrar medicamentos" autocomplete="off">
       </div>
@@ -246,7 +248,10 @@ details.metodo ul { margin: 8px 0 0; padding-left: 20px; max-width: 95ch; displa
         <li><b>Pronóstico de la farmacia</b> = pronóstico del medicamento (método elegido) × participación de la farmacia en sus ventas de los últimos 3 meses.</li>
         <li><b>Disponible</b> al inicio del mes = stock actual − demanda pronosticada desde la fecha de corte hasta ese mes.</li>
         <li><b>Entrega</b> = pronóstico × (cobertura + seguridad) ÷ días del mes − disponible, redondeada hacia arriba a cajas enteras.</li>
-        <li><b>Compra de droguería</b> ("Todas las farmacias") = suma de entregas − stock en droguería.</li>
+        <li><b>Compra de droguería</b> ("Todas las farmacias") = suma de entregas − stock en droguería. Botones: comprar para 30, 60 o 75 días.</li>
+        <li><b>Reparto</b> a una farmacia: botones para 1 semana, 15 días o 1 mes.</li>
+        <li><b>Bloqueados</b>: lo que una sucursal bloqueó en la página de Abastecimiento no se le reparte ni se compra para ella; si Abastecimiento lo bloqueó para todas, no se compra. Al reactivarlo vuelve a entrar solo.</li>
+        <li>Las cantidades salen del kardex en cajas: enteras + fracciones ÷ unidades por caja. Entregas y compras se redondean a cajas enteras.</li>
       </ul>
     </details>
   </section>
@@ -455,7 +460,14 @@ async function cargarPron(f) {
     msg('No se pudo cargar el archivo. ' + (e.message || '') + codigo, true);
   }
 }
-$('fPron').addEventListener('change', e => { cargarPron(e.target.files[0]); e.target.value = ''; });
+// .TXT del kardex de LolFar → se resume y se pronostica en la página; .json(.gz) → pronósticos ya hechos (Colab)
+function subir(files) {
+  files = [...files]; if (!files.length) return;
+  const txt = files.filter(f => /\.txt$/i.test(f.name));
+  if (txt.length) { if (window.subirKardex) window.subirKardex(txt); else msg('Ingresa como administrador para subir el kardex.', true); }
+  else if (/json/i.test(files[0].name)) cargarPron(files[0]); else cargarMov(files[0]);
+}
+$('fPron').addEventListener('change', e => { subir(e.target.files); e.target.value = ''; });
 
 /* ---------- arrastrar y soltar ---------- */
 let dragN = 0;
@@ -464,8 +476,7 @@ addEventListener('dragleave', e => { e.preventDefault(); if (--dragN <= 0) { dra
 addEventListener('dragover', e => e.preventDefault());
 addEventListener('drop', e => {
   e.preventDefault(); dragN = 0; $('drop').hidden = true;
-  const f = e.dataTransfer.files[0]; if (!f) return;
-  if (/json/i.test(f.name)) cargarPron(f); else cargarMov(f);
+  subir(e.dataTransfer.files);
 });
 
 /* ---------- elecciones (guardadas en la página) ---------- */
@@ -671,6 +682,8 @@ function opcionesLinea() {
 function dibujar(id, cfg) { if (S.charts[id]) S.charts[id].destroy(); S.charts[id] = new Chart($(id), cfg); }
 
 /* ---------- REPOSICIÓN ---------- */
+// Lo que una sucursal bloqueó (o Abastecimiento bloqueó para todas) no se compra ni se le reparte.
+const bloqueado = (c, f) => !!window.BLOQ && (window.BLOQ.has('TODAS__' + c) || window.BLOQ.has(f + '__' + c));
 function plan(p, f, obj) {
   const o = S.P, sh = p.s?.[f] || 0;
   const pr = m => { const j = o.fm.indexOf(m); return j < 0 ? 0 : pronDe(p, j) * sh; };
@@ -682,17 +695,24 @@ function plan(p, f, obj) {
     consumo += m === corteMes ? pr(m) * Math.max(0, diasMes(m) - dia) / diasMes(m) : pr(m);
   }
   const disp = Math.max(0, stock - consumo), pron = pr(obj);
-  const entrega = Math.max(0, Math.ceil(pron * (S.cob + S.seg) / diasMes(obj) - disp - 1e-9));
-  return { pron, stock, disp, entrega };
+  const bloq = bloqueado(p.c, f);
+  const entrega = bloq ? 0 : Math.max(0, Math.ceil(pron * (S.cob + S.seg) / diasMes(obj) - disp - 1e-9));
+  return { pron, stock, disp, entrega, bloq };
 }
 $('rFarm').addEventListener('change', e => { S.farm = e.target.value; S.rMostrar = PAGINA; pintarRep(); });
 $('rMes').addEventListener('change', e => { S.mesObj = e.target.value; pintarRep(); });
 $('rCob').addEventListener('input', e => { S.cob = Math.max(0, +e.target.value || 0); pintarRep(); });
+$('rPres').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b) return; S.cob = +b.dataset.d; $('rCob').value = S.cob; pintarRep(); });
 $('rSeg').addEventListener('input', e => { S.seg = Math.max(0, +e.target.value || 0); pintarRep(); });
 $('rq').addEventListener('input', () => { S.rMostrar = PAGINA; pintarRep(); });
 function pintarRep() {
   const o = S.P, obj = S.mesObj, todas = !S.farm;
   const hist = o.meses.slice(-6);
+  // compra de droguería: 30/60/75 días · reparto a una sucursal: 1 semana / 15 días / 1 mes
+  const pres = todas ? [[30, '30 días'], [60, '60 días'], [75, '75 días']] : [[7, '1 semana'], [15, '15 días'], [30, '1 mes']];
+  $('rPresL').textContent = todas ? 'Comprar para' : 'Repartir para';
+  $('rCobL').textContent = todas ? 'Otro (días)' : 'Otro (días)';
+  $('rPres').innerHTML = pres.map(([d, t]) => `<button type="button" data-d="${d}" aria-pressed="${S.cob === d}">${t}</button>`).join('');
   $('rEyebrow').textContent = `Abastecer ${nombreMes(obj)} · ${S.cob} días de cobertura + ${S.seg} de seguridad`;
   $('rTitulo').textContent = todas ? 'Compra de droguería' : S.farm;
   $('rH2').textContent = todas ? 'Compra sugerida por medicamento' : 'Entrega sugerida desde droguería';
@@ -706,11 +726,13 @@ function pintarRep() {
       const x = plan(p, S.farm, obj); const sh = p.s?.[S.farm] || 0;
       if (!x.pron && !x.stock) continue;
       r = { ...x, final: x.entrega, h: p.h.slice(-6).map(v => v == null ? null : v * sh) };
+      if (x.bloq) r.nb = 1;
     } else {
-      let pron = 0, stock = 0, ent = 0;
-      for (const f of o.farmacias) { const x = plan(p, f, obj); pron += x.pron; stock += x.stock; ent += x.entrega; }
+      let pron = 0, stock = 0, ent = 0, nb = 0;
+      for (const f of o.farmacias) { const x = plan(p, f, obj); pron += x.pron; stock += x.stock; ent += x.entrega; if (x.bloq) nb++; }
       if (!pron && !stock) continue;
-      r = { pron, stock, entrega: ent, sd: p.sd || 0, final: Math.max(0, Math.ceil(ent - (p.sd || 0))), h: p.h.slice(-6) };
+      const general = bloqueado(p.c, 'TODAS');
+      r = { pron, stock, entrega: ent, sd: p.sd || 0, final: general ? 0 : Math.max(0, Math.ceil(ent - (p.sd || 0))), h: p.h.slice(-6), nb, general };
     }
     r.p = p; lista.push(r);
   }
@@ -729,8 +751,8 @@ function pintarRep() {
     h += `<tr class="click" data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}">${esc(p.n)}</td>${hv.map(v => celda(v, max)).join('')}
       <td class="sep" style="text-align:left">${esc(corto(elegido(p.c) || ''))}${manual(p.c) ? '<span class="tag man">tuyo</span>' : ''}</td>
       <td class="n pj big">${fmt(cv(p, r.pron))}</td>
-      ${todas ? `<td class="n">${fmt(cv(p, r.stock))}</td><td class="n">${fmt(cv(p, r.entrega))}</td><td class="n">${fmt(cv(p, r.sd))}</td><td class="n tot ent">${r.final ? fmt(cv(p, r.final)) : '·'}</td>`
-              : `<td class="n">${fmt(cv(p, r.stock))}</td><td class="n">${fmt(cv(p, r.disp))}</td><td class="n tot ent">${r.final ? fmt(cv(p, r.final)) : '·'}</td>`}</tr>`;
+      ${todas ? `<td class="n">${fmt(cv(p, r.stock))}</td><td class="n">${fmt(cv(p, r.entrega))}</td><td class="n">${fmt(cv(p, r.sd))}</td><td class="n tot ent">${r.general ? '<span class="tag bloq">bloqueado</span>' : (r.final ? fmt(cv(p, r.final)) : '·') + (r.nb ? `<span class="tag bloq" title="Bloqueado en ${r.nb} sucursal(es): no se les reparte">${r.nb} bloq.</span>` : '')}</td>`
+              : `<td class="n">${fmt(cv(p, r.stock))}</td><td class="n">${fmt(cv(p, r.disp))}</td><td class="n tot ent">${r.nb ? '<span class="tag bloq">bloqueado</span>' : r.final ? fmt(cv(p, r.final)) : '·'}</td>`}</tr>`;
   }
   if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${hist.length + 7}">Ningún medicamento coincide con el filtro.</td></tr>`;
   $('rTabla').innerHTML = h + '</tbody>'; ajustarC0($('rTabla'));
@@ -842,6 +864,6 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=1"></script>
+<script type="module" src="proyeccion.js?v=2"></script>
 
 </body></html>

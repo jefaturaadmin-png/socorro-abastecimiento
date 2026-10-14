@@ -73,6 +73,7 @@ service cloud.firestore {
 
     // ---------- proyección de compras: solo el administrador ----------
     match /proy_config/{id} { allow read, write: if esAdmin(); }
+    match /proy_meses/{id} { allow read, write: if esAdmin(); }
     match /proy_elecciones/{id} { allow read, write: if esAdmin(); }
     match /proy_blobs/{id} {
       allow read, write: if esAdmin();
