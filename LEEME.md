@@ -1,5 +1,7 @@
 # Socorro · Abastecimiento — bloqueos por farmacia
 
+**Dirección:** https://abastecimiento.fssocorro.com (dominio en Squarespace: registro CNAME `abastecimiento` → `jefaturaadmin-png.github.io`; el archivo `CNAME` del repositorio lo conecta en GitHub Pages).
+
 Cada químico bloquea los productos que no se deben abastecer a su farmacia y, si cambia la situación, pide la reactivación. Solo el administrador (Abastecimiento) reactiva o rechaza.
 
 ## Archivos
@@ -24,7 +26,7 @@ Cada químico bloquea los productos que no se deben abastecer a su farmacia y, s
       - `farmacia` (string): vacío
       - `activo` (boolean): `true`
 4. **GitHub**: sube todos los archivos (incluido `catalogo.json`) a la raíz del repositorio → Settings → Pages → Branch `main`, carpeta `/ (root)` → Save. En unos minutos tendrás la dirección `https://<tu-usuario>.github.io/<repositorio>/`.
-5. **Dominio autorizado**: Firebase → Authentication → Configuración → **Dominios autorizados** → agrega `<tu-usuario>.github.io`.
+5. **Dominio autorizado**: Firebase → Authentication → Configuración → **Dominios autorizados** → agrega `abastecimiento.fssocorro.com` (y `jefaturaadmin-png.github.io`).
 6. Entra a la página con `carlos` y tu contraseña → pestaña **Usuarios** → crea un usuario por farmacia (por ejemplo `mercado`, `tupac`…), elige su farmacia y entrégale su contraseña.
 
 ## Uso diario
