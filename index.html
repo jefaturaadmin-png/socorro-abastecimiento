@@ -6,7 +6,7 @@
 <title>Socorro · Abastecimiento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610140500">
+<link rel="stylesheet" href="styles.css?v=202610140600">
 </head>
 <body>
 
@@ -19,6 +19,8 @@
   <symbol id="i-bajar" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
   <symbol id="i-usuario" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
   <symbol id="i-tienda" viewBox="0 0 24 24"><path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M10 20v-6h4v6"/></symbol>
+  <symbol id="i-reactivar" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/></symbol>
+  <symbol id="i-ojo" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
   <symbol id="i-mas" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
 </svg>
 
@@ -90,9 +92,9 @@
             <div class="col">
               <div class="campo buscador">
                 <label for="bqBus" class="sr">Producto</label>
-                <div class="con-icono">
+                <div class="busca-unida">
                   <input id="bqBus" type="search" autocomplete="off" placeholder="Ej. 26375, provita o ABBO">
-                  <svg width="18" height="18"><use href="#i-buscar"/></svg>
+                  <button type="button" class="lupa" data-lupa="bq" aria-label="Buscar"><svg width="18" height="18"><use href="#i-buscar"/></svg></button>
                 </div>
                 <div class="resultados" id="bqRes" hidden></div>
               </div>
@@ -108,18 +110,20 @@
         <aside class="card resumen">
           <h2><svg width="18" height="18"><use href="#i-grafico"/></svg>Estado rápido</h2>
           <ul class="estados">
-            <li><i class="pt rojo">!</i>Bloqueados activos: <b id="qK1">0</b></li>
+            <li><i class="pt verde">!</i>Bloqueados activos: <b id="qK1">0</b></li>
             <li><i class="pt ambar">!</i>Reactivaciones pendientes: <b id="qK2">0</b></li>
-            <li><i class="pt gris">!</i>Reactivaciones rechazadas: <b id="qK3">0</b></li>
+            <li><i class="pt rojo">!</i>Reactivaciones rechazadas: <b id="qK3">0</b></li>
           </ul>
-          <button class="btn ancho" id="qXls" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Exportar a Excel</button>
         </aside>
       </div>
 
       <section class="card lista">
         <div class="lh">
           <h2><svg width="18" height="18"><use href="#i-lista"/></svg>Productos bloqueados actualmente <span class="num" id="qCount"></span></h2>
-          <label class="con-icono busca-tabla"><span class="sr">Filtrar</span><input id="qFil" type="search" placeholder="Buscar en la tabla…"><svg width="18" height="18"><use href="#i-buscar"/></svg></label>
+          <div class="filtros">
+            <label class="con-icono busca-tabla"><span class="sr">Filtrar</span><input id="qFil" type="search" placeholder="Buscar en la tabla…"><svg width="18" height="18"><use href="#i-buscar"/></svg></label>
+            <button class="btn" id="qXls" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Exportar a Excel</button>
+          </div>
         </div>
         <div class="tabla-wrap"><table class="tabla" id="qTabla"></table></div>
       </section>
@@ -154,7 +158,7 @@
             <div class="campo"><label for="abFarm">Farmacia</label><select id="abFarm"></select></div>
             <div class="campo buscador">
               <label for="abBus">Producto (código, nombre o laboratorio)</label>
-              <div class="con-icono"><input id="abBus" type="search" autocomplete="off" placeholder="Ej. 26375, provita o ABBO"><svg width="18" height="18"><use href="#i-buscar"/></svg></div>
+              <div class="busca-unida"><input id="abBus" type="search" autocomplete="off" placeholder="Ej. 26375, provita o ABBO"><button type="button" class="lupa" data-lupa="ab" aria-label="Buscar"><svg width="18" height="18"><use href="#i-buscar"/></svg></button></div>
               <div class="resultados" id="abRes" hidden></div>
             </div>
             <div class="sel" id="abSel" hidden></div>
@@ -252,6 +256,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610140500"></script>
+<script type="module" src="app.js?v=202610140600"></script>
 </body>
 </html>

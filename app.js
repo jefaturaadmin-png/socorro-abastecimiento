@@ -6,7 +6,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where,
   serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610140500";
+import { firebaseConfig, DOMINIO, FARMACIAS, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610140600";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -301,6 +301,10 @@ function cablearBuscador(pre) {
   });
 }
 cablearBuscador("bq"); cablearBuscador("ab");
+// Botón azul de la lupa: muestra los resultados de lo escrito.
+document.querySelectorAll("[data-lupa]").forEach(b => b.addEventListener("click", () => {
+  const inp = $(b.dataset.lupa + "Bus"); inp.focus(); inp.dispatchEvent(new Event("input"));
+}));
 ["bq", "ab"].forEach(pre => {
   $(pre + "Sel").addEventListener("input", e => {
     const campo = e.target.dataset?.m, p = S.sel[pre]; if (!campo || !p?.manual) return;
@@ -363,15 +367,16 @@ function pintarQuimico() {
   const estado = d => d.solicitud?.estado === "pendiente" ? `<span class="tag t-pend">Reactivación pedida</span>`
     : d.solicitud?.estado === "rechazada" ? `<span class="tag t-rech">Reactivación rechazada</span>`
     : `<span class="tag t-bloq">Bloqueado</span>`;
-  const accion = d => d.farmacia === "TODAS" ? "Ver" : d.solicitud?.estado === "pendiente" ? "Ver solicitud"
-    : d.solicitud?.estado === "rechazada" ? "Volver a pedir" : "Pedir reactivación";
+  const accion = d => d.farmacia === "TODAS" ? ["Ver", "i-ojo"] : d.solicitud?.estado === "pendiente" ? ["Ver solicitud", "i-ojo"]
+    : d.solicitud?.estado === "rechazada" ? ["Volver a pedir reactivación", "i-reactivar"] : ["Pedir reactivación", "i-reactivar"];
+  const boton = d => { const [t, i] = accion(d); return `<button class="btn icono" type="button" data-ficha="${esc(d.id)}" title="${t}" aria-label="${t}"><svg width="18" height="18"><use href="#${i}"/></svg></button>`; };
   $("qTabla").innerHTML = `<thead><tr><th>Producto</th><th>Motivo</th><th>Desde</th><th>Estado</th><th class="der">Acción</th></tr></thead><tbody>` +
     (lista.length ? lista.map(d => `<tr>
       <td class="p"><b>${esc(codVis(d.codpro))} - ${esc(d.producto)}</b><code>${d.laboratorio ? esc(d.laboratorio) + " · " : ""}por ${esc(d.porNombre)}</code></td>
       <td>${tagMotivo(d.motivo)}</td>
       <td class="f">${fmtF(d.desde)}</td>
       <td>${estado(d)}</td>
-      <td class="der"><button class="btn sm" type="button" data-ficha="${esc(d.id)}">${accion(d)}</button></td>
+      <td class="der">${boton(d)}</td>
     </tr>`).join("") : `<tr class="vacia"><td colspan="5">${q ? "Ningún bloqueo coincide con la búsqueda." : "No hay productos bloqueados en tu farmacia."}</td></tr>`) + "</tbody>";
 }
 $("qTabla").addEventListener("click", e => { const b = e.target.closest("[data-ficha]"); if (b) abrirFicha(b.dataset.ficha); });
