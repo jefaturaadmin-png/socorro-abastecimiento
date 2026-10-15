@@ -171,7 +171,12 @@ window.subirKardex = async function (files) {
     await recalcular(nuevas ? null : undefined);
     toast(`${nuevas.toLocaleString("es-PE")} movimientos nuevos · ${repetidas.toLocaleString("es-PE")} repetidos descartados`);
     msg(ignoradas ? `${ignoradas} filas no se pudieron leer y se omitieron.` : "");
-  } catch (e) { console.error(e); msg("No se pudo procesar el kardex. " + (e.message || "") + (e.code ? ` (${e.code})` : ""), true); }
+  } catch (e) {
+    console.error(e);
+    msg(e.code === "permission-denied"
+      ? "Firebase no dio permiso para guardar el kardex. Publica las reglas nuevas de firestore.rules (deben incluir «match /proy_meses/{id}»), espera un minuto y vuelve a intentarlo."
+      : "No se pudo procesar el kardex. " + (e.message || "") + (e.code ? ` (${e.code})` : ""), true);
+  }
 };
 
 /* ---------- pronósticos calculados en la página ---------- */
