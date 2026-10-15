@@ -1,13 +1,21 @@
 // Proyección de compras: guarda sus datos en Firebase (colecciones proy_*, solo administrador).
 // Ofrece a la página del kardex la misma forma de guardar que tenía como artefacto (db + assets).
-import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
-import {
-  getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot
-} from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig } from "./config.js?v=202610141100";
-
-const app = initializeApp(firebaseConfig), auth = getAuth(app), db = getFirestore(app);
+// Dentro del panel usa la conexión y la sesión de la página principal (window.parent.FB);
+// abierta sola, inicia su propia conexión.
+const PADRE = (() => { try { return window.parent !== window && window.parent.FB ? window.parent : null; } catch { return null; } })();
+let F;
+if (PADRE) F = PADRE.FB;
+else {
+  const V = "https://www.gstatic.com/firebasejs/13.0.0/";
+  const [{ initializeApp }, A, FS, { firebaseConfig }] = await Promise.all([
+    import(V + "firebase-app.js"), import(V + "firebase-auth.js"), import(V + "firebase-firestore.js"), import("./config.js?v=202610151100")]);
+  const app = initializeApp(firebaseConfig);
+  F = { auth: A.getAuth(app), db: FS.getFirestore(app), onAuthStateChanged: A.onAuthStateChanged,
+    doc: FS.doc, getDoc: FS.getDoc, setDoc: FS.setDoc, deleteDoc: FS.deleteDoc, collection: FS.collection, getDocs: FS.getDocs, onSnapshot: FS.onSnapshot };
+}
+const { auth, db, onAuthStateChanged, doc, getDoc, deleteDoc, collection, getDocs, onSnapshot } = F;
+// Firebase solo acepta objetos creados en su propia ventana: los datos se pasan a la ventana principal.
+const setDoc = (ref, v, o) => F.setDoc(ref, PADRE ? PADRE.JSON.parse(JSON.stringify(v)) : v, ...(o ? [PADRE ? PADRE.JSON.parse(JSON.stringify(o)) : o] : []));
 const col = n => "proy_" + n;
 const ruta = p => { const [c, ...r] = p.split("/"); return [col(c), ...r]; };
 
@@ -55,10 +63,13 @@ const assetsShim = {
 };
 
 function bloquear(texto) {
-  document.querySelector("main").innerHTML = `<div class="empty" style="margin-top:24px"><h2>Proyección de compras</h2><p>${texto}</p></div>`;
-  document.querySelector(".bar .tabs")?.remove(); document.getElementById("btnPron")?.remove();
+  let av = document.getElementById("avisoSesion");
+  if (!av) { av = document.createElement("div"); av.id = "avisoSesion"; av.className = "empty"; av.style.margin = "24px auto"; document.querySelector("main").prepend(av); }
+  av.innerHTML = `<h2>Proyección de compras</h2><p>${texto}</p>`;
+  document.querySelectorAll("main > section").forEach(s => s.dataset.oculto = "1");
+  document.querySelector("main").classList.add("sin-sesion");
 }
-
+function desbloquear() { document.getElementById("avisoSesion")?.remove(); document.querySelector("main").classList.remove("sin-sesion"); }
 let arrancado = false;
 onAuthStateChanged(auth, async u => {
   if (!u) return bloquear("Ingresa como administrador en la página de Abastecimiento para ver la proyección.");
@@ -66,6 +77,7 @@ onAuthStateChanged(auth, async u => {
     const p = (await getDoc(doc(db, "usuarios", u.uid))).data() || {};
     if (String(p.rol || "").trim().toLowerCase() !== "admin") return bloquear("Esta sección es solo para el administrador.");
   } catch { return bloquear("No se pudo comprobar tu usuario. Recarga la página."); }
+  desbloquear();
   if (arrancado) return; arrancado = true;
   window.claude = { use: async n => n === "db" ? dbShim : n === "assets" ? assetsShim : null };
   window.iniciarKardex();
