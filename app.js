@@ -6,7 +6,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, where,
   serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610151800";
+import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610151900";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -87,7 +87,13 @@ $("fLogin").addEventListener("submit", async e => {
   $("lBtn").disabled = true; $("lErr").hidden = true;
   S.claveIngreso = $("lPass").value;
   try { await signInWithEmailAndPassword(auth, email, $("lPass").value); $("lPass").value = ""; }
-  catch { $("lErr").textContent = "Usuario o contraseña incorrectos."; $("lErr").hidden = false; }
+  catch (err) {
+    const c = err?.code || "";
+    $("lErr").textContent = c === "auth/too-many-requests" ? "Demasiados intentos fallidos. Espera unos minutos y vuelve a intentarlo."
+      : c === "auth/network-request-failed" ? "Sin conexión a internet. Revisa tu red e inténtalo de nuevo."
+      : "Usuario o contraseña incorrectos. Revisa mayúsculas (Bloq Mayús) y que no haya espacios.";
+    $("lErr").hidden = false;
+  }
   finally { $("lBtn").disabled = false; }
 });
 $("salir").addEventListener("click", () => signOut(auth));
