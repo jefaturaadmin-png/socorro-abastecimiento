@@ -102,14 +102,17 @@ async function* lineas(file, avance) {
 }
 
 // Mes guardado: { d: {cod: {alm: {destka: [ingCajas, salCajas, ingSoles, salSoles]}}}, k: "numkar ordenados en diferencias" }
-const mesesMeta = async () => { const s = await getDocs(collection(db, "proy_meses")); return new Map(s.docs.map(d => [d.id, d.data()])); };
+let paso = "";
+const mesesMeta = async () => { paso = "leer la lista de meses (proy_meses)"; const s = await getDocs(collection(db, "proy_meses")); return new Map(s.docs.map(d => [d.id, d.data()])); };
 async function leerMes(meta) {
   if (!meta?.asset) return { d: {}, k: new Set() };
+  paso = "leer un mes guardado (proy_blobs)";
   const r = await assetsShim.fetch(meta.asset); if (!r.ok) throw new Error("No se pudo leer un mes guardado.");
   const o = await r.json(); let n = 0;
   return { d: o.d, k: new Set((o.k ? o.k.split(",") : []).map(x => (n += +x))) };
 }
 async function guardarMes(mes, m, metaPrev, filas) {
+  paso = `guardar el mes ${mes} (proy_blobs / proy_meses)`;
   const ks = [...m.k].sort((a, b) => a - b); let prev = 0;
   const k = ks.map(x => { const d = x - prev; prev = x; return d; }).join(",");
   const { id } = await assetsShim.upload(new Blob([JSON.stringify({ d: m.d, k })]));
@@ -117,11 +120,13 @@ async function guardarMes(mes, m, metaPrev, filas) {
   if (metaPrev?.asset) assetsShim.delete(metaPrev.asset).catch(() => {});
 }
 async function leerMaestro() {
+  paso = "leer productos y stock (proy_config/maestro)";
   const c = await getDoc(doc(db, "proy_config", "maestro"));
   if (!c.exists()) return { prod: {}, stock: {}, corte: "" };
   const r = await assetsShim.fetch(c.data().asset); return r.ok ? await r.json() : { prod: {}, stock: {}, corte: "" };
 }
 async function guardarMaestro(m) {
+  paso = "guardar productos y stock (proy_config/maestro)";
   const prev = await getDoc(doc(db, "proy_config", "maestro"));
   const { id } = await assetsShim.upload(new Blob([JSON.stringify(m)]));
   await setDoc(doc(db, "proy_config", "maestro"), { asset: id, corte: m.corte, actualizado: new Date().toISOString() });
@@ -174,8 +179,8 @@ window.subirKardex = async function (files) {
   } catch (e) {
     console.error(e);
     msg(e.code === "permission-denied"
-      ? "Firebase no dio permiso para guardar el kardex. Publica las reglas nuevas de firestore.rules (deben incluir «match /proy_meses/{id}»), espera un minuto y vuelve a intentarlo."
-      : "No se pudo procesar el kardex. " + (e.message || "") + (e.code ? ` (${e.code})` : ""), true);
+      ? `Firebase no dio permiso al ${paso}. Revisa que las reglas publicadas incluyan «match /proy_meses/{id}», espera un minuto y vuelve a intentarlo.`
+      : `No se pudo procesar el kardex (paso: ${paso || "lectura del archivo"}). ` + (e.message || "") + (e.code ? ` (${e.code})` : ""), true);
   }
 };
 
@@ -302,7 +307,7 @@ async function recalcular() {
     p.push({ c: cod, n: pr[0], k: pr[2] || 0, a: apto, h, b: bOk, f: fOk, s, st, hf, sd: maestro.stock[cod]?.[DROG]?.[0] || 0 });
   }
   const o = { corte, meses, hfm, bm, fm, metodos: METODOS.filter(m => p.some(x => x.f[m])), farmacias, p, origen: "kardex" };
-  msg("Guardando pronósticos…");
+  msg("Guardando pronósticos…"); paso = "guardar los pronósticos (proy_config/datos)";
   const prev = await getDoc(doc(db, "proy_config", "datos"));
   const { id } = await assetsShim.upload(new Blob([JSON.stringify(o)]));
   await setDoc(doc(db, "proy_config", "datos"), { asset: id, archivo: "kardex", corte, subido: new Date().toISOString() });
