@@ -103,7 +103,8 @@ async function* lineas(file, avance) {
 
 // Mes guardado: { d: {cod: {alm: {destka: [ingCajas, salCajas, ingSoles, salSoles]}}}, k: "numkar ordenados en diferencias" }
 let paso = "";
-const mesesMeta = async () => { paso = "leer la lista de meses (proy_meses)"; const s = await getDocs(collection(db, "proy_meses")); return new Map(s.docs.map(d => [d.id, d.data()])); };
+// La lista de meses guardados vive en proy_config/meses (un solo documento: { m: { "2026-10": {asset, …} } }).
+const mesesMeta = async () => { paso = "leer la lista de meses (proy_config/meses)"; const s = await getDoc(doc(db, "proy_config", "meses")); return new Map(Object.entries(s.exists() ? s.data().m || {} : {})); };
 async function leerMes(meta) {
   if (!meta?.asset) return { d: {}, k: new Set() };
   paso = "leer un mes guardado (proy_blobs)";
@@ -112,11 +113,11 @@ async function leerMes(meta) {
   return { d: o.d, k: new Set((o.k ? o.k.split(",") : []).map(x => (n += +x))) };
 }
 async function guardarMes(mes, m, metaPrev, filas) {
-  paso = `guardar el mes ${mes} (proy_blobs / proy_meses)`;
+  paso = `guardar el mes ${mes} (proy_blobs / proy_config)`;
   const ks = [...m.k].sort((a, b) => a - b); let prev = 0;
   const k = ks.map(x => { const d = x - prev; prev = x; return d; }).join(",");
   const { id } = await assetsShim.upload(new Blob([JSON.stringify({ d: m.d, k })]));
-  await setDoc(doc(db, "proy_meses", mes), { asset: id, movimientos: ks.length, nuevos: filas, actualizado: new Date().toISOString() });
+  await setDoc(doc(db, "proy_config", "meses"), { m: { [mes]: { asset: id, movimientos: ks.length, nuevos: filas, actualizado: new Date().toISOString() } } }, { merge: true });
   if (metaPrev?.asset) assetsShim.delete(metaPrev.asset).catch(() => {});
 }
 async function leerMaestro() {
@@ -179,7 +180,7 @@ window.subirKardex = async function (files) {
   } catch (e) {
     console.error(e);
     msg(e.code === "permission-denied"
-      ? `Firebase no dio permiso al ${paso}. Revisa que las reglas publicadas incluyan «match /proy_meses/{id}», espera un minuto y vuelve a intentarlo.`
+      ? `Firebase no dio permiso al ${paso}. Revisa que las reglas de firestore.rules estén publicadas (botón Publicar), espera un minuto y vuelve a intentarlo.`
       : `No se pudo procesar el kardex (paso: ${paso || "lectura del archivo"}). ` + (e.message || "") + (e.code ? ` (${e.code})` : ""), true);
   }
 };

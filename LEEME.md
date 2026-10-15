@@ -39,7 +39,7 @@ Cada químico bloquea los productos que no se deben abastecer a su farmacia y, s
 
 Pestaña **Proyección de compras** (`proyeccion.html` + `proyeccion.js`), abierta dentro del panel.
 
-- **Subir kardex (.TXT)**: uno o varios archivos exportados de LolFar (también el grande, de cientos de MB). Se leen en el navegador; cada movimiento se identifica por `numkar`, así que lo repetido se descarta solo. Se guarda en Firebase el resumen por mes, producto y almacén (`proy_meses`, `proy_blobs`) y el stock actual (`proy_config/maestro`).
+- **Subir kardex (.TXT)**: uno o varios archivos exportados de LolFar (también el grande, de cientos de MB). Se leen en el navegador; cada movimiento se identifica por `numkar`, así que lo repetido se descarta solo. Se guarda en Firebase el resumen por mes, producto y almacén (índice en `proy_config/meses`, datos en `proy_blobs`) y el stock actual (`proy_config/maestro`).
 - Cantidades en cajas: enteras + fracciones ÷ unidades por caja (`stkfra`). Demanda = ventas − anulaciones de cada farmacia; DROGUERIA FS es el almacén central (compras y envíos). Se ignoran CANJES.
 - Con eso la página calcula los pronósticos (Media 3/6 meses, con estacionalidad, SES, Holt y AR estacional) y su error en los últimos 6 meses. Hacen falta al menos 4 meses completos.
 - **Reposición**: compra de droguería para 30/60/75 días; reparto a cada farmacia para 1 semana/15 días/1 mes. Los productos bloqueados en Abastecimiento no se reparten a esa farmacia (ni se compran si el bloqueo es general).
