@@ -311,7 +311,7 @@ async function recalcular() {
       const sk = maestro.stock[cod]?.[fa]; if (sk) st[fa] = sk[0];
     }
     const pr = maestro.prod[cod] || [cod, 1, 0];
-    p.push({ c: cod, n: pr[0], k: pr[2] || 0, a: apto, h, b: bOk, f: fOk, s, st, hf, sd: maestro.stock[cod]?.[DROG]?.[0] || 0 });
+    p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: apto, h, b: bOk, f: fOk, s, st, hf, sd: maestro.stock[cod]?.[DROG]?.[0] || 0 });
   }
   const o = { corte, meses, hfm, bm, fm, metodos: METODOS.filter(m => p.some(x => x.f[m])), farmacias, p, origen: "kardex" };
   msg("Guardando pronósticos…"); paso = "guardar los pronósticos (proy_config/datos)";
