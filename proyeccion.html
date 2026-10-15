@@ -516,9 +516,28 @@ async function iniciar() {
       usarPron(validar(await r.json()), false);
       pintarFuente(`cargado el ${new Date(cfg.data().subido).toLocaleDateString('es-PE')}`);
       msg('');
+      const m = window.stockKardex ? await window.stockKardex() : null; // el stock del último kardex, si es más nuevo
+      if (m) window.aplicarStock(m);
     }
   } catch (e) { msg(e.message || 'No se pudieron leer los datos guardados.', true); }
 }
+
+// Stock del último kardex subido (proy_config/maestro) sobre los pronósticos guardados, si es más reciente que su fecha de corte.
+// Los pronósticos (historia y métodos) no cambian; solo el stock actual de cada farmacia y de la droguería, y la fecha de corte.
+window.aplicarStock = function (m) {
+  const o = S.P, corte = String(m?.corte || '').slice(0, 10);
+  if (!o || S.ejemplo || !corte || corte <= o.corte) return false;
+  for (const p of o.p) {
+    const st = m.stock?.[p.c]; if (!st) continue;
+    p.st ??= {};
+    for (const f of o.farmacias) if (st[f]) p.st[f] = st[f][0];
+    if (st['DROGUERIA FS']) p.sd = st['DROGUERIA FS'][0];
+  }
+  o.corte = corte;
+  usarPron(o, false);
+  pintarFuente(`stock del kardex al ${corte.split('-').reverse().join('/')}`);
+  return true;
+};
 
 /* ---------- navegación ---------- */
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; S.vista = S.tab; document.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-selected', x === b)); render(); });
@@ -864,6 +883,6 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=202610151000"></script>
+<script type="module" src="proyeccion.js?v=202610151500"></script>
 
 </body></html>
