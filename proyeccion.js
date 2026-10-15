@@ -8,7 +8,7 @@ if (PADRE) F = PADRE.FB;
 else {
   const V = "https://www.gstatic.com/firebasejs/13.0.0/";
   const [{ initializeApp }, A, FS, { firebaseConfig }] = await Promise.all([
-    import(V + "firebase-app.js"), import(V + "firebase-auth.js"), import(V + "firebase-firestore.js"), import("./config.js?v=202610151100")]);
+    import(V + "firebase-app.js"), import(V + "firebase-auth.js"), import(V + "firebase-firestore.js"), import("./config.js?v=202610151800")]);
   const app = initializeApp(firebaseConfig);
   F = { auth: A.getAuth(app), db: FS.getFirestore(app), onAuthStateChanged: A.onAuthStateChanged,
     doc: FS.doc, getDoc: FS.getDoc, setDoc: FS.setDoc, deleteDoc: FS.deleteDoc, collection: FS.collection, getDocs: FS.getDocs, onSnapshot: FS.onSnapshot };
@@ -152,7 +152,7 @@ window.subirKardex = async function (files) {
   try {
     msg("Preparando…");
     const metas = await mesesMeta(), maestro = await leerMaestro(), meses = new Map(), nuevosMes = new Map();
-    let filas = 0, nuevas = 0, repetidas = 0, ignoradas = 0;
+    let filas = 0, nuevas = 0, repetidas = 0, ignoradas = 0, stockCambio = false;
     for (const f of files) {
       for await (const l of lineas(f, n => { leidosArch = n; pct(n); })) {
         if (!l || l.startsWith("despro")) continue;
@@ -162,19 +162,20 @@ window.subirKardex = async function (files) {
         const fecha = fechaISO(x[COL.feckar]), mes = fecha.slice(0, 7), nk = +x[COL.numkar], cod = x[COL.codpro].trim();
         if (!mes || !nk || !cod) { ignoradas++; continue; }
         if (!meses.has(mes)) { msg(`Abriendo ${mes}…`); meses.set(mes, await leerMes(metas.get(mes))); nuevosMes.set(mes, 0); }
-        const M = meses.get(mes);
+        const M = meses.get(mes), fra = +x[COL.fra] || 1, cos = +x[COL.coscom] || 0;
+        // datos del producto y stock actual del almacén (el más reciente gana), aunque el movimiento ya estuviera cargado:
+        // el stock de cada fila (stkalm) es el del momento en que se descargó el archivo
+        const pr = maestro.prod[cod];
+        if (!pr || fecha >= pr[3]) maestro.prod[cod] = [x[COL.despro].trim(), fra, cos, fecha];
+        const st = (maestro.stock[cod] ??= {}), previo = st[alm], stk = Math.round(((+x[COL.stkE] || 0) + (+x[COL.stkM] || 0) / fra) * 1000) / 1000;
+        if (!previo || fecha >= previo[1]) { if (!previo || previo[0] !== stk || previo[1] !== fecha) stockCambio = true; st[alm] = [stk, fecha]; }
+        if (fecha > maestro.corte) { maestro.corte = fecha; stockCambio = true; }
         if (M.k.has(nk)) { repetidas++; continue; }
         M.k.add(nk); nuevas++; nuevosMes.set(mes, nuevosMes.get(mes) + 1);
-        const fra = +x[COL.fra] || 1, cos = +x[COL.coscom] || 0, tipo = x[COL.destka].trim();
+        const tipo = x[COL.destka].trim();
         const ing = (+x[COL.iE] || 0) + (+x[COL.iM] || 0) / fra, sal = (+x[COL.sE] || 0) + (+x[COL.sM] || 0) / fra;
         const a = ((M.d[cod] ??= {})[alm] ??= {})[tipo] ??= [0, 0, 0, 0];
         a[0] += ing; a[1] += sal; a[2] += ing * cos; a[3] += sal * cos;
-        // datos del producto y stock actual del almacén (el más reciente gana)
-        const pr = maestro.prod[cod];
-        if (!pr || fecha >= pr[3]) maestro.prod[cod] = [x[COL.despro].trim(), fra, cos, fecha];
-        const st = (maestro.stock[cod] ??= {}), previo = st[alm];
-        if (!previo || fecha >= previo[1]) st[alm] = [Math.round(((+x[COL.stkE] || 0) + (+x[COL.stkM] || 0) / fra) * 1000) / 1000, fecha];
-        if (fecha > maestro.corte) maestro.corte = fecha;
       }
       base += f.size;
     }
@@ -184,11 +185,16 @@ window.subirKardex = async function (files) {
       for (const c in M.d) for (const al in M.d[c]) for (const t in M.d[c][al]) M.d[c][al][t] = M.d[c][al][t].map(v => Math.round(v * 1000) / 1000);
       await guardarMes(mes, M, metas.get(mes), nuevosMes.get(mes));
     }
-    if (nuevas) { msg("Guardando productos y stock…"); await guardarMaestro(maestro); }
+    if (nuevas || stockCambio) { msg("Guardando productos y stock…"); await guardarMaestro(maestro); }
     msg("Calculando pronósticos…");
-    await recalcular(nuevas ? null : undefined);
-    toast(`${nuevas.toLocaleString("es-PE")} movimientos nuevos · ${repetidas.toLocaleString("es-PE")} repetidos descartados`);
-    msg(ignoradas ? `${ignoradas} filas no se pudieron leer y se omitieron.` : "");
+    const aviso = await recalcular();
+    // si los pronósticos siguen siendo los del archivo de Colab (faltan meses de kardex), se les pone el stock de este kardex
+    const alDia = window.aplicarStock ? window.aplicarStock(maestro) : false;
+    const corte = maestro.corte ? maestro.corte.slice(0, 10).split("-").reverse().join("/") : "";
+    toast(nuevas
+      ? `${nuevas.toLocaleString("es-PE")} movimientos nuevos · ${repetidas.toLocaleString("es-PE")} repetidos descartados`
+      : `Este kardex ya estaba cargado (${repetidas.toLocaleString("es-PE")} movimientos repetidos)${corte ? ` · stock al ${corte}` : ""}`);
+    msg([aviso, alDia ? `Stock actualizado al ${corte} con el kardex.` : "", ignoradas ? `${ignoradas} filas no se pudieron leer y se omitieron.` : ""].filter(Boolean).join(" "));
   } catch (e) {
     console.error(e);
     msg(e.code === "permission-denied"
@@ -276,7 +282,7 @@ async function recalcular() {
   // el mes del corte cuenta como completo solo si llega a su último día
   const ultimoCompleto = +corte.slice(8, 10) >= diasMesCorte ? mesCorte : sumaM(mesCorte, -1);
   const meses = []; for (let m = lista[0]; m <= ultimoCompleto; m = sumaM(m, 1)) meses.push(m);
-  if (meses.length < 4) { msg(`Se necesitan al menos 4 meses completos de kardex para pronosticar (hay ${meses.length}).`, true); return; }
+  if (meses.length < 4) return `Los pronósticos siguen siendo los del archivo de pronósticos: con el kardex se necesitan al menos 4 meses completos para calcularlos (hay ${meses.length}).`;
   // demanda mensual por producto y farmacia (ventas − anulaciones) y movimientos por farmacia
   const dem = new Map(), farmVol = new Map(), conDatos = new Set();
   for (let i = 0; i < meses.length; i++) {
@@ -317,7 +323,7 @@ async function recalcular() {
       const sk = maestro.stock[cod]?.[fa]; if (sk) st[fa] = sk[0];
     }
     const pr = maestro.prod[cod] || [cod, 1, 0];
-    p.push({ c: cod, n: pr[0], k: pr[2] || 0, a: apto, h, b: bOk, f: fOk, s, st, hf, sd: maestro.stock[cod]?.[DROG]?.[0] || 0 });
+    p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: apto, h, b: bOk, f: fOk, s, st, hf, sd: maestro.stock[cod]?.[DROG]?.[0] || 0 });
   }
   const o = { corte, meses, hfm, bm, fm, metodos: METODOS.filter(m => p.some(x => x.f[m])), farmacias, p, origen: "kardex" };
   msg("Guardando pronósticos…"); paso = "guardar los pronósticos (proy_config/datos)";
@@ -326,7 +332,9 @@ async function recalcular() {
   await setDoc(doc(db, "proy_config", "datos"), { asset: id, archivo: "kardex", corte, subido: new Date().toISOString() });
   if (prev.exists() && prev.data().asset) assetsShim.delete(prev.data().asset).catch(() => {});
   usarPron(o, false); pintarFuente(`kardex al ${corte.split("-").reverse().join("/")}`); msg("");
+  return "";
 }
+window.stockKardex = async () => { try { return await leerMaestro(); } catch (e) { console.warn(e); return null; } };
 window.recalcularPron = recalcular;
 
 /* ---------- bloqueos: lo bloqueado por una sucursal no se compra ni se le reparte ---------- */

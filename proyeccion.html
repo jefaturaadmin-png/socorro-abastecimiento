@@ -345,6 +345,13 @@ const nombreMes = m => { const [y, mo] = m.split('-'); return MESESL[+mo - 1] + 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const soles = () => S.unidad === 'soles';
 const fmt = v => v == null || !isFinite(v) ? '–' : soles() ? nf0.format(v) : nf1.format(v);
+// Stock en cajas enteras y fracciones sueltas (24.7 con 10 por caja → "24 / 7 f"), como en LolFar. Sin unidades por caja, con decimales.
+const fmtS = (p, v) => {
+  const fr = +p?.fr || 0;
+  if (v == null || !isFinite(v) || soles() || fr <= 1) return fmt(v);
+  const u = Math.round(v * fr), e = Math.trunc(u / fr), f = Math.abs(u % fr);
+  return f ? `${nf0.format(e)} / ${f} f` : nf0.format(e);
+};
 const fmtU = v => soles() ? 'S/ ' + nf0.format(v) : nf1.format(v) + ' cajas';
 const pct = v => v == null || !isFinite(v) ? '–' : nf0.format(v * 100) + ' %';
 const pctS = v => v == null || !isFinite(v) ? '–' : (v > 0 ? '+' : '') + nf0.format(v * 100) + ' %';
@@ -517,9 +524,30 @@ async function iniciar() {
       usarPron(validar(await r.json()), false);
       pintarFuente(`cargado el ${new Date(cfg.data().subido).toLocaleDateString('es-PE')}`);
       msg('');
+      const m = window.stockKardex ? await window.stockKardex() : null; // el stock del último kardex, si es más nuevo
+      if (m) window.aplicarStock(m);
     }
   } catch (e) { msg(e.message || 'No se pudieron leer los datos guardados.', true); }
 }
+
+// Stock del último kardex subido (proy_config/maestro) sobre los pronósticos guardados, si es más reciente que su fecha de corte.
+// Los pronósticos (historia y métodos) no cambian; solo el stock actual de cada farmacia y de la droguería, y la fecha de corte.
+window.aplicarStock = function (m) {
+  const o = S.P, corte = String(m?.corte || '').slice(0, 10);
+  if (!o || S.ejemplo || !m) return false;
+  for (const p of o.p) { const pr = m.prod?.[p.c]; if (pr && +pr[1] > 1) p.fr = +pr[1]; } // unidades por caja (para mostrar las fracciones)
+  if (!corte || corte <= o.corte) { render(); return false; }
+  for (const p of o.p) {
+    const st = m.stock?.[p.c]; if (!st) continue;
+    p.st ??= {};
+    for (const f of o.farmacias) if (st[f]) p.st[f] = st[f][0];
+    if (st['DROGUERIA FS']) p.sd = st['DROGUERIA FS'][0];
+  }
+  o.corte = corte;
+  usarPron(o, false);
+  pintarFuente(`stock del kardex al ${corte.split('-').reverse().join('/')}`);
+  return true;
+};
 
 /* ---------- navegación ---------- */
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; S.vista = S.tab; document.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-selected', x === b)); render(); });
@@ -625,9 +653,9 @@ function pintarFichaP() {
   $('fpFarmNota').textContent = `Entrega para ${nombreMes(obj)} con ${S.cob} días de cobertura y ${S.seg} de seguridad (se cambian en Reposición).`;
   let hf = `<thead><tr><th class="c1 solo">Farmacia</th><th>Participación</th><th>Stock actual</th><th class="pj">Pronóstico ${et(obj)}</th><th class="tot">Entrega</th></tr></thead><tbody>`;
   const filas = o.farmacias.map(f => ({ f, s: p.s?.[f] || 0, x: plan(p, f, obj) })).filter(r => r.s || r.x.stock).sort((a, b) => b.s - a.s);
-  for (const r of filas) hf += `<tr class="click" tabindex="0" data-farm="${esc(r.f)}" ${r.f === S.fpFarm ? 'style="outline:2px solid var(--accent);outline-offset:-2px"' : ''}><td class="c1 solo">${esc(r.f)}</td><td class="n">${pct(r.s)}</td><td class="n">${fmt(conv(r.x.stock))}</td><td class="n pj">${fmt(conv(r.x.pron))}</td><td class="n tot ent">${r.x.entrega ? fmt(conv(r.x.entrega)) : '·'}</td></tr>`;
+  for (const r of filas) hf += `<tr class="click" tabindex="0" data-farm="${esc(r.f)}" ${r.f === S.fpFarm ? 'style="outline:2px solid var(--accent);outline-offset:-2px"' : ''}><td class="c1 solo">${esc(r.f)}</td><td class="n">${pct(r.s)}</td><td class="n">${fmtS(p, conv(r.x.stock))}</td><td class="n pj">${fmt(conv(r.x.pron))}</td><td class="n tot ent">${r.x.entrega ? fmt(conv(r.x.entrega)) : '·'}</td></tr>`;
   const te = sum(filas.map(r => r.x.entrega));
-  hf += `</tbody><tfoot><tr><td class="c1 solo">Total farmacias · stock droguería ${fmt(conv(p.sd || 0))}</td><td></td><td class="n">${fmt(conv(sum(filas.map(r => r.x.stock))))}</td><td class="n">${fmt(conv(sum(filas.map(r => r.x.pron))))}</td><td class="n tot">${fmt(conv(te))}</td></tr></tfoot>`;
+  hf += `</tbody><tfoot><tr><td class="c1 solo">Total farmacias · stock droguería ${fmtS(p, conv(p.sd || 0))}</td><td></td><td class="n">${fmtS(p, conv(sum(filas.map(r => r.x.stock))))}</td><td class="n">${fmt(conv(sum(filas.map(r => r.x.pron))))}</td><td class="n tot">${fmt(conv(te))}</td></tr></tfoot>`;
   $('fpFarm').innerHTML = hf;
   $('fpFarmNota').textContent += ' Clic en una farmacia para ver su proyección.';
   pintarFarm(p);
@@ -645,7 +673,7 @@ function pintarFarm(p) {
   let ae = 0, sr = 0; for (const mes of o.bm) { const r = real(mes), q = pr(mes); if (r != null && q != null) { ae += Math.abs(q - r); sr += r; } }
   const st = p.st?.[f] || 0, corteMes = o.corte.slice(0, 7);
   $('fpFH2').textContent = 'Proyección de ' + f;
-  $('fpFNota').textContent = `Participación ${pct(sh)} · stock actual ${fmt(conv(st))} · método ${m}` + (hv ? ` · error en esta farmacia (abr–sep): ${sr ? pct(ae / sr) : '–'}` : '') + `. Valores ${soles() ? 'en soles' : 'en cajas'}.`;
+  $('fpFNota').textContent = `Participación ${pct(sh)} · stock actual ${fmtS(p, conv(st))} · método ${m}` + (hv ? ` · error en esta farmacia (abr–sep): ${sr ? pct(ae / sr) : '–'}` : '') + `. Valores ${soles() ? 'en soles' : 'en cajas'}.`;
   const esF = mes => o.fm.includes(mes);
   let h = `<thead><tr><th class="c1 solo">Concepto</th>${cols.map(mes => `<th class="${esF(mes) ? 'pj' : ''}">${et(mes)}${mes === corteMes ? '*' : ''}</th>`).join('')}</tr></thead><tbody>`;
   if (hv) {
@@ -752,8 +780,8 @@ function pintarRep() {
     h += `<tr class="click" data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}">${esc(p.n)}</td>${hv.map(v => celda(v, max)).join('')}
       <td class="sep" style="text-align:left">${esc(corto(elegido(p.c) || ''))}${manual(p.c) ? '<span class="tag man">tuyo</span>' : ''}</td>
       <td class="n pj big">${fmt(cv(p, r.pron))}</td>
-      ${todas ? `<td class="n">${fmt(cv(p, r.stock))}</td><td class="n">${fmt(cv(p, r.entrega))}</td><td class="n">${fmt(cv(p, r.sd))}</td><td class="n tot ent">${r.general ? '<span class="tag bloq">bloqueado</span>' : (r.final ? fmt(cv(p, r.final)) : '·') + (r.nb ? `<span class="tag bloq" title="Bloqueado en ${r.nb} sucursal(es): no se les reparte">${r.nb} bloq.</span>` : '')}</td>`
-              : `<td class="n">${fmt(cv(p, r.stock))}</td><td class="n">${fmt(cv(p, r.disp))}</td><td class="n tot ent">${r.nb ? '<span class="tag bloq">bloqueado</span>' : r.final ? fmt(cv(p, r.final)) : '·'}</td>`}</tr>`;
+      ${todas ? `<td class="n">${fmtS(p, cv(p, r.stock))}</td><td class="n">${fmt(cv(p, r.entrega))}</td><td class="n">${fmtS(p, cv(p, r.sd))}</td><td class="n tot ent">${r.general ? '<span class="tag bloq">bloqueado</span>' : (r.final ? fmt(cv(p, r.final)) : '·') + (r.nb ? `<span class="tag bloq" title="Bloqueado en ${r.nb} sucursal(es): no se les reparte">${r.nb} bloq.</span>` : '')}</td>`
+              : `<td class="n">${fmtS(p, cv(p, r.stock))}</td><td class="n">${fmtS(p, cv(p, r.disp))}</td><td class="n tot ent">${r.nb ? '<span class="tag bloq">bloqueado</span>' : r.final ? fmt(cv(p, r.final)) : '·'}</td>`}</tr>`;
   }
   if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${hist.length + 7}">Ningún medicamento coincide con el filtro.</td></tr>`;
   $('rTabla').innerHTML = h + '</tbody>'; ajustarC0($('rTabla'));
@@ -865,6 +893,6 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=202610151100"></script>
+<script type="module" src="proyeccion.js?v=202610151800"></script>
 
 </body></html>
