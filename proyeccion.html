@@ -167,6 +167,7 @@ main.sin-sesion > section { display: none !important }
             <option value="man">Elegidos por mí</option>
             <option value="auto">Sin elegir (automático)</option>
           </select></label>
+        <label class="field"><span>Laboratorio</span><select id="pLab" class="sLab"><option value="">Todos</option></select></label>
         <input id="pq" type="search" placeholder="Filtrar medicamento…" aria-label="Filtrar medicamentos" autocomplete="off">
       </div>
     </div>
@@ -229,6 +230,7 @@ main.sin-sesion > section { display: none !important }
         <div class="field"><span id="rPresL">Cobertura</span><div class="seg" id="rPres" role="group" aria-label="Días a cubrir"></div></div>
         <label class="field"><span id="rCobL">Cobertura (días)</span><input id="rCob" type="number" min="0" max="180" value="30"></label>
         <label class="field"><span>Seguridad (días)</span><input id="rSeg" type="number" min="0" max="60" value="7"></label>
+        <label class="field"><span>Laboratorio</span><select id="rLab" class="sLab"><option value="">Todos</option></select></label>
         <input id="rq" type="search" placeholder="Filtrar medicamento…" aria-label="Filtrar medicamentos" autocomplete="off">
       </div>
     </div>
@@ -572,12 +574,32 @@ function render() {
 }
 function abrirFichaP(c, origen) { S.cur = c; S.origen = origen; S.fpFarm = origen === 'rep' ? S.farm : ''; S.vista = 'fichaP'; render(); scrollTo({ top: 0 }); }
 
+/* ---------- filtro por laboratorio (del catálogo de productos de la página) ---------- */
+const LAB = new Map();
+fetch('catalogo.json').then(r => r.json()).then(cat => { for (const x of cat) LAB.set(String(x.c), String(x.ln || x.l || '').trim()); if (S.P) render(); }).catch(() => {});
+const labDe = c => LAB.get(c) || '';
+let labsDe = null;
+function llenarLabs() {
+  if (labsDe === S.P && document.querySelector('.sLab').options.length > 1) return;
+  labsDe = S.P;
+  const n = new Map(); for (const p of S.P.p) { const l = labDe(p.c); if (l) n.set(l, (n.get(l) || 0) + 1); }
+  const op = `<option value="">Todos</option>` + [...n.keys()].sort().map(l => `<option value="${esc(l)}">${esc(l)} (${n.get(l)})</option>`).join('');
+  document.querySelectorAll('.sLab').forEach(s => { s.innerHTML = op; s.value = n.has(S.lab) ? S.lab : ''; });
+  if (!n.has(S.lab)) S.lab = '';
+}
+document.querySelectorAll('.sLab').forEach(s => s.addEventListener('change', e => {
+  S.lab = e.target.value; document.querySelectorAll('.sLab').forEach(x => x.value = S.lab);
+  S.pMostrar = S.rMostrar = PAGINA; render();
+}));
+
 /* ---------- PRONÓSTICO ---------- */
 $('pFiltro').addEventListener('change', e => { S.pFiltro = e.target.value; S.pMostrar = PAGINA; pintarPron(); });
 $('pq').addEventListener('input', () => { S.pMostrar = PAGINA; pintarPron(); });
 function pintarPron() {
   const o = S.P, mets = o.metodos, conv = (p, v) => soles() ? v * p.k : v;
+  llenarLabs();
   let lista = o.p;
+  if (S.lab) lista = lista.filter(p => labDe(p.c) === S.lab);
   if (S.pFiltro === 'apto') lista = lista.filter(p => p.a);
   if (S.pFiltro === 'man') lista = lista.filter(p => manual(p.c));
   if (S.pFiltro === 'auto') lista = lista.filter(p => !manual(p.c));
@@ -757,8 +779,10 @@ function pintarRep() {
   $('rNota').textContent = `Demanda real ${todas ? 'de todas las farmacias' : 'estimada de la farmacia (por su participación)'}; pronóstico con el método elegido en la pestaña Pronóstico.`;
   $('rk1l').textContent = todas ? 'Medicamentos a comprar' : 'Medicamentos a reponer';
   $('rk2l').textContent = todas ? 'Cajas a comprar' : 'Cajas a entregar';
+  llenarLabs();
   const lista = [];
   for (const p of o.p) {
+    if (S.lab && labDe(p.c) !== S.lab) continue;
     let r;
     if (!todas) {
       const x = plan(p, S.farm, obj); const sh = p.s?.[S.farm] || 0;
@@ -902,6 +926,6 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=202610161000"></script>
+<script type="module" src="proyeccion.js?v=202610161200"></script>
 
 </body></html>
