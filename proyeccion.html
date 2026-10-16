@@ -536,6 +536,15 @@ window.aplicarStock = function (m) {
   const o = S.P, corte = String(m?.corte || '').slice(0, 10);
   if (!o || S.ejemplo || !m) return false;
   for (const p of o.p) { const pr = m.prod?.[p.c]; if (pr && +pr[1] > 1) p.fr = +pr[1]; } // unidades por caja (para mostrar las fracciones)
+  // productos con stock en el kardex pero sin ventas en el historial de pronósticos: se agregan sin pronóstico ("Sin ventas")
+  const hay = new Set(o.p.map(p => p.c)); let nuevos = 0;
+  for (const [c, st] of Object.entries(m.stock || {})) {
+    if (hay.has(c) || !Object.values(st).some(x => x[0] > 0)) continue;
+    const pr = m.prod?.[c] || [c, 1, 0];
+    o.p.push({ c, n: pr[0], k: +pr[2] || 0, fr: +pr[1] || 1, a: false, h: o.meses.map(() => 0), b: {}, f: {}, s: {}, st: {}, sd: 0, sinVentas: true });
+    nuevos++;
+  }
+  if (nuevos && (!corte || corte <= o.corte)) { usarPron(o, false); }
   if (!corte || corte <= o.corte) { render(); return false; }
   for (const p of o.p) {
     const st = m.stock?.[p.c]; if (!st) continue;
@@ -597,7 +606,7 @@ function pintarPron() {
         if (m === k.best) cls.push('best'); if (m === sel) cls.push('sel');
         return `<td class="${cls.join(' ')}" data-m="${esc(m)}" title="Usar ${esc(m)}">${pct(x.wape)}</td>`; }).join('')}
       <td class="sep"><select class="msel" data-sel="${esc(p.c)}" aria-label="Método para ${esc(p.n)}">
-        <option value="auto" ${esMan ? '' : 'selected'}>Automático (${esc(corto(k.best || ''))})</option>
+        <option value="auto" ${esMan ? '' : 'selected'}>${k.best ? `Automático (${esc(corto(k.best))})` : 'Sin ventas'}</option>
         ${Object.keys(k.met).map(m => `<option value="${esc(m)}" ${esMan && m === sel ? 'selected' : ''}>${esc(corto(m))}</option>`).join('')}
       </select></td>
       ${o.fm.map((_, j) => `<td class="n pj big">${fmt(conv(p, pronDe(p, j)))}</td>`).join('')}</tr>`;
@@ -893,6 +902,6 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=202610151800"></script>
+<script type="module" src="proyeccion.js?v=202610161000"></script>
 
 </body></html>

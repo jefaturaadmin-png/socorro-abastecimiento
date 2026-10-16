@@ -8,7 +8,7 @@ if (PADRE) F = PADRE.FB;
 else {
   const V = "https://www.gstatic.com/firebasejs/13.0.0/";
   const [{ initializeApp }, A, FS, { firebaseConfig }] = await Promise.all([
-    import(V + "firebase-app.js"), import(V + "firebase-auth.js"), import(V + "firebase-firestore.js"), import("./config.js?v=202610151800")]);
+    import(V + "firebase-app.js"), import(V + "firebase-auth.js"), import(V + "firebase-firestore.js"), import("./config.js?v=202610161000")]);
   const app = initializeApp(firebaseConfig);
   F = { auth: A.getAuth(app), db: FS.getFirestore(app), onAuthStateChanged: A.onAuthStateChanged,
     doc: FS.doc, getDoc: FS.getDoc, setDoc: FS.setDoc, deleteDoc: FS.deleteDoc, collection: FS.collection, getDocs: FS.getDocs, onSnapshot: FS.onSnapshot };
@@ -304,7 +304,7 @@ async function recalcular() {
   const p = [];
   for (const [cod, pf] of dem) {
     const h = meses.map((_, i) => conDatos.has(i) ? r1([...pf.values()].reduce((a, v) => a + v[i], 0)) : null);
-    const ult = ultimos(h, 6); if (!ult.some(v => v > 0)) continue;
+    const ult = ultimos(h, 6); if (!ult.some(v => v > 0) && !Object.values(maestro.stock[cod] || {}).some(x => x[0] > 0)) continue;
     const prom = media(ultimos(h, 12)), apto = h.filter(v => v != null).length >= 24 && prom >= 10;
     // prueba: pronóstico de cada mes de bm con lo conocido hasta el mes anterior
     const b = {}; METODOS.forEach(m => b[m] = []);
@@ -324,6 +324,13 @@ async function recalcular() {
     }
     const pr = maestro.prod[cod] || [cod, 1, 0];
     p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: apto, h, b: bOk, f: fOk, s, st, hf, sd: maestro.stock[cod]?.[DROG]?.[0] || 0 });
+  }
+  // productos con stock en algún almacén pero sin ninguna venta registrada: se listan sin pronóstico
+  for (const [cod, st] of Object.entries(maestro.stock)) {
+    if (dem.has(cod) || !Object.values(st).some(x => x[0] > 0)) continue;
+    const pr = maestro.prod[cod] || [cod, 1, 0], stf = {};
+    for (const fa of farmacias) if (st[fa]) stf[fa] = st[fa][0];
+    p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: false, h: meses.map(() => 0), b: {}, f: {}, s: {}, st: stf, hf: {}, sd: st[DROG]?.[0] || 0, sinVentas: true });
   }
   const o = { corte, meses, hfm, bm, fm, metodos: METODOS.filter(m => p.some(x => x.f[m])), farmacias, p, origen: "kardex" };
   msg("Guardando pronósticos…"); paso = "guardar los pronósticos (proy_config/datos)";
