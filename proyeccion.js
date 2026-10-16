@@ -338,6 +338,7 @@ async function recalcular() {
   const { id } = await assetsShim.upload(new Blob([JSON.stringify(o)]));
   await setDoc(doc(db, "proy_config", "datos"), { asset: id, archivo: "kardex", corte, subido: new Date().toISOString() });
   if (prev.exists() && prev.data().asset) assetsShim.delete(prev.data().asset).catch(() => {});
+  window.STOCK_TODOS = maestro.stock;
   usarPron(o, false); pintarFuente(`kardex al ${corte.split("-").reverse().join("/")}`); msg("");
   return "";
 }

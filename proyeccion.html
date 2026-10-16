@@ -354,6 +354,12 @@ const fmtS = (p, v) => {
   const u = Math.round(v * fr), e = Math.trunc(u / fr), f = Math.abs(u % fr);
   return f ? `${nf0.format(e)} / ${f} f` : nf0.format(e);
 };
+// Stock actual total del producto: droguería + todas las sucursales y almacenes (del último kardex; si no, de los pronósticos).
+const stockTotal = p => {
+  const st = window.STOCK_TODOS?.[p.c];
+  if (st) { let t = 0, d = 0; for (const [a, x] of Object.entries(st)) { if (/CANJE/i.test(a)) continue; t += +x[0] || 0; if (a === 'DROGUERIA FS') d += +x[0] || 0; } return { t, d }; }
+  const f = sum(Object.values(p.st || {})), d = p.sd || 0; return { t: f + d, d };
+};
 const fmtU = v => soles() ? 'S/ ' + nf0.format(v) : nf1.format(v) + ' cajas';
 const pct = v => v == null || !isFinite(v) ? '–' : nf0.format(v * 100) + ' %';
 const pctS = v => v == null || !isFinite(v) ? '–' : (v > 0 ? '+' : '') + nf0.format(v * 100) + ' %';
@@ -536,6 +542,7 @@ async function iniciar() {
 // Los pronósticos (historia y métodos) no cambian; solo el stock actual de cada farmacia y de la droguería, y la fecha de corte.
 window.aplicarStock = function (m) {
   const o = S.P, corte = String(m?.corte || '').slice(0, 10);
+  if (m?.stock) window.STOCK_TODOS = m.stock;
   if (!o || S.ejemplo || !m) return false;
   for (const p of o.p) { const pr = m.prod?.[p.c]; if (pr && +pr[1] > 1) p.fr = +pr[1]; } // unidades por caja (para mostrar las fracciones)
   // productos con stock en el kardex pero sin ventas en el historial de pronósticos: se agregan sin pronóstico ("Sin ventas")
@@ -618,11 +625,12 @@ function pintarPron() {
   $('pk3').textContent = nf0.format(man); $('pk3s').textContent = `de ${nf0.format(o.p.length)}; el resto usa el de menor error`;
   $('pk4l').textContent = 'Demanda ' + nombreMes(o.fm[0]); $('pk4').textContent = fmtU(dem);
 
-  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th>Prom. 3m</th>${mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="${esc(m)}">${esc(corto(m))}</th>`).join('')}
+  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th title="Droguería + todas las sucursales y almacenes">Stock actual</th><th>Prom. 3m</th>${mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="${esc(m)}">${esc(corto(m))}</th>`).join('')}
     <th class="sep">Método usado</th>${o.fm.map(m => `<th class="pj">${et(m)}</th>`).join('')}</tr></thead><tbody>`;
   for (const p of vis) {
     const k = S.calc.get(p.c), sel = elegido(p.c), esMan = manual(p.c);
     h += `<tr data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a></td>
+      ${(() => { const s = stockTotal(p); return `<td class="n big" title="Droguería ${fmtS(p, conv(p, s.d))} · sucursales y otros almacenes ${fmtS(p, conv(p, s.t - s.d))}">${s.t ? fmtS(p, conv(p, s.t)) : '<span class="z">0</span>'}</td>`; })()}
       <td class="n">${fmt(conv(p, k.prom))}</td>
       ${mets.map((m, i) => { const x = k.met[m]; const cls = ['w', i === 0 ? 'sep' : '']; if (!x || x.wape == null) return `<td class="${cls.join(' ')} na">–</td>`;
         if (m === k.best) cls.push('best'); if (m === sel) cls.push('sel');
@@ -633,7 +641,7 @@ function pintarPron() {
       </select></td>
       ${o.fm.map((_, j) => `<td class="n pj big">${fmt(conv(p, pronDe(p, j)))}</td>`).join('')}</tr>`;
   }
-  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${mets.length + 5}">Ningún medicamento coincide con el filtro.</td></tr>`;
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${mets.length + 6}">Ningún medicamento coincide con el filtro.</td></tr>`;
   $('pTabla').innerHTML = h + '</tbody>'; ajustarC0($('pTabla'));
   $('pMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(fil.length)} medicamentos, de mayor a menor demanda</span>` +
     (fil.length > vis.length ? `<button class="btn" id="pMas">Ver ${Math.min(PAGINA, fil.length - vis.length)} más</button>` : '');
@@ -926,6 +934,6 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=202610161200"></script>
+<script type="module" src="proyeccion.js?v=202610161400"></script>
 
 </body></html>
