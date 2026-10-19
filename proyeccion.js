@@ -363,8 +363,8 @@ async function recalcular() {
   const meses = []; for (let m = ini; m <= ultimoCompleto; m = sumaM(m, 1)) meses.push(m);
   if (meses.length < 4) return `Los pronósticos siguen siendo los del archivo de pronósticos: se necesitan al menos 4 meses completos para calcularlos (hay ${meses.length}).`;
   // demanda mensual por producto y farmacia (ventas − anulaciones) y movimientos por farmacia
-  // Kardex: todos sus meses. Colab: su historia total y por farmacia. Por producto, si está en Colab se usa Colab
-  // hasta su último mes y el kardex después; si no está en Colab (p. ej. no se vendía en su periodo) se usa solo el kardex.
+  // Kardex: todos sus meses. Colab: su historia total y por farmacia, solo como respaldo. Cada mes usa el kardex si
+  // está completo (vende al menos el 90 % de lo que dice Colab para ese mes); si no, Colab para los productos que están en Colab.
   const demK = new Map(), conK = new Set(), conDatos = new Set(), hBase = new Map(), pfB = new Map(), bIdx = new Map((B?.p || []).map(p => [p.c, p]));
   const iDe = new Map(meses.map((m, i) => [m, i]));
   if (B) {
@@ -392,7 +392,11 @@ async function recalcular() {
       (pf.get(alm) ?? pf.set(alm, Array(meses.length).fill(0)).get(alm))[i] += v;
     }
   }
-  const usaBase = (cod, m) => hBase.has(cod) && bFin && m <= bFin;
+  const totK = Array(meses.length).fill(0), totB = Array(meses.length).fill(0);
+  for (const pf of demK.values()) for (const a of pf.values()) a.forEach((v, i) => totK[i] += v);
+  for (const h of hBase.values()) h.forEach((v, i) => totB[i] += v || 0);
+  const kOk = meses.map((m, i) => conK.has(i) && (!(bFin && m <= bFin) || totK[i] >= .9 * totB[i]));
+  const usaBase = (cod, m) => { const i = iDe.get(m); return hBase.has(cod) && bFin && m <= bFin && !kOk[i]; };
   const dem = new Map(), hTot = new Map(), farmVol = new Map();
   for (const cod of new Set([...demK.keys(), ...hBase.keys()])) {
     const pk = demK.get(cod) || new Map(), pb = pfB.get(cod) || new Map(), pf = new Map();
