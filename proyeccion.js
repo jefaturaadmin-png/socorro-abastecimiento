@@ -363,35 +363,46 @@ async function recalcular() {
   const meses = []; for (let m = ini; m <= ultimoCompleto; m = sumaM(m, 1)) meses.push(m);
   if (meses.length < 4) return `Los pronósticos siguen siendo los del archivo de pronósticos: se necesitan al menos 4 meses completos para calcularlos (hay ${meses.length}).`;
   // demanda mensual por producto y farmacia (ventas − anulaciones) y movimientos por farmacia
-  const dem = new Map(), farmVol = new Map(), conDatos = new Set(), hBase = new Map(), bIdx = new Map((B?.p || []).map(p => [p.c, p]));
+  // Kardex: todos sus meses. Colab: su historia total y por farmacia. Por producto, si está en Colab se usa Colab
+  // hasta su último mes y el kardex después; si no está en Colab (p. ej. no se vendía en su periodo) se usa solo el kardex.
+  const demK = new Map(), conK = new Set(), conDatos = new Set(), hBase = new Map(), pfB = new Map(), bIdx = new Map((B?.p || []).map(p => [p.c, p]));
+  const iDe = new Map(meses.map((m, i) => [m, i]));
   if (B) {
     msg("Uniendo el historial de Colab…");
-    const iDe = new Map(meses.map((m, i) => [m, i]));
     bMeses.forEach(m => { if (iDe.has(m)) conDatos.add(iDe.get(m)); });
     for (const bp of B.p) {
       const h = Array(meses.length).fill(null); bMeses.forEach((m, j) => { if (iDe.has(m)) h[iDe.get(m)] = bp.h?.[j] ?? null; }); hBase.set(bp.c, h);
-      const pf = (dem.get(bp.c) ?? dem.set(bp.c, new Map()).get(bp.c));
+      const pf = new Map(); pfB.set(bp.c, pf);
       for (const [alm, arr] of Object.entries(bp.hf || {})) (B.hfm || []).forEach((m, j) => {
         if (!iDe.has(m) || arr[j] == null) return;
         (pf.get(alm) ?? pf.set(alm, Array(meses.length).fill(0)).get(alm))[iDe.get(m)] += arr[j];
-        farmVol.set(alm, (farmVol.get(alm) || 0) + Math.max(0, arr[j]));
       });
-      for (const alm of Object.keys(bp.s || {})) if (!farmVol.has(alm)) farmVol.set(alm, 0);
+      for (const alm of Object.keys(bp.s || {})) if (!pf.has(alm)) pf.set(alm, Array(meses.length).fill(0));
     }
   }
   for (let i = 0; i < meses.length; i++) {
-    if (bFin && meses[i] <= bFin) continue; // ese mes ya está en el historial de Colab
     const meta = metas.get(meses[i]); if (!meta) continue;
-    msg(`Leyendo ${meses[i]}…`); conDatos.add(i);
+    msg(`Leyendo ${meses[i]}…`); conDatos.add(i); conK.add(i);
     const { d } = await leerMes(meta);
     for (const cod in d) for (const alm in d[cod]) {
       if (alm === DROG) continue;
       const t = d[cod][alm], v = (t[VENTA]?.[1] || 0) - (t[ANULA]?.[0] || 0);
       if (!t[VENTA] && !t[ANULA]) continue;
-      const pf = (dem.get(cod) ?? dem.set(cod, new Map()).get(cod));
+      const pf = (demK.get(cod) ?? demK.set(cod, new Map()).get(cod));
       (pf.get(alm) ?? pf.set(alm, Array(meses.length).fill(0)).get(alm))[i] += v;
-      farmVol.set(alm, (farmVol.get(alm) || 0) + Math.max(0, v));
     }
+  }
+  const usaBase = (cod, m) => hBase.has(cod) && bFin && m <= bFin;
+  const dem = new Map(), hTot = new Map(), farmVol = new Map();
+  for (const cod of new Set([...demK.keys(), ...hBase.keys()])) {
+    const pk = demK.get(cod) || new Map(), pb = pfB.get(cod) || new Map(), pf = new Map();
+    for (const alm of new Set([...pk.keys(), ...pb.keys()])) {
+      const a = meses.map((m, i) => usaBase(cod, m) ? (pb.get(alm)?.[i] || 0) : (pk.get(alm)?.[i] || 0));
+      pf.set(alm, a); farmVol.set(alm, (farmVol.get(alm) || 0) + a.reduce((x, v) => x + Math.max(0, v), 0));
+    }
+    dem.set(cod, pf);
+    hTot.set(cod, meses.map((m, i) => !conDatos.has(i) ? null : usaBase(cod, m) ? hBase.get(cod)[i]
+      : conK.has(i) ? r1([...pk.values()].reduce((x, v) => x + v[i], 0)) : 0));
   }
   // ventas por día de los últimos 90 días hasta el corte (para "ventas de los últimos N días")
   msg("Leyendo ventas por día…");
@@ -404,8 +415,7 @@ async function recalcular() {
   msg("Calculando pronósticos…");
   const p = [];
   for (const [cod, pf] of dem) {
-    const hb = hBase.get(cod), bp = bIdx.get(cod);
-    const h = meses.map((m, i) => !conDatos.has(i) ? null : bFin && m <= bFin ? (hb ? hb[i] : 0) : r1([...pf.values()].reduce((a, v) => a + v[i], 0)));
+    const bp = bIdx.get(cod), h = hTot.get(cod);
     // se incluyen todos los productos con historia (también los que dejaron de venderse: categoría E)
     const prom = media(ultimos(h, 12)), apto = h.filter(v => v != null).length >= 24 && prom >= 10;
     // prueba: pronóstico de cada mes de bm con lo conocido hasta el mes anterior

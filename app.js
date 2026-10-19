@@ -15,7 +15,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610200000";
+const VERSION_PROY = "202610200100";
 
 /* ===================== utilidades ===================== */
 const $ = id => document.getElementById(id);
