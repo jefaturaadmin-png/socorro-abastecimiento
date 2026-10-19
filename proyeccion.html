@@ -648,7 +648,7 @@ async function iniciar() {
       const m = window.stockKardex ? await window.stockKardex() : null; // el stock del último kardex, si es más nuevo
       if (m) window.aplicarStock(m);
       // pronósticos del archivo de Colab y ya hay kardex guardado: se unen y se recalculan una vez
-      if (cfg.data().archivo !== 'kardex' && m?.corte && window.recalcularPron) {
+      if ((cfg.data().archivo !== 'kardex' || S.P.ver !== window.CALC_VER) && m?.corte && window.recalcularPron) {
         try { const a = await window.recalcularPron(); if (a) msg(a); } catch (e) { console.warn(e); }
       }
       if (!S.P.dias && m?.corte && window.ventasDiarias) {
@@ -784,7 +784,8 @@ function pintarFichaP() {
   const k = S.calc.get(p.c), sel = elegido(p.c), esMan = manual(p.c), conv = v => v == null ? null : soles() ? v * p.k : v;
   $('fpEyebrow').innerHTML = `Código <code>${esc(p.c)}</code> · ${p.a ? 'apto para SARIMA' : 'baja rotación: solo métodos simples'}`;
   $('fpTitulo').textContent = p.n;
-  $('fpNota').textContent = `Usando ${sel}${esMan ? ' (elegido por ti)' : ' (automático: menor error)'}. Valores ${soles() ? 'en soles' : 'en cajas'}.`;
+  $('fpNota').textContent = sel ? `Usando ${sel}${esMan ? ' (elegido por ti)' : ' (automático: menor error)'}. Valores ${soles() ? 'en soles' : 'en cajas'}.`
+    : 'Sin ventas en el historial guardado: no hay pronóstico.';
   const mets = Object.keys(k.met).sort((a, b) => (k.met[a].wape ?? 9) - (k.met[b].wape ?? 9));
   let h = `<thead><tr><th class="c1 solo">Método</th><th>WAPE</th><th>Sesgo</th>${o.bm.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}">${et(m)}</th>`).join('')}${o.fm.map((m, i) => `<th class="pj ${i === 0 ? 'sep' : ''}">${et(m)}</th>`).join('')}<th></th></tr></thead><tbody>`;
   h += `<tr><td class="c1 solo"><b>Demanda real</b></td><td></td><td></td>${k.real.map((v, i) => `<td class="n big ${i === 0 ? 'sep' : ''}">${fmt(conv(v))}</td>`).join('')}${o.fm.map((_, i) => `<td class="n z ${i === 0 ? 'sep' : ''}">·</td>`).join('')}<td></td></tr>`;
@@ -1266,6 +1267,6 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=202610200200"></script>
+<script type="module" src="proyeccion.js?v=202610200300"></script>
 
 </body></html>

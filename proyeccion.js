@@ -350,6 +350,8 @@ async function leerBase() {
   return { id, o: window.validar ? window.validar(o) : o };
 }
 
+// Versión del cálculo: si cambia, los pronósticos guardados se rehacen solos al abrir la página.
+const CALC_VER = 4; window.CALC_VER = CALC_VER;
 async function recalcular() {
   const metas = await mesesMeta(); if (!metas.size) return "";
   const maestro = await leerMaestro(), lista = [...metas.keys()].sort();
@@ -450,7 +452,7 @@ async function recalcular() {
     p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: false, h: meses.map(() => 0), b: {}, f: {}, s: {}, st: stf, hf: {}, sd: st[DROG]?.[0] || 0,
       sinVentas: true, dv: {}, um: (pr[3] || "").slice(0, 10), uv: "" });
   }
-  const o = { corte, meses, hfm, bm, fm, metodos: METODOS.filter(m => p.some(x => x.f[m])), farmacias, p, origen: "kardex",
+  const o = { ver: CALC_VER, corte, meses, hfm, bm, fm, metodos: METODOS.filter(m => p.some(x => x.f[m])), farmacias, p, origen: "kardex",
     dias: diasInfo };
   msg("Guardando pronósticos…"); paso = "guardar los pronósticos (proy_config/datos)";
   const prev = await getDoc(doc(db, "proy_config", "datos"));
