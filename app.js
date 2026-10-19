@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
 import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, where,
-  serverTimestamp, writeBatch, addDoc
+  serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610151900";
 
@@ -12,10 +12,10 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 // La proyección de compras (proyeccion.html, dentro de un marco) usa esta misma conexión y sesión.
-window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, query, where };
+window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610191900";
+const VERSION_PROY = "202610192000";
 
 /* ===================== utilidades ===================== */
 const $ = id => document.getElementById(id);
@@ -202,10 +202,6 @@ function iniciar() {
       render();
     }, e => avisar(e));
     S.subs.push(escuchar(miFarm(), "propia"), escuchar("TODAS", "todas"));
-    S.subs.push(onSnapshot(query(collection(db, "pedidos"), where("farmacia", "==", miFarm())), snap => {
-      const hace15 = Date.now() - 15 * 864e5;
-      S.pedidos = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => (aFecha(d.fecha) || Date.now()) >= hace15); pintarMisPedidos();
-    }, e => avisar(e)));
     // Si el administrador le cambia la sucursal, el rol o la deshabilita, se recarga con los datos nuevos.
     pintarPedidoSucursal();
     S.subs.push(onSnapshot(doc(db, "usuarios", S.perfil.uid), snap => {
@@ -249,7 +245,7 @@ function render() {
 function montarMotivos(contId, nombre) {
   $(contId).innerHTML = MOTIVOS_BLOQUEO.map(m => `<label class="${esc(m.clase)}"><input type="radio" name="${nombre}" value="${esc(m.texto)}">${esc(m.texto)}</label>`).join("");
 }
-function farmDeForm(pre) { return pre === "ab" ? $("abFarm").value : miFarm(); }
+function farmDeForm(pre) { return pre === "bq" ? miFarm() : $("abFarm").value; }
 function estadoEn(cod, farm) {
   const todas = S.bloqueos.get(`TODAS__${cod}`);
   if (todas?.estado === "bloqueado") return todas;
@@ -270,25 +266,6 @@ function pintarSel(pre) {
   if (!p) { box.hidden = true; box.innerHTML = ""; btn.disabled = true; return; }
   box.hidden = false;
   const farm = farmDeForm(pre);
-  if (pre === "pu") {
-    btn.textContent = "Enviar pedido urgente";
-    if (p.manual) {
-      if (!box.querySelector(".manual")) {
-        box.innerHTML = `<span class="cod">Producto que no está en la lista</span>
-          <div class="manual"><input data-m="c" placeholder="Código (si lo tienes)" value="${esc(p.c)}" autocomplete="off"><input data-m="n" placeholder="Nombre del producto" value="${esc(p.n)}" autocomplete="off"></div>
-          <button class="enlace" type="button" data-quitar>Quitar</button>`;
-        box.querySelector(p.c ? '[data-m="n"]' : '[data-m="c"]').focus();
-      }
-      btn.disabled = !(p.c.trim() || p.n.trim().length >= 3);
-      return;
-    }
-    const b = estadoEn(p.c, farm);
-    box.innerHTML = `<span class="cod">${esc(p.c)}${p.l ? " · Lab. " + esc(p.l) : ""}</span><b>${esc(p.n)}</b>` +
-      (b ? `<span class="est mal">Está bloqueado en tu farmacia (${esc(b.motivo)}); igual puedes pedirlo.</span>` : `<span class="est ok">Se pedirá para ${esc(corto(farm))}</span>`) +
-      `<button class="enlace" type="button" data-quitar>Quitar</button>`;
-    btn.disabled = false;
-    return;
-  }
   btn.textContent = pre === "bq" ? "Bloquear en mi farmacia" : (farm === "TODAS" ? "Bloquear en todas las farmacias" : `Bloquear en ${corto(farm)}`);
   if (p.manual) {
     // El formulario se arma una sola vez para no perder lo que se está escribiendo.
@@ -353,12 +330,12 @@ function cablearBuscador(pre) {
     pintarSel(pre);
   });
 }
-cablearBuscador("bq"); cablearBuscador("ab"); cablearBuscador("pu");
+cablearBuscador("bq"); cablearBuscador("ab");
 // Botón azul de la lupa: muestra los resultados de lo escrito.
 document.querySelectorAll("[data-lupa]").forEach(b => b.addEventListener("click", () => {
   const inp = $(b.dataset.lupa + "Bus"); inp.focus(); inp.dispatchEvent(new Event("input"));
 }));
-["bq", "ab", "pu"].forEach(pre => {
+["bq", "ab"].forEach(pre => {
   $(pre + "Sel").addEventListener("input", e => {
     const campo = e.target.dataset?.m, p = S.sel[pre]; if (!campo || !p?.manual) return;
     p[campo] = e.target.value; pintarSel(pre);
@@ -397,32 +374,6 @@ async function enviarBloqueo(e) {
   } catch (err) { msg(pre + "Msg", textoError(err), true); pintarSel(pre); }
 }
 $("bqForm").addEventListener("submit", enviarBloqueo);
-
-/* ===================== químico: pedido urgente ===================== */
-$("puForm").addEventListener("submit", async e => {
-  e.preventDefault();
-  const el = S.sel.pu; if (!el) return msg("puMsg", "Elige un producto.", true);
-  const p = prodFinal(el), cant = Math.round(+$("puCant").value || 0);
-  const quien = { porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario };
-  $("puBtn").disabled = true;
-  try {
-    await addDoc(collection(db, "pedidos"), { farmacia: miFarm(), codpro: p.c, producto: p.n, laboratorio: p.l || "", cantidad: cant > 0 ? cant : null,
-      comentario: $("puCom").value.trim(), estado: "pendiente", fecha: serverTimestamp(), ...(p.manual ? { fueraCatalogo: true } : {}), ...quien });
-    toast(`Pedido urgente enviado: ${p.n}`);
-    S.sel.pu = null; $("puCant").value = ""; $("puCom").value = ""; msg("puMsg", ""); pintarSel("pu");
-  } catch (err) { msg("puMsg", textoError(err), true); pintarSel("pu"); }
-});
-function pintarMisPedidos() {
-  const l = [...(S.pedidos || [])].sort((a, b) => (aFecha(b.fecha) || Date.now()) - (aFecha(a.fecha) || Date.now()));
-  $("puLista").innerHTML = l.length ? l.map(d => `<li class="${d.estado === "anulado" ? "anulado" : ""}"><b title="${esc(d.producto)}">${esc(d.producto)}${d.cantidad ? ` · ${d.cantidad}` : ""}</b>
-      <small>${fmtFH(d.fecha).replace("<br>", " ")} · ${d.estado === "anulado" ? "anulado" : esc(d.porNombre)}</small>
-      ${d.estado === "pendiente" && d.porUid === S.perfil.uid ? `<button class="enlace" type="button" data-anular-ped="${esc(d.id)}">Anular</button>` : ""}</li>`).join("")
-    : `<li class="muted">Aún no hay pedidos.</li>`;
-}
-$("puLista").addEventListener("click", async e => {
-  const b = e.target.closest("[data-anular-ped]"); if (!b) return;
-  try { await updateDoc(doc(db, "pedidos", b.dataset.anularPed), { estado: "anulado" }); toast("Pedido anulado"); } catch (err) { toast(textoError(err)); }
-});
 $("abForm").addEventListener("submit", enviarBloqueo);
 
 /* ===================== químico: pedir cambio de sucursal ===================== */

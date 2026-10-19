@@ -337,11 +337,3 @@ legend { padding: 0; margin-bottom: 8px }
   .lista-cuerpo { grid-template-columns: minmax(0, 1fr) }
   .torta { border-left: 0; border-top: 1px solid var(--line) }
 }
-
-/* pedidos urgentes del químico */
-.mis-ped { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow: auto }
-.mis-ped li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; font-size: 13px; padding-bottom: 8px; border-bottom: 1px solid var(--line-2) }
-.mis-ped b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.mis-ped small { color: var(--muted); grid-column: 1 }
-.mis-ped .enlace { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 12.5px }
-.mis-ped .anulado b { text-decoration: line-through; color: var(--muted) }
