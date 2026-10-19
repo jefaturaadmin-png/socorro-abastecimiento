@@ -117,6 +117,21 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .tag.auto { background: var(--bg); color: var(--muted); border: 1px solid var(--line) }
 .more { padding: 12px 16px; display: flex; gap: 12px; align-items: center; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); flex-wrap: wrap }
 
+.ped-grid { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; align-items: start }
+.ped-grid > .card { margin: 0 }
+.torta .dona { height: 230px; padding: 0 16px }
+.torta .ley { list-style: none; margin: 0; padding: 4px 10px 14px }
+.torta .ley button { width: 100%; display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 4px 6px; border-radius: 6px; cursor: pointer; font-size: 13px; text-align: left; color: var(--fg) }
+.torta .ley button:hover, .torta .ley button[aria-pressed="true"] { background: var(--accent-soft) }
+.torta .ley i { width: 10px; height: 10px; border-radius: 3px; flex: none }
+.torta .ley b { margin-left: auto; font-family: var(--f-mono); font-weight: 500 }
+.torta .ley span { width: 38px; text-align: right; color: var(--muted); font-size: 12px }
+.torta .ley .cero button { color: #b6400b }
+.acc-tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 99px; white-space: nowrap; margin: 1px 2px }
+.acc-tag.drog { background: #dff0ec; color: #1f7a6d } .acc-tag.pasar { background: #e3e9f6; color: #3d5a99 } .acc-tag.comprar { background: var(--accent-soft); color: var(--accent) }
+.cells td.de { white-space: normal; min-width: 140px }
+.al-si { color: #1f7a6d; font-weight: 600 } .al-no { color: #b6400b; font-weight: 600 }
+@media (max-width: 960px) { .ped-grid { grid-template-columns: minmax(0, 1fr) } }
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 16px }
 .kpi { background: var(--surface); padding: 12px 16px; min-width: 0 }
 .kpi span { display: block; font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted) }
@@ -145,7 +160,7 @@ main.sin-sesion > section { display: none !important }
     <div class="tabs" role="tablist">
       <button role="tab" data-tab="pron" aria-selected="true">Pronóstico</button>
       <button role="tab" data-tab="rep" aria-selected="false">Reposición</button>
-      <button role="tab" data-tab="mov" aria-selected="false">Movimientos</button>
+      <button role="tab" data-tab="ped" aria-selected="false">Pedidos</button>
     </div>
     <div class="seg" role="group" aria-label="Unidad">
       <button data-u="cajas" aria-pressed="true">Cajas</button><button data-u="soles" aria-pressed="false">Soles</button>
@@ -177,14 +192,7 @@ main.sin-sesion > section { display: none !important }
         <input id="pq" type="search" placeholder="Filtrar medicamento…" aria-label="Filtrar medicamentos" autocomplete="off">
       </div>
     </div>
-    <div class="kpis">
-      <div class="kpi"><span>Error con tus elecciones</span><b id="pk1" class="acc">–</b><small>WAPE ponderado, abr–sep</small></div>
-      <div class="kpi"><span>Error solo con media 3 meses</span><b id="pk2">–</b><small>para comparar</small></div>
-      <div class="kpi"><span>Elegidos por ti</span><b id="pk3">–</b><small id="pk3s"></small></div>
-      <div class="kpi"><span id="pk4l">Demanda pronosticada</span><b id="pk4">–</b><small>todas las farmacias</small></div>
-    </div>
     <div class="card">
-      <div class="ch"><h2>Error de cada método (WAPE)</h2><span class="note">Clic en una celda de error para usar ese método. Verde: el de menor error. Recuadro naranja: el que se usa. Clic en el nombre para ver el detalle.</span></div>
       <div class="scroll"><table class="cells" id="pTabla"></table></div>
       <div class="more" id="pMore"></div>
     </div>
@@ -212,11 +220,11 @@ main.sin-sesion > section { display: none !important }
       <div class="scroll"><table class="cells" id="fpTabla"></table></div>
     </div>
     <div class="card">
-      <div class="ch"><h2>Real vs. pronóstico</h2><span class="note">Barras: demanda real. Líneas: lo que cada método habría pronosticado (abr–sep) y su pronóstico a futuro. Clic en la leyenda para ocultar métodos.</span></div>
+      <div class="ch"><h2>Real vs. pronóstico</h2></div>
       <div class="chartbox"><canvas id="fpChart" aria-label="Demanda real y pronósticos"></canvas></div>
     </div>
     <div class="card">
-      <div class="ch"><h2>Reparto por farmacia</h2><span class="note" id="fpFarmNota"></span></div>
+      <div class="ch"><h2>Reparto por farmacia</h2><div class="field"><span>Repartir para (días + seguridad)</span><div class="seg" id="fpPres" role="group" aria-label="Días a cubrir"></div></div></div>
       <div class="scroll"><table class="cells" id="fpFarm"></table></div>
     </div>
     <div class="card" id="fpFCard" hidden>
@@ -271,6 +279,52 @@ main.sin-sesion > section { display: none !important }
         <li><b>Reparto</b> a una farmacia: botones para 1 semana, 15 días o 1 mes.</li>
         <li><b>Bloqueados</b>: lo que una sucursal bloqueó en la página de Abastecimiento no se le reparte ni se compra para ella; si Abastecimiento lo bloqueó para todas, no se compra. Al reactivarlo vuelve a entrar solo.</li>
         <li>Las cantidades salen del kardex en cajas: enteras + fracciones ÷ unidades por caja. Entregas y compras se redondean a cajas enteras.</li>
+      </ul>
+    </details>
+  </section>
+
+  <!-- PEDIDOS -->
+  <section id="vPed" hidden>
+    <div class="head">
+      <div><div class="eyebrow" id="qEyebrow"></div><h1>Pedidos de las sucursales</h1></div>
+      <div class="controls">
+        <label class="field"><span>Sucursal</span><select id="qFarm"></select></label>
+        <label class="field"><span>Qué hacer</span><select id="qAcc">
+          <option value="">Todo lo urgente</option><option value="drog">Enviar de droguería</option><option value="pasar">Pasar de otra sucursal</option>
+          <option value="comprar">Comprar</option><option value="falta">Faltó su alerta</option><option value="sobra">Alertó sin necesitarlo</option></select></label>
+        <label class="field"><span>Laboratorio</span><select id="qLab" class="sLab"><option value="">Todos</option></select></label>
+        <label class="btn" for="fAlertas" title="Excel o CSV con las alertas de las sucursales: Sucursal, Fecha, Producto y, si lo tiene, el código">Cargar alertas (Excel)</label>
+        <input id="fAlertas" type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" hidden>
+        <input id="qq" type="search" placeholder="Filtrar medicamento…" aria-label="Filtrar medicamentos" autocomplete="off">
+      </div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><span>Urgentes</span><b id="qk1" class="acc">–</b><small id="qk1s"></small></div>
+      <div class="kpi"><span>Enviar de droguería</span><b id="qk2">–</b><small id="qk2s"></small></div>
+      <div class="kpi"><span>Pasar de otra sucursal</span><b id="qk3">–</b><small id="qk3s"></small></div>
+      <div class="kpi"><span>Comprar</span><b id="qk4">–</b><small id="qk4s"></small></div>
+    </div>
+    <div class="ped-grid">
+      <div class="card">
+        <div class="ch"><h2 id="qH2"></h2><span class="note" id="qNota"></span></div>
+        <div class="scroll"><table class="cells" id="qTabla"></table></div>
+        <div class="more" id="qMore"></div>
+      </div>
+      <div class="card torta">
+        <div class="ch"><h2>Por sucursal</h2><div class="seg" id="qVer" role="group" aria-label="Qué contar">
+          <button type="button" data-ver="calc" aria-pressed="true">Urgentes</button><button type="button" data-ver="alertas" aria-pressed="false">Alertas</button></div></div>
+        <div class="chartbox dona"><canvas id="qChart" aria-label="Pedidos por sucursal"></canvas></div>
+        <ul class="ley" id="qLey"></ul>
+      </div>
+    </div>
+    <details class="metodo">
+      <summary>Cómo se decide</summary>
+      <ul>
+        <li><b>Urgente</b>: la sucursal vende el producto (tipo A o B en esa sucursal) y su stock no alcanza para los días de seguridad elegidos en Reposición.</li>
+        <li><b>Cuánto</b>: lo que falta para cubrir días + seguridad con la venta diaria de los últimos días (lo elegido en Reposición).</li>
+        <li><b>De dónde</b>: primero el stock de la droguería; si no alcanza, de otra sucursal que tenga más de lo que necesita; si nada alcanza, comprar.</li>
+        <li><b>Alertas</b>: carga el Excel de alertas de las sucursales para ver qué pidieron, qué <b>faltó pedir</b> (urgente sin alerta) y qué pidieron <b>sin necesitarlo</b> (tienen stock para más días que la seguridad). El archivo se lee solo en tu navegador.</li>
+        <li>Lo bloqueado no se pide ni se reparte.</li>
       </ul>
     </details>
   </section>
@@ -624,10 +678,10 @@ document.querySelectorAll('[data-volver]').forEach(b => b.onclick = () => { S.vi
 function render() {
   const v = S.vista;
   $('vPron').hidden = v !== 'pron'; $('vFichaP').hidden = v !== 'fichaP'; $('vRep').hidden = v !== 'rep';
-  $('vMov').hidden = v !== 'mov'; $('vFichaM').hidden = v !== 'fichaM';
+  $('vMov').hidden = v !== 'mov'; $('vPed').hidden = v !== 'ped'; $('vFichaM').hidden = v !== 'fichaM';
   if (!S.P) return;
   if (v === 'pron') pintarPron(); else if (v === 'fichaP') pintarFichaP(); else if (v === 'rep') pintarRep();
-  else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM();
+  else if (v === 'ped') pintarPed(); else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM();
 }
 function abrirFichaP(c, origen) { S.cur = c; S.origen = origen; S.fpFarm = origen === 'rep' ? S.farm : ''; S.vista = 'fichaP'; render(); scrollTo({ top: 0 }); }
 
@@ -673,43 +727,32 @@ function pintarPron() {
   if (S.pFiltro === 'auto') lista = lista.filter(p => !manual(p.c));
   const fil = filtroTexto(lista, $('pq').value), vis = fil.slice(0, S.pMostrar);
 
-  // KPIs sobre todos los medicamentos
-  let ae = 0, ae3 = 0, sr = 0, man = 0, dem = 0;
-  for (const p of o.p) {
-    const k = S.calc.get(p.c), m = elegido(p.c);
-    if (manual(p.c)) man++;
-    dem += conv(p, pronDe(p, 0));
-    if (!m || !k.met[m]?.ok || !k.met['Media 3 meses']?.ok || !k.sr) continue;
-    ae += k.met[m].ae; ae3 += k.met['Media 3 meses'].ae; sr += k.sr;
-  }
-  $('pk1').textContent = sr ? pct(ae / sr) : '–'; $('pk2').textContent = sr ? pct(ae3 / sr) : '–';
-  $('pk3').textContent = nf0.format(man); $('pk3s').textContent = `de ${nf0.format(o.p.length)}; el resto usa el de menor error`;
-  $('pk4l').textContent = 'Demanda ' + nombreMes(o.fm[0]); $('pk4').textContent = fmtU(dem);
-
-  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th title="Categoría por movimiento (últimos 12 meses)">Tipo</th><th title="Droguería + todas las sucursales y almacenes">Stock actual</th><th>Prom. 3m</th>${mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="${esc(m)}">${esc(corto(m))}</th>`).join('')}
-    <th class="sep">Método usado</th>${o.fm.map(m => `<th class="pj">${et(m)}</th>`).join('')}</tr></thead><tbody>`;
+  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th title="Categoría por movimiento (últimos 12 meses)">Tipo</th><th title="Droguería + todas las sucursales y almacenes">Stock actual</th><th>Prom. 3m</th>${S.verMet ? mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="Error del método (WAPE). Clic en una celda para usarlo.">${esc(corto(m))}</th>`).join('') + '<th class="sep">Método usado</th>' : ''}
+    <th class="sep"><button type="button" class="btn sm" data-vermet title="${S.verMet ? 'Ocultar' : 'Ver'} el error de cada modelo y el método usado">${S.verMet ? '◂ Ocultar modelos' : 'Modelos ▸'}</button></th>${o.fm.map(m => `<th class="pj">${et(m)}</th>`).join('')}</tr></thead><tbody>`;
   for (const p of vis) {
     const k = S.calc.get(p.c), sel = elegido(p.c), esMan = manual(p.c);
     h += `<tr data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${etiquetas(p)}</td>
       <td style="text-align:center">${catBadge(p.cat)}</td>
       ${(() => { const s = stockTotal(p); return `<td class="n big" title="Droguería ${fmtS(p, conv(p, s.d))} · sucursales y otros almacenes ${fmtS(p, conv(p, s.t - s.d))}">${s.t ? fmtS(p, conv(p, s.t)) : '<span class="z">0</span>'}</td>`; })()}
       <td class="n">${fmt(conv(p, k.prom))}</td>
-      ${mets.map((m, i) => { const x = k.met[m]; const cls = ['w', i === 0 ? 'sep' : '']; if (!x || x.wape == null) return `<td class="${cls.join(' ')} na">–</td>`;
+      ${!S.verMet ? '' : mets.map((m, i) => { const x = k.met[m]; const cls = ['w', i === 0 ? 'sep' : '']; if (!x || x.wape == null) return `<td class="${cls.join(' ')} na">–</td>`;
         if (m === k.best) cls.push('best'); if (m === sel) cls.push('sel');
-        return `<td class="${cls.join(' ')}" data-m="${esc(m)}" title="Usar ${esc(m)}">${pct(x.wape)}</td>`; }).join('')}
+        return `<td class="${cls.join(' ')}" data-m="${esc(m)}" title="Usar ${esc(m)}">${pct(x.wape)}</td>`; }).join('') + `
       <td class="sep"><select class="msel" data-sel="${esc(p.c)}" aria-label="Método para ${esc(p.n)}">
         <option value="auto" ${esMan ? '' : 'selected'}>${k.best ? `Automático (${esc(corto(k.best))})` : 'Sin ventas'}</option>
         ${Object.keys(k.met).map(m => `<option value="${esc(m)}" ${esMan && m === sel ? 'selected' : ''}>${esc(corto(m))}</option>`).join('')}
-      </select></td>
+      </select></td>`}
+      <td class="sep z" style="text-align:center">${S.verMet ? '' : esc(corto(sel || '–'))}</td>
       ${o.fm.map((_, j) => `<td class="n pj big">${fmt(conv(p, pronDe(p, j)))}</td>`).join('')}</tr>`;
   }
-  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${mets.length + 7}">Ningún medicamento coincide con el filtro.</td></tr>`;
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${(S.verMet ? mets.length + 1 : 0) + o.fm.length + 5}">Ningún medicamento coincide con el filtro.</td></tr>`;
   $('pTabla').innerHTML = h + '</tbody>'; ajustarC0($('pTabla'));
   $('pMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(fil.length)} medicamentos, de mayor a menor demanda</span>` +
     (fil.length > vis.length ? `<button class="btn" id="pMas">Ver ${Math.min(PAGINA, fil.length - vis.length)} más</button>` : '');
   if ($('pMas')) $('pMas').onclick = () => { S.pMostrar += PAGINA; pintarPron(); };
 }
 $('pTabla').addEventListener('click', e => {
+  if (e.target.closest('[data-vermet]')) { S.verMet = !S.verMet; return pintarPron(); }
   const a = e.target.closest('[data-abrir]'); if (a) return abrirFichaP(a.dataset.abrir, 'pron');
   const td = e.target.closest('td.w[data-m]'); if (td) elegir(td.closest('tr').dataset.cod, td.dataset.m);
 });
@@ -725,7 +768,8 @@ function pintarFichaP() {
   const mets = Object.keys(k.met).sort((a, b) => (k.met[a].wape ?? 9) - (k.met[b].wape ?? 9));
   let h = `<thead><tr><th class="c1 solo">Método</th><th>WAPE</th><th>Sesgo</th>${o.bm.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}">${et(m)}</th>`).join('')}${o.fm.map((m, i) => `<th class="pj ${i === 0 ? 'sep' : ''}">${et(m)}</th>`).join('')}<th></th></tr></thead><tbody>`;
   h += `<tr><td class="c1 solo"><b>Demanda real</b></td><td></td><td></td>${k.real.map((v, i) => `<td class="n big ${i === 0 ? 'sep' : ''}">${fmt(conv(v))}</td>`).join('')}${o.fm.map((_, i) => `<td class="n z ${i === 0 ? 'sep' : ''}">·</td>`).join('')}<td></td></tr>`;
-  for (const m of mets) {
+  const otros = mets.filter(m => m !== sel);
+  for (const m of [sel, ...(S.fpTodos ? otros : [])].filter(m => m && k.met[m])) {
     const x = k.met[m], es = m === sel;
     h += `<tr ${es ? 'style="outline:2px solid var(--accent);outline-offset:-2px"' : ''}><td class="c1 solo">${esc(m)}${m === k.best ? '<span class="tag auto">menor error</span>' : ''}${es ? '<span class="tag man">en uso</span>' : ''}</td>
       <td class="n ${m === k.best ? 'pos' : ''}"><b>${pct(x.wape)}</b></td><td class="n ${x.sesgo > 0 ? 'neg' : 'pos'}">${pctS(x.sesgo)}</td>
@@ -733,6 +777,7 @@ function pintarFichaP() {
       ${p.f[m].map((v, i) => `<td class="n pj ${es ? 'big' : ''} ${i === 0 ? 'sep' : ''}">${fmt(conv(v))}</td>`).join('')}
       <td>${es ? '' : `<button class="btn sm" data-usar="${esc(m)}">Usar</button>`}</td></tr>`;
   }
+  if (otros.length) h += `<tr><td class="c1 solo" colspan="${o.bm.length + o.fm.length + 4}"><button type="button" class="btn sm" data-fptodos>${S.fpTodos ? '▴ Ocultar los otros métodos' : `▾ Ver los otros ${otros.length} métodos`}</button></td></tr>`;
   h += `</tbody>`;
   $('fpTabla').innerHTML = h + (esMan ? `<tfoot><tr><td class="c1 solo" colspan="${o.bm.length + o.fm.length + 4}"><button class="btn sm" data-usar="auto">Volver a automático</button></td></tr></tfoot>` : '');
 
@@ -751,14 +796,13 @@ function pintarFichaP() {
 
   // reparto por farmacia
   const obj = S.mesObj, kObj = o.fm.indexOf(obj);
-  $('fpFarmNota').textContent = `Entrega para ${nombreMes(obj)} con ${S.cob} días de cobertura y ${S.seg} de seguridad (se cambian en Reposición).`;
+  $('fpPres').innerHTML = [[7, 7], [15, 15], [30, 30]].map(([d, sg]) => `<button type="button" data-d="${d}" data-s="${sg}" aria-pressed="${S.cob === d && S.seg === sg}">${d} + ${sg}</button>`).join('');
   let hf = `<thead><tr><th class="c1 solo">Farmacia</th><th>Participación</th><th>Stock actual</th><th class="pj">Pronóstico ${et(obj)}</th><th class="tot">Entrega</th></tr></thead><tbody>`;
   const filas = o.farmacias.map(f => ({ f, s: p.s?.[f] || 0, x: plan(p, f, obj) })).filter(r => r.s || r.x.stock).sort((a, b) => b.s - a.s);
   for (const r of filas) hf += `<tr class="click" tabindex="0" data-farm="${esc(r.f)}" ${r.f === S.fpFarm ? 'style="outline:2px solid var(--accent);outline-offset:-2px"' : ''}><td class="c1 solo">${esc(r.f)}</td><td class="n">${pct(r.s)}</td><td class="n">${fmtS(p, conv(r.x.stock))}</td><td class="n pj">${fmt(conv(r.x.pron))}</td><td class="n tot ent">${r.x.entrega ? fmt(conv(r.x.entrega)) : '·'}</td></tr>`;
   const te = sum(filas.map(r => r.x.entrega));
   hf += `</tbody><tfoot><tr><td class="c1 solo">Total farmacias · stock droguería ${fmtS(p, conv(p.sd || 0))}</td><td></td><td class="n">${fmtS(p, conv(sum(filas.map(r => r.x.stock))))}</td><td class="n">${fmt(conv(sum(filas.map(r => r.x.pron))))}</td><td class="n tot">${fmt(conv(te))}</td></tr></tfoot>`;
   $('fpFarm').innerHTML = hf;
-  $('fpFarmNota').textContent += ' Clic en una farmacia para ver su proyección.';
   pintarFarm(p);
 }
 
@@ -797,9 +841,13 @@ function elegirFarm(tr) {
   pintarFichaP();
   if (S.fpFarm) $('fpFCard').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
 }
+$('fpPres').addEventListener('click', e => {
+  const b = e.target.closest('[data-d]'); if (!b) return;
+  S.cob = +b.dataset.d; S.seg = +b.dataset.s; $('rCob').value = S.cob; $('rSeg').value = S.seg; pintarFichaP();
+});
 $('fpFarm').addEventListener('click', e => elegirFarm(e.target.closest('tr[data-farm]')));
 $('fpFarm').addEventListener('keydown', e => { if (e.key === 'Enter') elegirFarm(e.target.closest('tr[data-farm]')); });
-$('fpTabla').addEventListener('click', e => { const b = e.target.closest('[data-usar]'); if (b) elegir(S.cur, b.dataset.usar); });
+$('fpTabla').addEventListener('click', e => { if (e.target.closest('[data-fptodos]')) { S.fpTodos = !S.fpTodos; return pintarFichaP(); } const b = e.target.closest('[data-usar]'); if (b) elegir(S.cur, b.dataset.usar); });
 const color = (c, a) => `color-mix(in srgb, ${c} ${a * 100}%, transparent)`;
 function opcionesLinea() {
   const muted = css('--muted'), line = css('--line'), fg = css('--fg');
@@ -988,6 +1036,164 @@ function pintarRepMes() {
 }
 $('rTabla').addEventListener('click', e => { const tr = e.target.closest('tr.click'); if (tr) abrirFichaP(tr.dataset.cod, 'rep'); });
 
+/* ---------- PEDIDOS DE LAS SUCURSALES ---------- */
+// Urgente = la sucursal vende el producto (A o B allí) y su stock no cubre los días de seguridad.
+// Cuánto = lo que falta para días + seguridad. De dónde: droguería → otra sucursal con sobrante → comprar.
+const PAL_PED = ['#3d5a99', '#a33b3b', '#d9a400', '#1f7a6d', '#6f68c4', '#2f8a99', '#e2620d', '#8a8f2a', '#8a4f9e', '#b03a6a', '#2e6b4f', '#7a5230', '#4d8fb3', '#9a6a00', '#5c5c5c'];
+const ALIAS_SUC = { REAL: 'ALMACEN PRINCIPAL', PRINCIPAL: 'ALMACEN PRINCIPAL', PUNO: 'ALMACEN SUCURSAL', TAMBO: 'ALMACEN MCDO.TAMBO', 'MCDO TAMBO': 'ALMACEN MCDO.TAMBO', 'MERCADO TAMBO': 'ALMACEN MCDO.TAMBO' };
+const nombreSuc = f => { const k = f.replace(/^ALMACEN\s+/, ''); return { PRINCIPAL: 'Real', SUCURSAL: 'Puno', 'MCDO.TAMBO': 'Tambo' }[k] || k.charAt(0) + k.slice(1).toLowerCase(); };
+const cajas = v => nf1.format(v) + ' cajas';
+const normTxt = t => String(t ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+let pedCache = null;
+function calcPedidos() {
+  const o = S.P, n = S.base === 'pron' ? 15 : +S.base, clave = [o, n, S.cob, S.seg, window.BLOQ?.size].join('|');
+  if (pedCache?.clave === clave) return pedCache;
+  const filas = [];
+  for (const p of o.p) {
+    const pide = [], sobra = [];
+    for (const f of o.farmacias) {
+      const c = p.catF?.[f] || 'E', st = p.st?.[f] || 0, v = ventaDias(p, f, n);
+      const diaria = v ? v / n : 0, nec = diaria * (S.cob + S.seg);
+      if (!['A', 'B'].includes(c) || !diaria || bloqueado(p.c, f)) { if (st >= 1) sobra.push({ f, q: Math.floor(st - nec) }); continue; }
+      const ent = c === 'A' ? Math.max(0, Math.ceil(nec - st - 1e-9)) : st < 1 ? 1 : 0;
+      if (ent > 0 && st < diaria * S.seg) pide.push({ p, f, cat: c, st, diaria, dias: st / diaria, ent });
+      else if (st - nec >= 1) sobra.push({ f, q: Math.floor(st - nec) });
+    }
+    if (!pide.length) continue;
+    let drog = bloqueado(p.c, 'TODAS') ? 0 : Math.max(0, Math.floor(p.sd || 0));
+    const libres = sobra.filter(x => x.q >= 1).sort((a, b) => b.q - a.q);
+    for (const r of pide.sort((a, b) => a.dias - b.dias)) {
+      let falta = r.ent; r.de = [];
+      const d = Math.min(falta, drog); if (d > 0) { r.de.push({ t: 'drog', q: d }); drog -= d; falta -= d; }
+      for (const l of libres) { if (falta <= 0) break; const q = Math.min(falta, l.q); if (q > 0) { r.de.push({ t: 'pasar', g: l.f, q }); l.q -= q; falta -= q; } }
+      if (falta > 0) r.de.push({ t: 'comprar', q: falta });
+      filas.push(r);
+    }
+  }
+  return pedCache = { clave, filas, n };
+}
+// alertas de las sucursales (Excel/CSV), solo en este navegador
+S.alertas = null;
+try { const a = JSON.parse(localStorage.getItem('socorro_alertas') || 'null'); if (a?.filas) S.alertas = a; } catch {}
+function sucDe(t) {
+  const k = normTxt(t).replace(/^(ALMACEN|FARMACIA|BOTICA)\s+/, '');
+  if (ALIAS_SUC[k]) return ALIAS_SUC[k];
+  const fs = S.P?.farmacias || [];
+  return fs.find(f => normTxt(f).replace(/^ALMACEN\s+/, '') === k) || fs.find(f => { const x = normTxt(f).replace(/^ALMACEN\s+/, ''); return x.includes(k) || k.includes(x); }) || '';
+}
+async function cargarAlertas(file) {
+  try {
+    let filas;
+    if (/\.(xlsx|xls)$/i.test(file.name)) {
+      const X = await import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm');
+      const wb = X.read(await file.arrayBuffer(), { cellDates: true });
+      filas = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+    } else {
+      const t = await file.text(), sep = t.split('\n')[0].includes('\t') ? '\t' : t.split('\n')[0].includes(';') ? ';' : ',';
+      filas = t.split(/\r?\n/).map(l => l.split(sep).map(x => x.replace(/^"|"$/g, '').trim()));
+    }
+    const hi = filas.findIndex(r => r.some(c => /sucur|local/i.test(c)) && r.some(c => /producto|descrip|c[oó]d|ingr/i.test(c)));
+    if (hi < 0) throw new Error('No encontré las columnas Sucursal y Producto en el archivo.');
+    const h = filas[hi], col = re => h.findIndex(c => re.test(c));
+    const cS = col(/sucur|local/i), cP = col(/producto|descrip/i), cC = col(/^\s*(c[oó]d|ingr|codpro)/i), cF = col(/fecha/i);
+    const porNombre = new Map(S.P.p.map(p => [normTxt(p.n), p.c]));
+    const res = [], sinProd = new Set(), sinSuc = new Set();
+    for (const r of filas.slice(hi + 1)) {
+      if (!r.some(x => String(x).trim())) continue;
+      const f = sucDe(r[cS]); if (!f) { sinSuc.add(String(r[cS])); continue; }
+      let c = cC >= 0 ? String(r[cC]).trim().replace(/\.0+$/, '') : '';
+      if (c && /^\d+$/.test(c)) c = c.padStart(5, '0');
+      if (!c || !S.idx.has(c)) c = porNombre.get(normTxt(r[cP])) || '';
+      if (!c) { sinProd.add(String(r[cP])); continue; }
+      res.push({ f, c, fecha: cF >= 0 ? String(r[cF]) : '' });
+    }
+    S.alertas = { nombre: file.name, filas: res, sinProd: [...sinProd].slice(0, 50), sinSuc: [...sinSuc] };
+    try { localStorage.setItem('socorro_alertas', JSON.stringify(S.alertas)); } catch {}
+    toast(`${nf0.format(res.length)} alertas leídas` + (sinProd.size ? ` · ${sinProd.size} productos no reconocidos` : '') + (sinSuc.size ? ` · sucursal no reconocida: ${[...sinSuc].join(', ')}` : ''));
+    pintarPed();
+  } catch (e) { toast('No se pudo leer el archivo de alertas: ' + e.message); }
+}
+$('fAlertas').addEventListener('change', e => { if (e.target.files[0]) cargarAlertas(e.target.files[0]); e.target.value = ''; });
+S.qFarm = ''; S.qAcc = ''; S.qVer = 'calc'; S.qMostrar = PAGINA;
+$('qFarm').addEventListener('change', e => { S.qFarm = e.target.value; S.qMostrar = PAGINA; pintarPed(); });
+$('qAcc').addEventListener('change', e => { S.qAcc = e.target.value; S.qMostrar = PAGINA; pintarPed(); });
+$('qq').addEventListener('input', () => { S.qMostrar = PAGINA; pintarPed(); });
+$('qVer').addEventListener('click', e => { const b = e.target.closest('[data-ver]'); if (!b || b.disabled) return; S.qVer = b.dataset.ver; pintarPed(); });
+$('qLey').addEventListener('click', e => { const b = e.target.closest('[data-farm]'); if (!b) return; S.qFarm = S.qFarm === b.dataset.farm ? '' : b.dataset.farm; S.qMostrar = PAGINA; pintarPed(); });
+$('qTabla').addEventListener('click', e => { const tr = e.target.closest('tr.click'); if (tr) abrirFichaP(tr.dataset.cod, 'ped'); });
+function pintarPed() {
+  const o = S.P;
+  llenarLabs();
+  if (!o.dias) {
+    $('qEyebrow').textContent = ''; $('qH2').textContent = 'Falta la venta por día';
+    $('qNota').textContent = 'Vuelve a subir el kardex para que se guarden las ventas por día.'; $('qTabla').innerHTML = ''; $('qLey').innerHTML = ''; return;
+  }
+  const { filas, n } = calcPedidos();
+  // alertas: por sucursal+código
+  const al = new Map(), alF = new Map();
+  for (const a of S.alertas?.filas || []) { const k = a.f + '__' + a.c; const x = al.get(k) || { n: 0, ult: '' }; x.n++; if (a.fecha > x.ult) x.ult = a.fecha; al.set(k, x); alF.set(a.f, (alF.get(a.f) || 0) + 1); }
+  const hay = !!S.alertas;
+  const urg = new Set(filas.map(r => r.f + '__' + r.p.c));
+  // alertas sin necesidad: la sucursal pidió pero tiene stock para más que la seguridad
+  const sobran = [];
+  for (const [k, x] of al) if (!urg.has(k)) {
+    const [f, c] = k.split('__'), p = S.idx.get(c); if (!p) continue;
+    const v = ventaDias(p, f, n), diaria = v ? v / n : 0, st = p.st?.[f] || 0;
+    sobran.push({ p, f, cat: p.catF?.[f] || 'E', st, diaria, dias: diaria ? st / diaria : Infinity, ent: 0, de: [], alerta: x, sobra: true });
+  }
+  for (const r of filas) r.alerta = al.get(r.f + '__' + r.p.c) || null;
+  // filtros
+  const q = $('qq').value;
+  const pasa = r => (!S.lab || labDe(r.p.c) === S.lab) && (!S.qFarm || r.f === S.qFarm);
+  let lista = S.qAcc === 'sobra' ? sobran : filas;
+  if (['drog', 'pasar', 'comprar'].includes(S.qAcc)) lista = lista.filter(r => r.de.some(d => d.t === S.qAcc));
+  if (S.qAcc === 'falta') lista = lista.filter(r => !r.alerta);
+  lista = filtroTexto(lista.filter(pasa).map(r => Object.assign(r, { c: r.p.c, n: r.p.n })), q).sort((a, b) => a.dias - b.dias || b.ent - a.ent);
+  const base = filas.filter(r => (!S.lab || labDe(r.p.c) === S.lab) && (!S.qFarm || r.f === S.qFarm));
+  const cuenta = t => base.filter(r => r.de.some(d => d.t === t));
+  const suma = t => sum(base.flatMap(r => r.de.filter(d => d.t === t).map(d => d.q)));
+  $('qEyebrow').textContent = `Ventas de los últimos ${n} días · stock para menos de ${S.seg} días · reponer para ${S.cob} + ${S.seg} días (se cambia en Reposición)`;
+  $('qk1').textContent = nf0.format(base.length); $('qk1s').textContent = hay ? `${nf0.format(base.filter(r => !r.alerta).length)} sin alerta de la sucursal` : 'productos × sucursal';
+  $('qk2').textContent = nf0.format(cuenta('drog').length); $('qk2s').textContent = `${cajas(suma('drog'))} desde el stock de droguería`;
+  $('qk3').textContent = nf0.format(cuenta('pasar').length); $('qk3s').textContent = `${cajas(suma('pasar'))} de sucursales con sobrante`;
+  $('qk4').textContent = nf0.format(cuenta('comprar').length); $('qk4s').textContent = `${cajas(suma('comprar'))} no hay en ninguna parte`;
+  $('qFarm').innerHTML = `<option value="">Todas</option>` + o.farmacias.map(f => `<option value="${esc(f)}" ${f === S.qFarm ? 'selected' : ''}>${esc(nombreSuc(f))}</option>`).join('');
+  $('qAcc').value = S.qAcc;
+  $('qH2').textContent = (S.qFarm ? nombreSuc(S.qFarm) : 'Todas las sucursales') + ' · ' + nf0.format(lista.length);
+  $('qNota').textContent = hay ? `Alertas: ${S.alertas.nombre} (${nf0.format(S.alertas.filas.length)})` : 'Carga el Excel de alertas para ver qué pidió cada sucursal y qué le faltó pedir.';
+  const vis = lista.slice(0, S.qMostrar);
+  const accion = r => r.sobra ? `<span class="z">Tiene para ${isFinite(r.dias) ? nf0.format(r.dias) + ' días' : 'mucho tiempo (no vende)'}</span>`
+    : r.de.map(d => d.t === 'drog' ? `<span class="acc-tag drog">Droguería ${fmt(d.q)}</span>` : d.t === 'pasar' ? `<span class="acc-tag pasar">De ${esc(nombreSuc(d.g))} ${fmt(d.q)}</span>` : `<span class="acc-tag comprar">Comprar ${fmt(d.q)}</span>`).join('');
+  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th>${S.qFarm ? '' : '<th>Sucursal</th>'}<th>Tipo</th><th>Stock</th><th>Venta diaria</th><th>Días de stock</th><th class="tot">Necesita</th><th>De dónde</th>${hay ? '<th>Alerta</th>' : ''}</tr></thead><tbody>`;
+  for (const r of vis) {
+    const p = r.p;
+    h += `<tr class="click" data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}">${esc(p.n)}${etiquetas(p)}</td>
+      ${S.qFarm ? '' : `<td>${esc(nombreSuc(r.f))}</td>`}<td style="text-align:center">${catBadge(r.cat)}</td><td class="n">${fmtS(p, r.st)}</td><td class="n">${fmt(r.diaria)}</td>
+      <td class="n ${r.dias < 3 ? 'neg' : ''}">${isFinite(r.dias) ? fmt(r.dias) : '–'}</td><td class="n tot ent">${r.ent ? fmt(r.ent) : '·'}</td><td class="de">${accion(r)}</td>
+      ${hay ? `<td>${r.alerta ? `<span class="al-si" title="Última: ${esc(r.alerta.ult)}">Sí${r.alerta.n > 1 ? ' ×' + r.alerta.n : ''}</span>` : '<span class="al-no">Faltó</span>'}</td>` : ''}</tr>`;
+  }
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${hay ? 9 : 8}">Nada que mostrar con estos filtros.</td></tr>`;
+  $('qTabla').innerHTML = h + '</tbody>'; ajustarC0($('qTabla'));
+  $('qMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(lista.length)} · primero los que se acaban antes</span>` +
+    (lista.length > vis.length ? `<button class="btn" id="qMas">Ver ${Math.min(PAGINA, lista.length - vis.length)} más</button>` : '');
+  if ($('qMas')) $('qMas').onclick = () => { S.qMostrar += PAGINA; pintarPed(); };
+
+  // torta por sucursal
+  if (S.qVer === 'alertas' && !hay) S.qVer = 'calc';
+  document.querySelectorAll('#qVer [data-ver]').forEach(b => { b.setAttribute('aria-pressed', b.dataset.ver === S.qVer); b.disabled = b.dataset.ver === 'alertas' && !hay; b.title = b.disabled ? 'Carga primero el Excel de alertas' : ''; });
+  const porF = new Map(o.farmacias.map(f => [f, 0]));
+  if (S.qVer === 'alertas') for (const a of S.alertas.filas) { if (!S.lab || labDe(a.c) === S.lab) porF.set(a.f, (porF.get(a.f) || 0) + 1); }
+  else for (const r of filas) if (!S.lab || labDe(r.p.c) === S.lab) porF.set(r.f, porF.get(r.f) + 1);
+  const con = [...porF].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]), cero = [...porF].filter(([, v]) => !v), tot = sum(con.map(x => x[1]));
+  const colF = new Map(con.map(([f], i) => [f, PAL_PED[i % PAL_PED.length]]));
+  dibujar('qChart', { type: 'doughnut', data: { labels: con.map(([f]) => nombreSuc(f)), datasets: [{ data: con.map(x => x[1]),
+      backgroundColor: con.map(([f]) => S.qFarm && f !== S.qFarm ? color(colF.get(f), .3) : colF.get(f)), borderColor: css('--surface') || '#fff', borderWidth: 2 }] },
+    options: { maintainAspectRatio: false, cutout: '55%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${c.label}: ${nf0.format(c.raw)} (${Math.round(c.raw / tot * 100)}%)` } } },
+      onClick: (e, els) => { if (!els.length) return; const f = con[els[0].index][0]; S.qFarm = S.qFarm === f ? '' : f; S.qMostrar = PAGINA; pintarPed(); } } });
+  $('qLey').innerHTML = con.map(([f, v]) => `<li><button type="button" data-farm="${esc(f)}" aria-pressed="${S.qFarm === f}"><i style="background:${colF.get(f)}"></i>${esc(nombreSuc(f))}<b>${nf0.format(v)}</b><span>${Math.round(v / tot * 100)}%</span></button></li>`).join('') +
+    cero.map(([f]) => `<li class="cero"><button type="button" data-farm="${esc(f)}" aria-pressed="${S.qFarm === f}"><i style="background:#e6c9c1"></i>${esc(nombreSuc(f))}<b>0</b><span></span></button></li>`).join('');
+}
+
 /* ---------- MOVIMIENTOS (archivo del kardex, solo en esta visita) ---------- */
 const esVenta = t => /VENTA/i.test(t);
 async function cargarMov(f) {
@@ -1090,6 +1296,6 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=202610191200"></script>
+<script type="module" src="proyeccion.js?v=202610191700"></script>
 
 </body></html>
