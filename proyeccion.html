@@ -439,6 +439,16 @@ function celda(v, max, cls = '') {
   return `<td class="n ${cls}" style="--hc:color-mix(in srgb, var(--heat) ${p}%, transparent)">${fmt(v)}</td>`;
 }
 function ajustarC0(t) { const c = t.querySelector('thead .c0'); if (c) t.style.setProperty('--c0w', c.offsetWidth + 'px'); }
+// Por qué un código buscado no aparece en la lista.
+const Q_ACTUAL = () => ({ pron: $('pq').value, rep: $('rq').value, ped: $('qq').value })[S.vista] || '';
+function porQueNo(q) {
+  const c = String(q || '').trim(); if (!/^\d{3,6}$/.test(c)) return 'Ningún medicamento coincide con el filtro.';
+  const cod = c.padStart(5, '0'), p = S.idx.get(cod) || S.idx.get(c);
+  if (p) return `El código ${c} (${p.n}) existe, pero lo ocultan los filtros elegidos (laboratorio, tipo, etiqueta o "Mostrar").`;
+  const mp = window.MAESTRO?.prod?.[cod] || window.MAESTRO?.prod?.[c];
+  if (mp) return `El código ${c} (${mp[0]}) está en el kardex pero todavía no en los cálculos: recarga la página para que se recalcule.`;
+  return `El código ${c} no está en nada de lo guardado: ni en el historial de Colab ni en los kardex subidos (no tuvo ningún movimiento en esos archivos). Aparecerá cuando suba un kardex donde tenga movimientos.`;
+}
 const filtroTexto = (lista, q) => { q = q.trim().toUpperCase(); return q ? lista.filter(p => q.split(/\s+/).every(w => (p.c + ' ' + p.n).toUpperCase().includes(w))) : lista; };
 
 /* ---------- datos de ejemplo (formato del archivo de pronósticos) ---------- */
@@ -655,14 +665,16 @@ window.aplicarStock = function (m) {
   pedCache = null;
   const o = S.P, corte = String(m?.corte || '').slice(0, 10);
   if (m?.stock) window.STOCK_TODOS = m.stock;
+  if (m) window.MAESTRO = m;
   if (!o || S.ejemplo || !m) return false;
   for (const p of o.p) { const pr = m.prod?.[p.c]; if (pr && +pr[1] > 1) p.fr = +pr[1]; } // unidades por caja (para mostrar las fracciones)
   // productos con stock en el kardex pero sin ventas en el historial de pronósticos: se agregan sin pronóstico ("Sin ventas")
   const hay = new Set(o.p.map(p => p.c)); let nuevos = 0;
-  for (const [c, st] of Object.entries(m.stock || {})) {
-    if (hay.has(c) || !Object.values(st).some(x => x[0] > 0)) continue;
-    const pr = m.prod?.[c] || [c, 1, 0];
-    o.p.push({ c, n: pr[0], k: +pr[2] || 0, fr: +pr[1] || 1, a: false, h: o.meses.map(() => 0), b: {}, f: {}, s: {}, st: {}, sd: 0, sinVentas: true });
+  for (const c of new Set([...Object.keys(m.stock || {}), ...Object.keys(m.prod || {})])) {
+    if (hay.has(c)) continue;
+    const pr = m.prod?.[c] || [c, 1, 0], sk = m.stock?.[c] || {}, st = {};
+    for (const f of o.farmacias) if (sk[f]) st[f] = sk[f][0];
+    o.p.push({ c, n: pr[0], k: +pr[2] || 0, fr: +pr[1] || 1, a: false, h: o.meses.map(() => 0), b: {}, f: {}, s: {}, st, sd: sk['DROGUERIA FS']?.[0] || 0, sinVentas: true });
     nuevos++;
   }
   if (nuevos && (!corte || corte <= o.corte)) { usarPron(o, false); }
@@ -753,7 +765,7 @@ function pintarPron() {
       <td class="sep z" style="text-align:center">${S.verMet ? '' : esc(corto(sel || '–'))}</td>
       ${o.fm.map((_, j) => `<td class="n pj big">${fmt(conv(p, pronDe(p, j)))}</td>`).join('')}</tr>`;
   }
-  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${(S.verMet ? mets.length + 1 : 0) + o.fm.length + 5}">Ningún medicamento coincide con el filtro.</td></tr>`;
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${(S.verMet ? mets.length + 1 : 0) + o.fm.length + 5}">${esc(porQueNo(Q_ACTUAL()))}</td></tr>`;
   $('pTabla').innerHTML = h + '</tbody>'; ajustarC0($('pTabla'));
   $('pMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(fil.length)} medicamentos, de mayor a menor demanda</span>` +
     (fil.length > vis.length ? `<button class="btn" id="pMas">Ver ${Math.min(PAGINA, fil.length - vis.length)} más</button>` : '');
@@ -991,7 +1003,7 @@ function pintarRep() {
       <td class="n">${fmtS(p, cv(p, r.st))}</td>${todas ? `<td class="n">${fmtS(p, cv(p, r.sd))}</td>` : ''}<td class="n">${fmt(cv(p, r.nec))}</td>
       <td class="n tot ent">${fin}</td></tr>`;
   }
-  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${hist.length + 8}">Ningún medicamento coincide con el filtro.</td></tr>`;
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${hist.length + 8}">${esc(porQueNo(Q_ACTUAL()))}</td></tr>`;
   $('rTabla').innerHTML = h + '</tbody>'; ajustarC0($('rTabla'));
   $('rMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(fil.length)} medicamentos${sinDias ? ' · * estimado con el pronóstico mensual' : ''}</span>` +
     (fil.length > vis.length ? `<button class="btn" id="rMas">Ver ${Math.min(PAGINA, fil.length - vis.length)} más</button>` : '');
@@ -1049,7 +1061,7 @@ function pintarRepMes() {
       ${todas ? `<td class="n">${fmtS(p, cv(p, r.stock))}</td><td class="n">${fmt(cv(p, r.entrega))}</td><td class="n">${fmtS(p, cv(p, r.sd))}</td><td class="n tot ent">${r.general ? '<span class="tag bloq">bloqueado</span>' : (r.final ? fmt(cv(p, r.final)) : '·') + (r.nb ? `<span class="tag bloq" title="Bloqueado en ${r.nb} sucursal(es): no se les reparte">${r.nb} bloq.</span>` : '')}</td>`
               : `<td class="n">${fmtS(p, cv(p, r.stock))}</td><td class="n">${fmtS(p, cv(p, r.disp))}</td><td class="n tot ent">${r.nb ? '<span class="tag bloq">bloqueado</span>' : r.final ? fmt(cv(p, r.final)) : '·'}</td>`}</tr>`;
   }
-  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${hist.length + 7}">Ningún medicamento coincide con el filtro.</td></tr>`;
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${hist.length + 7}">${esc(porQueNo(Q_ACTUAL()))}</td></tr>`;
   $('rTabla').innerHTML = h + '</tbody>'; ajustarC0($('rTabla'));
   $('rMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(fil.length)} medicamentos</span>` +
     (fil.length > vis.length ? `<button class="btn" id="rMas">Ver ${Math.min(PAGINA, fil.length - vis.length)} más</button>` : '');
@@ -1254,6 +1266,6 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=202610192300"></script>
+<script type="module" src="proyeccion.js?v=202610192330"></script>
 
 </body></html>
