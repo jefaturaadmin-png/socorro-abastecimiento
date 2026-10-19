@@ -891,12 +891,22 @@ $('rSeg').addEventListener('input', e => { S.seg = Math.max(0, +e.target.value |
 $('rq').addEventListener('input', () => { S.rMostrar = PAGINA; pintarRep(); });
 /* Ventas de los últimos N días (del kardex por día) → venta diaria × (días + seguridad) − stock, según la categoría:
    A: lo necesario · B: máximo 1 unidad · C: a pedido · D: solo con pedido confirmado · E: no se repone (devolver o liquidar). */
+// Venta diaria de la farmacia según su historial mensual (promedio de los últimos 3 meses con dato).
+const diariaHist = (p, f) => {
+  const hv = S.P.hfm && p.hf?.[f] ? p.hf[f] : (p.h || []).map(v => v == null ? null : v * (p.s?.[f] || 0));
+  const u = hv.filter(v => v != null).slice(-3);
+  return u.length ? Math.max(0, u.reduce((a, b) => a + b, 0) / u.length / 30) : 0;
+};
+// Días de la ventana que tienen ventas por día del kardex (el resto se completa con el historial).
+const diasReales = n => { const o = S.P; if (!o.dias) return 0; const pr = o.dias.primero ?? 0; return Math.max(0, Math.min(n, o.dias.n - pr)); };
+// Ventas de los últimos n días: lo del kardex día por día y, para los días que el kardex guardado no cubre,
+// la venta diaria del historial (desde 2024). Sin ningún día del kardex devuelve null (se usa el pronóstico).
 const ventaDias = (p, f, n) => {
   const o = S.P; if (!o.dias) return null;
-  const desde = o.dias.n - n; let t = 0;
-  if (o.dias.primero != null && desde < o.dias.primero) return null;
+  const desde = o.dias.n - n, reales = diasReales(n); let t = 0;
+  if (!reales) return null;
   for (const [i, q] of (p.dv?.[f] || [])) if (i >= desde) t += q;
-  return Math.max(0, t);
+  return Math.max(0, t) + (n - reales) * diariaHist(p, f);
 };
 function plan2(p, f) {
   const n = +S.base, st = p.st?.[f] || 0, c = p.catF?.[f] || 'E', bloq = bloqueado(p.c, f);
@@ -923,8 +933,10 @@ function pintarRep() {
   $('rTitulo').textContent = todas ? 'Compra de droguería' : S.farm;
   $('rH2').textContent = todas ? 'Compra sugerida por medicamento' : 'Entrega sugerida desde droguería';
   const sinDias = !o.dias;
-  $('rNota').textContent = sinDias ? 'Todavía no hay ventas por día: se usa el pronóstico mensual. Vuelve a subir el kardex para calcular con los días.'
-    : `Venta diaria = ventas de los últimos ${n} días ÷ ${n}. ${o.dias.completo ? '' : 'Algunos días aún no tienen detalle: vuelve a subir el kardex de esos meses.'} Tipo A–E según los meses con venta del último año${todas ? ' (total empresa)' : ' en esta farmacia'}.`;
+  const dr = sinDias ? 0 : diasReales(n);
+  $('rNota').textContent = (!dr ? 'Venta diaria según el historial guardado (desde 2024) y el pronóstico del mes. '
+    : dr >= n ? `Venta diaria = ventas de los últimos ${n} días del kardex ÷ ${n}. ` : `Venta de ${n} días = ${dr} días del kardex + ${n - dr} días con el promedio del historial guardado. `)
+    + `Tipo A–E según los meses con venta del último año${todas ? ' (total empresa)' : ' en esta farmacia'}.`;
   $('rk1l').textContent = todas ? 'Medicamentos a comprar' : 'Medicamentos a reponer';
   $('rk2l').textContent = todas ? 'Cajas a comprar' : 'Cajas a entregar';
   const lista = [];
@@ -1093,7 +1105,7 @@ function pintarPed() {
   const base = filas.filter(r => (!S.lab || labDe(r.p.c) === S.lab) && (!S.qFarm || r.f === S.qFarm));
   const cuenta = t => base.filter(r => r.de.some(d => d.t === t));
   const suma = t => sum(base.flatMap(r => r.de.filter(d => d.t === t).map(d => d.q)));
-  $('qEyebrow').textContent = `${estimado ? 'Venta estimada para' : 'Ventas de los últimos'} ${n} días · stock para menos de ${S.seg} días · reponer para ${S.cob} + ${S.seg} días (se cambia en Reposición)`;
+  $('qEyebrow').textContent = `Ventas de los últimos ${n} días · stock para menos de ${S.seg} días · reponer para ${S.cob} + ${S.seg} días (se cambia en Reposición)`;
   $('qk1').textContent = nf0.format(base.length); $('qk1s').textContent = 'productos × sucursal';
   $('qk2').textContent = nf0.format(cuenta('drog').length); $('qk2s').textContent = `${cajas(suma('drog'))} desde el stock de droguería`;
   $('qk3').textContent = nf0.format(cuenta('pasar').length); $('qk3s').textContent = `${cajas(suma('pasar'))} de sucursales con sobrante`;
@@ -1101,8 +1113,9 @@ function pintarPed() {
   $('qFarm').innerHTML = `<option value="">Todas</option>` + o.farmacias.map(f => `<option value="${esc(f)}" ${f === S.qFarm ? 'selected' : ''}>${esc(nombreSuc(f))}</option>`).join('');
   $('qAcc').value = S.qAcc;
   $('qH2').textContent = (S.qFarm ? nombreSuc(S.qFarm) : 'Todas las sucursales') + ' · ' + nf0.format(lista.length);
-  $('qNota').textContent = estimado ? `Stock del kardex · venta diaria estimada con el pronóstico del mes y lo que vende cada sucursal (aún no hay ${n} días de ventas por día guardados).`
-    : `Stock y ventas de los últimos ${n} días del kardex.`;
+  const dr = diasReales(n);
+  $('qNota').textContent = `Stock: último kardex de cada producto y almacén. Venta: ` + (!dr ? 'historial mensual guardado (desde 2024) y pronóstico del mes.'
+    : dr >= n ? `los últimos ${n} días del kardex.` : `${dr} días del kardex + ${n - dr} días con el promedio del historial guardado.`);
   const vis = lista.slice(0, S.qMostrar);
   const accion = r => r.de.map(d => d.t === 'drog' ? `<span class="acc-tag drog">Droguería ${fmt(d.q)}</span>` : d.t === 'pasar' ? `<span class="acc-tag pasar">De ${esc(nombreSuc(d.g))} ${fmt(d.q)}</span>` : `<span class="acc-tag comprar">Comprar ${fmt(d.q)}</span>`).join('');
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th>${S.qFarm ? '' : '<th>Sucursal</th>'}<th>Tipo</th><th>Stock</th><th>Venta diaria</th><th>Días de stock</th><th class="tot">Necesita</th><th>De dónde</th></tr></thead><tbody>`;
@@ -1233,6 +1246,6 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=202610192100"></script>
+<script type="module" src="proyeccion.js?v=202610192200"></script>
 
 </body></html>
