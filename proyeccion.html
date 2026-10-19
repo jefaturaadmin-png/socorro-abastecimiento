@@ -500,7 +500,7 @@ function clasificar(o) {
     const actF = Object.fromEntries(o.farmacias.map(f => [f, vendeAct(p.dv?.[f])]));
     p.cat = catDe(meses12(p.h, Object.values(actF).some(Boolean)));
     p.catF = {};
-    for (const f of o.farmacias) p.catF[f] = catDe(meses12(p.hf?.[f] || [], actF[f]));
+    for (const f of o.farmacias) p.catF[f] = o.hfm ? catDe(meses12(p.hf?.[f] || [], actF[f])) : (p.s?.[f] || actF[f] ? p.cat : 'E');
     p.pap = PAP.test(p.n);
     // estacional: 24+ meses de historia y diferencia clara entre el mes más alto y el más bajo del año
     const ok = p.h.map((v, i) => [v, o.meses[i]]).filter(([v]) => v != null), g = ok.length ? sum(ok.map(([v]) => v)) / ok.length : 0;
@@ -516,7 +516,7 @@ function clasificar(o) {
   }
 }
 function usarPron(o, ejemplo) {
-  clasificar(o);
+  clasificar(o); pedCache = null;
   S.P = o; S.ejemplo = ejemplo; S.idx = new Map(o.p.map(p => [p.c, p])); S.calc = new Map();
   for (const p of o.p) {
     const real = o.bm.map(m => p.h[o.meses.indexOf(m)]);
@@ -633,6 +633,10 @@ async function iniciar() {
       msg('');
       const m = window.stockKardex ? await window.stockKardex() : null; // el stock del último kardex, si es más nuevo
       if (m) window.aplicarStock(m);
+      if (!S.P.dias && m?.corte && window.ventasDiarias) {
+        const r = await window.ventasDiarias(m.corte);
+        if (r && r.dias.primero != null) { S.P.dias = r.dias; for (const p of S.P.p) p.dv = r.vd.get(p.c) || {}; clasificar(S.P); pedCache = null; render(); }
+      }
     }
   } catch (e) { msg(e.message || 'No se pudieron leer los datos guardados.', true); }
 }
@@ -640,6 +644,7 @@ async function iniciar() {
 // Stock del último kardex subido (proy_config/maestro) sobre los pronósticos guardados, si es más reciente que su fecha de corte.
 // Los pronósticos (historia y métodos) no cambian; solo el stock actual de cada farmacia y de la droguería, y la fecha de corte.
 window.aplicarStock = function (m) {
+  pedCache = null;
   const o = S.P, corte = String(m?.corte || '').slice(0, 10);
   if (m?.stock) window.STOCK_TODOS = m.stock;
   if (!o || S.ejemplo || !m) return false;
@@ -889,6 +894,7 @@ $('rq').addEventListener('input', () => { S.rMostrar = PAGINA; pintarRep(); });
 const ventaDias = (p, f, n) => {
   const o = S.P; if (!o.dias) return null;
   const desde = o.dias.n - n; let t = 0;
+  if (o.dias.primero != null && desde < o.dias.primero) return null;
   for (const [i, q] of (p.dv?.[f] || [])) if (i >= desde) t += q;
   return Math.max(0, t);
 };
@@ -1039,15 +1045,16 @@ const ALIAS_SUC = { REAL: 'ALMACEN PRINCIPAL', PRINCIPAL: 'ALMACEN PRINCIPAL', P
 const nombreSuc = f => { const k = f.replace(/^ALMACEN\s+/, ''); return { PRINCIPAL: 'Real', SUCURSAL: 'Puno', 'MCDO.TAMBO': 'Tambo' }[k] || k.charAt(0) + k.slice(1).toLowerCase(); };
 const cajas = v => nf1.format(v) + ' cajas';
 const normTxt = t => String(t ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
-let pedCache = null;
+var pedCache = null;
 function calcPedidos() {
-  const o = S.P, n = S.base === 'pron' ? 15 : +S.base, clave = [o, n, S.cob, S.seg, window.BLOQ?.size].join('|');
-  if (pedCache?.clave === clave) return pedCache;
-  const filas = [];
+  const o = S.P, n = S.base === 'pron' ? 15 : +S.base, clave = [n, S.cob, S.seg, window.BLOQ?.size].join('|');
+  if (pedCache?.clave === clave && pedCache.o === o) return pedCache;
+  const filas = []; let estimado = 0;
   for (const p of o.p) {
     const pide = [], sobra = [];
     for (const f of o.farmacias) {
-      const c = p.catF?.[f] || 'E', st = p.st?.[f] || 0, v = ventaDias(p, f, n);
+      const c = p.catF?.[f] || 'E', st = p.st?.[f] || 0, vd = ventaDias(p, f, n);
+      const v = vd ?? pronDe(p, 0) * (p.s?.[f] || 0) * n / 30; if (vd == null) estimado++;
       const diaria = v ? v / n : 0, nec = diaria * (S.cob + S.seg);
       if (!['A', 'B'].includes(c) || !diaria || bloqueado(p.c, f)) { if (st >= 1) sobra.push({ f, q: Math.floor(st - nec) }); continue; }
       const ent = c === 'A' ? Math.max(0, Math.ceil(nec - st - 1e-9)) : st < 1 ? 1 : 0;
@@ -1065,7 +1072,7 @@ function calcPedidos() {
       filas.push(r);
     }
   }
-  return pedCache = { clave, filas, n };
+  return pedCache = { clave, o, filas, n, estimado };
 }
 S.qFarm = ''; S.qAcc = ''; S.qMostrar = PAGINA;
 $('qFarm').addEventListener('change', e => { S.qFarm = e.target.value; S.qMostrar = PAGINA; pintarPed(); });
@@ -1076,11 +1083,7 @@ $('qTabla').addEventListener('click', e => { const tr = e.target.closest('tr.cli
 function pintarPed() {
   const o = S.P;
   llenarLabs();
-  if (!o.dias) {
-    $('qEyebrow').textContent = ''; $('qH2').textContent = 'Falta la venta por día';
-    $('qNota').textContent = 'Vuelve a subir el kardex para que se guarden las ventas por día.'; $('qTabla').innerHTML = ''; $('qLey').innerHTML = ''; return;
-  }
-  const { filas, n } = calcPedidos();
+  const { filas, n, estimado } = calcPedidos();
   // filtros
   const q = $('qq').value;
   const pasa = r => (!S.lab || labDe(r.p.c) === S.lab) && (!S.qFarm || r.f === S.qFarm);
@@ -1090,7 +1093,7 @@ function pintarPed() {
   const base = filas.filter(r => (!S.lab || labDe(r.p.c) === S.lab) && (!S.qFarm || r.f === S.qFarm));
   const cuenta = t => base.filter(r => r.de.some(d => d.t === t));
   const suma = t => sum(base.flatMap(r => r.de.filter(d => d.t === t).map(d => d.q)));
-  $('qEyebrow').textContent = `Ventas de los últimos ${n} días · stock para menos de ${S.seg} días · reponer para ${S.cob} + ${S.seg} días (se cambia en Reposición)`;
+  $('qEyebrow').textContent = `${estimado ? 'Venta estimada para' : 'Ventas de los últimos'} ${n} días · stock para menos de ${S.seg} días · reponer para ${S.cob} + ${S.seg} días (se cambia en Reposición)`;
   $('qk1').textContent = nf0.format(base.length); $('qk1s').textContent = 'productos × sucursal';
   $('qk2').textContent = nf0.format(cuenta('drog').length); $('qk2s').textContent = `${cajas(suma('drog'))} desde el stock de droguería`;
   $('qk3').textContent = nf0.format(cuenta('pasar').length); $('qk3s').textContent = `${cajas(suma('pasar'))} de sucursales con sobrante`;
@@ -1098,7 +1101,8 @@ function pintarPed() {
   $('qFarm').innerHTML = `<option value="">Todas</option>` + o.farmacias.map(f => `<option value="${esc(f)}" ${f === S.qFarm ? 'selected' : ''}>${esc(nombreSuc(f))}</option>`).join('');
   $('qAcc').value = S.qAcc;
   $('qH2').textContent = (S.qFarm ? nombreSuc(S.qFarm) : 'Todas las sucursales') + ' · ' + nf0.format(lista.length);
-  $('qNota').textContent = 'Calculado con el kardex: stock por debajo de la seguridad en productos que la sucursal vende.';
+  $('qNota').textContent = estimado ? `Stock del kardex · venta diaria estimada con el pronóstico del mes y lo que vende cada sucursal (aún no hay ${n} días de ventas por día guardados).`
+    : `Stock y ventas de los últimos ${n} días del kardex.`;
   const vis = lista.slice(0, S.qMostrar);
   const accion = r => r.de.map(d => d.t === 'drog' ? `<span class="acc-tag drog">Droguería ${fmt(d.q)}</span>` : d.t === 'pasar' ? `<span class="acc-tag pasar">De ${esc(nombreSuc(d.g))} ${fmt(d.q)}</span>` : `<span class="acc-tag comprar">Comprar ${fmt(d.q)}</span>`).join('');
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th>${S.qFarm ? '' : '<th>Sucursal</th>'}<th>Tipo</th><th>Stock</th><th>Venta diaria</th><th>Días de stock</th><th class="tot">Necesita</th><th>De dónde</th></tr></thead><tbody>`;
@@ -1229,6 +1233,6 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=202610192000"></script>
+<script type="module" src="proyeccion.js?v=202610192100"></script>
 
 </body></html>

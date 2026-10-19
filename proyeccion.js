@@ -289,6 +289,28 @@ function pronosticar(h, meses, futuros, apto) {
 const sumaM = (m, k) => { const [a, b] = m.split("-").map(Number), t = a * 12 + b - 1 + k; return `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, "0")}`; };
 const r1 = v => Math.round(v * 10) / 10;
 
+// ventas por día de los últimos 90 días hasta el corte, leídas de los meses guardados.
+// primero = índice del primer día con datos (los días anteriores no se conocen); null si no hay ninguno.
+async function ventasDiarias(corte, metas) {
+  metas ??= await mesesMeta();
+  const DIAS = 90, finD = new Date(corte + "T12:00:00"), dias = [];
+  for (let i = DIAS - 1; i >= 0; i--) { const d = new Date(finD); d.setDate(d.getDate() - i); dias.push(d.toISOString().slice(0, 10)); }
+  const diaIdx = new Map(dias.map((d, i) => [d, i])), mesesDia = [...new Set(dias.map(d => d.slice(0, 7)))];
+  const vd = new Map(); let conDiario = 0, primero = null;
+  for (const mes of mesesDia) {
+    const meta = metas.get(mes); if (!meta) continue;
+    const { v, kd } = await leerMes(meta);
+    if (kd === null || (kd && kd.size)) conDiario++;
+    for (const cod in v) for (const alm in v[cod]) for (const dd in v[cod][alm]) {
+      const i = diaIdx.get(`${mes}-${dd}`); if (i == null) continue;
+      if (primero == null || i < primero) primero = i;
+      (((vd.get(cod) ?? vd.set(cod, {}).get(cod))[alm] ??= [])).push([i, v[cod][alm][dd]]);
+    }
+  }
+  return { vd, dias: { desde: dias[0], hasta: dias[DIAS - 1], n: DIAS, completo: conDiario === mesesDia.length, primero } };
+}
+window.ventasDiarias = async corte => { try { return await ventasDiarias(String(corte).slice(0, 10)); } catch { return null; } };
+
 async function recalcular() {
   const metas = await mesesMeta(); if (!metas.size) { msg("Todavía no hay kardex cargado."); return; }
   const maestro = await leerMaestro(), lista = [...metas.keys()].sort();
@@ -300,11 +322,6 @@ async function recalcular() {
   if (meses.length < 4) return `Los pronósticos siguen siendo los del archivo de pronósticos: con el kardex se necesitan al menos 4 meses completos para calcularlos (hay ${meses.length}).`;
   // demanda mensual por producto y farmacia (ventas − anulaciones) y movimientos por farmacia
   const dem = new Map(), farmVol = new Map(), conDatos = new Set();
-  // ventas por día de los últimos 90 días hasta el corte (para "ventas de los últimos N días")
-  const DIAS = 90, finD = new Date(corte + "T12:00:00"), dias = [];
-  for (let i = DIAS - 1; i >= 0; i--) { const d = new Date(finD); d.setDate(d.getDate() - i); dias.push(d.toISOString().slice(0, 10)); }
-  const diaIdx = new Map(dias.map((d, i) => [d, i])), mesesDia = [...new Set(dias.map(d => d.slice(0, 7)))];
-  const vd = new Map(); let conDiario = 0;
   for (let i = 0; i < meses.length; i++) {
     const meta = metas.get(meses[i]); if (!meta) continue;
     msg(`Leyendo ${meses[i]}…`); conDatos.add(i);
@@ -318,15 +335,9 @@ async function recalcular() {
       farmVol.set(alm, (farmVol.get(alm) || 0) + Math.max(0, v));
     }
   }
-  for (const mes of mesesDia) {
-    const meta = metas.get(mes); if (!meta) continue;
-    const { v, kd } = await leerMes(meta);
-    if (kd === null || (kd && kd.size)) conDiario++;
-    for (const cod in v) for (const alm in v[cod]) for (const dd in v[cod][alm]) {
-      const i = diaIdx.get(`${mes}-${dd}`); if (i == null) continue;
-      (((vd.get(cod) ?? vd.set(cod, {}).get(cod))[alm] ??= [])).push([i, v[cod][alm][dd]]);
-    }
-  }
+  // ventas por día de los últimos 90 días hasta el corte (para "ventas de los últimos N días")
+  msg("Leyendo ventas por día…");
+  const { vd, dias: diasInfo } = await ventasDiarias(corte, metas);
   const farmacias = [...farmVol.entries()].sort((a, b) => b[1] - a[1]).map(([f]) => f);
   const bm = meses.slice(-6), fm = [0, 1, 2].map(j => sumaM(ultimoCompleto, j + 1)), hfm = meses.slice(-15);
   msg("Calculando pronósticos…");
@@ -364,7 +375,7 @@ async function recalcular() {
       sinVentas: true, dv: {}, um: (pr[3] || "").slice(0, 10), uv: "" });
   }
   const o = { corte, meses, hfm, bm, fm, metodos: METODOS.filter(m => p.some(x => x.f[m])), farmacias, p, origen: "kardex",
-    dias: { desde: dias[0], hasta: dias[DIAS - 1], n: DIAS, completo: conDiario === mesesDia.length } };
+    dias: diasInfo };
   msg("Guardando pronósticos…"); paso = "guardar los pronósticos (proy_config/datos)";
   const prev = await getDoc(doc(db, "proy_config", "datos"));
   const { id } = await assetsShim.upload(new Blob([JSON.stringify(o)]));
