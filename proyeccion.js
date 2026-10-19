@@ -88,17 +88,32 @@ onAuthStateChanged(auth, async u => {
    KARDEX DE LOLFAR (.TXT) → resumen por mes en Firebase → pronósticos
    Cantidades en cajas: enteras + fracciones ÷ unidades por caja (stkfra).
    ===================================================================== */
-const COL = { despro: 0, stkE: 1, stkM: 2, feckar: 8, destka: 10, coscom: 18, fra: 20, numkar: 24, codpro: 25, desalm: 27, iE: 30, iM: 31, sE: 32, sM: 33 };
+const COL0 = { despro: 0, stkE: 1, stkM: 2, feckar: 8, destka: 10, coscom: 18, fra: 20, numkar: 24, codpro: 25, desalm: 27, iE: 30, iM: 31, sE: 32, sM: 33, n: 34, cus: 15 };
+let COL = COL0;
+// Columnas según la cabecera de cada archivo (los kardex de otros años pueden traerlas en otro orden o con otras de más).
+function columnasDe(cab) {
+  const h = cab.split("\t").map(t => t.trim().toLowerCase()), i = n => h.indexOf(n);
+  const c = { despro: i("despro"), stkE: i("stkalm"), stkM: i("stkalm_m"), feckar: i("feckar"), destka: i("destka"), coscom: i("coscom"), fra: i("stkfra"),
+    numkar: i("numkar"), codpro: i("codpro"), desalm: i("desalm"), iE: i("icant_e"), iM: i("icant_m"), sE: i("scant_e"), sM: i("scant_m"), n: h.length, cus: i("cusnam") };
+  return ["despro", "feckar", "destka", "numkar", "codpro", "desalm"].every(k => c[k] >= 0) ? c : COL0;
+}
+const num = v => { const t = String(v ?? "").trim(); return +(/,\d{1,3}$/.test(t) && !t.includes(".") ? t.replace(",", ".") : t.replace(/,/g, "")) || 0; };
 const VENTA = "DESCARGO POR VENTA", ANULA = "CARGO POR ANULACIONES", DROG = "DROGUERIA FS";
 const ignorar = alm => /CANJE/i.test(alm) || !alm;
 
 // Algunas filas traen el nombre del cliente partido por tabulaciones: se rearma la fila a 34 columnas.
 function campos(linea) {
-  let x = linea.split("\t");
-  if (x.length > 34) x = [...x.slice(0, 15), x.slice(15, x.length - 18).join(" "), ...x.slice(x.length - 18)];
-  return x.length === 34 ? x : null;
+  let x = linea.split("\t"); const n = COL.n, cus = COL.cus;
+  if (x.length > n && cus >= 0) x = [...x.slice(0, cus), x.slice(cus, cus + x.length - n + 1).join(" "), ...x.slice(cus + x.length - n + 1)];
+  return x.length === n ? x : null;
 }
-const fechaISO = f => { const m = /^\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(\S*)/.exec(f || ""); return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")} ${m[4]}` : ""; };
+// Fecha del kardex: 15/8/2024, 15-08-2024 o 2024-08-15 (con o sin hora).
+const fechaISO = f => {
+  let m = /^\s*(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})[ T]*(\S*)/.exec(f || "");
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")} ${m[4]}`;
+  m = /^\s*(\d{4})-(\d{1,2})-(\d{1,2})[ T]*(\S*)/.exec(f || "");
+  return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")} ${m[4]}` : "";
+};
 
 async function* lineas(file, avance) {
   const lector = file.stream().pipeThrough(new TextDecoderStream("windows-1252")).getReader();
@@ -158,25 +173,28 @@ window.subirKardex = async function (files) {
     let filas = 0, nuevas = 0, repetidas = 0, ignoradas = 0, stockCambio = false, diarias = 0;
     const cambioDia = new Set();
     maestro.uv ??= {};
+    const malas = [];
     for (const f of files) {
+      COL = COL0; const ign0 = ignoradas;
       for await (const l of lineas(f, n => { leidosArch = n; pct(n); })) {
-        if (!l || l.startsWith("despro")) continue;
+        if (!l) continue;
+        if (/(^|\t)\s*codpro\s*(\t|$)/i.test(l) && /(^|\t)\s*desalm\s*(\t|$)/i.test(l)) { COL = columnasDe(l); continue; }
         const x = campos(l); if (!x) { ignoradas++; continue; }
         filas++;
         const alm = x[COL.desalm].trim(); if (ignorar(alm)) continue;
-        const fecha = fechaISO(x[COL.feckar]), mes = fecha.slice(0, 7), nk = +x[COL.numkar], cod = x[COL.codpro].trim();
+        const fecha = fechaISO(x[COL.feckar]), mes = fecha.slice(0, 7), nk = num(x[COL.numkar]), cod = x[COL.codpro].trim();
         if (!mes || !nk || !cod) { ignoradas++; continue; }
         if (!meses.has(mes)) { msg(`Abriendo ${mes}…`); meses.set(mes, await leerMes(metas.get(mes))); nuevosMes.set(mes, 0); }
-        const M = meses.get(mes), fra = +x[COL.fra] || 1, cos = +x[COL.coscom] || 0;
+        const M = meses.get(mes), fra = num(x[COL.fra]) || 1, cos = num(x[COL.coscom]);
         // datos del producto y stock actual del almacén (el más reciente gana), aunque el movimiento ya estuviera cargado:
         // el stock de cada fila (stkalm) es el del momento en que se descargó el archivo
         const pr = maestro.prod[cod];
         if (!pr || fecha >= pr[3]) maestro.prod[cod] = [x[COL.despro].trim(), fra, cos, fecha];
-        const st = (maestro.stock[cod] ??= {}), previo = st[alm], stk = Math.round(((+x[COL.stkE] || 0) + (+x[COL.stkM] || 0) / fra) * 1000) / 1000;
+        const st = (maestro.stock[cod] ??= {}), previo = st[alm], stk = Math.round((num(x[COL.stkE]) + num(x[COL.stkM]) / fra) * 1000) / 1000;
         if (!previo || fecha >= previo[1]) { if (!previo || previo[0] !== stk || previo[1] !== fecha) stockCambio = true; st[alm] = [stk, fecha]; }
         if (fecha > maestro.corte) { maestro.corte = fecha; stockCambio = true; }
         const tipo = x[COL.destka].trim();
-        const ing = (+x[COL.iE] || 0) + (+x[COL.iM] || 0) / fra, sal = (+x[COL.sE] || 0) + (+x[COL.sM] || 0) / fra;
+        const ing = num(x[COL.iE]) + num(x[COL.iM]) / fra, sal = num(x[COL.sE]) + num(x[COL.sM]) / fra;
         // última venta del producto (para los que dejaron de moverse)
         if (tipo === VENTA && (!maestro.uv[cod] || fecha > maestro.uv[cod])) { maestro.uv[cod] = fecha; stockCambio = true; }
         // ventas por día (ventas − anulaciones) de cada almacén; los meses guardados antes se completan al volver a subir el kardex
@@ -192,6 +210,7 @@ window.subirKardex = async function (files) {
         a[0] += ing; a[1] += sal; a[2] += ing * cos; a[3] += sal * cos;
       }
       base += f.size;
+      if (ignoradas > ign0) malas.push(`${f.name}: ${(ignoradas - ign0).toLocaleString("es-PE")} filas`);
     }
     for (const [mes, M] of meses) {
       if (!nuevosMes.get(mes) && !cambioDia.has(mes)) continue;
@@ -209,7 +228,7 @@ window.subirKardex = async function (files) {
       ? `${nuevas.toLocaleString("es-PE")} movimientos nuevos · ${repetidas.toLocaleString("es-PE")} repetidos descartados`
       : diarias ? `Kardex ya cargado: se completaron las ventas por día (${diarias.toLocaleString("es-PE")} movimientos)`
       : `Este kardex ya estaba cargado (${repetidas.toLocaleString("es-PE")} movimientos repetidos)${corte ? ` · stock al ${corte}` : ""}`);
-    msg([aviso, alDia ? `Stock actualizado al ${corte} con el kardex.` : "", ignoradas ? `${ignoradas} filas no se pudieron leer y se omitieron.` : ""].filter(Boolean).join(" "));
+    msg([aviso, alDia ? `Stock actualizado al ${corte} con el kardex.` : "", ignoradas ? `${ignoradas.toLocaleString("es-PE")} filas no se pudieron leer y se omitieron (${malas.join("; ")}).` : ""].filter(Boolean).join(" "));
   } catch (e) {
     console.error(e);
     msg(e.code === "permission-denied"
