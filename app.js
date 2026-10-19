@@ -471,6 +471,8 @@ function pintarAdmin() {
   $("aChips").innerHTML = [["", "Todas", act.length], ["TODAS", "Bloqueo general", cuenta("TODAS")], ...FARMACIAS.map(f => [f, corto(f), cuenta(f)])]
     .map(([v, t, n]) => `<button type="button" data-farm="${esc(v)}" aria-pressed="${S.af.farm === v}">${esc(t)}<span>${n}</span></button>`).join("");
 
+  pintarTorta(todos);
+
   // laboratorios presentes en los bloqueos
   const labs = [...new Set(todos.map(d => d.laboratorio).filter(Boolean))].sort();
   $("aLab").innerHTML = `<option value="">Todos</option>` + labs.map(l => `<option ${l === S.af.lab ? "selected" : ""}>${esc(l)}</option>`).join("");
@@ -497,6 +499,35 @@ function pintarAdmin() {
         <td class="f ${vencida ? "mal" : ""}">${d.revisar ? fmtF(d.revisar) : "–"}</td>
       </tr>`; }).join("") : `<tr class="vacia"><td colspan="6">No hay registros con estos filtros.</td></tr>`) + "</tbody>";
 }
+// torta: reparto de los registros por sucursal (respeta laboratorio, motivo, estado y búsqueda; no la farmacia elegida)
+const COL_TORTA = ["#14306B", "#2F6FB3", "#1E6B5F", "#B7791F", "#6B4C9A", "#3E8E9E", "#A0522D", "#5C7A2E", "#8A5A83", "#4A5B7A"];
+function pintarTorta(todos) {
+  const q = norm(S.af.q).trim();
+  const base = todos
+    .filter(d => !S.af.lab || d.laboratorio === S.af.lab)
+    .filter(d => !S.af.estado || d.estado === S.af.estado)
+    .filter(d => !S.af.motivo || d.motivo === S.af.motivo)
+    .filter(d => !q || q.split(/\s+/).every(w => norm(d.codpro + " " + d.producto + " " + (d.laboratorio || "")).includes(w)));
+  const filas = [["TODAS", "Bloqueo general"], ...FARMACIAS.map(f => [f, corto(f)])].map(([f, t]) => [f, t, base.filter(d => d.farmacia === f).length]);
+  const con = filas.filter(x => x[2] > 0).sort((a, b) => b[2] - a[2]), cero = filas.filter(x => !x[2]), total = base.length;
+  const R = 64, C = 2 * Math.PI * R;
+  let acum = 0, arcos = "";
+  con.forEach(([f, t, n], i) => {
+    const largo = n / total * C, sel = S.af.farm === f;
+    arcos += `<circle r="${R}" cx="90" cy="90" fill="none" stroke="${COL_TORTA[i % COL_TORTA.length]}" stroke-width="${sel ? 44 : 36}"
+      stroke-dasharray="${Math.max(0, largo - (con.length > 1 ? 1.5 : 0))} ${C}" stroke-dashoffset="${-acum}" data-farm="${esc(f)}" class="${S.af.farm && !sel ? "tenue" : ""}"><title>${esc(t)}: ${n} (${Math.round(n / total * 100)}%)</title></circle>`;
+    acum += largo;
+  });
+  $("aTorta").innerHTML = `<h3>Por sucursal</h3>
+    <svg viewBox="0 0 180 180" class="dona" role="img" aria-label="Registros por sucursal"><g transform="rotate(-90 90 90)">${total ? arcos : `<circle r="${R}" cx="90" cy="90" fill="none" stroke="var(--line)" stroke-width="36"/>`}</g>
+      <text x="90" y="88" text-anchor="middle" class="n">${total}</text><text x="90" y="108" text-anchor="middle" class="l">registros</text></svg>
+    <ul class="ley">${con.map(([f, t, n], i) => `<li><button type="button" data-farm="${esc(f)}" aria-pressed="${S.af.farm === f}"><i style="background:${COL_TORTA[i % COL_TORTA.length]}"></i>${esc(t)}<b>${n}</b><span>${Math.round(n / total * 100)}%</span></button></li>`).join("")}</ul>
+    ${cero.length ? `<div class="cero"><b>Sin registros · ${cero.length}</b><ul>${cero.map(([f, t]) => `<li><button type="button" data-farm="${esc(f)}">${esc(t)}<b>0</b></button></li>`).join("")}</ul></div>` : ""}`;
+}
+$("aTorta").addEventListener("click", e => {
+  const x = e.target.closest("[data-farm]"); if (!x) return;
+  S.af.farm = S.af.farm === x.dataset.farm ? "" : x.dataset.farm; pintarAdmin();
+});
 $("aTabla").addEventListener("click", e => { const tr = e.target.closest("[data-ficha]"); if (tr) abrirFicha(tr.dataset.ficha); });
 $("aTabla").addEventListener("keydown", e => { const tr = e.target.closest("[data-ficha]"); if (tr && e.key === "Enter") abrirFicha(tr.dataset.ficha); });
 $("aSol").addEventListener("click", e => {

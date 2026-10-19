@@ -309,3 +309,31 @@ legend { padding: 0; margin-bottom: 8px }
 
 /* ---------- proyección de compras (marco a pantalla completa bajo la cabecera) ---------- */
 .proy-frame { display: block; width: 100%; height: calc(100vh - 63px); height: calc(100dvh - 63px); border: 0; background: #f7f5f3 }
+
+/* ---------- torta por sucursal (lista del administrador) ---------- */
+.lista-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr) 270px; border-top: 1px solid var(--line) }
+.lista-cuerpo .tabla-wrap { border-top: 0 }
+.torta { border-left: 1px solid var(--line); padding: 18px 18px 22px; background: var(--soft) }
+.torta h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted) }
+.dona { display: block; width: 180px; height: 180px; margin: 0 auto 12px; stroke-linecap: butt }
+.dona text { stroke: none }
+.dona circle[data-farm] { cursor: pointer; transition: opacity .15s, stroke-width .15s }
+.dona circle.tenue { opacity: .3 }
+.dona .n { font-size: 30px; font-weight: 800; fill: var(--fg) }
+.dona .l { font-size: 11px; fill: var(--muted) }
+.dona text { pointer-events: none }
+.torta ul { list-style: none; margin: 0; padding: 0 }
+.torta li button { width: 100%; display: flex; align-items: center; gap: 8px; font: inherit; font-size: 13px; padding: 5px 8px; border: 0; border-radius: 8px; background: none; color: var(--fg); cursor: pointer; text-align: left }
+.torta li button:hover, .torta li button[aria-pressed="true"] { background: var(--brand-soft) }
+.torta li i { width: 10px; height: 10px; border-radius: 3px; flex: none }
+.torta li b { margin-left: auto; font-variant-numeric: tabular-nums }
+.torta li span { width: 36px; text-align: right; color: var(--muted); font-size: 12px }
+.torta .cero { margin-top: 14px; padding: 10px 8px 6px; border-radius: 10px; background: var(--bad-soft) }
+.torta .cero > b { display: block; padding: 0 8px 4px; font-size: 12px; color: var(--bad) }
+.torta .cero ul { display: grid; grid-template-columns: 1fr 1fr; column-gap: 4px }
+.torta .cero li button { color: var(--bad); font-weight: 600; font-size: 12px; padding: 3px 6px }
+.torta .cero li button:hover { background: rgba(180,50,28,.08) }
+@media (max-width: 960px) {
+  .lista-cuerpo { grid-template-columns: minmax(0, 1fr) }
+  .torta { border-left: 0; border-top: 1px solid var(--line) }
+}

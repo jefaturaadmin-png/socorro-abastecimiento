@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610151900">
+<link rel="stylesheet" href="styles.css?v=202610191400">
 </head>
 <body>
 
@@ -221,7 +221,10 @@
             <button class="btn" id="aCsv" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button>
           </div>
         </div>
-        <div class="tabla-wrap"><table class="tabla" id="aTabla"></table></div>
+        <div class="lista-cuerpo">
+          <div class="tabla-wrap"><table class="tabla" id="aTabla"></table></div>
+          <aside class="torta" id="aTorta" aria-label="Bloqueos por sucursal"></aside>
+        </div>
       </section>
     </div>
   </section>
@@ -301,6 +304,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610151900"></script>
+<script type="module" src="app.js?v=202610191400"></script>
 </body>
 </html>
