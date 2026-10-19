@@ -113,23 +113,26 @@ async function* lineas(file, avance) {
   if (resto) yield resto;
 }
 
-// Mes guardado: { d: {cod: {alm: {destka: [ingCajas, salCajas, ingSoles, salSoles]}}}, k: "numkar ordenados en diferencias" }
+// Mes guardado: { d: {cod: {alm: {destka: [ingCajas, salCajas, ingSoles, salSoles]}}}, k: "numkar ordenados en diferencias",
+//                 v: {cod: {alm: {día: venta neta en cajas}}}, kd: true (todas las ventas del mes están por día) o "numkar con detalle diario" }
 let paso = "";
 // La lista de meses guardados vive en proy_config/meses (un solo documento: { m: { "2026-10": {asset, …} } }).
 const mesesMeta = async () => { paso = "leer la lista de meses (proy_config/meses)"; const s = await getDoc(doc(db, "proy_config", "meses")); return new Map(Object.entries(s.exists() ? s.data().m || {} : {})); };
+const desDif = t => { let n = 0; return new Set((t ? t.split(",") : []).map(x => (n += +x))); };
+const aDif = set => { const ks = [...set].sort((a, b) => a - b); let prev = 0; return ks.map(x => { const d = x - prev; prev = x; return d; }).join(","); };
 async function leerMes(meta) {
-  if (!meta?.asset) return { d: {}, k: new Set() };
+  if (!meta?.asset) return { d: {}, k: new Set(), v: {}, kd: null };
   paso = "leer un mes guardado (proy_blobs)";
   const r = await assetsShim.fetch(meta.asset); if (!r.ok) throw new Error("No se pudo leer un mes guardado.");
-  const o = await r.json(); let n = 0;
-  return { d: o.d, k: new Set((o.k ? o.k.split(",") : []).map(x => (n += +x))) };
+  const o = await r.json();
+  // kd: null = el detalle diario ya está completo; Set = movimientos que ya tienen detalle diario (meses guardados antes de existir)
+  return { d: o.d, k: desDif(o.k), v: o.v || {}, kd: o.kd === true ? null : desDif(typeof o.kd === "string" ? o.kd : "") };
 }
 async function guardarMes(mes, m, metaPrev, filas) {
   paso = `guardar el mes ${mes} (proy_blobs / proy_config)`;
-  const ks = [...m.k].sort((a, b) => a - b); let prev = 0;
-  const k = ks.map(x => { const d = x - prev; prev = x; return d; }).join(",");
-  const { id } = await assetsShim.upload(new Blob([JSON.stringify({ d: m.d, k })]));
-  await setDoc(doc(db, "proy_config", "meses"), { m: { [mes]: { asset: id, movimientos: ks.length, nuevos: filas, actualizado: new Date().toISOString() } } }, { merge: true });
+  const completo = !m.kd || m.kd.size >= m.k.size;
+  const { id } = await assetsShim.upload(new Blob([JSON.stringify({ d: m.d, k: aDif(m.k), v: m.v, kd: completo ? true : aDif(m.kd) })]));
+  await setDoc(doc(db, "proy_config", "meses"), { m: { [mes]: { asset: id, movimientos: m.k.size, nuevos: filas, diario: completo, actualizado: new Date().toISOString() } } }, { merge: true });
   if (metaPrev?.asset) assetsShim.delete(metaPrev.asset).catch(() => {});
 }
 async function leerMaestro() {
@@ -152,7 +155,9 @@ window.subirKardex = async function (files) {
   try {
     msg("Preparando…");
     const metas = await mesesMeta(), maestro = await leerMaestro(), meses = new Map(), nuevosMes = new Map();
-    let filas = 0, nuevas = 0, repetidas = 0, ignoradas = 0, stockCambio = false;
+    let filas = 0, nuevas = 0, repetidas = 0, ignoradas = 0, stockCambio = false, diarias = 0;
+    const cambioDia = new Set();
+    maestro.uv ??= {};
     for (const f of files) {
       for await (const l of lineas(f, n => { leidosArch = n; pct(n); })) {
         if (!l || l.startsWith("despro")) continue;
@@ -170,22 +175,31 @@ window.subirKardex = async function (files) {
         const st = (maestro.stock[cod] ??= {}), previo = st[alm], stk = Math.round(((+x[COL.stkE] || 0) + (+x[COL.stkM] || 0) / fra) * 1000) / 1000;
         if (!previo || fecha >= previo[1]) { if (!previo || previo[0] !== stk || previo[1] !== fecha) stockCambio = true; st[alm] = [stk, fecha]; }
         if (fecha > maestro.corte) { maestro.corte = fecha; stockCambio = true; }
-        if (M.k.has(nk)) { repetidas++; continue; }
-        M.k.add(nk); nuevas++; nuevosMes.set(mes, nuevosMes.get(mes) + 1);
         const tipo = x[COL.destka].trim();
         const ing = (+x[COL.iE] || 0) + (+x[COL.iM] || 0) / fra, sal = (+x[COL.sE] || 0) + (+x[COL.sM] || 0) / fra;
+        // última venta del producto (para los que dejaron de moverse)
+        if (tipo === VENTA && (!maestro.uv[cod] || fecha > maestro.uv[cod])) { maestro.uv[cod] = fecha; stockCambio = true; }
+        // ventas por día (ventas − anulaciones) de cada almacén; los meses guardados antes se completan al volver a subir el kardex
+        const nuevo = !M.k.has(nk);
+        if ((tipo === VENTA || tipo === ANULA) && alm !== DROG && (M.kd ? !M.kd.has(nk) : nuevo)) {
+          const dia = fecha.slice(8, 10), dv = (M.v[cod] ??= {})[alm] ??= {};
+          dv[dia] = Math.round(((dv[dia] || 0) + (tipo === VENTA ? sal : -ing)) * 1000) / 1000;
+          if (M.kd) M.kd.add(nk); cambioDia.add(mes); diarias++;
+        } else if (M.kd && !M.kd.has(nk)) M.kd.add(nk);
+        if (!nuevo) { repetidas++; continue; }
+        M.k.add(nk); nuevas++; nuevosMes.set(mes, nuevosMes.get(mes) + 1);
         const a = ((M.d[cod] ??= {})[alm] ??= {})[tipo] ??= [0, 0, 0, 0];
         a[0] += ing; a[1] += sal; a[2] += ing * cos; a[3] += sal * cos;
       }
       base += f.size;
     }
     for (const [mes, M] of meses) {
-      if (!nuevosMes.get(mes)) continue;
+      if (!nuevosMes.get(mes) && !cambioDia.has(mes)) continue;
       msg(`Guardando ${mes}…`);
       for (const c in M.d) for (const al in M.d[c]) for (const t in M.d[c][al]) M.d[c][al][t] = M.d[c][al][t].map(v => Math.round(v * 1000) / 1000);
       await guardarMes(mes, M, metas.get(mes), nuevosMes.get(mes));
     }
-    if (nuevas || stockCambio) { msg("Guardando productos y stock…"); await guardarMaestro(maestro); }
+    if (nuevas || stockCambio || diarias) { msg("Guardando productos y stock…"); await guardarMaestro(maestro); }
     msg("Calculando pronósticos…");
     const aviso = await recalcular();
     // si los pronósticos siguen siendo los del archivo de Colab (faltan meses de kardex), se les pone el stock de este kardex
@@ -193,6 +207,7 @@ window.subirKardex = async function (files) {
     const corte = maestro.corte ? maestro.corte.slice(0, 10).split("-").reverse().join("/") : "";
     toast(nuevas
       ? `${nuevas.toLocaleString("es-PE")} movimientos nuevos · ${repetidas.toLocaleString("es-PE")} repetidos descartados`
+      : diarias ? `Kardex ya cargado: se completaron las ventas por día (${diarias.toLocaleString("es-PE")} movimientos)`
       : `Este kardex ya estaba cargado (${repetidas.toLocaleString("es-PE")} movimientos repetidos)${corte ? ` · stock al ${corte}` : ""}`);
     msg([aviso, alDia ? `Stock actualizado al ${corte} con el kardex.` : "", ignoradas ? `${ignoradas} filas no se pudieron leer y se omitieron.` : ""].filter(Boolean).join(" "));
   } catch (e) {
@@ -285,6 +300,11 @@ async function recalcular() {
   if (meses.length < 4) return `Los pronósticos siguen siendo los del archivo de pronósticos: con el kardex se necesitan al menos 4 meses completos para calcularlos (hay ${meses.length}).`;
   // demanda mensual por producto y farmacia (ventas − anulaciones) y movimientos por farmacia
   const dem = new Map(), farmVol = new Map(), conDatos = new Set();
+  // ventas por día de los últimos 90 días hasta el corte (para "ventas de los últimos N días")
+  const DIAS = 90, finD = new Date(corte + "T12:00:00"), dias = [];
+  for (let i = DIAS - 1; i >= 0; i--) { const d = new Date(finD); d.setDate(d.getDate() - i); dias.push(d.toISOString().slice(0, 10)); }
+  const diaIdx = new Map(dias.map((d, i) => [d, i])), mesesDia = [...new Set(dias.map(d => d.slice(0, 7)))];
+  const vd = new Map(); let conDiario = 0;
   for (let i = 0; i < meses.length; i++) {
     const meta = metas.get(meses[i]); if (!meta) continue;
     msg(`Leyendo ${meses[i]}…`); conDatos.add(i);
@@ -298,13 +318,22 @@ async function recalcular() {
       farmVol.set(alm, (farmVol.get(alm) || 0) + Math.max(0, v));
     }
   }
+  for (const mes of mesesDia) {
+    const meta = metas.get(mes); if (!meta) continue;
+    const { v, kd } = await leerMes(meta);
+    if (kd === null || (kd && kd.size)) conDiario++;
+    for (const cod in v) for (const alm in v[cod]) for (const dd in v[cod][alm]) {
+      const i = diaIdx.get(`${mes}-${dd}`); if (i == null) continue;
+      (((vd.get(cod) ?? vd.set(cod, {}).get(cod))[alm] ??= [])).push([i, v[cod][alm][dd]]);
+    }
+  }
   const farmacias = [...farmVol.entries()].sort((a, b) => b[1] - a[1]).map(([f]) => f);
   const bm = meses.slice(-6), fm = [0, 1, 2].map(j => sumaM(ultimoCompleto, j + 1)), hfm = meses.slice(-15);
   msg("Calculando pronósticos…");
   const p = [];
   for (const [cod, pf] of dem) {
     const h = meses.map((_, i) => conDatos.has(i) ? r1([...pf.values()].reduce((a, v) => a + v[i], 0)) : null);
-    const ult = ultimos(h, 6); if (!ult.some(v => v > 0) && !Object.values(maestro.stock[cod] || {}).some(x => x[0] > 0)) continue;
+    // se incluyen todos los productos con historia (también los que dejaron de venderse: categoría E)
     const prom = media(ultimos(h, 12)), apto = h.filter(v => v != null).length >= 24 && prom >= 10;
     // prueba: pronóstico de cada mes de bm con lo conocido hasta el mes anterior
     const b = {}; METODOS.forEach(m => b[m] = []);
@@ -323,16 +352,19 @@ async function recalcular() {
       const sk = maestro.stock[cod]?.[fa]; if (sk) st[fa] = sk[0];
     }
     const pr = maestro.prod[cod] || [cod, 1, 0];
-    p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: apto, h, b: bOk, f: fOk, s, st, hf, sd: maestro.stock[cod]?.[DROG]?.[0] || 0 });
+    p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: apto, h, b: bOk, f: fOk, s, st, hf, sd: maestro.stock[cod]?.[DROG]?.[0] || 0,
+      dv: vd.get(cod) || {}, um: (maestro.prod[cod] || [])[3]?.slice(0, 10) || "", uv: maestro.uv?.[cod]?.slice(0, 10) || "" });
   }
-  // productos con stock en algún almacén pero sin ninguna venta registrada: se listan sin pronóstico
-  for (const [cod, st] of Object.entries(maestro.stock)) {
-    if (dem.has(cod) || !Object.values(st).some(x => x[0] > 0)) continue;
-    const pr = maestro.prod[cod] || [cod, 1, 0], stf = {};
+  // productos que aparecen en el kardex pero sin ninguna venta registrada (solo compras, envíos…): se listan sin pronóstico
+  for (const cod of Object.keys(maestro.prod)) {
+    if (dem.has(cod)) continue;
+    const st = maestro.stock[cod] || {}, pr = maestro.prod[cod] || [cod, 1, 0], stf = {};
     for (const fa of farmacias) if (st[fa]) stf[fa] = st[fa][0];
-    p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: false, h: meses.map(() => 0), b: {}, f: {}, s: {}, st: stf, hf: {}, sd: st[DROG]?.[0] || 0, sinVentas: true });
+    p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: false, h: meses.map(() => 0), b: {}, f: {}, s: {}, st: stf, hf: {}, sd: st[DROG]?.[0] || 0,
+      sinVentas: true, dv: {}, um: (pr[3] || "").slice(0, 10), uv: "" });
   }
-  const o = { corte, meses, hfm, bm, fm, metodos: METODOS.filter(m => p.some(x => x.f[m])), farmacias, p, origen: "kardex" };
+  const o = { corte, meses, hfm, bm, fm, metodos: METODOS.filter(m => p.some(x => x.f[m])), farmacias, p, origen: "kardex",
+    dias: { desde: dias[0], hasta: dias[DIAS - 1], n: DIAS, completo: conDiario === mesesDia.length } };
   msg("Guardando pronósticos…"); paso = "guardar los pronósticos (proy_config/datos)";
   const prev = await getDoc(doc(db, "proy_config", "datos"));
   const { id } = await assetsShim.upload(new Blob([JSON.stringify(o)]));

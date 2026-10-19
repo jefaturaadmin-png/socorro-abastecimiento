@@ -109,6 +109,10 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .cells select.msel { font-size: 12.5px; padding: 3px 6px; max-width: 150px }
 .tag { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; padding: 1px 6px; border-radius: 99px; margin-left: 6px; vertical-align: 1px }
 .tag.man { background: var(--accent-soft); color: var(--accent) }
+.cat { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; font-size: 12px; font-weight: 700; color: #fff }
+.cat.A { background: #1f7a6d } .cat.B { background: #3d5a99 } .cat.C { background: #b8860b } .cat.D { background: #8a4f9e } .cat.E { background: #a33b3b }
+.tag.pap { background: #e3e9f6; color: #3d5a99 } .tag.est { background: #f6ead0; color: #9a6a00 } .tag.ped { background: #f1ebe6; color: #74685f }
+.c1 small.sub { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap }
 .tag.bloq { background: #fde2dd; color: #b6400b }
 .tag.auto { background: var(--bg); color: var(--muted); border: 1px solid var(--line) }
 .more { padding: 12px 16px; display: flex; gap: 12px; align-items: center; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); flex-wrap: wrap }
@@ -168,6 +172,8 @@ main.sin-sesion > section { display: none !important }
             <option value="auto">Sin elegir (automático)</option>
           </select></label>
         <label class="field"><span>Laboratorio</span><select id="pLab" class="sLab"><option value="">Todos</option></select></label>
+        <label class="field"><span>Tipo</span><select class="sTipo"><option value="">Todos</option><option value="A">A · Regular</option><option value="B">B · Ocasional</option><option value="C">C · Esporádico</option><option value="D">D · Golondrino</option><option value="E">E · Sin movimiento</option></select></label>
+        <label class="field"><span>Etiqueta</span><select class="sEtq"><option value="">Todas</option><option value="pap">Apoyo al paciente (2+1, 1+1…)</option><option value="est">Estacional</option></select></label>
         <input id="pq" type="search" placeholder="Filtrar medicamento…" aria-label="Filtrar medicamentos" autocomplete="off">
       </div>
     </div>
@@ -226,11 +232,17 @@ main.sin-sesion > section { display: none !important }
       <div><div class="eyebrow" id="rEyebrow"></div><h1 id="rTitulo"></h1></div>
       <div class="controls">
         <label class="field"><span>Farmacia</span><select id="rFarm"></select></label>
-        <label class="field"><span>Mes a abastecer</span><select id="rMes"></select></label>
+        <label class="field"><span>Calcular con</span><select id="rBase">
+          <option value="15">Ventas de los últimos 15 días</option><option value="30">Ventas de los últimos 30 días</option>
+          <option value="45">Ventas de los últimos 45 días</option><option value="60">Ventas de los últimos 60 días</option>
+          <option value="90">Ventas de los últimos 3 meses</option><option value="pron">Pronóstico mensual</option></select></label>
+        <label class="field" id="rMesF"><span>Mes a abastecer</span><select id="rMes"></select></label>
         <div class="field"><span id="rPresL">Cobertura</span><div class="seg" id="rPres" role="group" aria-label="Días a cubrir"></div></div>
-        <label class="field"><span id="rCobL">Cobertura (días)</span><input id="rCob" type="number" min="0" max="180" value="30"></label>
-        <label class="field"><span>Seguridad (días)</span><input id="rSeg" type="number" min="0" max="60" value="7"></label>
+        <label class="field"><span id="rCobL">Cobertura (días)</span><input id="rCob" type="number" min="0" max="180" value="15"></label>
+        <label class="field"><span>Seguridad (días)</span><input id="rSeg" type="number" min="0" max="60" value="15"></label>
         <label class="field"><span>Laboratorio</span><select id="rLab" class="sLab"><option value="">Todos</option></select></label>
+        <label class="field"><span>Tipo</span><select class="sTipo"><option value="">Todos</option><option value="A">A · Regular</option><option value="B">B · Ocasional</option><option value="C">C · Esporádico</option><option value="D">D · Golondrino</option><option value="E">E · Sin movimiento</option></select></label>
+        <label class="field"><span>Etiqueta</span><select class="sEtq"><option value="">Todas</option><option value="pap">Apoyo al paciente (2+1, 1+1…)</option><option value="est">Estacional</option></select></label>
         <input id="rq" type="search" placeholder="Filtrar medicamento…" aria-label="Filtrar medicamentos" autocomplete="off">
       </div>
     </div>
@@ -238,7 +250,7 @@ main.sin-sesion > section { display: none !important }
       <div class="kpi"><span id="rk1l">Medicamentos a reponer</span><b id="rk1">–</b><small id="rk1s"></small></div>
       <div class="kpi"><span id="rk2l">Cajas a entregar</span><b id="rk2" class="acc">–</b><small id="rk2s"></small></div>
       <div class="kpi"><span>Valor a costo</span><b id="rk3">–</b><small>con IGV</small></div>
-      <div class="kpi"><span>Demanda pronosticada</span><b id="rk4">–</b><small id="rk4s"></small></div>
+      <div class="kpi"><span id="rk4l">Demanda pronosticada</span><b id="rk4">–</b><small id="rk4s"></small></div>
     </div>
     <div class="card">
       <div class="ch"><h2 id="rH2"></h2><span class="note" id="rNota"></span></div>
@@ -248,6 +260,10 @@ main.sin-sesion > section { display: none !important }
     <details class="metodo">
       <summary>Cómo se calcula la entrega</summary>
       <ul>
+        <li><b>Calcular con ventas de los últimos N días</b> (15, 30, 45, 60 o 90): venta diaria = lo vendido en esos días ÷ N. <b>Necesita</b> = venta diaria × (días + seguridad), por ejemplo 15 + 15. <b>Entrega</b> = necesita − stock, en cajas enteras.</li>
+        <li><b>Tipo</b> según los meses con venta en el último año: <b>A</b> Regular (10–12): lo necesario · <b>B</b> Ocasional (6–9): máximo 1 unidad · <b>C</b> Esporádico (3–5): a pedido · <b>D</b> Golondrino (1–2): solo con pedido confirmado · <b>E</b> Sin movimiento (0): no se repone; si hay stock, devolver o liquidar. En la compra se usa el tipo del total; en el reparto, el de cada farmacia.</li>
+        <li><b>PAP</b>: productos con apoyo al paciente (2+1, 1+1…); el regalo cuenta como venta porque sale del stock. <b>Estacional</b>: con 2+ años de historia y meses claramente más altos que otros.</li>
+        <li>Con <b>Pronóstico mensual</b> se usa el cálculo anterior (abajo).</li>
         <li><b>Pronóstico de la farmacia</b> = pronóstico del medicamento (método elegido) × participación de la farmacia en sus ventas de los últimos 3 meses.</li>
         <li><b>Disponible</b> al inicio del mes = stock actual − demanda pronosticada desde la fecha de corte hasta ese mes.</li>
         <li><b>Entrega</b> = pronóstico × (cobertura + seguridad) ÷ días del mes − disponible, redondeada hacia arriba a cajas enteras.</li>
@@ -332,7 +348,7 @@ const S = {
   db: null, assets: null,
   tab: 'pron', vista: 'pron', origen: 'pron', cur: null, unidad: 'cajas',
   pFiltro: 'todos', pMostrar: PAGINA,
-  farm: '', mesObj: '', cob: 30, seg: 7, rMostrar: PAGINA,
+  farm: '', mesObj: '', cob: 15, seg: 15, base: '15', cat: '', etq: '', rMostrar: PAGINA,
   M: null, almacen: '', desde: '', hasta: '', metrica: 'ventas', mMostrar: PAGINA,
   charts: {}
 };
@@ -417,7 +433,41 @@ function validar(o) {
     throw new Error('El archivo no tiene el formato de pronósticos. Genera "pronosticos.json.gz" con la celda de Colab.');
   return o;
 }
+/* Categoría por movimiento: meses con venta en los últimos 12 meses (A 10–12, B 6–9, C 3–5, D 1–2, E 0),
+   del total (para la compra) y de cada farmacia (para el reparto). Etiquetas: apoyo al paciente (2+1…) y estacional. */
+const PAP = /\(\s*\d+\s*\+\s*\d+\s*\)/;
+const catDe = n => n >= 10 ? 'A' : n >= 6 ? 'B' : n >= 3 ? 'C' : n >= 1 ? 'D' : 'E';
+const NCAT = { A: 'Regular', B: 'Ocasional', C: 'Esporádico', D: 'Golondrino', E: 'Sin movimiento' };
+function clasificar(o) {
+  // ventas del mes en curso (aún incompleto): cuentan como un mes con venta dentro de los últimos 12
+  let iAct = Infinity;
+  if (o.dias && o.meses.length) {
+    const fin = new Date(o.dias.hasta + 'T00:00:00Z'), ult = o.meses[o.meses.length - 1];
+    for (let i = o.dias.n - 1; i >= 0; i--) { const d = new Date(fin - (o.dias.n - 1 - i) * 864e5).toISOString().slice(0, 7); if (d <= ult) { iAct = i + 1; break; } }
+  }
+  const vendeAct = l => (l || []).some(([i, q]) => i >= iAct && q > 0);
+  const meses12 = (h, act) => act ? h.slice(-11).filter(v => v > 0).length + 1 : h.slice(-12).filter(v => v > 0).length;
+  for (const p of o.p) {
+    const actF = Object.fromEntries(o.farmacias.map(f => [f, vendeAct(p.dv?.[f])]));
+    p.cat = catDe(meses12(p.h, Object.values(actF).some(Boolean)));
+    p.catF = {};
+    for (const f of o.farmacias) p.catF[f] = catDe(meses12(p.hf?.[f] || [], actF[f]));
+    p.pap = PAP.test(p.n);
+    // estacional: 24+ meses de historia y diferencia clara entre el mes más alto y el más bajo del año
+    const ok = p.h.map((v, i) => [v, o.meses[i]]).filter(([v]) => v != null), g = ok.length ? sum(ok.map(([v]) => v)) / ok.length : 0;
+    p.est = false;
+    if (ok.length >= 24 && g >= 1) {
+      const idx = Array.from({ length: 12 }, (_, m) => { const v = ok.filter(([, mm]) => +mm.slice(5) - 1 === m).map(([v]) => v); return v.length ? sum(v) / v.length / g : 1; });
+      p.est = Math.max(...idx) - Math.min(...idx) >= .8;
+    }
+    // para los que dejaron de venderse: cuánto vendían antes (6 meses hasta su última venta)
+    let iu = -1; p.h.forEach((v, i) => { if (v > 0) iu = i; });
+    p.ultMes = iu >= 0 ? o.meses[iu] : '';
+    p.antes = iu >= 0 ? sum(p.h.slice(Math.max(0, iu - 5), iu + 1).map(v => v || 0)) / Math.min(6, iu + 1) : 0;
+  }
+}
 function usarPron(o, ejemplo) {
+  clasificar(o);
   S.P = o; S.ejemplo = ejemplo; S.idx = new Map(o.p.map(p => [p.c, p])); S.calc = new Map();
   for (const p of o.p) {
     const real = o.bm.map(m => p.h[o.meses.indexOf(m)]);
@@ -599,6 +649,16 @@ document.querySelectorAll('.sLab').forEach(s => s.addEventListener('change', e =
   S.pMostrar = S.rMostrar = PAGINA; render();
 }));
 
+const catBadge = c => `<span class="cat ${c}" title="${c} · ${NCAT[c]}">${c}</span>`;
+const etiquetas = p => (p.pap ? '<span class="tag pap" title="Programa de apoyo al paciente">PAP</span>' : '') + (p.est ? '<span class="tag est" title="Venta por temporadas">Estacional</span>' : '');
+// en Reposición por farmacia se usa la categoría de esa farmacia
+const pasaTipo = p => {
+  const c = S.vista === 'rep' && S.farm ? (p.catF?.[S.farm] || 'E') : p.cat;
+  return (!S.cat || c === S.cat) && (!S.etq || (S.etq === 'pap' ? p.pap : p.est));
+};
+document.querySelectorAll('.sTipo').forEach(s => s.addEventListener('change', e => { S.cat = e.target.value; document.querySelectorAll('.sTipo').forEach(x => x.value = S.cat); S.pMostrar = S.rMostrar = PAGINA; render(); }));
+document.querySelectorAll('.sEtq').forEach(s => s.addEventListener('change', e => { S.etq = e.target.value; document.querySelectorAll('.sEtq').forEach(x => x.value = S.etq); S.pMostrar = S.rMostrar = PAGINA; render(); }));
+
 /* ---------- PRONÓSTICO ---------- */
 $('pFiltro').addEventListener('change', e => { S.pFiltro = e.target.value; S.pMostrar = PAGINA; pintarPron(); });
 $('pq').addEventListener('input', () => { S.pMostrar = PAGINA; pintarPron(); });
@@ -607,6 +667,7 @@ function pintarPron() {
   llenarLabs();
   let lista = o.p;
   if (S.lab) lista = lista.filter(p => labDe(p.c) === S.lab);
+  lista = lista.filter(pasaTipo);
   if (S.pFiltro === 'apto') lista = lista.filter(p => p.a);
   if (S.pFiltro === 'man') lista = lista.filter(p => manual(p.c));
   if (S.pFiltro === 'auto') lista = lista.filter(p => !manual(p.c));
@@ -625,11 +686,12 @@ function pintarPron() {
   $('pk3').textContent = nf0.format(man); $('pk3s').textContent = `de ${nf0.format(o.p.length)}; el resto usa el de menor error`;
   $('pk4l').textContent = 'Demanda ' + nombreMes(o.fm[0]); $('pk4').textContent = fmtU(dem);
 
-  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th title="Droguería + todas las sucursales y almacenes">Stock actual</th><th>Prom. 3m</th>${mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="${esc(m)}">${esc(corto(m))}</th>`).join('')}
+  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th title="Categoría por movimiento (últimos 12 meses)">Tipo</th><th title="Droguería + todas las sucursales y almacenes">Stock actual</th><th>Prom. 3m</th>${mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="${esc(m)}">${esc(corto(m))}</th>`).join('')}
     <th class="sep">Método usado</th>${o.fm.map(m => `<th class="pj">${et(m)}</th>`).join('')}</tr></thead><tbody>`;
   for (const p of vis) {
     const k = S.calc.get(p.c), sel = elegido(p.c), esMan = manual(p.c);
-    h += `<tr data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a></td>
+    h += `<tr data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${etiquetas(p)}</td>
+      <td style="text-align:center">${catBadge(p.cat)}</td>
       ${(() => { const s = stockTotal(p); return `<td class="n big" title="Droguería ${fmtS(p, conv(p, s.d))} · sucursales y otros almacenes ${fmtS(p, conv(p, s.t - s.d))}">${s.t ? fmtS(p, conv(p, s.t)) : '<span class="z">0</span>'}</td>`; })()}
       <td class="n">${fmt(conv(p, k.prom))}</td>
       ${mets.map((m, i) => { const x = k.met[m]; const cls = ['w', i === 0 ? 'sep' : '']; if (!x || x.wape == null) return `<td class="${cls.join(' ')} na">–</td>`;
@@ -641,7 +703,7 @@ function pintarPron() {
       </select></td>
       ${o.fm.map((_, j) => `<td class="n pj big">${fmt(conv(p, pronDe(p, j)))}</td>`).join('')}</tr>`;
   }
-  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${mets.length + 6}">Ningún medicamento coincide con el filtro.</td></tr>`;
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${mets.length + 7}">Ningún medicamento coincide con el filtro.</td></tr>`;
   $('pTabla').innerHTML = h + '</tbody>'; ajustarC0($('pTabla'));
   $('pMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(fil.length)} medicamentos, de mayor a menor demanda</span>` +
     (fil.length > vis.length ? `<button class="btn" id="pMas">Ver ${Math.min(PAGINA, fil.length - vis.length)} más</button>` : '');
@@ -770,10 +832,103 @@ function plan(p, f, obj) {
 $('rFarm').addEventListener('change', e => { S.farm = e.target.value; S.rMostrar = PAGINA; pintarRep(); });
 $('rMes').addEventListener('change', e => { S.mesObj = e.target.value; pintarRep(); });
 $('rCob').addEventListener('input', e => { S.cob = Math.max(0, +e.target.value || 0); pintarRep(); });
-$('rPres').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b) return; S.cob = +b.dataset.d; $('rCob').value = S.cob; pintarRep(); });
+$('rPres').addEventListener('click', e => {
+  const b = e.target.closest('[data-d]'); if (!b) return;
+  S.cob = +b.dataset.d; $('rCob').value = S.cob;
+  if (b.dataset.s != null) { S.seg = +b.dataset.s; $('rSeg').value = S.seg; }
+  pintarRep();
+});
+$('rBase').addEventListener('change', e => { S.base = e.target.value; if (S.base !== 'pron' && ![7, 15, 30].includes(S.cob)) { S.cob = S.seg = 15; $('rCob').value = $('rSeg').value = 15; } pintarRep(); });
 $('rSeg').addEventListener('input', e => { S.seg = Math.max(0, +e.target.value || 0); pintarRep(); });
 $('rq').addEventListener('input', () => { S.rMostrar = PAGINA; pintarRep(); });
+/* Ventas de los últimos N días (del kardex por día) → venta diaria × (días + seguridad) − stock, según la categoría:
+   A: lo necesario · B: máximo 1 unidad · C: a pedido · D: solo con pedido confirmado · E: no se repone (devolver o liquidar). */
+const ventaDias = (p, f, n) => {
+  const o = S.P; if (!o.dias) return null;
+  const desde = o.dias.n - n; let t = 0;
+  for (const [i, q] of (p.dv?.[f] || [])) if (i >= desde) t += q;
+  return Math.max(0, t);
+};
+function plan2(p, f) {
+  const n = +S.base, st = p.st?.[f] || 0, c = p.catF?.[f] || 'E', bloq = bloqueado(p.c, f);
+  let v = ventaDias(p, f, n), aprox = false;
+  if (v == null) { v = pronDe(p, 0) * (p.s?.[f] || 0) * n / 30; aprox = true; }
+  const diaria = v / n, nec = diaria * (S.cob + S.seg);
+  let ent = 0, nota = '';
+  if (bloq) nota = '';
+  else if (c === 'A') ent = Math.max(0, Math.ceil(nec - st - 1e-9));
+  else if (c === 'B') ent = st < 1 ? 1 : 0;
+  else nota = c === 'C' ? 'a pedido' : c === 'D' ? 'solo con pedido' : (st > 0 ? 'liquidar' : 'sin mov.');
+  return { v, diaria, nec, st, ent, nota, c, bloq, aprox };
+}
 function pintarRep() {
+  $('rMesF').hidden = S.base !== 'pron';
+  if (S.base === 'pron') return pintarRepMes();
+  const o = S.P, todas = !S.farm, n = +S.base;
+  const pres = [[7, 7, '7 + 7'], [15, 15, '15 + 15'], [30, 30, '30 + 30']];
+  $('rPresL').textContent = todas ? 'Comprar para (días + seguridad)' : 'Repartir para (días + seguridad)';
+  $('rCobL').textContent = 'Otro (días)';
+  $('rPres').innerHTML = pres.map(([d, s, t]) => `<button type="button" data-d="${d}" data-s="${s}" aria-pressed="${S.cob === d && S.seg === s}">${t}</button>`).join('');
+  llenarLabs();
+  $('rEyebrow').textContent = `Ventas de los últimos ${n} días · abastecer para ${S.cob} días + ${S.seg} de seguridad`;
+  $('rTitulo').textContent = todas ? 'Compra de droguería' : S.farm;
+  $('rH2').textContent = todas ? 'Compra sugerida por medicamento' : 'Entrega sugerida desde droguería';
+  const sinDias = !o.dias;
+  $('rNota').textContent = sinDias ? 'Todavía no hay ventas por día: se usa el pronóstico mensual. Vuelve a subir el kardex para calcular con los días.'
+    : `Venta diaria = ventas de los últimos ${n} días ÷ ${n}. ${o.dias.completo ? '' : 'Algunos días aún no tienen detalle: vuelve a subir el kardex de esos meses.'} Tipo A–E según los meses con venta del último año${todas ? ' (total empresa)' : ' en esta farmacia'}.`;
+  $('rk1l').textContent = todas ? 'Medicamentos a comprar' : 'Medicamentos a reponer';
+  $('rk2l').textContent = todas ? 'Cajas a comprar' : 'Cajas a entregar';
+  const lista = [];
+  for (const p of o.p) {
+    if (S.lab && labDe(p.c) !== S.lab) continue;
+    if (!pasaTipo(p)) continue;
+    let r;
+    if (!todas) {
+      const x = plan2(p, S.farm);
+      if (!x.v && !x.st && !S.cat) continue;
+      r = { ...x, cat: x.c, final: x.ent, h: (p.hf?.[S.farm] || []).slice(-6), nb: x.bloq ? 1 : 0 };
+    } else {
+      let v = 0, st = 0, ent = 0, nec = 0, nb = 0, aprox = false;
+      for (const f of o.farmacias) { const x = plan2(p, f); v += x.v; st += x.st; ent += x.ent; nec += x.nec; if (x.bloq) nb++; aprox ||= x.aprox; }
+      if (!v && !st && !p.sd && !S.cat) continue;
+      const general = bloqueado(p.c, 'TODAS'), sd = p.sd || 0;
+      const nota = ['C', 'D', 'E'].includes(p.cat) ? (p.cat === 'C' ? 'a pedido' : p.cat === 'D' ? 'solo con pedido' : (st + sd > 0 ? 'liquidar' : 'sin mov.')) : '';
+      r = { v, diaria: v / n, nec, st, sd, ent, nb, general, nota, aprox, cat: p.cat,
+        final: general || nota ? 0 : Math.max(0, Math.ceil(ent - sd - 1e-9)), h: p.h.slice(-6) };
+    }
+    r.p = p; lista.push(r);
+  }
+  const cv = (p, v) => v == null ? null : soles() ? v * p.k : v;
+  lista.sort((a, b) => cv(b.p, b.final) - cv(a.p, a.final) || cv(b.p, b.v) - cv(a.p, a.v));
+  const fil = filtroTexto(lista.map(r => Object.assign(r, { c: r.p.c, n: r.p.n })), $('rq').value), vis = fil.slice(0, S.rMostrar);
+  const con = lista.filter(x => x.final > 0);
+  $('rk1').textContent = nf0.format(con.length); $('rk1s').textContent = `de ${nf0.format(lista.length)} listados`;
+  $('rk2').textContent = nf0.format(sum(con.map(x => x.final))); $('rk2s').textContent = `para ${S.cob} + ${S.seg} días`;
+  $('rk3').textContent = 'S/ ' + nf0.format(sum(con.map(x => x.final * x.p.k)));
+  $('rk4l').textContent = 'Vendido'; $('rk4').textContent = fmtU(sum(lista.map(x => cv(x.p, x.v)))); $('rk4s').textContent = `vendido en ${n} días · ${todas ? 'todas las farmacias' : S.farm.toLowerCase()}`;
+  const hist = o.meses.slice(-6);
+  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th>Tipo</th>${hist.map(m => `<th>${et(m)}</th>`).join('')}
+    <th class="sep pj">Venta ${n} d</th><th class="pj">Diaria</th><th>Stock ${todas ? 'farmacias' : ''}</th>${todas ? '<th>Stock droguería</th>' : ''}<th>Necesita</th>
+    <th class="tot">${todas ? 'Compra' : 'Entrega'}</th></tr></thead><tbody>`;
+  for (const r of vis) {
+    const p = r.p, hv = r.h.map(v => cv(p, v) || 0), max = Math.max(0, ...hv);
+    const sub = ['D', 'E'].includes(r.cat) && p.ultMes ? `<small class="sub">Última venta ${et(p.ultMes)} · antes ~${fmt(cv(p, p.antes))}/mes</small>` : '';
+    const fin = r.general || (todas ? false : r.bloq) ? '<span class="tag bloq">bloqueado</span>'
+      : r.final ? fmt(cv(p, r.final)) + (r.nb ? `<span class="tag bloq" title="Bloqueado en ${r.nb} sucursal(es)">${r.nb} bloq.</span>` : '')
+      : r.nota ? `<span class="tag ped">${r.nota}</span>` : '·';
+    h += `<tr class="click" data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}">${esc(p.n)}${etiquetas(p)}${sub}</td>
+      <td style="text-align:center">${catBadge(r.cat)}</td>${hv.map(v => celda(v, max)).join('')}
+      <td class="n sep pj big">${fmt(cv(p, r.v))}${r.aprox ? '*' : ''}</td><td class="n pj">${fmt(cv(p, r.diaria))}</td>
+      <td class="n">${fmtS(p, cv(p, r.st))}</td>${todas ? `<td class="n">${fmtS(p, cv(p, r.sd))}</td>` : ''}<td class="n">${fmt(cv(p, r.nec))}</td>
+      <td class="n tot ent">${fin}</td></tr>`;
+  }
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${hist.length + 8}">Ningún medicamento coincide con el filtro.</td></tr>`;
+  $('rTabla').innerHTML = h + '</tbody>'; ajustarC0($('rTabla'));
+  $('rMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(fil.length)} medicamentos${sinDias ? ' · * estimado con el pronóstico mensual' : ''}</span>` +
+    (fil.length > vis.length ? `<button class="btn" id="rMas">Ver ${Math.min(PAGINA, fil.length - vis.length)} más</button>` : '');
+  if ($('rMas')) $('rMas').onclick = () => { S.rMostrar += PAGINA; pintarRep(); };
+}
+function pintarRepMes() {
   const o = S.P, obj = S.mesObj, todas = !S.farm;
   const hist = o.meses.slice(-6);
   // compra de droguería: 30/60/75 días · reparto a una sucursal: 1 semana / 15 días / 1 mes
@@ -791,6 +946,7 @@ function pintarRep() {
   const lista = [];
   for (const p of o.p) {
     if (S.lab && labDe(p.c) !== S.lab) continue;
+    if (!pasaTipo(p)) continue;
     let r;
     if (!todas) {
       const x = plan(p, S.farm, obj); const sh = p.s?.[S.farm] || 0;
@@ -813,7 +969,7 @@ function pintarRep() {
   $('rk1').textContent = nf0.format(con.length); $('rk1s').textContent = `de ${nf0.format(lista.length)} con demanda o stock`;
   $('rk2').textContent = nf0.format(sum(con.map(x => x.final))); $('rk2s').textContent = nombreMes(obj);
   $('rk3').textContent = 'S/ ' + nf0.format(sum(con.map(x => x.final * x.p.k)));
-  $('rk4').textContent = fmtU(sum(lista.map(x => cv(x.p, x.pron)))); $('rk4s').textContent = todas ? 'todas las farmacias' : S.farm.toLowerCase();
+  $('rk4l').textContent = 'Demanda pronosticada'; $('rk4').textContent = fmtU(sum(lista.map(x => cv(x.p, x.pron)))); $('rk4s').textContent = todas ? 'todas las farmacias' : S.farm.toLowerCase();
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th>${hist.map(m => `<th>${et(m)}</th>`).join('')}<th class="sep">Método</th><th class="pj">Pronóstico ${MESES[mesNum(obj)]}</th>
     ${todas ? '<th>Stock farmacias</th><th>Entregas</th><th>Stock droguería</th><th class="tot">Compra</th>' : '<th>Stock actual</th><th>Disponible</th><th class="tot">Entrega</th>'}</tr></thead><tbody>`;
   for (const r of vis) {
@@ -934,6 +1090,6 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=202610161400"></script>
+<script type="module" src="proyeccion.js?v=202610191200"></script>
 
 </body></html>
