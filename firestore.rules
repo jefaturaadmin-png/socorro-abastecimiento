@@ -71,6 +71,22 @@ service cloud.firestore {
       allow delete: if false;   // nada se borra
     }
 
+    // ---------- pedidos urgentes de las sucursales ----------
+    // El químico pide para SU farmacia y a su nombre; solo puede anular los suyos. El administrador ve todos.
+    match /pedidos/{id} {
+      allow read: if esAdmin() || (esQuimico() && resource.data.farmacia == miFarmacia());
+      allow create: if esAdmin()
+        || (esQuimico()
+            && request.resource.data.farmacia == miFarmacia()
+            && request.resource.data.porUid == request.auth.uid
+            && request.resource.data.estado == 'pendiente');
+      allow update: if esAdmin()
+        || (esQuimico() && resource.data.porUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado'])
+            && request.resource.data.estado == 'anulado');
+      allow delete: if esAdmin();
+    }
+
     // ---------- proyección de compras: solo el administrador ----------
     match /proy_config/{id} { allow read, write: if esAdmin(); }
     match /proy_meses/{id} { allow read, write: if esAdmin(); }

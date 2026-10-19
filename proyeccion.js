@@ -81,7 +81,7 @@ onAuthStateChanged(auth, async u => {
   if (arrancado) return; arrancado = true;
   window.claude = { use: async n => n === "db" ? dbShim : n === "assets" ? assetsShim : null };
   window.iniciarKardex();
-  escucharBloqueos();
+  escucharBloqueos(); escucharPedidos();
 });
 
 /* =====================================================================
@@ -379,6 +379,14 @@ window.recalcularPron = recalcular;
 
 /* ---------- bloqueos: lo bloqueado por una sucursal no se compra ni se le reparte ---------- */
 window.BLOQ = new Set();
+// pedidos urgentes que registran las sucursales (pestaña Pedidos)
+function escucharPedidos() {
+  onSnapshot(collection(db, "pedidos"), s => {
+    window.PEDIDOS = s.docs.map(d => { const x = d.data(); return { f: x.farmacia, c: String(x.codpro || ""), n: x.producto || "", cant: x.cantidad || null,
+      fecha: x.fecha?.toMillis ? x.fecha.toMillis() : Date.now(), por: x.porNombre || "", com: x.comentario || "", estado: x.estado || "pendiente" }; });
+    if (S.P && S.vista === "ped") render();
+  }, () => { window.PEDIDOS = null; });
+}
 function escucharBloqueos() {
   onSnapshot(collection(db, "bloqueos"), s => {
     window.BLOQ = new Set(s.docs.filter(d => d.data().estado === "bloqueado").map(d => d.id));
