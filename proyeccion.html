@@ -564,9 +564,13 @@ async function cargarPron(f) {
       const ref = S.db.doc('config/datos');
       const prev = await ref.get().catch(() => null);
       await ref.set({ asset: up.id, archivo: f.name, corte: o.corte, subido: new Date().toISOString() });
-      const viejo = prev?.exists ? prev.data().asset : null;
-      if (viejo && viejo !== up.id) S.assets.delete(viejo).catch(() => {});
+      // este archivo pasa a ser el historial base que se une con el kardex
+      const bref = S.db.doc('config/base'), bprev = await bref.get().catch(() => null);
+      await bref.set({ asset: up.id, archivo: f.name, corte: o.corte, guardado: new Date().toISOString() });
+      const viejos = new Set([prev?.exists ? prev.data().asset : null, bprev?.exists ? bprev.data().asset : null]);
+      for (const v of viejos) if (v && v !== up.id) S.assets.delete(v).catch(() => {});
       msg(''); toast('Pronósticos guardados en la página');
+      if (window.recalcularPron) { const a = await window.recalcularPron(); if (a) msg(a); }
     } else {
       msg('Esta vista no puede guardar el archivo: tendrás que volver a cargarlo la próxima vez.');
     }
@@ -633,6 +637,10 @@ async function iniciar() {
       msg('');
       const m = window.stockKardex ? await window.stockKardex() : null; // el stock del último kardex, si es más nuevo
       if (m) window.aplicarStock(m);
+      // pronósticos del archivo de Colab y ya hay kardex guardado: se unen y se recalculan una vez
+      if (cfg.data().archivo !== 'kardex' && m?.corte && window.recalcularPron) {
+        try { const a = await window.recalcularPron(); if (a) msg(a); } catch (e) { console.warn(e); }
+      }
       if (!S.P.dias && m?.corte && window.ventasDiarias) {
         const r = await window.ventasDiarias(m.corte);
         if (r && r.dias.primero != null) { S.P.dias = r.dias; for (const p of S.P.p) p.dv = r.vd.get(p.c) || {}; clasificar(S.P); pedCache = null; render(); }
@@ -1246,6 +1254,6 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=202610192200"></script>
+<script type="module" src="proyeccion.js?v=202610192300"></script>
 
 </body></html>

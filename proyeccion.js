@@ -311,18 +311,57 @@ async function ventasDiarias(corte, metas) {
 }
 window.ventasDiarias = async corte => { try { return await ventasDiarias(String(corte).slice(0, 10)); } catch { return null; } };
 
+// Base histórica: el último archivo de pronósticos de Colab (proy_config/base). Si aún no se guardó aparte,
+// se toma de proy_config/datos mientras esos datos sigan siendo los de Colab (no recalculados con el kardex).
+async function leerBase() {
+  paso = "leer el historial de Colab (proy_config/base)";
+  let id = null;
+  const b = await getDoc(doc(db, "proy_config", "base"));
+  if (b.exists()) id = b.data().asset;
+  else {
+    const d = await getDoc(doc(db, "proy_config", "datos"));
+    if (d.exists() && d.data().asset && d.data().archivo !== "kardex") {
+      id = d.data().asset;
+      await setDoc(doc(db, "proy_config", "base"), { asset: id, archivo: d.data().archivo || "", corte: d.data().corte || "", guardado: new Date().toISOString() });
+    }
+  }
+  if (!id) return null;
+  const r = await assetsShim.fetch(id); if (!r.ok) return null;
+  const o = await r.json();
+  return { id, o: window.validar ? window.validar(o) : o };
+}
+
 async function recalcular() {
-  const metas = await mesesMeta(); if (!metas.size) { msg("Todavía no hay kardex cargado."); return; }
+  const metas = await mesesMeta(); if (!metas.size) return "";
   const maestro = await leerMaestro(), lista = [...metas.keys()].sort();
+  const base = await leerBase(), B = base?.o, bMeses = B?.meses || [], bFin = bMeses[bMeses.length - 1] || "";
   const corte = maestro.corte.slice(0, 10), mesCorte = corte.slice(0, 7);
   const diasMesCorte = new Date(+mesCorte.slice(0, 4), +mesCorte.slice(5), 0).getDate();
   // el mes del corte cuenta como completo solo si llega a su último día
   const ultimoCompleto = +corte.slice(8, 10) >= diasMesCorte ? mesCorte : sumaM(mesCorte, -1);
-  const meses = []; for (let m = lista[0]; m <= ultimoCompleto; m = sumaM(m, 1)) meses.push(m);
-  if (meses.length < 4) return `Los pronósticos siguen siendo los del archivo de pronósticos: con el kardex se necesitan al menos 4 meses completos para calcularlos (hay ${meses.length}).`;
+  // historia completa: los meses del archivo de Colab y, después de su último mes, los meses del kardex
+  const ini = bMeses.length && bMeses[0] < lista[0] ? bMeses[0] : lista[0];
+  const meses = []; for (let m = ini; m <= ultimoCompleto; m = sumaM(m, 1)) meses.push(m);
+  if (meses.length < 4) return `Los pronósticos siguen siendo los del archivo de pronósticos: se necesitan al menos 4 meses completos para calcularlos (hay ${meses.length}).`;
   // demanda mensual por producto y farmacia (ventas − anulaciones) y movimientos por farmacia
-  const dem = new Map(), farmVol = new Map(), conDatos = new Set();
+  const dem = new Map(), farmVol = new Map(), conDatos = new Set(), hBase = new Map(), bIdx = new Map((B?.p || []).map(p => [p.c, p]));
+  if (B) {
+    msg("Uniendo el historial de Colab…");
+    const iDe = new Map(meses.map((m, i) => [m, i]));
+    bMeses.forEach(m => { if (iDe.has(m)) conDatos.add(iDe.get(m)); });
+    for (const bp of B.p) {
+      const h = Array(meses.length).fill(null); bMeses.forEach((m, j) => { if (iDe.has(m)) h[iDe.get(m)] = bp.h?.[j] ?? null; }); hBase.set(bp.c, h);
+      const pf = (dem.get(bp.c) ?? dem.set(bp.c, new Map()).get(bp.c));
+      for (const [alm, arr] of Object.entries(bp.hf || {})) (B.hfm || []).forEach((m, j) => {
+        if (!iDe.has(m) || arr[j] == null) return;
+        (pf.get(alm) ?? pf.set(alm, Array(meses.length).fill(0)).get(alm))[iDe.get(m)] += arr[j];
+        farmVol.set(alm, (farmVol.get(alm) || 0) + Math.max(0, arr[j]));
+      });
+      for (const alm of Object.keys(bp.s || {})) if (!farmVol.has(alm)) farmVol.set(alm, 0);
+    }
+  }
   for (let i = 0; i < meses.length; i++) {
+    if (bFin && meses[i] <= bFin) continue; // ese mes ya está en el historial de Colab
     const meta = metas.get(meses[i]); if (!meta) continue;
     msg(`Leyendo ${meses[i]}…`); conDatos.add(i);
     const { d } = await leerMes(meta);
@@ -338,12 +377,16 @@ async function recalcular() {
   // ventas por día de los últimos 90 días hasta el corte (para "ventas de los últimos N días")
   msg("Leyendo ventas por día…");
   const { vd, dias: diasInfo } = await ventasDiarias(corte, metas);
+  // también las farmacias que solo aparecen en el stock o las ventas por día del kardex
+  for (const st of Object.values(maestro.stock || {})) for (const alm in st) if (alm !== DROG && !ignorar(alm) && !farmVol.has(alm)) farmVol.set(alm, 0);
+  for (const fs of vd.values()) for (const alm in fs) if (!farmVol.has(alm)) farmVol.set(alm, 0);
   const farmacias = [...farmVol.entries()].sort((a, b) => b[1] - a[1]).map(([f]) => f);
   const bm = meses.slice(-6), fm = [0, 1, 2].map(j => sumaM(ultimoCompleto, j + 1)), hfm = meses.slice(-15);
   msg("Calculando pronósticos…");
   const p = [];
   for (const [cod, pf] of dem) {
-    const h = meses.map((_, i) => conDatos.has(i) ? r1([...pf.values()].reduce((a, v) => a + v[i], 0)) : null);
+    const hb = hBase.get(cod), bp = bIdx.get(cod);
+    const h = meses.map((m, i) => !conDatos.has(i) ? null : bFin && m <= bFin ? (hb ? hb[i] : 0) : r1([...pf.values()].reduce((a, v) => a + v[i], 0)));
     // se incluyen todos los productos con historia (también los que dejaron de venderse: categoría E)
     const prom = media(ultimos(h, 12)), apto = h.filter(v => v != null).length >= 24 && prom >= 10;
     // prueba: pronóstico de cada mes de bm con lo conocido hasta el mes anterior
@@ -360,10 +403,10 @@ async function recalcular() {
     const s = {}, st = {}, hf = {};
     for (const fa of farmacias) {
       const v = pf.get(fa); if (v) { hf[fa] = v.slice(-15).map(r1); const x = Math.max(0, media(v.slice(-3))); if (tot3 && x) s[fa] = Math.round(x / tot3 * 1e4) / 1e4; }
-      const sk = maestro.stock[cod]?.[fa]; if (sk) st[fa] = sk[0];
+      const sk = maestro.stock[cod]?.[fa]; if (sk) st[fa] = sk[0]; else if (bp?.st?.[fa] != null) st[fa] = bp.st[fa];
     }
-    const pr = maestro.prod[cod] || [cod, 1, 0];
-    p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: apto, h, b: bOk, f: fOk, s, st, hf, sd: maestro.stock[cod]?.[DROG]?.[0] || 0,
+    const pr = maestro.prod[cod] || (bp ? [bp.n, bp.fr || 1, bp.k || 0] : [cod, 1, 0]);
+    p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: apto, h, b: bOk, f: fOk, s, st, hf, sd: maestro.stock[cod]?.[DROG]?.[0] ?? bp?.sd ?? 0,
       dv: vd.get(cod) || {}, um: (maestro.prod[cod] || [])[3]?.slice(0, 10) || "", uv: maestro.uv?.[cod]?.slice(0, 10) || "" });
   }
   // productos que aparecen en el kardex pero sin ninguna venta registrada (solo compras, envíos…): se listan sin pronóstico
@@ -380,7 +423,7 @@ async function recalcular() {
   const prev = await getDoc(doc(db, "proy_config", "datos"));
   const { id } = await assetsShim.upload(new Blob([JSON.stringify(o)]));
   await setDoc(doc(db, "proy_config", "datos"), { asset: id, archivo: "kardex", corte, subido: new Date().toISOString() });
-  if (prev.exists() && prev.data().asset) assetsShim.delete(prev.data().asset).catch(() => {});
+  if (prev.exists() && prev.data().asset && prev.data().asset !== base?.id) assetsShim.delete(prev.data().asset).catch(() => {});
   window.STOCK_TODOS = maestro.stock;
   usarPron(o, false); pintarFuente(`kardex al ${corte.split("-").reverse().join("/")}`); msg("");
   return "";
