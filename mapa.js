@@ -135,12 +135,18 @@
       cajas += `<rect class="anaq ${M.sel === a.id ? 'sel' : ''} ${M.editar ? 'ed' : ''}" data-a="${a.id}" x="${a.x}" y="${a.y}" width="${a.w}" height="${a.h}" fill="${col}"><title>${esc(a.t)}: ${(asig.get(a.id) || []).map(x => x.lab).join(', ') || 'vacío'}</title></rect>`;
       // nombre del anaquel y debajo las iniciales (4 letras) de sus laboratorios, en pequeño
       const vert = a.h > a.w * 1.5, largo = vert ? a.h : a.w, corto = vert ? a.w : a.h, rot = vert ? `transform="rotate(-90 ${cx} ${cy})"` : '';
-      const ini = (asig.get(a.id) || []).map(x => inicial(x.lab)), porLinea = Math.max(1, Math.floor((largo - 2) / 15)), lineas = [];
-      for (let k = 0; k < ini.length; k += porLinea) lineas.push(ini.slice(k, k + porLinea).join(' '));
-      const caben = Math.max(1, Math.floor((corto - 8) / 4.6)), ver = lineas.slice(0, caben);
+      // se achica la letra hasta que entren todas las iniciales (mínimo 1.4 pt; si aun así no caben, la última línea termina en …)
+      const ini = (asig.get(a.id) || []).map(x => inicial(x.lab)), fn = Math.min(7, Math.max(3, corto * .42));
+      let fs = 4.2, lineas = [];
+      for (; ; fs = Math.round((fs - .2) * 10) / 10) {
+        const porLinea = Math.max(1, Math.floor((largo - 1.5) / (fs * .62 * 5))); lineas = [];
+        for (let k = 0; k < ini.length; k += porLinea) lineas.push(ini.slice(k, k + porLinea).join(' '));
+        if (fs <= 1.4 || lineas.length * fs * 1.12 + fn + .8 <= corto) break;
+      }
+      const caben = Math.max(1, Math.floor((corto - fn - .8) / (fs * 1.12))), ver = lineas.slice(0, caben);
       if (lineas.length > caben) ver[caben - 1] = ver[caben - 1].replace(/\S+$/, '…');
-      const y0 = cy - (ver.length ? (ver.length * 4.6) / 2 + 1 : 0);
-      textos += `<text class="nt" x="${cx}" y="${y0}" ${rot}>${esc(a.t)}</text>` + ver.map((l, k) => `<text class="ni" x="${cx}" y="${y0 + 5.5 + k * 4.6}" ${rot}>${esc(l)}</text>`).join('');
+      const alto = fn + (ver.length ? .8 + ver.length * fs * 1.12 : 0), y0 = cy - alto / 2 + fn / 2;
+      textos += `<text class="nt" x="${cx}" y="${y0}" style="font-size:${fn}px" ${rot}>${esc(a.t)}</text>` + ver.map((l, k) => `<text class="ni" x="${cx}" y="${y0 + fn / 2 + .8 + fs * (k + .56) * 1.12}" style="font-size:${fs}px;stroke-width:${fs * .28}px" ${rot}>${esc(l)}</text>`).join('');
     });
     const [vx, vy, vw, vh] = P.vb.split(' ').map(Number);
     $('mPlano').innerHTML = `<svg viewBox="${P.vb}" role="img" aria-label="Mapa de calor del ${P.nombre}">
@@ -351,6 +357,44 @@
     if (solo !== true) { pintar(); toast('Segundo piso vacío: arrastra los laboratorios desde "Sin ubicar"'); }
   }
   $('mVaciar2').addEventListener('click', () => vaciarPiso2());
+
+  // PDF: los dos pisos con su mapa y la lista completa de laboratorios por anaquel (se guarda con "Guardar como PDF")
+  const fondos = {};
+  async function fondoDatos(u) {
+    if (!fondos[u]) { const t = await (await fetch(u)).text(); fondos[u] = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(t))); }
+    return fondos[u];
+  }
+  async function descargarPDF() {
+    if (!S.P || !M.cfg) return;
+    const w = open('', '_blank'); if (!w) return toast('Permite las ventanas emergentes para descargar el PDF');
+    w.document.write('<p style="font:14px system-ui;padding:20px">Preparando el PDF…</p>');
+    const datos = {}; for (const n of [1, 2]) { try { datos[n] = await fondoDatos(PISOS[n].fondo); } catch { datos[n] = new URL(PISOS[n].fondo, location.href).href; } }
+    const antes = { piso: M.piso, sel: M.sel, editar: M.editar }; M.sel = null; M.editar = false;
+    const fecha = new Date().toLocaleDateString('es-PE'), base = location.href;
+    let paginas = '';
+    for (const n of [1, 2]) {
+      M.piso = n; pintar();
+      const svg = $('mPlano').innerHTML.replace(/href="(planos\/[^"]+)"/g, () => `href="${datos[n]}"`);
+      const filas = anaqs(n).map(a => ({ a, l: M.asig.get(a.id) || [] })).filter(x => x.l.length);
+      const resp = a => M.cfg.resp?.[grupoDe(a.t) || a.id] || '';
+      paginas += `<section><h1>Droguería FS · ${PISOS[n].nombre}</h1><p class="sub">Distribución de laboratorios por anaquel · calor por ${M.medida === 'mov' ? 'movimiento (cajas al mes)' : 'stock en droguería'} · ${fecha}</p>
+        <div class="plano">${svg}</div>
+        <table><thead><tr><th>Anaquel</th><th>Responsable</th><th>Laboratorios</th></tr></thead><tbody>${filas.map(({ a, l }) => `<tr><td><b>${esc(a.t)}</b></td><td>${esc(resp(a))}</td><td>${l.map(x => `${esc(x.lab)} <i>(${esc(inicial(x.lab))})</i>`).join(' · ')}</td></tr>`).join('') || '<tr><td colspan="3">Sin laboratorios colocados.</td></tr>'}</tbody></table></section>`;
+    }
+    M.piso = antes.piso; M.sel = antes.sel; M.editar = antes.editar; pintar();
+    const css = [...document.styleSheets].map(sh => { try { return [...sh.cssRules].map(r => r.cssText).join('\n'); } catch { return ''; } }).join('\n');
+    w.document.open(); w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Mapa de calor · Droguería FS · ${fecha}</title><style>${css}
+      @page { size: A4 landscape; margin: 10mm } body { background: #fff; color: #111; font: 11px system-ui, sans-serif; margin: 0 }
+      section { page-break-after: always } section:last-child { page-break-after: auto } h1 { font-size: 18px; margin: 0 0 2px } .sub { margin: 0 0 6px; color: #555 }
+      .plano { padding: 0 } .plano svg { width: 100%; height: auto; max-height: 150mm } table { width: 100%; border-collapse: collapse; margin-top: 8px; page-break-inside: auto }
+      th, td { border: 1px solid #ccc; padding: 3px 6px; text-align: left; vertical-align: top } tr { page-break-inside: avoid } th { background: #f2f2f2 } td i { color: #777; font-style: normal }
+      .no-print { position: fixed; top: 8px; right: 8px } @media print { .no-print { display: none } }</style></head>
+      <body><button class="no-print" onclick="print()">Imprimir / Guardar como PDF</button>${paginas}</body></html>`);
+    w.document.close();
+    const imprimir = () => { try { w.focus(); w.print(); } catch {} };
+    if (w.document.readyState === 'complete') setTimeout(imprimir, 800); else w.addEventListener('load', () => setTimeout(imprimir, 400));
+  }
+  $('mPDF').addEventListener('click', descargarPDF);
   $('mAuto').addEventListener('click', () => { if (!M.cfg) return; M.cfg.manual = !M.cfg.manual; guardar(); pintar(); toast(M.cfg.manual ? 'Solo se muestran los laboratorios que colocaste' : 'Los laboratorios sin colocar se reparten solos'); });
   // modo: 'mover' (de un anaquel a otro), 'agregar' (un anaquel más) o 'quitar' (de un anaquel)
   function fijar(lab, id, modo = 'mover', de = null) {
