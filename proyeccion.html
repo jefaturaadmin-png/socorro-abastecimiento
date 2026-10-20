@@ -135,8 +135,8 @@ td.av b { color: var(--s2) } td.av small, tr.avance small { display: block; colo
 .plano .muro { fill: var(--surface); stroke: var(--fg); stroke-width: 7 } .plano .muro2 { fill: none; stroke: var(--fg); stroke-width: 7 }
 .plano .area { fill: color-mix(in srgb, var(--muted) 10%, transparent); stroke: var(--line); stroke-width: 2 }
 .plano .at { font-size: 22px; fill: var(--muted); text-anchor: middle; dominant-baseline: middle }
-.plano .anaq { stroke: rgba(0,0,0,.55); stroke-width: 2; cursor: pointer } .plano .anaq.sel { stroke: var(--fg); stroke-width: 6 }
-.plano .nt { font-size: 17px; font-weight: 700; fill: #111; text-anchor: middle; dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: rgba(255,255,255,.75); stroke-width: 4px }
+.plano .anaq { stroke: rgba(0,0,0,.6); stroke-width: .8; fill-opacity: .72; cursor: pointer } .plano .anaq:hover { fill-opacity: .9 } .plano .anaq.sel { stroke: #000; stroke-width: 2.5; fill-opacity: .9 }
+.plano .nt { font-size: 7px; font-weight: 700; fill: #111; text-anchor: middle; dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: rgba(255,255,255,.85); stroke-width: 2px }
 .leyenda { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted) }
 .leyenda i { width: 140px; height: 10px; border-radius: 99px; background: linear-gradient(90deg, hsl(120 80% 48%), hsl(60 80% 48%), hsl(0 80% 48%)) }
 .mlista { list-style: none; margin: 0; padding: 0 12px 12px; max-height: 720px; overflow: auto; display: grid; gap: 8px }
@@ -1420,7 +1420,7 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610201500"></script>
-<script type="module" src="proyeccion.js?v=202610201500"></script>
+<script src="mapa.js?v=202610201700"></script>
+<script type="module" src="proyeccion.js?v=202610201700"></script>
 
 </body></html>

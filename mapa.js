@@ -9,52 +9,39 @@
   const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const nf0 = new Intl.NumberFormat('es-PE', { maximumFractionDigits: 0 });
 
-  // Planos (coordenadas de la foto del croquis; se giran para verlos horizontales)
-  const R = (id, x, y, w, h, extra = {}) => ({ id, x, y, w, h, ...extra });
+  // Planos: los croquis en PDF pasados a SVG (planos/pisoN.svg) y, encima, cada anaquel con sus medidas del PDF (en puntos)
+  const R = (id, x0, y0, x1, y1, extra = {}) => ({ id, x: x0, y: y0, w: x1 - x0, h: y1 - y0, ...extra });
   const racks = [];
-  for (let k = 1; k <= 8; k++) {
-    const y = 765 - k * 63.75;
-    racks.push(R('R' + k, 460, y, 53, 63.75, { t: String(k) }), R('R' + (k + 8), 513, y, 57, 63.75, { t: String(k + 8) }));
+  for (let k = 0; k < 8; k++) {
+    const x0 = 412 + k * 30.75;
+    racks.push(R('R' + (k + 1), x0, 238, x0 + 30.75, 267, { t: String(k + 1) }), R('R' + (k + 9), x0, 268, x0 + 30.75, 298, { t: String(k + 9) }));
   }
   const PISOS = {
     1: {
-      nombre: 'Primer piso', W: 1206, H: 1600, gira: 'cw', vb: '120 60 1440 1000',
-      muro: [[110, 130], [995, 70], [1000, 1070], [770, 1080], [775, 1410], [215, 1462], [180, 620]],
-      areas: [
-        R('dev', 190, 865, 195, 155, { t: 'Devoluciones' }), R('ctrl', 205, 1100, 85, 340, { t: 'Controlados' }),
-        R('baja', 300, 1085, 165, 355, { t: 'Baja / rechazados' }), R('cuar', 470, 1010, 105, 405, { t: 'Cuarentena' }),
-        R('rec', 577, 1010, 103, 405, { t: 'Recepción' }), R('desp', 730, 620, 255, 100, { t: 'Despacho' }),
-        R('emb', 630, 343, 30, 472, { t: 'Embalaje' }), R('lav', 735, 722, 250, 125, { t: 'Lavadero / SSHH' }),
-        R('vest', 800, 970, 170, 105, { t: 'Vestidores' }), R('esc1', 430, 90, 345, 105, { t: 'Escalera' }),
-        R('esc2', 680, 1090, 95, 320, { t: 'Escalera' })
-      ],
+      nombre: 'Primer piso', fondo: 'planos/piso1.svg?v=202610201700', vb: '55 62 715 470',
       anaqueles: [
-        R('A1', 222, 245, 73, 525, { t: 'A1' }), R('A2', 330, 240, 50, 520, { t: 'A2' }), R('A3', 140, 135, 305, 35, { t: 'A3' }),
-        R('A4', 120, 180, 50, 150, { t: 'A4' }), R('A5', 185, 830, 305, 30, { t: 'A5' }),
+        R('A1', 415, 136, 660, 159, { t: 'Aprobados 1' }), R('A2', 415, 185, 661, 209, { t: 'Aprobados 2' }),
+        R('A3', 371, 111, 383, 250, { t: 'A3' }), R('A4', 618, 93, 688, 112, { t: 'A4' }), R('A5', 690, 102, 714, 243, { t: 'A5' }),
         ...racks,
-        R('R17', 625, 190, 60, 75, { t: '17' }), R('R18', 688, 190, 57, 75, { t: '18' }),
-        R('R19', 815, 230, 58, 65, { t: '19' }), R('R20', 875, 230, 57, 65, { t: '20' }), R('R21', 935, 230, 60, 65, { t: '21' }),
-        R('R22', 935, 160, 60, 70, { t: '22' }), R('R23', 875, 160, 57, 70, { t: '23' }),
-        R('E1', 782, 95, 210, 28, { t: 'E1' }), R('E2', 770, 343, 205, 25, { t: 'E2' }),
-        R('M1', 728, 370, 62, 65, { t: 'M1' }), R('M2', 935, 375, 32, 65, { t: 'M2' }), R('M3', 733, 525, 57, 60, { t: 'M3' })
+        R('R17', 656, 326, 689, 358, { t: '17' }), R('R18', 660, 358, 692, 390, { t: '18' }),
+        R('R19', 640, 425, 668, 455, { t: '19' }), R('R20', 640, 458, 668, 481, { t: '20' }), R('R23', 670, 458, 698, 481, { t: '23' }),
+        R('R21', 640, 483, 668, 505, { t: '21' }), R('R22', 670, 483, 698, 505, { t: '22' }),
+        R('K1', 503, 376, 530, 408, { t: 'K1' }), R('K2', 573, 376, 604, 406, { t: 'K2' }), R('K3', 578, 478, 600, 500, { t: 'K3' }),
+        R('E1', 605, 397, 617, 502, { t: 'E1' }), R('E2', 723, 407, 738, 511, { t: 'E2' })
       ],
-      cerca: [860, 670] // despacho: lo que más se mueve va más cerca
+      cerca: [448, 440] // despacho: lo que más se mueve va más cerca
     },
     2: {
-      nombre: 'Segundo piso', W: 1199, H: 1600, gira: 'ccw', vb: '110 150 1460 960',
-      muro: [[120, 190], [1020, 150], [975, 925], [440, 940], [430, 1525], [140, 1535], [190, 1275]],
-      areas: [R('mesa', 480, 170, 275, 100, { t: 'Mesa' })],
+      nombre: 'Segundo piso', fondo: 'planos/piso2.svg?v=202610201700', vb: '85 90 660 415',
       anaqueles: [
-        ...[345, 458, 572, 684, 790].map((y, i) => R('P' + (i + 1), 295, y, 660, 62, { t: 'Anaquel ' + (i + 1), zona: 'p2' })),
-        R('P6', 440, 880, 490, 35, { t: 'Anaquel 6', zona: 'p2' }),
-        R('Z1', 395, 925, 35, 590, { t: 'Zona 2 · A', zona: 'z2' }), R('Z2', 260, 975, 75, 445, { t: 'Zona 2 · B', zona: 'z2' }),
-        R('Z3', 150, 1480, 230, 40, { t: 'Zona 2 · C', zona: 'z2' })
+        R('P1', 201, 129, 238, 425, { t: 'Anaquel 1', zona: 'p2' }), R('P2', 249, 129, 286, 426, { t: 'Anaquel 2', zona: 'p2' }),
+        R('P3', 296, 130, 334, 427, { t: 'Anaquel 3', zona: 'p2' }), R('P4', 343, 130, 382, 427, { t: 'Anaquel 4', zona: 'p2' }),
+        R('P5', 391, 130, 428, 427, { t: 'Anaquel 5', zona: 'p2' }), R('P6', 438, 131, 461, 361, { t: 'Anaquel 6', zona: 'p2' }),
+        R('Z1', 460, 364, 723, 378, { t: 'Zona 2 · A', zona: 'z2' }), R('Z2', 708, 379, 722, 477, { t: 'Zona 2 · B', zona: 'z2' }),
+        R('Z3', 482, 403, 679, 432, { t: 'Zona 2 · C', zona: 'z2' })
       ]
     }
   };
-  // giro de la foto: cw (horario) o ccw (antihorario)
-  const gp = (P, x, y) => P.gira === 'cw' ? [P.H - y, x] : [y, P.W - x];
-  const gr = (P, r) => P.gira === 'cw' ? { x: P.H - r.y - r.h, y: r.x, w: r.h, h: r.w } : { x: r.y, y: P.W - r.x - r.w, w: r.h, h: r.w };
 
   const PESADO = /LECHE|FORMULA|\bNAN\b|ENFA|SIMILAC|NUTRILON|PEDIASURE|ENSURE|GLUCERNA|JARABE|\bJBE\b|SUSP|CLORURO|SUERO|DEXTROSA|SOLUCION|\bSOL\b|\bFCO\b|FRASCO|GALON|\b1\s?L\b|1000\s?ML|500\s?ML|AGUA|ALCOHOL|ELECTROLIT/;
   const ZONA2 = /COLGATE|ORAL B|DENTAID|DENTWORLD|DENTAL|EUCERIN|BIODERMA|ISDIN|LAROCHE|LA ROCHE|ISISPHARMA|AVENE|GALDERMA|CERAVE|VICHY|SESDERMA|URIAGE|DERMATOLOG/;
@@ -117,21 +104,21 @@
     const vals = P.anaqueles.map(a => val(a.id)), max = Math.max(1e-9, ...vals);
     document.querySelectorAll('#mPiso [data-p]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.p === M.piso));
     document.querySelectorAll('#mMed [data-m]').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === M.medida));
-    const poly = P.muro.map(([x, y]) => gp(P, x, y).join(',')).join(' ');
     let halos = '', cajas = '', textos = '';
-    for (const r of P.areas) { const g = gr(P, r); cajas += `<rect class="area" x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" rx="4"/>`; const vert = g.h > g.w * 1.3, lado = vert ? g.h : g.w, fs = Math.min(22, Math.max(12, lado / (r.t.length * .62)));
-      textos += `<text class="at" x="${g.x + g.w / 2}" y="${g.y + g.h / 2}" style="font-size:${fs}px" ${vert ? `transform="rotate(-90 ${g.x + g.w / 2} ${g.y + g.h / 2})"` : ''}>${esc(r.t)}</text>`; }
     P.anaqueles.forEach((a, i) => {
-      const g = gr(P, a), t = vals[i] / max, col = (asig.get(a.id) || []).length ? calor(t) : '#d9d4ce';
-      const rad = Math.max(g.w, g.h) * .55 + 40 * t;
-      if ((asig.get(a.id) || []).length) halos += `<ellipse cx="${g.x + g.w / 2}" cy="${g.y + g.h / 2}" rx="${g.w / 2 + rad * .5}" ry="${g.h / 2 + rad * .5}" fill="${col}" opacity="${.25 + .5 * t}"/>`;
-      cajas += `<rect class="anaq ${M.sel === a.id ? 'sel' : ''}" data-a="${a.id}" x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" rx="3" fill="${col}"><title>${esc(a.t)}: ${(asig.get(a.id) || []).map(x => x.lab).join(', ') || 'vacío'}</title></rect>`;
-      const top = (asig.get(a.id) || [])[0]?.lab || '';
-      textos += `<text class="nt" x="${g.x + g.w / 2}" y="${g.y + g.h / 2}" ${g.h > g.w * 1.5 ? `transform="rotate(-90 ${g.x + g.w / 2} ${g.y + g.h / 2})"` : ''}>${esc(a.t)}${top && Math.max(g.w, g.h) > 150 ? ' · ' + esc(top.slice(0, 22)) : ''}</text>`;
+      const n = (asig.get(a.id) || []).length, t = vals[i] / max, col = n ? calor(t) : '#cfc9c2', cx = a.x + a.w / 2, cy = a.y + a.h / 2;
+      if (n) halos += `<ellipse cx="${cx}" cy="${cy}" rx="${a.w / 2 + 10 + 22 * t}" ry="${a.h / 2 + 10 + 22 * t}" fill="${col}" opacity="${.35 + .5 * t}"/>`;
+      cajas += `<rect class="anaq ${M.sel === a.id ? 'sel' : ''}" data-a="${a.id}" x="${a.x}" y="${a.y}" width="${a.w}" height="${a.h}" fill="${col}"><title>${esc(a.t)}: ${(asig.get(a.id) || []).map(x => x.lab).join(', ') || 'vacío'}</title></rect>`;
+      const vert = a.h > a.w * 1.5, top = (asig.get(a.id) || [])[0]?.lab || '', largo = Math.max(a.w, a.h);
+      textos += `<text class="nt" x="${cx}" y="${cy}" ${vert ? `transform="rotate(-90 ${cx} ${cy})"` : ''}>${esc(a.t)}${top && largo > 120 ? ' · ' + esc(top.slice(0, 24)) : ''}</text>`;
     });
+    const [vx, vy, vw, vh] = P.vb.split(' ').map(Number);
     $('mPlano').innerHTML = `<svg viewBox="${P.vb}" role="img" aria-label="Mapa de calor del ${P.nombre}">
-      <defs><filter id="mBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="28"/></filter></defs>
-      <polygon class="muro" points="${poly}"/><g filter="url(#mBlur)">${halos}</g><polygon class="muro2" points="${poly}"/>${cajas}${textos}</svg>`;
+      <defs><filter id="mBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="9"/></filter></defs>
+      <rect x="${vx}" y="${vy}" width="${vw}" height="${vh}" fill="#fff"/>
+      <g filter="url(#mBlur)">${halos}</g>
+      <image href="${P.fondo}" x="0" y="0" width="841.92" height="595.32" style="mix-blend-mode:multiply"/>
+      ${cajas}${textos}</svg>`;
     $('mTitulo').textContent = `${P.nombre} · ${M.medida === 'mov' ? 'movimiento (cajas al mes)' : 'stock en droguería (cajas)'}`;
     $('mSinLab').textContent = M.sinLab ? `${nf0.format(M.sinLab.n)} productos sin laboratorio en el catálogo no se ubican en el mapa.` : '';
     // lista de anaqueles
