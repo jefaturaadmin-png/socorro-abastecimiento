@@ -356,6 +356,12 @@ main.sin-sesion > section { display: none !important }
     <div class="head">
       <div><div class="eyebrow" id="qEyebrow"></div><h1>Alertas de reposición</h1></div>
       <div class="controls">
+        <label class="field"><span>Calcular con</span><select id="qBase">
+          <option value="7">Ventas de los últimos 7 días</option><option value="15">Ventas de los últimos 15 días</option><option value="30">Ventas de los últimos 30 días</option>
+          <option value="45">Ventas de los últimos 45 días</option><option value="60">Ventas de los últimos 60 días</option><option value="90">Ventas de los últimos 3 meses</option></select></label>
+        <div class="field"><span>Reponer para (días + seguridad)</span><div class="seg" id="qPres" role="group" aria-label="Días a cubrir"></div></div>
+        <label class="field"><span>Otro (días)</span><input id="qCob" type="number" min="1" max="180" style="width:80px"></label>
+        <label class="field"><span>Seguridad (días)</span><input id="qSeg" type="number" min="0" max="90" style="width:80px"></label>
         <label class="field"><span>Sucursal</span><select id="qFarm"></select></label>
         <label class="field"><span>Qué hacer</span><select id="qAcc">
           <option value="">Todas las alertas</option><option value="drog">Enviar de droguería</option><option value="pasar">Pasar de otra sucursal</option>
@@ -1083,6 +1089,12 @@ function plan(p, f, obj) {
 $('rFarm').addEventListener('change', e => { S.farm = e.target.value; S.rMostrar = PAGINA; pintarRep(); });
 $('rMes').addEventListener('change', e => { S.mesObj = e.target.value; pintarRep(); });
 $('rCob').addEventListener('input', e => { S.cob = Math.max(0, +e.target.value || 0); pintarRep(); });
+// días a cubrir y base de venta desde Alertas (los mismos que Reposición)
+const igualarRep = () => { $('rCob').value = S.cob; $('rSeg').value = S.seg; if ([...$('rBase').options].some(o => o.value === S.base)) $('rBase').value = S.base; };
+$('qPres').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b) return; S.cob = +b.dataset.d; S.seg = +b.dataset.s; igualarRep(); S.qMostrar = PAGINA; pintarPed(); });
+$('qCob').addEventListener('change', e => { S.cob = Math.max(1, +e.target.value || 1); igualarRep(); pintarPed(); });
+$('qSeg').addEventListener('change', e => { S.seg = Math.max(0, +e.target.value || 0); igualarRep(); pintarPed(); });
+$('qBase').addEventListener('change', e => { S.base = e.target.value; igualarRep(); S.qMostrar = PAGINA; pintarPed(); });
 $('rPres').addEventListener('click', e => {
   const b = e.target.closest('[data-d]'); if (!b) return;
   S.cob = +b.dataset.d; $('rCob').value = S.cob;
@@ -1309,7 +1321,9 @@ function pintarPed() {
   const base = filas.filter(r => (!S.lab || labDe(r.p.c) === S.lab) && (!S.qFarm || r.f === S.qFarm));
   const cuenta = t => base.filter(r => r.de.some(d => d.t === t));
   const suma = t => sum(base.flatMap(r => r.de.filter(d => d.t === t).map(d => d.q)));
-  $('qEyebrow').textContent = `Ventas de los últimos ${n} días · stock para menos de ${S.seg} días · reponer para ${S.cob} + ${S.seg} días (se cambia en Reposición)`;
+  $('qEyebrow').textContent = `Ventas de los últimos ${n} días · alerta si el stock no alcanza para ${S.seg} días · Necesita = venta diaria × ${S.cob + S.seg} días (${S.cob} + ${S.seg} de seguridad) − stock`;
+  $('qBase').value = String(n); $('qCob').value = S.cob; $('qSeg').value = S.seg;
+  $('qPres').innerHTML = [[7, 7], [15, 15], [30, 30], [7, 3], [15, 7]].map(([d, sg]) => `<button type="button" data-d="${d}" data-s="${sg}" aria-pressed="${S.cob === d && S.seg === sg}">${d} + ${sg}</button>`).join('');
   $('qk1').textContent = nf0.format(base.length); $('qk2').textContent = nf0.format(cuenta('drog').length);
   $('qk3').textContent = nf0.format(cuenta('pasar').length); $('qk4').textContent = nf0.format(cuenta('comprar').length);
   document.querySelectorAll('#qCards [data-acc]').forEach(b => b.setAttribute('aria-pressed', b.dataset.acc === S.qAcc));
@@ -1321,7 +1335,7 @@ function pintarPed() {
     : dr >= n ? `los últimos ${n} días del kardex.` : `${dr} días del kardex + ${n - dr} días con el promedio del historial guardado.`);
   const vis = lista.slice(0, S.qMostrar);
   const accion = r => r.de.map(d => d.t === 'drog' ? `<span class="acc-tag drog">Droguería ${fmt(d.q)}</span>` : d.t === 'pasar' ? `<span class="acc-tag pasar">De ${esc(nombreSuc(d.g))} ${fmt(d.q)}</span>` : `<span class="acc-tag comprar">Comprar ${fmt(d.q)}</span>`).join('');
-  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th>${S.qFarm ? '' : '<th>Sucursal</th>'}<th>Tipo</th><th>Stock</th><th>Venta diaria</th><th>Días de stock</th><th class="tot">Necesita</th><th>De dónde</th></tr></thead><tbody>`;
+  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th>${S.qFarm ? '' : '<th>Sucursal</th>'}<th>Tipo</th><th>Stock</th><th>Venta diaria</th><th>Días de stock</th><th class="tot" title="Venta diaria × (${S.cob} + ${S.seg}) días − stock">Necesita (${S.cob + S.seg} d)</th><th>De dónde</th></tr></thead><tbody>`;
   for (const r of vis) {
     const p = r.p;
     h += `<tr class="click" data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}">${esc(p.n)}${etiquetas(p)}</td>
@@ -1449,7 +1463,7 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610210100"></script>
-<script type="module" src="proyeccion.js?v=202610210100"></script>
+<script src="mapa.js?v=202610210200"></script>
+<script type="module" src="proyeccion.js?v=202610210200"></script>
 
 </body></html>
