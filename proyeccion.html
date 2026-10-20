@@ -156,7 +156,7 @@ td.fijos .chip button { border: 0; background: none; cursor: pointer; color: var
 .plano .anaq.ed { stroke-dasharray: 3 2; stroke: var(--accent); cursor: move } .plano .nuevo { fill: rgba(226,98,13,.25); stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 3; pointer-events: none }
 .mbtns { display: inline-flex; flex-wrap: wrap; gap: 6px }
 .msin { margin: 0 12px 14px; padding: 10px; border: 1px dashed var(--line); border-radius: 10px; background: var(--bg) }
-.msin.drop { border-color: var(--accent); background: var(--accent-soft) }
+.msin.mdrop { border-color: var(--accent); background: var(--accent-soft) }
 .msinh { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 8px; font-size: 13px } .msinh input { margin-left: auto; padding: 4px 8px; font-size: 13px }
 .msin .ml { display: flex; flex-wrap: wrap; gap: 5px; max-height: 260px; overflow: auto }
 .msin .ml span { font-size: 11.5px; background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: 2px 9px; cursor: grab }
@@ -164,7 +164,7 @@ td.fijos .chip button { border: 0; background: none; cursor: pointer; color: var
 .mfantasma { position: fixed; z-index: 50; pointer-events: none; background: var(--fg); color: var(--bg); font-size: 12px; padding: 4px 9px; border-radius: 6px; white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.25) }
 .mlista .ml span[draggable] { cursor: grab } .mlista .ml span.fijo { background: var(--accent-soft); border-color: var(--accent) }
 .mlista .ml span button { border: 0; background: none; padding: 0 0 0 4px; cursor: pointer; color: var(--accent); font-weight: 700 }
-.mlista li.drop { border-color: var(--accent); background: var(--accent-soft) } .plano .anaq.drop { stroke: var(--accent); stroke-width: 3; fill-opacity: 1 }
+.mlista li.mdrop { border-color: var(--accent); background: var(--accent-soft) } .plano .anaq.mdrop { stroke: var(--accent); stroke-width: 3; fill-opacity: 1 }
 .mlista .ml { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px } .mlista .ml span { font-size: 11px; background: var(--bg); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px }
 @media (max-width: 960px) { .mapa-grid { grid-template-columns: minmax(0, 1fr) } }
 .qcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px }
@@ -706,10 +706,12 @@ $('fPron').addEventListener('change', e => { subir(e.target.files); e.target.val
 
 /* ---------- arrastrar y soltar ---------- */
 let dragN = 0;
-addEventListener('dragenter', e => { e.preventDefault(); dragN++; $('drop').hidden = false; });
-addEventListener('dragleave', e => { e.preventDefault(); if (--dragN <= 0) { dragN = 0; $('drop').hidden = true; } });
-addEventListener('dragover', e => e.preventDefault());
+const conArchivos = e => [...(e.dataTransfer?.types || [])].includes('Files');
+addEventListener('dragenter', e => { if (!conArchivos(e)) return; e.preventDefault(); dragN++; $('drop').hidden = false; });
+addEventListener('dragleave', e => { if (!conArchivos(e)) return; e.preventDefault(); if (--dragN <= 0) { dragN = 0; $('drop').hidden = true; } });
+addEventListener('dragover', e => { if (conArchivos(e)) e.preventDefault(); });
 addEventListener('drop', e => {
+  if (!conArchivos(e)) return;
   e.preventDefault(); dragN = 0; $('drop').hidden = true;
   subir(e.dataTransfer.files);
 });
@@ -1447,7 +1449,7 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610202300"></script>
-<script type="module" src="proyeccion.js?v=202610202300"></script>
+<script src="mapa.js?v=202610202330"></script>
+<script type="module" src="proyeccion.js?v=202610202330"></script>
 
 </body></html>

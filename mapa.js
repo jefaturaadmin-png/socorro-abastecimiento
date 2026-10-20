@@ -249,13 +249,13 @@
     if (!arr.mov && Math.hypot(e.clientX - arr.x, e.clientY - arr.y) < 6) return;
     arr.mov = true; e.preventDefault();
     const n = (M.asig?.get(arr.id) || []).length, d = bajo(e);
-    document.querySelectorAll('#mPlano .drop').forEach(x => x.classList.remove('drop')); if (d && d.dataset.a !== arr.id) d.classList.add('drop');
+    document.querySelectorAll('#mPlano .mdrop').forEach(x => x.classList.remove('mdrop')); if (d && d.dataset.a !== arr.id) d.classList.add('mdrop');
     fantasma.hidden = false; fantasma.style.left = e.clientX + 14 + 'px'; fantasma.style.top = e.clientY + 14 + 'px';
     fantasma.textContent = `${anaqDe.get(arr.id).t} (${n} lab.)${d && d.dataset.a !== arr.id ? ' → ' + anaqDe.get(d.dataset.a).t : ''}`;
   });
   const terminar = e => {
     if (!arr) return;
-    const a = arr; arr = null; fantasma.hidden = true; document.querySelectorAll('#mPlano .drop').forEach(x => x.classList.remove('drop'));
+    const a = arr; arr = null; fantasma.hidden = true; document.querySelectorAll('#mPlano .mdrop').forEach(x => x.classList.remove('mdrop'));
     if (!a.mov) return;
     sinClic = true; const d = e && bajo(e); if (!d || d.dataset.a === a.id || !M.cfg) return;
     const de = M.asig?.get(a.id) || [], al = M.asig?.get(d.dataset.a) || [];
@@ -296,8 +296,8 @@
   let arrastrado = null;
   document.addEventListener('dragstart', e => { const c = e.target.closest?.('#mLista [data-lab], #mSin [data-lab]'); if (!c) return; arrastrado = { lab: c.dataset.lab, de: c.closest('li[data-a]')?.dataset.a }; e.dataTransfer.setData('text/plain', arrastrado.lab); e.dataTransfer.effectAllowed = 'copyMove'; });
   const destino = e => e.target.closest?.('#mLista li[data-a], #mPlano [data-a], #mSinCard');
-  document.addEventListener('dragover', e => { const d = destino(e); if (d && arrastrado) { e.preventDefault(); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); d.classList.add('drop'); } });
-  document.addEventListener('drop', e => { const d = destino(e); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); if (d && arrastrado && d.id === 'mSinCard') { e.preventDefault(); if (arrastrado.de) fijar(arrastrado.lab, null, 'quitar', arrastrado.de); }
+  document.addEventListener('dragover', e => { const d = destino(e); if (d && arrastrado) { e.preventDefault(); document.querySelectorAll('.mdrop').forEach(x => x.classList.remove('mdrop')); d.classList.add('mdrop'); } });
+  document.addEventListener('drop', e => { const d = destino(e); document.querySelectorAll('.mdrop').forEach(x => x.classList.remove('mdrop')); if (d && arrastrado && d.id === 'mSinCard') { e.preventDefault(); if (arrastrado.de) fijar(arrastrado.lab, null, 'quitar', arrastrado.de); }
     else if (d && arrastrado && d.dataset.a !== arrastrado.de) { e.preventDefault(); fijar(arrastrado.lab, d.dataset.a, e.ctrlKey || e.metaKey || e.altKey ? 'agregar' : 'mover', arrastrado.de); } arrastrado = null; });
-  document.addEventListener('dragend', () => { arrastrado = null; document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); });
+  document.addEventListener('dragend', () => { arrastrado = null; document.querySelectorAll('.mdrop').forEach(x => x.classList.remove('mdrop')); });
 })();
