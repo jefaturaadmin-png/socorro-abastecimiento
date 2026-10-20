@@ -106,7 +106,7 @@
   function pintar() {
     if (!S.P || S.ejemplo && !S.P.p.length) return;
     cargarCfg();
-    const { labs, asig } = distribucion(), P = PISOS[M.piso];
+    const { labs, asig } = distribucion(), P = PISOS[M.piso]; M.asig = asig;
     const val = id => (asig.get(id) || []).reduce((a, x) => a + (M.medida === 'mov' ? x.mov : x.st), 0);
     const vals = P.anaqueles.map(a => val(a.id)), max = Math.max(1e-9, ...vals);
     document.querySelectorAll('#mPiso [data-p]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.p === M.piso));
@@ -146,7 +146,38 @@
 
   $('mPiso').addEventListener('click', e => { const b = e.target.closest('[data-p]'); if (b) { M.piso = +b.dataset.p; M.sel = null; pintar(); } });
   $('mMed').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (b) { M.medida = b.dataset.m; pintar(); } });
-  $('mPlano').addEventListener('click', e => { const r = e.target.closest('[data-a]'); M.sel = r && M.sel !== r.dataset.a ? r.dataset.a : null; pintar(); if (M.sel) $('mLista').querySelector('.sel')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); });
+  // arrastrar un cuadrado del plano sobre otro: sus laboratorios pasan a ese anaquel (si tenía, se intercambian)
+  let arr = null, sinClic = false;
+  const fantasma = document.createElement('div'); fantasma.className = 'mfantasma'; fantasma.hidden = true; document.body.append(fantasma);
+  const bajo = e => document.elementFromPoint(e.clientX, e.clientY)?.closest?.('#mPlano [data-a]');
+  $('mPlano').addEventListener('pointerdown', e => {
+    const r = e.target.closest('[data-a]'); if (!r || e.button) return;
+    arr = { id: r.dataset.a, x: e.clientX, y: e.clientY, mov: false }; $('mPlano').setPointerCapture(e.pointerId);
+  });
+  $('mPlano').addEventListener('pointermove', e => {
+    if (!arr) return;
+    if (!arr.mov && Math.hypot(e.clientX - arr.x, e.clientY - arr.y) < 6) return;
+    arr.mov = true; e.preventDefault();
+    const n = (M.asig?.get(arr.id) || []).length, d = bajo(e);
+    document.querySelectorAll('#mPlano .drop').forEach(x => x.classList.remove('drop')); if (d && d.dataset.a !== arr.id) d.classList.add('drop');
+    fantasma.hidden = false; fantasma.style.left = e.clientX + 14 + 'px'; fantasma.style.top = e.clientY + 14 + 'px';
+    fantasma.textContent = `${anaqDe.get(arr.id).t} (${n} lab.)${d && d.dataset.a !== arr.id ? ' → ' + anaqDe.get(d.dataset.a).t : ''}`;
+  });
+  const terminar = e => {
+    if (!arr) return;
+    const a = arr; arr = null; fantasma.hidden = true; document.querySelectorAll('#mPlano .drop').forEach(x => x.classList.remove('drop'));
+    if (!a.mov) return;
+    sinClic = true; const d = e && bajo(e); if (!d || d.dataset.a === a.id || !M.cfg) return;
+    const de = M.asig?.get(a.id) || [], al = M.asig?.get(d.dataset.a) || [];
+    if (!de.length) return toast('Ese anaquel está vacío');
+    for (const x of de) { M.cfg.fijo[x.lab] = d.dataset.a; M.cfg.zona[x.lab] = zonaAnaq(d.dataset.a); }
+    for (const x of al) { M.cfg.fijo[x.lab] = a.id; M.cfg.zona[x.lab] = zonaAnaq(a.id); }
+    guardar(); M.sel = d.dataset.a; pintar();
+    toast(`${anaqDe.get(a.id).t} → ${anaqDe.get(d.dataset.a).t}: ${de.length} laboratorio(s)${al.length ? `; los ${al.length} de ${anaqDe.get(d.dataset.a).t} pasaron a ${anaqDe.get(a.id).t}` : ''}`);
+  };
+  $('mPlano').addEventListener('pointerup', terminar);
+  $('mPlano').addEventListener('pointercancel', () => terminar(null));
+  $('mPlano').addEventListener('click', e => { if (sinClic) { sinClic = false; return; } const r = e.target.closest('[data-a]'); M.sel = r && M.sel !== r.dataset.a ? r.dataset.a : null; pintar(); if (M.sel) $('mLista').querySelector('.sel')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); });
   $('mLista').addEventListener('click', e => { if (e.target.closest('input')) return; const li = e.target.closest('[data-a]'); if (li) { M.sel = M.sel === li.dataset.a ? null : li.dataset.a; pintar(); } });
   $('mLista').addEventListener('input', e => { const i = e.target.closest('[data-resp]'); if (!i || !M.cfg) return; M.cfg.resp[i.dataset.resp] = i.value; guardar(); });
   $('mZonas').addEventListener('change', e => { const s = e.target.closest('[data-lab]'); if (!s || !M.cfg) return; M.cfg.zona[s.dataset.lab] = s.value; guardar(); pintar(); });
