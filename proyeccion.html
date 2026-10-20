@@ -125,6 +125,10 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .tley b { font-family: var(--f-mono); font-size: 22px; font-weight: 600 }
 .tley small { color: var(--muted); font-size: 13px; min-width: 90px; text-align: right }
 @media (max-width: 760px) { .tipos-in { grid-template-columns: minmax(0, 1fr) } .dona-g { height: 260px } }
+.fechero { display: flex; flex-wrap: wrap; align-items: center; gap: 8px }
+.fechero .dur { font-family: var(--f-mono); color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; font-size: 13px }
+tr.avance td { background: color-mix(in srgb, var(--s2) 8%, transparent) }
+td.av b { color: var(--s2) } td.av small, tr.avance small { display: block; color: var(--muted); font-size: 11px; font-family: inherit; white-space: nowrap }
 .qcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px }
 .qcard { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto auto; column-gap: 12px; align-items: center; text-align: left; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; color: var(--fg); font: inherit }
 .qcard i { grid-row: 1 / span 3; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--proj-soft); color: var(--proj) }
@@ -247,7 +251,9 @@ main.sin-sesion > section { display: none !important }
       <div class="chartbox"><canvas id="fpChart" aria-label="Demanda real y pronósticos"></canvas></div>
     </div>
     <div class="card">
-      <div class="ch"><h2>Reparto por farmacia</h2><div class="field"><span>Repartir para (días + seguridad)</span><div class="seg" id="fpPres" role="group" aria-label="Días a cubrir"></div></div></div>
+      <div class="ch"><h2>Reparto por farmacia</h2><div class="controls">
+        <div class="field"><span>Base para proyectar</span><div class="fechero"><select id="fpDesde" aria-label="Desde"></select><span class="z">→</span><span id="fpHasta"></span><b class="dur" id="fpDur"></b><div class="seg" id="fpRng" role="group" aria-label="Periodo rápido"></div></div></div>
+        <div class="field"><span>Repartir para (días + seguridad)</span><div class="seg" id="fpPres" role="group" aria-label="Días a cubrir"></div></div></div></div>
       <div class="scroll"><table class="cells" id="fpFarm"></table></div>
     </div>
     <div class="card" id="fpFCard" hidden>
@@ -732,7 +738,7 @@ function render() {
   if (v === 'pron') pintarPron(); else if (v === 'fichaP') pintarFichaP(); else if (v === 'rep') pintarRep();
   else if (v === 'ped') pintarPed(); else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM();
 }
-function abrirFichaP(c, origen) { S.cur = c; S.origen = origen; S.fpFarm = origen === 'rep' ? S.farm : ''; S.vista = 'fichaP'; render(); scrollTo({ top: 0 }); }
+function abrirFichaP(c, origen) { S.fpDesde = ''; S.cur = c; S.origen = origen; S.fpFarm = origen === 'rep' ? S.farm : ''; S.vista = 'fichaP'; render(); scrollTo({ top: 0 }); }
 
 /* ---------- filtro por laboratorio (del catálogo de productos de la página) ---------- */
 const LAB = new Map();
@@ -822,33 +828,77 @@ $('pTabla').addEventListener('click', e => {
 $('pTabla').addEventListener('change', e => { const s = e.target.closest('select[data-sel]'); if (s) elegir(s.dataset.sel, s.value); });
 
 /* ---------- FICHA PRONÓSTICO ---------- */
+// Fecha (AAAA-MM-DD) del índice de día de las ventas por día (0 = el más antiguo de la ventana de 90 días).
+const fechaDia = i => { const d = new Date(S.P.dias.hasta + 'T12:00:00'); d.setDate(d.getDate() - (S.P.dias.n - 1 - i)); return d.toISOString().slice(0, 10); };
+// Avance del mes en curso (el del corte): ventas desde el día 1 hasta hoy, de una farmacia o de todas.
+function avance(p, f) {
+  const o = S.P; if (!o.dias) return null;
+  const mes = o.dias.hasta.slice(0, 7); if (!o.fm.includes(mes)) return null;
+  if (o.dias.primero != null && fechaDia(o.dias.primero) > mes + '-01') return null; // el kardex no cubre el mes desde el día 1
+  let v = 0;
+  for (const fa of f ? [f] : Object.keys(p.dv || {})) for (const [i, q] of (p.dv?.[fa] || [])) if (fechaDia(i).startsWith(mes)) v += q;
+  return { mes, v: Math.max(0, v), dia: +o.dias.hasta.slice(8, 10), dm: diasMes(mes) };
+}
+const durMeses = n => n < 12 ? `${n}m` : `${Math.floor(n / 12)}A${n % 12 ? ' ' + (n % 12) + 'm' : ''}`;
+// Base para proyectar: el producto recalculado solo con la historia desde S.fpDesde (no se guarda; solo en la ficha).
+function baseLocal(p) {
+  const o = S.P, d = S.fpDesde, s = d ? o.meses.indexOf(d) : -1;
+  if (s <= 0 || !window.pronosticar) return p;
+  const h = p.h.slice(s), ms = o.meses.slice(s), apto = p.a && h.filter(v => v != null).length >= 24, r1 = v => Math.round(Math.max(0, v) * 10) / 10;
+  const rf = window.pronosticar(h, ms, o.fm, apto), f = {}, b = {};
+  for (const m in rf) if (rf[m]) { f[m] = rf[m].map(r1); b[m] = []; }
+  for (const mb of o.bm) {
+    const i = ms.indexOf(mb), r = i >= 3 ? window.pronosticar(h.slice(0, i), ms.slice(0, i), [mb], apto) : {};
+    for (const m in f) b[m].push(r[m] ? r1(r[m][0]) : null);
+  }
+  return { ...p, f, b, local: true };
+}
+// errores (WAPE y sesgo) de cada método con lo real de los meses de prueba
+function errores(p) {
+  const o = S.P, real = o.bm.map(m => p.h[o.meses.indexOf(m)]), sr = sum(real.map(v => v || 0)), met = {};
+  for (const m in p.f) {
+    const b = p.b?.[m]; if (!b) continue;
+    let ae = 0, e = 0, ok = true;
+    b.forEach((v, i) => { if (v == null || real[i] == null) { ok = false; return; } ae += Math.abs(v - real[i]); e += v - real[i]; });
+    met[m] = { wape: ok && sr > 0 ? ae / sr : null, sesgo: ok && sr > 0 ? e / sr : null };
+  }
+  let best = null; for (const [m, x] of Object.entries(met)) if (x.wape != null && (best == null || x.wape < met[best].wape)) best = m;
+  return { real, met, best: best || Object.keys(met)[0] || null };
+}
 function pintarFichaP() {
-  const o = S.P, p = S.idx.get(S.cur); if (!p) { S.vista = 'pron'; return render(); }
-  const k = S.calc.get(p.c), sel = elegido(p.c), esMan = manual(p.c), conv = v => v == null ? null : soles() ? v * p.k : v;
+  const o = S.P, p0 = S.idx.get(S.cur); if (!p0) { S.vista = 'pron'; return render(); }
+  const p = baseLocal(p0), k = errores(p), esMan = manual(p.c);
+  let sel = elegido(p.c); if (!p.f[sel]) sel = k.best;
+  // si el método elegido no existe con esta base, el reparto usa el de menor error
+  if (p.local) for (const m of (window.METODOS || [])) if (!p.f[m] && p.f[sel]) p.f[m] = p.f[sel];
+  const conv = v => v == null ? null : soles() ? v * p.k : v, nE = v => fmtE(p, conv(v));
   $('fpEyebrow').innerHTML = `Código <code>${esc(p.c)}</code> · ${p.a ? 'apto para SARIMA' : 'baja rotación: solo métodos simples'}`;
   $('fpTitulo').textContent = p.n;
-  $('fpNota').textContent = sel ? `Usando ${sel}${esMan ? ' (elegido por ti)' : ' (automático: menor error)'}. Valores ${soles() ? 'en soles' : 'en cajas'}.`
-    : 'Sin ventas en el historial guardado: no hay pronóstico.';
+  $('fpNota').textContent = sel ? '' : 'Sin ventas en el historial guardado: no hay pronóstico.';
+  const av = avance(p), pron0 = sel ? p.f[sel]?.[0] : null;
   const mets = Object.keys(k.met).sort((a, b) => (k.met[a].wape ?? 9) - (k.met[b].wape ?? 9));
   let h = `<thead><tr><th class="c1 solo">Método</th><th>WAPE</th><th>Sesgo</th>${o.bm.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}">${et(m)}</th>`).join('')}${o.fm.map((m, i) => `<th class="pj ${i === 0 ? 'sep' : ''}">${et(m)}</th>`).join('')}<th></th></tr></thead><tbody>`;
-  h += `<tr><td class="c1 solo"><b>Demanda real</b></td><td></td><td></td>${k.real.map((v, i) => `<td class="n big ${i === 0 ? 'sep' : ''}">${fmt(conv(v))}</td>`).join('')}${o.fm.map((_, i) => `<td class="n z ${i === 0 ? 'sep' : ''}">·</td>`).join('')}<td></td></tr>`;
+  h += `<tr><td class="c1 solo"><b>Demanda real</b></td><td></td><td></td>${k.real.map((v, i) => `<td class="n big ${i === 0 ? 'sep' : ''}">${nE(v)}</td>`).join('')}${o.fm.map((_, i) => `<td class="n z ${i === 0 ? 'sep' : ''}">·</td>`).join('')}<td></td></tr>`;
+  if (av) h += `<tr class="avance"><td class="c1 solo"><b>Avance ${et(av.mes)}</b> <small>(al ${av.dia})</small></td><td></td><td></td>${o.bm.map((_, i) => `<td class="n z ${i === 0 ? 'sep' : ''}">·</td>`).join('')}${o.fm.map((m, i) => m === av.mes
+    ? `<td class="n av ${i === 0 ? 'sep' : ''}"><b>${nE(av.v)}</b>${pron0 ? `<small>${pct(av.v / pron0)} del mes · esperado a la fecha ${nE(pron0 * av.dia / av.dm)}</small>` : ''}</td>` : `<td class="n z ${i === 0 ? 'sep' : ''}">·</td>`).join('')}<td></td></tr>`;
   const otros = mets.filter(m => m !== sel);
   for (const m of [sel, ...(S.fpTodos ? otros : [])].filter(m => m && k.met[m])) {
     const x = k.met[m], es = m === sel;
     h += `<tr ${es ? 'style="outline:2px solid var(--accent);outline-offset:-2px"' : ''}><td class="c1 solo">${esc(m)}${m === k.best ? '<span class="tag auto">menor error</span>' : ''}${es ? '<span class="tag man">en uso</span>' : ''}</td>
       <td class="n ${m === k.best ? 'pos' : ''}"><b>${pct(x.wape)}</b></td><td class="n ${x.sesgo > 0 ? 'neg' : 'pos'}">${pctS(x.sesgo)}</td>
-      ${p.b[m].map((v, i) => `<td class="n ${i === 0 ? 'sep' : ''}">${fmt(conv(v))}</td>`).join('')}
-      ${p.f[m].map((v, i) => `<td class="n pj ${es ? 'big' : ''} ${i === 0 ? 'sep' : ''}">${fmt(conv(v))}</td>`).join('')}
-      <td>${es ? '' : `<button class="btn sm" data-usar="${esc(m)}">Usar</button>`}</td></tr>`;
+      ${p.b[m].map((v, i) => `<td class="n ${i === 0 ? 'sep' : ''}">${nE(v)}</td>`).join('')}
+      ${p.f[m].map((v, i) => `<td class="n pj ${es ? 'big' : ''} ${i === 0 ? 'sep' : ''}">${nE(v)}</td>`).join('')}
+      <td>${es || p.local ? '' : `<button class="btn sm" data-usar="${esc(m)}">Usar</button>`}</td></tr>`;
   }
   if (otros.length) h += `<tr><td class="c1 solo" colspan="${o.bm.length + o.fm.length + 4}"><button type="button" class="btn sm" data-fptodos>${S.fpTodos ? '▴ Ocultar los otros métodos' : `▾ Ver los otros ${otros.length} métodos`}</button></td></tr>`;
   h += `</tbody>`;
-  $('fpTabla').innerHTML = h + (esMan ? `<tfoot><tr><td class="c1 solo" colspan="${o.bm.length + o.fm.length + 4}"><button class="btn sm" data-usar="auto">Volver a automático</button></td></tr></tfoot>` : '');
+  $('fpTabla').innerHTML = h + (esMan && !p.local ? `<tfoot><tr><td class="c1 solo" colspan="${o.bm.length + o.fm.length + 4}"><button class="btn sm" data-usar="auto">Volver a automático</button></td></tr></tfoot>` : '');
 
-  // gráfico
+  // gráfico: real, avance del mes (otro color) y pronósticos
   const desde = Math.max(0, o.meses.length - 18), lab = [...o.meses.slice(desde), ...o.fm];
   const nb = o.meses.length - desde, pal = ['--s2','--s3','--s4','--s5','--s6','--s7','--s8','--s1'].map(css);
   const ds = [{ type: 'bar', label: 'Demanda real', data: [...p.h.slice(desde).map(conv), ...o.fm.map(() => null)], backgroundColor: color(css('--muted'), .35), borderRadius: 2, order: 9 }];
+  if (av) ds.push({ type: 'bar', label: `Avance ${et(av.mes)} (al ${av.dia})`, data: lab.map(m => m === av.mes ? conv(av.v) : null), backgroundColor: css('--s2'), borderRadius: 2, order: 8 });
   mets.forEach((m, i) => {
     const off = nb - o.bm.length;
     const data = lab.map((_, j) => j >= off && j < nb ? conv(p.b[m][j - off]) : j >= nb ? conv(p.f[m][j - nb]) : null);
@@ -856,48 +906,64 @@ function pintarFichaP() {
     ds.push({ type: 'line', label: corto(m), data, borderColor: es ? css('--accent') : pal[i % pal.length], backgroundColor: es ? css('--accent') : pal[i % pal.length],
       borderWidth: es ? 3 : 1.5, pointRadius: es ? 3 : 0, tension: .2, hidden: !es && i > 2, order: es ? 0 : 1 });
   });
-  dibujar('fpChart', { data: { labels: lab.map(et), datasets: ds }, options: opcionesLinea() });
+  dibujar('fpChart', { data: { labels: lab.map(et), datasets: ds }, options: opcionesLinea(v => fmtE(p, v)) });
 
-  // reparto por farmacia
-  const obj = S.mesObj, kObj = o.fm.indexOf(obj);
+  // base para proyectar (fechero) y reparto por farmacia
+  const ult = o.meses[o.meses.length - 1], ini = S.fpDesde && o.meses.includes(S.fpDesde) ? S.fpDesde : o.meses[0];
+  const nMeses = o.meses.length - o.meses.indexOf(ini);
+  $('fpDesde').innerHTML = o.meses.slice(0, -2).map(m => `<option value="${m}" ${m === ini ? 'selected' : ''}>${etL(m)}</option>`).join('');
+  $('fpHasta').textContent = etL(ult); $('fpDur').textContent = durMeses(nMeses);
+  $('fpRng').innerHTML = [[3, '3m'], [6, '6m'], [12, '1A'], [24, '2A'], [0, 'Todo']].map(([n, t]) => `<button type="button" data-n="${n}" aria-pressed="${n ? nMeses === n : ini === o.meses[0]}">${t}</button>`).join('');
+  const obj = S.mesObj;
   $('fpPres').innerHTML = [[7, 7], [15, 15], [30, 30]].map(([d, sg]) => `<button type="button" data-d="${d}" data-s="${sg}" aria-pressed="${S.cob === d && S.seg === sg}">${d} + ${sg}</button>`).join('');
   let hf = `<thead><tr><th class="c1 solo">Farmacia</th><th>Participación</th><th>Stock actual</th><th class="pj">Pronóstico ${et(obj)}</th><th class="tot">Entrega</th></tr></thead><tbody>`;
   const filas = o.farmacias.map(f => ({ f, s: p.s?.[f] || 0, x: plan(p, f, obj) })).filter(r => r.s || r.x.stock).sort((a, b) => b.s - a.s);
-  for (const r of filas) hf += `<tr class="click" tabindex="0" data-farm="${esc(r.f)}" ${r.f === S.fpFarm ? 'style="outline:2px solid var(--accent);outline-offset:-2px"' : ''}><td class="c1 solo">${esc(r.f)}</td><td class="n">${pct(r.s)}</td><td class="n">${fmtS(p, conv(r.x.stock))}</td><td class="n pj">${fmt(conv(r.x.pron))}</td><td class="n tot ent">${r.x.entrega ? fmt(conv(r.x.entrega)) : '·'}</td></tr>`;
+  for (const r of filas) hf += `<tr class="click" tabindex="0" data-farm="${esc(r.f)}" ${r.f === S.fpFarm ? 'style="outline:2px solid var(--accent);outline-offset:-2px"' : ''}><td class="c1 solo">${esc(r.f)}</td><td class="n">${pct(r.s)}</td><td class="n">${fmtS(p, conv(r.x.stock))}</td><td class="n pj">${nE(r.x.pron)}</td><td class="n tot ent">${r.x.entrega ? fmtS(p, conv(r.x.entrega)) : '·'}</td></tr>`;
   const te = sum(filas.map(r => r.x.entrega));
-  hf += `</tbody><tfoot><tr><td class="c1 solo">Total farmacias · stock droguería ${fmtS(p, conv(p.sd || 0))}</td><td></td><td class="n">${fmtS(p, conv(sum(filas.map(r => r.x.stock))))}</td><td class="n">${fmt(conv(sum(filas.map(r => r.x.pron))))}</td><td class="n tot">${fmt(conv(te))}</td></tr></tfoot>`;
+  hf += `</tbody><tfoot><tr><td class="c1 solo">Total farmacias · stock droguería ${fmtS(p, conv(p.sd || 0))}</td><td></td><td class="n">${fmtS(p, conv(sum(filas.map(r => r.x.stock))))}</td><td class="n">${nE(sum(filas.map(r => r.x.pron)))}</td><td class="n tot">${fmtS(p, conv(te))}</td></tr></tfoot>`;
   $('fpFarm').innerHTML = hf;
-  pintarFarm(p);
+  pintarFarm(p, sel);
 }
+$('fpDesde').addEventListener('change', e => { S.fpDesde = e.target.value; pintarFichaP(); });
+$('fpRng').addEventListener('click', e => {
+  const b = e.target.closest('[data-n]'); if (!b) return;
+  const ms = S.P.meses, n = +b.dataset.n; S.fpDesde = n ? ms[Math.max(0, ms.length - n)] : ''; pintarFichaP();
+});
 
-/* proyección de una farmacia dentro de la ficha */
-function pintarFarm(p) {
+/* proyección de una farmacia: de enero a diciembre del año en curso, comparada con los años anteriores */
+function pintarFarm(p, m) {
   const card = $('fpFCard'), f = S.fpFarm;
   card.hidden = !f; if (!f) return;
-  const o = S.P, sh = p.s?.[f] || 0, m = elegido(p.c), conv = v => v == null ? null : soles() ? v * p.k : v;
-  const hm = o.hfm || [], hv = p.hf?.[f] || null;
-  const pasados = hm.length ? hm : o.bm, cols = [...pasados, ...o.fm];
+  const o = S.P, sh = p.s?.[f] || 0, conv = v => v == null ? null : soles() ? v * p.k : v, nE = v => fmtE(p, conv(v));
+  const hm = o.hfm || [], hv = p.hf?.[f] || null, corteMes = o.corte.slice(0, 7);
   const real = mes => { const i = hm.indexOf(mes); return hv && i >= 0 ? hv[i] : null; };
-  const pr = mes => { let j = o.bm.indexOf(mes); if (j >= 0) return p.b[m]?.[j] * sh; j = o.fm.indexOf(mes); return j >= 0 ? p.f[m]?.[j] * sh : null; };
-  let ae = 0, sr = 0; for (const mes of o.bm) { const r = real(mes), q = pr(mes); if (r != null && q != null) { ae += Math.abs(q - r); sr += r; } }
-  const st = p.st?.[f] || 0, corteMes = o.corte.slice(0, 7);
-  $('fpFH2').textContent = 'Proyección de ' + f;
-  $('fpFNota').textContent = `Participación ${pct(sh)} · stock actual ${fmtS(p, conv(st))} · método ${m}` + (hv ? ` · error en esta farmacia (abr–sep): ${sr ? pct(ae / sr) : '–'}` : '') + `. Valores ${soles() ? 'en soles' : 'en cajas'}.`;
+  const pr = mes => { if (!m) return null; let j = o.bm.indexOf(mes), v = j >= 0 ? p.b[m]?.[j] : (j = o.fm.indexOf(mes)) >= 0 ? p.f[m]?.[j] : null; return v == null ? null : v * sh; };
+  const av = avance(p, f), Y = +(av?.mes || o.fm[0]).slice(0, 4);
+  const cols = []; for (let x = `${Y}-01`; x <= o.fm[o.fm.length - 1]; x = addM(x, 1)) cols.push(x);
+  $('fpFH2').textContent = 'Proyección de ' + f; $('fpFNota').textContent = '';
   const esF = mes => o.fm.includes(mes);
-  let h = `<thead><tr><th class="c1 solo">Concepto</th>${cols.map(mes => `<th class="${esF(mes) ? 'pj' : ''}">${et(mes)}${mes === corteMes ? '*' : ''}</th>`).join('')}</tr></thead><tbody>`;
+  let h = `<thead><tr><th class="c1 solo">Concepto</th>${cols.map(mes => `<th class="${esF(mes) ? 'pj' : ''}">${et(mes)}</th>`).join('')}</tr></thead><tbody>`;
   if (hv) {
     const rv = cols.map(mes => conv(real(mes))), max = Math.max(0, ...rv.filter(v => v != null));
-    h += `<tr><td class="c1 solo"><b>Demanda real</b></td>${rv.map((v, i) => v == null ? `<td class="n ${esF(cols[i]) ? 'pj' : 'z'}">${esF(cols[i]) ? '' : '–'}</td>` : celda(v, max, 'big')).join('')}</tr>`;
-    h += `<tr><td class="c1 solo">Mismo mes año anterior</td>${cols.map(mes => { const v = conv(real(addM(mes, -12))); return v == null ? '<td class="n z">–</td>' : `<td class="n">${fmt(v)}</td>`; }).join('')}</tr>`;
+    h += `<tr><td class="c1 solo"><b>Demanda real ${Y}</b></td>${cols.map((mes, i) => av && mes === av.mes ? `<td class="n av"><b>${nE(av.v)}</b><small>al ${av.dia}</small></td>`
+      : rv[i] == null ? `<td class="n ${esF(mes) ? 'pj' : 'z'}">${esF(mes) ? '' : '–'}</td>` : celda(rv[i], max, 'big').replace(/>[^<]*<\/td>$/, `>${nE(real(mes))}</td>`)).join('')}</tr>`;
+    for (const k of [1, 2]) h += `<tr><td class="c1 solo">${Y - k}</td>${cols.map(mes => { const v = real(addM(mes, -12 * k)); return v == null ? '<td class="n z">–</td>' : `<td class="n">${nE(v)}</td>`; }).join('')}</tr>`;
   }
-  h += `<tr><td class="c1 solo"><b>Pronóstico</b></td>${cols.map(mes => { const v = pr(mes); return v == null ? '<td class="n z">·</td>' : `<td class="n pj ${esF(mes) ? 'big' : ''}">${fmt(conv(v))}</td>`; }).join('')}</tr>`;
-  h += `<tr><td class="c1 solo"><b>Entrega sugerida</b></td>${cols.map(mes => esF(mes) && mes > corteMes ? `<td class="n pj ent">${fmt(conv(plan(p, f, mes).entrega))}</td>` : '<td class="n z">·</td>').join('')}</tr></tbody>`;
-  $('fpFTabla').innerHTML = h + (hv ? '' : `<tfoot><tr><td class="c1 solo" colspan="${cols.length + 1}">Este archivo no trae la demanda histórica por farmacia. Actualízalo con la celda de Colab para ver lo real.</td></tr></tfoot>`);
-  dibujar('fpFChart', { data: { labels: cols.map(et), datasets: [
-    { type: 'bar', label: 'Demanda real', data: cols.map(mes => conv(real(mes))), backgroundColor: color(css('--muted'), .35), borderRadius: 2, order: 2 },
-    { type: 'bar', label: 'Mismo mes año anterior', data: cols.map(mes => conv(real(addM(mes, -12)))), backgroundColor: color(css('--s4'), .45), borderRadius: 2, order: 3, hidden: true },
-    { type: 'line', label: 'Pronóstico (' + corto(m) + ')', data: cols.map(mes => conv(pr(mes))), borderColor: css('--accent'), backgroundColor: css('--accent'), borderWidth: 2.5, pointRadius: 3, tension: .2, order: 0 }] },
-    options: opcionesLinea() });
+  h += `<tr><td class="c1 solo"><b>Pronóstico</b></td>${cols.map(mes => { const v = pr(mes); return v == null ? '<td class="n z">·</td>' : `<td class="n pj ${esF(mes) ? 'big' : ''}">${nE(v)}</td>`; }).join('')}</tr>`;
+  h += `<tr><td class="c1 solo"><b>Entrega sugerida</b></td>${cols.map(mes => esF(mes) && mes > corteMes ? `<td class="n pj ent">${fmtS(p, conv(plan(p, f, mes).entrega))}</td>` : '<td class="n z">·</td>').join('')}</tr></tbody>`;
+  $('fpFTabla').innerHTML = h + (hv ? '' : `<tfoot><tr><td class="c1 solo" colspan="${cols.length + 1}">No hay demanda histórica de esta farmacia en los datos guardados.</td></tr></tfoot>`);
+  // gráfico por año: enero a diciembre, años anteriores en líneas, el año en curso con su avance y el pronóstico punteado
+  const meses12 = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+  const anio = y => meses12.map(mm => conv(real(`${y}-${mm}`)));
+  const colA = { 2: css('--s8'), 1: css('--s3') }, ds = [];
+  for (const k of [2, 1]) if (anio(Y - k).some(v => v != null)) ds.push({ type: 'line', label: String(Y - k), data: anio(Y - k), borderColor: colA[k], backgroundColor: colA[k], borderWidth: 2, pointRadius: 2, tension: .25 });
+  const actual = anio(Y); if (av) actual[+av.mes.slice(5) - 1] = null;
+  const ultReal = actual.reduce((a, v, i) => v != null ? i : a, -1);
+  ds.push({ type: 'line', label: `${Y} real`, data: actual, borderColor: css('--fg'), backgroundColor: css('--fg'), borderWidth: 3, pointRadius: 3, tension: .25 });
+  const proy = meses12.map((mm, i) => { const mes = `${Y}-${mm}`; return i === ultReal ? actual[i] : esF(mes) ? conv(pr(mes)) : null; });
+  if (proy.some(v => v != null)) ds.push({ type: 'line', label: `${Y} pronóstico`, data: proy, borderColor: css('--accent'), backgroundColor: css('--accent'), borderWidth: 2.5, borderDash: [7, 5], pointRadius: 2, tension: .25 });
+  if (av) ds.push({ type: 'line', label: `Avance ${et(av.mes)} (al ${av.dia})`, data: meses12.map(mm => `${Y}-${mm}` === av.mes ? conv(av.v) : null), borderColor: css('--s2'), backgroundColor: css('--s2'), pointRadius: 7, pointStyle: 'rectRot', showLine: false });
+  dibujar('fpFChart', { data: { labels: meses12.map(mm => MESES[+mm - 1]), datasets: ds }, options: opcionesLinea(v => fmtE(p, v)) });
 }
 function elegirFarm(tr) {
   if (!tr) return;
@@ -913,13 +979,13 @@ $('fpFarm').addEventListener('click', e => elegirFarm(e.target.closest('tr[data-
 $('fpFarm').addEventListener('keydown', e => { if (e.key === 'Enter') elegirFarm(e.target.closest('tr[data-farm]')); });
 $('fpTabla').addEventListener('click', e => { if (e.target.closest('[data-fptodos]')) { S.fpTodos = !S.fpTodos; return pintarFichaP(); } const b = e.target.closest('[data-usar]'); if (b) elegir(S.cur, b.dataset.usar); });
 const color = (c, a) => `color-mix(in srgb, ${c} ${a * 100}%, transparent)`;
-function opcionesLinea() {
+function opcionesLinea(fv = fmt) {
   const muted = css('--muted'), line = css('--line'), fg = css('--fg');
   return { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
     scales: { x: { grid: { display: false }, ticks: { color: muted, font: { family: 'IBM Plex Mono' } } },
       y: { beginAtZero: true, grid: { color: line }, ticks: { color: muted, font: { family: 'IBM Plex Mono' }, callback: v => fmt(v) } } },
     plugins: { legend: { position: 'bottom', labels: { color: fg, boxWidth: 12, boxHeight: 12 } },
-      tooltip: { filter: it => it.raw != null, callbacks: { label: it => ` ${it.dataset.label}: ${fmt(it.raw)}` } } } };
+      tooltip: { filter: it => it.raw != null, callbacks: { label: it => ` ${it.dataset.label}: ${fv(it.raw)}` } } } };
 }
 function dibujar(id, cfg) { if (S.charts[id]) S.charts[id].destroy(); S.charts[id] = new Chart($(id), cfg); }
 
@@ -1310,6 +1376,6 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=202610200900"></script>
+<script type="module" src="proyeccion.js?v=202610201200"></script>
 
 </body></html>

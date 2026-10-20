@@ -351,7 +351,7 @@ async function leerBase() {
 }
 
 // Versión del cálculo: si cambia, los pronósticos guardados se rehacen solos al abrir la página.
-const CALC_VER = 4; window.CALC_VER = CALC_VER;
+const CALC_VER = 5; window.CALC_VER = CALC_VER;
 async function recalcular() {
   const metas = await mesesMeta(); if (!metas.size) return "";
   const maestro = await leerMaestro(), lista = [...metas.keys()].sort();
@@ -417,7 +417,7 @@ async function recalcular() {
   for (const st of Object.values(maestro.stock || {})) for (const alm in st) if (alm !== DROG && !ignorar(alm) && !farmVol.has(alm)) farmVol.set(alm, 0);
   for (const fs of vd.values()) for (const alm in fs) if (!farmVol.has(alm)) farmVol.set(alm, 0);
   const farmacias = [...farmVol.entries()].sort((a, b) => b[1] - a[1]).map(([f]) => f);
-  const bm = meses.slice(-6), fm = [0, 1, 2].map(j => sumaM(ultimoCompleto, j + 1)), hfm = meses.slice(-15);
+  const bm = meses.slice(-6), fm = [0, 1, 2].map(j => sumaM(ultimoCompleto, j + 1)), hfm = meses.slice(-36);
   msg("Calculando pronósticos…");
   const p = [];
   for (const [cod, pf] of dem) {
@@ -437,7 +437,7 @@ async function recalcular() {
     const tot3 = farmacias.reduce((a, fa) => a + Math.max(0, media((pf.get(fa) || []).slice(-3))), 0);
     const s = {}, st = {}, hf = {};
     for (const fa of farmacias) {
-      const v = pf.get(fa); if (v) { hf[fa] = v.slice(-15).map(r1); const x = Math.max(0, media(v.slice(-3))); if (tot3 && x) s[fa] = Math.round(x / tot3 * 1e4) / 1e4; }
+      const v = pf.get(fa); if (v) { hf[fa] = v.slice(-36).map(r1); const x = Math.max(0, media(v.slice(-3))); if (tot3 && x) s[fa] = Math.round(x / tot3 * 1e4) / 1e4; }
       const sk = maestro.stock[cod]?.[fa]; if (sk) st[fa] = sk[0]; else if (bp?.st?.[fa] != null) st[fa] = bp.st[fa];
     }
     const pr = maestro.prod[cod] || (bp ? [bp.n, bp.fr || 1, bp.k || 0] : [cod, 1, 0]);
@@ -465,6 +465,7 @@ async function recalcular() {
 }
 window.stockKardex = async () => { try { return await leerMaestro(); } catch (e) { console.warn(e); return null; } };
 window.recalcularPron = recalcular;
+window.pronosticar = pronosticar; window.METODOS = METODOS;
 
 /* ---------- bloqueos: lo bloqueado por una sucursal no se compra ni se le reparte ---------- */
 window.BLOQ = new Set();
