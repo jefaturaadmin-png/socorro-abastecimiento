@@ -109,6 +109,10 @@
     for (const x of todos) if (!x.fijo) for (const [id, l] of asig) if (l.includes(x)) x.en = id;
     return { labs: todos, asig };
   }
+  // iniciales del laboratorio: su código de 4 letras del catálogo (o las 4 primeras letras del nombre)
+  const COD = new Map();
+  fetch('catalogo.json').then(r => r.json()).then(c => { for (const x of c) if (x.ln && x.l) COD.set(String(x.ln).trim(), String(x.l).trim()); if (S.vista === 'mapa') pintar(); }).catch(() => {});
+  const inicial = lab => (COD.get(lab) || lab.replace(/^LAB(ORATORIO)?S?\.?\s+/, '').replace(/[^A-Z0-9]/g, '')).slice(0, 4);
   const calor = t => `hsl(${Math.round(120 * (1 - t))} 80% 48%)`;
 
   function pintar() {
@@ -124,8 +128,14 @@
       const n = (asig.get(a.id) || []).length, t = vals[i] / max, col = n ? calor(t) : '#cfc9c2', cx = a.x + a.w / 2, cy = a.y + a.h / 2;
       if (n) halos += `<ellipse cx="${cx}" cy="${cy}" rx="${a.w / 2 + 10 + 22 * t}" ry="${a.h / 2 + 10 + 22 * t}" fill="${col}" opacity="${.35 + .5 * t}"/>`;
       cajas += `<rect class="anaq ${M.sel === a.id ? 'sel' : ''} ${M.editar ? 'ed' : ''}" data-a="${a.id}" x="${a.x}" y="${a.y}" width="${a.w}" height="${a.h}" fill="${col}"><title>${esc(a.t)}: ${(asig.get(a.id) || []).map(x => x.lab).join(', ') || 'vacío'}</title></rect>`;
-      const vert = a.h > a.w * 1.5, top = (asig.get(a.id) || [])[0]?.lab || '', largo = Math.max(a.w, a.h);
-      textos += `<text class="nt" x="${cx}" y="${cy}" ${vert ? `transform="rotate(-90 ${cx} ${cy})"` : ''}>${esc(a.t)}${top && largo > 120 ? ' · ' + esc(top.slice(0, 24)) : ''}</text>`;
+      // nombre del anaquel y debajo las iniciales (4 letras) de sus laboratorios, en pequeño
+      const vert = a.h > a.w * 1.5, largo = vert ? a.h : a.w, corto = vert ? a.w : a.h, rot = vert ? `transform="rotate(-90 ${cx} ${cy})"` : '';
+      const ini = (asig.get(a.id) || []).map(x => inicial(x.lab)), porLinea = Math.max(1, Math.floor((largo - 2) / 15)), lineas = [];
+      for (let k = 0; k < ini.length; k += porLinea) lineas.push(ini.slice(k, k + porLinea).join(' '));
+      const caben = Math.max(1, Math.floor((corto - 8) / 4.6)), ver = lineas.slice(0, caben);
+      if (lineas.length > caben) ver[caben - 1] = ver[caben - 1].replace(/\S+$/, '…');
+      const y0 = cy - (ver.length ? (ver.length * 4.6) / 2 + 1 : 0);
+      textos += `<text class="nt" x="${cx}" y="${y0}" ${rot}>${esc(a.t)}</text>` + ver.map((l, k) => `<text class="ni" x="${cx}" y="${y0 + 5.5 + k * 4.6}" ${rot}>${esc(l)}</text>`).join('');
     });
     const [vx, vy, vw, vh] = P.vb.split(' ').map(Number);
     $('mPlano').innerHTML = `<svg viewBox="${P.vb}" role="img" aria-label="Mapa de calor del ${P.nombre}">
