@@ -80,7 +80,7 @@
   // los laboratorios que el usuario fijó a un anaquel van primero; el resto se reparte sumando a esa carga
   function repartir(labs, anaqs, val, fijos = new Map()) {
     const carga = new Map(anaqs.map(a => [a.id, 0])), de = new Map(anaqs.map(a => [a.id, []]));
-    for (const [id, l] of fijos) if (de.has(id)) for (const x of l) { de.get(id).push(x); carga.set(id, carga.get(id) + val(x)); }
+    for (const [id, l] of fijos) if (de.has(id)) for (const x of l) { de.get(id).push(x); carga.set(id, carga.get(id) + val(x) / x.k); }
     for (const x of [...labs].sort((a, b) => val(b) - val(a))) {
       let mejor = anaqs[0]; for (const a of anaqs) if (carga.get(a.id) < carga.get(mejor.id)) mejor = a;
       carga.set(mejor.id, carga.get(mejor.id) + val(x)); de.get(mejor.id).push(x);
@@ -88,10 +88,12 @@
     return de;
   }
   const TODOS = Object.values(PISOS).flatMap(P => P.anaqueles), anaqDe = new Map(TODOS.map(a => [a.id, a]));
+  const lista = v => (Array.isArray(v) ? v : v ? [v] : []).filter(id => anaqDe.has(id));
+  const fijosDe = lab => lista(M.cfg?.fijo?.[lab]);
   const zonaAnaq = id => id.startsWith('P') ? 'p2' : id.startsWith('Z') ? 'z2' : 'p1';
   function distribucion() {
     const todos = laboratorios(), asig = new Map(), v = x => x.mov || x.st * .1, fijos = new Map();
-    for (const x of todos) { const id = M.cfg?.fijo?.[x.lab]; if (id && anaqDe.has(id)) { x.fijo = id; (fijos.get(id) || fijos.set(id, []).get(id)).push(x); } }
+    for (const x of todos) { x.k = 1; const ids = fijosDe(x.lab); if (ids.length) { x.fijo = ids; x.k = ids.length; for (const id of ids) (fijos.get(id) || fijos.set(id, []).get(id)).push(x); } }
     const labs = todos.filter(x => !x.fijo);
     const p1 = PISOS[1], c = p1.cerca, d = a => Math.hypot(a.x + a.w / 2 - c[0], a.y + a.h / 2 - c[1]);
     const a1 = [...p1.anaqueles].sort((a, b) => d(a) - d(b));
@@ -107,7 +109,7 @@
     if (!S.P || S.ejemplo && !S.P.p.length) return;
     cargarCfg();
     const { labs, asig } = distribucion(), P = PISOS[M.piso]; M.asig = asig;
-    const val = id => (asig.get(id) || []).reduce((a, x) => a + (M.medida === 'mov' ? x.mov : x.st), 0);
+    const val = id => (asig.get(id) || []).reduce((a, x) => a + (M.medida === 'mov' ? x.mov : x.st) / x.k, 0);
     const vals = P.anaqueles.map(a => val(a.id)), max = Math.max(1e-9, ...vals);
     document.querySelectorAll('#mPiso [data-p]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.p === M.piso));
     document.querySelectorAll('#mMed [data-m]').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === M.medida));
@@ -134,13 +136,14 @@
     $('mLista').innerHTML = filas.map(({ a, v, l }) => `<li class="${M.sel === a.id ? 'sel' : ''}" data-a="${a.id}">
       <div class="mh"><i style="background:${l.length ? calor(v / max) : '#d9d4ce'}"></i><b>${esc(a.t)}</b><span>${nf0.format(v)} · ${Math.round(v / total * 100)}%</span></div>
       ${M.piso === 2 ? `<label class="resp">Responsable <input data-resp="${a.id}" value="${esc(M.cfg?.resp?.[a.id] || '')}" placeholder="Nombre"></label>` : ''}
-      <div class="ml">${l.map(x => `<span draggable="true" data-lab="${esc(x.lab)}" class="${x.fijo ? 'fijo' : ''}" title="${esc(x.lab)}: ${nf0.format(x.mov)} cajas/mes · stock ${nf0.format(x.st)} · ${x.n} productos${x.fijo ? ' · puesto por ti' : ''}. Arrástralo a otro anaquel.">${x.fijo ? '📌 ' : ''}${esc(x.lab)}${x.fijo ? `<button type="button" data-soltar="${esc(x.lab)}" title="Volver a automático">×</button>` : ''}</span>`).join('') || '<em>vacío · arrastra aquí un laboratorio</em>'}</div></li>`).join('');
+      <div class="ml">${l.map(x => `<span draggable="true" data-lab="${esc(x.lab)}" class="${x.fijo ? 'fijo' : ''}" title="${esc(x.lab)}: ${nf0.format(x.mov)} cajas/mes · stock ${nf0.format(x.st)} · ${x.n} productos${x.fijo ? ' · puesto por ti' : ''}. Arrástralo a otro anaquel (con Ctrl presionado lo agregas sin quitarlo de aquí).">${x.fijo ? '📌 ' : ''}${esc(x.lab)}${x.k > 1 ? ` <small>1/${x.k}</small>` : ''}${x.fijo ? `<button type="button" data-soltar="${esc(x.lab)}" data-de="${a.id}" title="Quitar de este anaquel">×</button>` : ''}</span>`).join('') || '<em>vacío · arrastra aquí un laboratorio</em>'}</div></li>`).join('');
     // zonas por laboratorio
     const q = ($('mq').value || '').trim().toUpperCase();
     $('mZonas').innerHTML = `<thead><tr><th class="c1 solo">Laboratorio</th><th>Movimiento</th><th>Stock droguería</th><th>% pesado</th><th>Zona</th><th>Anaquel</th></tr></thead><tbody>` +
       labs.filter(x => !q || x.lab.includes(q)).sort((a, b) => b.mov - a.mov).map(x => `<tr><td class="c1 solo">${esc(x.lab)}</td><td class="n">${nf0.format(x.mov)}</td><td class="n">${nf0.format(x.st)}</td><td class="n">${Math.round(x.pes / x.tot * 100)}%</td>
         <td><select data-lab="${esc(x.lab)}">${Object.entries(ZONAS).map(([k, t]) => `<option value="${k}" ${x.zona === k ? 'selected' : ''}>${t}${k === x.zAuto ? ' (sugerida)' : ''}</option>`).join('')}</select></td>
-        <td><select data-fijar="${esc(x.lab)}"><option value="">${x.fijo ? 'Automático' : `Automático (${esc(anaqDe.get(x.en)?.t || '—')})`}</option>${[1, 2].map(n => `<optgroup label="${PISOS[n].nombre}">${PISOS[n].anaqueles.map(a => `<option value="${a.id}" ${x.fijo === a.id ? 'selected' : ''}>${esc(a.t)}</option>`).join('')}</optgroup>`).join('')}</select></td></tr>`).join('') + '</tbody>';
+        <td class="fijos">${x.fijo ? x.fijo.map(id => `<span class="chip">${esc(anaqDe.get(id).t)}<button type="button" data-quitar="${esc(x.lab)}" data-de="${id}" title="Quitar">×</button></span>`).join('') : `<span class="z">Automático (${esc(anaqDe.get(x.en)?.t || '—')})</span>`}
+          <select data-fijar="${esc(x.lab)}" aria-label="Añadir anaquel"><option value="">＋ Añadir anaquel…</option>${[1, 2].map(n => `<optgroup label="${PISOS[n].nombre}">${PISOS[n].anaqueles.filter(a => !x.fijo?.includes(a.id)).map(a => `<option value="${a.id}">${esc(a.t)}</option>`).join('')}</optgroup>`).join('')}</select></td></tr>`).join('') + '</tbody>';
   }
   window.pintarMapa = pintar;
 
@@ -170,8 +173,9 @@
     sinClic = true; const d = e && bajo(e); if (!d || d.dataset.a === a.id || !M.cfg) return;
     const de = M.asig?.get(a.id) || [], al = M.asig?.get(d.dataset.a) || [];
     if (!de.length) return toast('Ese anaquel está vacío');
-    for (const x of de) { M.cfg.fijo[x.lab] = d.dataset.a; M.cfg.zona[x.lab] = zonaAnaq(d.dataset.a); }
-    for (const x of al) { M.cfg.fijo[x.lab] = a.id; M.cfg.zona[x.lab] = zonaAnaq(a.id); }
+    const cambiar = (x, de1, a1) => { const ids = fijosDe(x.lab); const n = ids.length ? ids.map(i => i === de1 ? a1 : i).filter((i, k, arr) => arr.indexOf(i) === k) : [a1]; M.cfg.fijo[x.lab] = n.length === 1 ? n[0] : n; M.cfg.zona[x.lab] = zonaAnaq(n[0]); };
+    for (const x of de) cambiar(x, a.id, d.dataset.a);
+    for (const x of al) if (!de.includes(x)) cambiar(x, d.dataset.a, a.id);
     guardar(); M.sel = d.dataset.a; pintar();
     toast(`${anaqDe.get(a.id).t} → ${anaqDe.get(d.dataset.a).t}: ${de.length} laboratorio(s)${al.length ? `; los ${al.length} de ${anaqDe.get(d.dataset.a).t} pasaron a ${anaqDe.get(a.id).t}` : ''}`);
   };
@@ -182,17 +186,24 @@
   $('mLista').addEventListener('input', e => { const i = e.target.closest('[data-resp]'); if (!i || !M.cfg) return; M.cfg.resp[i.dataset.resp] = i.value; guardar(); });
   $('mZonas').addEventListener('change', e => { const s = e.target.closest('[data-lab]'); if (!s || !M.cfg) return; M.cfg.zona[s.dataset.lab] = s.value; guardar(); pintar(); });
   $('mq').addEventListener('input', () => pintar());
-  function fijar(lab, id) {
+  // modo: 'mover' (de un anaquel a otro), 'agregar' (un anaquel más) o 'quitar' (de un anaquel)
+  function fijar(lab, id, modo = 'mover', de = null) {
     if (!M.cfg) return; M.cfg.fijo ??= {};
-    if (id) { M.cfg.fijo[lab] = id; M.cfg.zona[lab] = zonaAnaq(id); } else delete M.cfg.fijo[lab];
-    guardar(); pintar(); toast(id ? `${lab} → ${anaqDe.get(id).t}` : `${lab} vuelve a automático`);
+    let ids = fijosDe(lab);
+    if (modo === 'quitar') ids = ids.filter(x => x !== de);
+    else if (modo === 'agregar') { if (!ids.length && de) ids = [de]; if (!ids.includes(id)) ids.push(id); }
+    else ids = ids.includes(de) ? ids.map(x => x === de ? id : x).filter((x, i, a) => a.indexOf(x) === i) : [id];
+    if (ids.length) { M.cfg.fijo[lab] = ids.length === 1 ? ids[0] : ids; M.cfg.zona[lab] = zonaAnaq(ids[0]); } else delete M.cfg.fijo[lab];
+    guardar(); pintar();
+    toast(modo === 'quitar' ? (ids.length ? `${lab} sale de ${anaqDe.get(de).t}` : `${lab} vuelve a automático`) : `${lab} → ${ids.map(x => anaqDe.get(x).t).join(', ')}`);
   }
-  $('mZonas').addEventListener('change', e => { const s = e.target.closest('[data-fijar]'); if (s) fijar(s.dataset.fijar, s.value); });
-  $('mLista').addEventListener('click', e => { const b = e.target.closest('[data-soltar]'); if (b) { e.stopPropagation(); fijar(b.dataset.soltar, ''); } }, true);
+  $('mZonas').addEventListener('change', e => { const s = e.target.closest('[data-fijar]'); if (s && s.value) fijar(s.dataset.fijar, s.value, 'agregar'); });
+  $('mZonas').addEventListener('click', e => { const b = e.target.closest('[data-quitar]'); if (b) fijar(b.dataset.quitar, null, 'quitar', b.dataset.de); });
+  $('mLista').addEventListener('click', e => { const b = e.target.closest('[data-soltar]'); if (b) { e.stopPropagation(); fijar(b.dataset.soltar, null, 'quitar', b.dataset.de); } }, true);
   let arrastrado = null;
-  document.addEventListener('dragstart', e => { const c = e.target.closest?.('#mLista [data-lab]'); if (!c) return; arrastrado = c.dataset.lab; e.dataTransfer.setData('text/plain', arrastrado); e.dataTransfer.effectAllowed = 'move'; });
+  document.addEventListener('dragstart', e => { const c = e.target.closest?.('#mLista [data-lab]'); if (!c) return; arrastrado = { lab: c.dataset.lab, de: c.closest('li[data-a]')?.dataset.a }; e.dataTransfer.setData('text/plain', arrastrado.lab); e.dataTransfer.effectAllowed = 'copyMove'; });
   const destino = e => e.target.closest?.('#mLista li[data-a], #mPlano [data-a]');
   document.addEventListener('dragover', e => { const d = destino(e); if (d && arrastrado) { e.preventDefault(); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); d.classList.add('drop'); } });
-  document.addEventListener('drop', e => { const d = destino(e); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); if (d && arrastrado) { e.preventDefault(); fijar(arrastrado, d.dataset.a); } arrastrado = null; });
+  document.addEventListener('drop', e => { const d = destino(e); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); if (d && arrastrado && d.dataset.a !== arrastrado.de) { e.preventDefault(); fijar(arrastrado.lab, d.dataset.a, e.ctrlKey || e.metaKey || e.altKey ? 'agregar' : 'mover', arrastrado.de); } arrastrado = null; });
   document.addEventListener('dragend', () => { arrastrado = null; document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); });
 })();
