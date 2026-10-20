@@ -55,6 +55,7 @@
     M.cfg.zona ??= {}; M.cfg.resp ??= {}; M.cfg.fijo ??= {}; M.cargando = false;
     // el segundo piso por cuadrados se arma solo una vez (después se puede volver a armar con el botón)
     if (!M.cfg.armado2) { try { armarPiso2(true); } catch (e) { console.warn(e); } }
+    if (!M.cfg.vacio2) { refrescar(); vaciarPiso2(true); }
     pintar();
   }
   let tGuardar;
@@ -338,6 +339,18 @@
     M.cfg.fijo = {}; M.cfg.manual = true; M.sel = null; guardar(); pintar(); toast('Anaqueles vacíos: arrastra los laboratorios desde "Sin ubicar"');
   });
   $('mArmar2').addEventListener('click', () => armarPiso2());
+  // vaciar el segundo piso: sus cuadrados quedan sin laboratorios (lo del primer piso no se toca)
+  function vaciarPiso2(solo) {
+    if (!M.cfg || solo !== true && !confirm('¿Dejar vacíos todos los cuadrados del segundo piso? Sus laboratorios pasan a "Sin ubicar"; el primer piso no se toca.')) return;
+    const p2 = new Set(anaqs(2).map(a => a.id));
+    for (const [lab, v] of Object.entries(M.cfg.fijo || {})) {
+      const ids = (Array.isArray(v) ? v : [v]).filter(id => !p2.has(id));
+      if (ids.length) M.cfg.fijo[lab] = ids.length === 1 ? ids[0] : ids; else delete M.cfg.fijo[lab];
+    }
+    M.cfg.manual = true; M.cfg.vacio2 = true; M.sel = null; guardar();
+    if (solo !== true) { pintar(); toast('Segundo piso vacío: arrastra los laboratorios desde "Sin ubicar"'); }
+  }
+  $('mVaciar2').addEventListener('click', () => vaciarPiso2());
   $('mAuto').addEventListener('click', () => { if (!M.cfg) return; M.cfg.manual = !M.cfg.manual; guardar(); pintar(); toast(M.cfg.manual ? 'Solo se muestran los laboratorios que colocaste' : 'Los laboratorios sin colocar se reparten solos'); });
   // modo: 'mover' (de un anaquel a otro), 'agregar' (un anaquel más) o 'quitar' (de un anaquel)
   function fijar(lab, id, modo = 'mover', de = null) {
