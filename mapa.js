@@ -100,13 +100,14 @@
     refrescar();
     const todos = laboratorios(), asig = new Map(), v = x => x.mov || x.st * .1, fijos = new Map();
     for (const x of todos) { x.k = 1; const ids = fijosDe(x.lab); if (ids.length) { x.fijo = ids; x.k = ids.length; for (const id of ids) (fijos.get(id) || fijos.set(id, []).get(id)).push(x); } }
-    const labs = todos.filter(x => !x.fijo);
+    const labs = M.cfg?.manual ? [] : todos.filter(x => !x.fijo);
     const p1 = PISOS[1], c = p1.cerca, d = a => Math.hypot(a.x + a.w / 2 - c[0], a.y + a.h / 2 - c[1]);
     const a1 = anaqs(1).sort((a, b) => d(a) - d(b));
     for (const [id, l] of repartir(labs.filter(x => x.zona === 'p1'), a1, v, fijos)) asig.set(id, l);
     const a2 = anaqs(2);
     for (const z of ['p2', 'z2']) for (const [id, l] of repartir(labs.filter(x => x.zona === z), a2.filter(a => a.zona === z), v, fijos)) asig.set(id, l);
     for (const x of todos) if (!x.fijo) for (const [id, l] of asig) if (l.includes(x)) x.en = id;
+    M.sinUbicar = todos.filter(x => !x.fijo && !x.en);
     return { labs: todos, asig };
   }
   // iniciales del laboratorio: su código de 4 letras del catálogo (o las 4 primeras letras del nombre)
@@ -145,11 +146,15 @@
       <image href="${P.fondo}" x="0" y="0" width="841.92" height="595.32" style="mix-blend-mode:multiply"/>
       ${cajas}${textos}<rect id="mNuevo" class="nuevo" x="0" y="0" width="0" height="0"/></svg>`;
     pintarEdicion();
+    $('mAuto').setAttribute('aria-pressed', !M.cfg?.manual); $('mAuto').textContent = M.cfg?.manual ? 'Reparto automático: no' : 'Reparto automático: sí';
+    const su = M.sinUbicar || [], qs = ($('mqSin').value || '').trim().toUpperCase();
+    $('mSinCard').hidden = !su.length; $('mSinN').textContent = nf0.format(su.length);
+    $('mSin').innerHTML = su.filter(x => !qs || x.lab.includes(qs)).sort((a, b) => b.mov - a.mov).slice(0, 300).map(x => `<span draggable="true" data-lab="${esc(x.lab)}" title="${esc(x.lab)}: ${nf0.format(x.mov)} cajas/mes · stock ${nf0.format(x.st)} · ${x.n} productos. Arrástralo a un anaquel.">${esc(x.lab)} <small>${nf0.format(x.mov)}</small></span>`).join('');
     $('mTitulo').textContent = `${P.nombre} · ${M.medida === 'mov' ? 'movimiento (cajas al mes)' : 'stock en droguería (cajas)'}`;
     $('mSinLab').textContent = M.sinLab ? `${nf0.format(M.sinLab.n)} productos sin laboratorio en el catálogo no se ubican en el mapa.` : '';
     // lista de anaqueles
     const total = vals.reduce((a, b) => a + b, 0) || 1;
-    const filas = P.anaqueles.map((a, i) => ({ a, v: vals[i], l: asig.get(a.id) || [] })).filter(r => r.l.length || M.piso === 2).sort((x, y) => y.v - x.v);
+    const filas = P.anaqueles.map((a, i) => ({ a, v: vals[i], l: asig.get(a.id) || [] })).filter(r => r.l.length || M.piso === 2 || M.cfg?.manual).sort((x, y) => y.v - x.v);
     $('mLista').innerHTML = filas.map(({ a, v, l }) => `<li class="${M.sel === a.id ? 'sel' : ''}" data-a="${a.id}">
       <div class="mh"><i style="background:${l.length ? calor(v / max) : '#d9d4ce'}"></i><b>${esc(a.t)}</b><span>${nf0.format(v)} · ${Math.round(v / total * 100)}%</span></div>
       ${M.piso === 2 ? `<label class="resp">Responsable <input data-resp="${a.id}" value="${esc(M.cfg?.resp?.[a.id] || '')}" placeholder="Nombre"></label>` : ''}
@@ -268,6 +273,12 @@
   $('mLista').addEventListener('input', e => { const i = e.target.closest('[data-resp]'); if (!i || !M.cfg) return; M.cfg.resp[i.dataset.resp] = i.value; guardar(); });
   $('mZonas').addEventListener('change', e => { const s = e.target.closest('[data-lab]'); if (!s || !M.cfg) return; M.cfg.zona[s.dataset.lab] = s.value; guardar(); pintar(); });
   $('mq').addEventListener('input', () => pintar());
+  $('mqSin').addEventListener('input', () => pintar());
+  $('mLimpiar').addEventListener('click', () => {
+    if (!M.cfg || !confirm('¿Vaciar todos los anaqueles de los dos pisos? Quedarán todos los laboratorios "sin ubicar" para que los coloques tú, y el reparto automático se apaga.')) return;
+    M.cfg.fijo = {}; M.cfg.manual = true; M.sel = null; guardar(); pintar(); toast('Anaqueles vacíos: arrastra los laboratorios desde "Sin ubicar"');
+  });
+  $('mAuto').addEventListener('click', () => { if (!M.cfg) return; M.cfg.manual = !M.cfg.manual; guardar(); pintar(); toast(M.cfg.manual ? 'Solo se muestran los laboratorios que colocaste' : 'Los laboratorios sin colocar se reparten solos'); });
   // modo: 'mover' (de un anaquel a otro), 'agregar' (un anaquel más) o 'quitar' (de un anaquel)
   function fijar(lab, id, modo = 'mover', de = null) {
     if (!M.cfg) return; M.cfg.fijo ??= {};
@@ -277,15 +288,16 @@
     else ids = ids.includes(de) ? ids.map(x => x === de ? id : x).filter((x, i, a) => a.indexOf(x) === i) : [id];
     if (ids.length) { M.cfg.fijo[lab] = ids.length === 1 ? ids[0] : ids; M.cfg.zona[lab] = zonaAnaq(ids[0]); } else delete M.cfg.fijo[lab];
     guardar(); pintar();
-    toast(modo === 'quitar' ? (ids.length ? `${lab} sale de ${anaqDe.get(de).t}` : `${lab} vuelve a automático`) : `${lab} → ${ids.map(x => anaqDe.get(x).t).join(', ')}`);
+    toast(modo === 'quitar' ? (ids.length ? `${lab} sale de ${anaqDe.get(de).t}` : `${lab} ${M.cfg.manual ? "queda sin ubicar" : "vuelve a automático"}`) : `${lab} → ${ids.map(x => anaqDe.get(x).t).join(', ')}`);
   }
   $('mZonas').addEventListener('change', e => { const s = e.target.closest('[data-fijar]'); if (s && s.value) fijar(s.dataset.fijar, s.value, 'agregar'); });
   $('mZonas').addEventListener('click', e => { const b = e.target.closest('[data-quitar]'); if (b) fijar(b.dataset.quitar, null, 'quitar', b.dataset.de); });
   $('mLista').addEventListener('click', e => { const b = e.target.closest('[data-soltar]'); if (b) { e.stopPropagation(); fijar(b.dataset.soltar, null, 'quitar', b.dataset.de); } }, true);
   let arrastrado = null;
-  document.addEventListener('dragstart', e => { const c = e.target.closest?.('#mLista [data-lab]'); if (!c) return; arrastrado = { lab: c.dataset.lab, de: c.closest('li[data-a]')?.dataset.a }; e.dataTransfer.setData('text/plain', arrastrado.lab); e.dataTransfer.effectAllowed = 'copyMove'; });
-  const destino = e => e.target.closest?.('#mLista li[data-a], #mPlano [data-a]');
+  document.addEventListener('dragstart', e => { const c = e.target.closest?.('#mLista [data-lab], #mSin [data-lab]'); if (!c) return; arrastrado = { lab: c.dataset.lab, de: c.closest('li[data-a]')?.dataset.a }; e.dataTransfer.setData('text/plain', arrastrado.lab); e.dataTransfer.effectAllowed = 'copyMove'; });
+  const destino = e => e.target.closest?.('#mLista li[data-a], #mPlano [data-a], #mSinCard');
   document.addEventListener('dragover', e => { const d = destino(e); if (d && arrastrado) { e.preventDefault(); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); d.classList.add('drop'); } });
-  document.addEventListener('drop', e => { const d = destino(e); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); if (d && arrastrado && d.dataset.a !== arrastrado.de) { e.preventDefault(); fijar(arrastrado.lab, d.dataset.a, e.ctrlKey || e.metaKey || e.altKey ? 'agregar' : 'mover', arrastrado.de); } arrastrado = null; });
+  document.addEventListener('drop', e => { const d = destino(e); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); if (d && arrastrado && d.id === 'mSinCard') { e.preventDefault(); if (arrastrado.de) fijar(arrastrado.lab, null, 'quitar', arrastrado.de); }
+    else if (d && arrastrado && d.dataset.a !== arrastrado.de) { e.preventDefault(); fijar(arrastrado.lab, d.dataset.a, e.ctrlKey || e.metaKey || e.altKey ? 'agregar' : 'mover', arrastrado.de); } arrastrado = null; });
   document.addEventListener('dragend', () => { arrastrado = null; document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); });
 })();

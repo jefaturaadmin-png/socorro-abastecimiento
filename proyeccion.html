@@ -154,6 +154,13 @@ td.fijos .chip button { border: 0; background: none; cursor: pointer; color: var
 .medit label { display: inline-flex; align-items: center; gap: 6px } .medit input, .medit select { padding: 3px 7px; font-size: 13px }
 .medit .sep { width: 1px; align-self: stretch; background: var(--line) } .btn.on { background: var(--accent); color: #fff; border-color: var(--accent) } .btn.rojo { color: #b6400b; border-color: #e7b7a6 }
 .plano .anaq.ed { stroke-dasharray: 3 2; stroke: var(--accent); cursor: move } .plano .nuevo { fill: rgba(226,98,13,.25); stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 3; pointer-events: none }
+.mbtns { display: inline-flex; flex-wrap: wrap; gap: 6px }
+.msin { margin: 0 12px 14px; padding: 10px; border: 1px dashed var(--line); border-radius: 10px; background: var(--bg) }
+.msin.drop { border-color: var(--accent); background: var(--accent-soft) }
+.msinh { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 8px; font-size: 13px } .msinh input { margin-left: auto; padding: 4px 8px; font-size: 13px }
+.msin .ml { display: flex; flex-wrap: wrap; gap: 5px; max-height: 260px; overflow: auto }
+.msin .ml span { font-size: 11.5px; background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: 2px 9px; cursor: grab }
+.msin .ml small { color: var(--muted); font-family: var(--f-mono) }
 .mfantasma { position: fixed; z-index: 50; pointer-events: none; background: var(--fg); color: var(--bg); font-size: 12px; padding: 4px 9px; border-radius: 6px; white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,.25) }
 .mlista .ml span[draggable] { cursor: grab } .mlista .ml span.fijo { background: var(--accent-soft); border-color: var(--accent) }
 .mlista .ml span button { border: 0; background: none; padding: 0 0 0 4px; cursor: pointer; color: var(--accent); font-weight: 700 }
@@ -397,10 +404,14 @@ main.sin-sesion > section { display: none !important }
     </div>
     <div class="mapa-grid">
       <div class="card">
-        <div class="ch"><h2 id="mTitulo"></h2><span class="leyenda"><span>menos</span><i></i><span>más</span></span><button type="button" class="btn sm" id="mEditar">✎ Editar anaqueles</button></div>
+        <div class="ch"><h2 id="mTitulo"></h2><span class="leyenda"><span>menos</span><i></i><span>más</span></span><span class="mbtns"><button type="button" class="btn sm" id="mAuto">Reparto automático: sí</button><button type="button" class="btn sm rojo" id="mLimpiar">Limpiar todo</button><button type="button" class="btn sm" id="mEditar">✎ Editar anaqueles</button></span></div>
         <div class="medit" id="mEdit" hidden></div>
         <div class="plano" id="mPlano"></div>
         <p class="note" id="mSinLab" style="padding:0 16px 12px;margin:0"></p>
+        <div class="msin" id="mSinCard" hidden>
+          <div class="msinh"><b>Sin ubicar · <span id="mSinN"></span></b><span class="z">Arrástralos a un anaquel del plano o de la lista (y de vuelta aquí para sacarlos). Número: cajas al mes.</span><input id="mqSin" type="search" placeholder="Buscar laboratorio…" autocomplete="off"></div>
+          <div class="ml" id="mSin"></div>
+        </div>
       </div>
       <div class="card"><div class="ch"><h2>Anaqueles</h2><span class="note">Clic para resaltar</span></div><ul class="mlista" id="mLista"></ul></div>
     </div>
@@ -1436,7 +1447,7 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610202200"></script>
-<script type="module" src="proyeccion.js?v=202610202200"></script>
+<script src="mapa.js?v=202610202300"></script>
+<script type="module" src="proyeccion.js?v=202610202300"></script>
 
 </body></html>
