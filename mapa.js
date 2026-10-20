@@ -52,7 +52,7 @@
   async function cargarCfg() {
     if (M.cfg || M.cargando) return; M.cargando = true;
     try { const d = await S.db?.doc('config/mapa').get(); M.cfg = d?.exists ? d.data() : {}; } catch { M.cfg = {}; }
-    M.cfg.zona ??= {}; M.cfg.resp ??= {}; M.cargando = false; pintar();
+    M.cfg.zona ??= {}; M.cfg.resp ??= {}; M.cfg.fijo ??= {}; M.cargando = false; pintar();
   }
   let tGuardar;
   function guardar() { clearTimeout(tGuardar); tGuardar = setTimeout(() => S.db?.doc('config/mapa').set(M.cfg).catch(() => toast('No se pudo guardar el mapa')), 500); }
@@ -77,22 +77,29 @@
     return [...L.values()];
   }
   // reparto equitativo: el laboratorio que más se mueve va al anaquel con menos carga (los anaqueles más cercanos primero)
-  function repartir(labs, anaqs, val) {
+  // los laboratorios que el usuario fijó a un anaquel van primero; el resto se reparte sumando a esa carga
+  function repartir(labs, anaqs, val, fijos = new Map()) {
     const carga = new Map(anaqs.map(a => [a.id, 0])), de = new Map(anaqs.map(a => [a.id, []]));
+    for (const [id, l] of fijos) if (de.has(id)) for (const x of l) { de.get(id).push(x); carga.set(id, carga.get(id) + val(x)); }
     for (const x of [...labs].sort((a, b) => val(b) - val(a))) {
       let mejor = anaqs[0]; for (const a of anaqs) if (carga.get(a.id) < carga.get(mejor.id)) mejor = a;
       carga.set(mejor.id, carga.get(mejor.id) + val(x)); de.get(mejor.id).push(x);
     }
     return de;
   }
+  const TODOS = Object.values(PISOS).flatMap(P => P.anaqueles), anaqDe = new Map(TODOS.map(a => [a.id, a]));
+  const zonaAnaq = id => id.startsWith('P') ? 'p2' : id.startsWith('Z') ? 'z2' : 'p1';
   function distribucion() {
-    const labs = laboratorios(), asig = new Map(), v = x => x.mov || x.st * .1;
+    const todos = laboratorios(), asig = new Map(), v = x => x.mov || x.st * .1, fijos = new Map();
+    for (const x of todos) { const id = M.cfg?.fijo?.[x.lab]; if (id && anaqDe.has(id)) { x.fijo = id; (fijos.get(id) || fijos.set(id, []).get(id)).push(x); } }
+    const labs = todos.filter(x => !x.fijo);
     const p1 = PISOS[1], c = p1.cerca, d = a => Math.hypot(a.x + a.w / 2 - c[0], a.y + a.h / 2 - c[1]);
     const a1 = [...p1.anaqueles].sort((a, b) => d(a) - d(b));
-    for (const [id, l] of repartir(labs.filter(x => x.zona === 'p1'), a1, v)) asig.set(id, l);
+    for (const [id, l] of repartir(labs.filter(x => x.zona === 'p1'), a1, v, fijos)) asig.set(id, l);
     const a2 = PISOS[2].anaqueles;
-    for (const z of ['p2', 'z2']) for (const [id, l] of repartir(labs.filter(x => x.zona === z), a2.filter(a => a.zona === z), v)) asig.set(id, l);
-    return { labs, asig };
+    for (const z of ['p2', 'z2']) for (const [id, l] of repartir(labs.filter(x => x.zona === z), a2.filter(a => a.zona === z), v, fijos)) asig.set(id, l);
+    for (const x of todos) if (!x.fijo) for (const [id, l] of asig) if (l.includes(x)) x.en = id;
+    return { labs: todos, asig };
   }
   const calor = t => `hsl(${Math.round(120 * (1 - t))} 80% 48%)`;
 
@@ -127,12 +134,13 @@
     $('mLista').innerHTML = filas.map(({ a, v, l }) => `<li class="${M.sel === a.id ? 'sel' : ''}" data-a="${a.id}">
       <div class="mh"><i style="background:${l.length ? calor(v / max) : '#d9d4ce'}"></i><b>${esc(a.t)}</b><span>${nf0.format(v)} · ${Math.round(v / total * 100)}%</span></div>
       ${M.piso === 2 ? `<label class="resp">Responsable <input data-resp="${a.id}" value="${esc(M.cfg?.resp?.[a.id] || '')}" placeholder="Nombre"></label>` : ''}
-      <div class="ml">${l.map(x => `<span title="${esc(x.lab)}: ${nf0.format(x.mov)} cajas/mes · stock ${nf0.format(x.st)} · ${x.n} productos">${esc(x.lab)}</span>`).join('') || '<em>vacío</em>'}</div></li>`).join('');
+      <div class="ml">${l.map(x => `<span draggable="true" data-lab="${esc(x.lab)}" class="${x.fijo ? 'fijo' : ''}" title="${esc(x.lab)}: ${nf0.format(x.mov)} cajas/mes · stock ${nf0.format(x.st)} · ${x.n} productos${x.fijo ? ' · puesto por ti' : ''}. Arrástralo a otro anaquel.">${x.fijo ? '📌 ' : ''}${esc(x.lab)}${x.fijo ? `<button type="button" data-soltar="${esc(x.lab)}" title="Volver a automático">×</button>` : ''}</span>`).join('') || '<em>vacío · arrastra aquí un laboratorio</em>'}</div></li>`).join('');
     // zonas por laboratorio
     const q = ($('mq').value || '').trim().toUpperCase();
-    $('mZonas').innerHTML = `<thead><tr><th class="c1 solo">Laboratorio</th><th>Movimiento</th><th>Stock droguería</th><th>% pesado</th><th>Zona</th></tr></thead><tbody>` +
+    $('mZonas').innerHTML = `<thead><tr><th class="c1 solo">Laboratorio</th><th>Movimiento</th><th>Stock droguería</th><th>% pesado</th><th>Zona</th><th>Anaquel</th></tr></thead><tbody>` +
       labs.filter(x => !q || x.lab.includes(q)).sort((a, b) => b.mov - a.mov).map(x => `<tr><td class="c1 solo">${esc(x.lab)}</td><td class="n">${nf0.format(x.mov)}</td><td class="n">${nf0.format(x.st)}</td><td class="n">${Math.round(x.pes / x.tot * 100)}%</td>
-        <td><select data-lab="${esc(x.lab)}">${Object.entries(ZONAS).map(([k, t]) => `<option value="${k}" ${x.zona === k ? 'selected' : ''}>${t}${k === x.zAuto ? ' (sugerida)' : ''}</option>`).join('')}</select></td></tr>`).join('') + '</tbody>';
+        <td><select data-lab="${esc(x.lab)}">${Object.entries(ZONAS).map(([k, t]) => `<option value="${k}" ${x.zona === k ? 'selected' : ''}>${t}${k === x.zAuto ? ' (sugerida)' : ''}</option>`).join('')}</select></td>
+        <td><select data-fijar="${esc(x.lab)}"><option value="">${x.fijo ? 'Automático' : `Automático (${esc(anaqDe.get(x.en)?.t || '—')})`}</option>${[1, 2].map(n => `<optgroup label="${PISOS[n].nombre}">${PISOS[n].anaqueles.map(a => `<option value="${a.id}" ${x.fijo === a.id ? 'selected' : ''}>${esc(a.t)}</option>`).join('')}</optgroup>`).join('')}</select></td></tr>`).join('') + '</tbody>';
   }
   window.pintarMapa = pintar;
 
@@ -143,4 +151,17 @@
   $('mLista').addEventListener('input', e => { const i = e.target.closest('[data-resp]'); if (!i || !M.cfg) return; M.cfg.resp[i.dataset.resp] = i.value; guardar(); });
   $('mZonas').addEventListener('change', e => { const s = e.target.closest('[data-lab]'); if (!s || !M.cfg) return; M.cfg.zona[s.dataset.lab] = s.value; guardar(); pintar(); });
   $('mq').addEventListener('input', () => pintar());
+  function fijar(lab, id) {
+    if (!M.cfg) return; M.cfg.fijo ??= {};
+    if (id) { M.cfg.fijo[lab] = id; M.cfg.zona[lab] = zonaAnaq(id); } else delete M.cfg.fijo[lab];
+    guardar(); pintar(); toast(id ? `${lab} → ${anaqDe.get(id).t}` : `${lab} vuelve a automático`);
+  }
+  $('mZonas').addEventListener('change', e => { const s = e.target.closest('[data-fijar]'); if (s) fijar(s.dataset.fijar, s.value); });
+  $('mLista').addEventListener('click', e => { const b = e.target.closest('[data-soltar]'); if (b) { e.stopPropagation(); fijar(b.dataset.soltar, ''); } }, true);
+  let arrastrado = null;
+  document.addEventListener('dragstart', e => { const c = e.target.closest?.('#mLista [data-lab]'); if (!c) return; arrastrado = c.dataset.lab; e.dataTransfer.setData('text/plain', arrastrado); e.dataTransfer.effectAllowed = 'move'; });
+  const destino = e => e.target.closest?.('#mLista li[data-a], #mPlano [data-a]');
+  document.addEventListener('dragover', e => { const d = destino(e); if (d && arrastrado) { e.preventDefault(); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); d.classList.add('drop'); } });
+  document.addEventListener('drop', e => { const d = destino(e); document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); if (d && arrastrado) { e.preventDefault(); fijar(arrastrado, d.dataset.a); } arrastrado = null; });
+  document.addEventListener('dragend', () => { arrastrado = null; document.querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); });
 })();
