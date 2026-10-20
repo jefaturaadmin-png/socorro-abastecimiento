@@ -81,24 +81,30 @@
   function repartir(labs, anaqs, val, fijos = new Map()) {
     const carga = new Map(anaqs.map(a => [a.id, 0])), de = new Map(anaqs.map(a => [a.id, []]));
     for (const [id, l] of fijos) if (de.has(id)) for (const x of l) { de.get(id).push(x); carga.set(id, carga.get(id) + val(x) / x.k); }
+    if (!anaqs.length) return de;
     for (const x of [...labs].sort((a, b) => val(b) - val(a))) {
       let mejor = anaqs[0]; for (const a of anaqs) if (carga.get(a.id) < carga.get(mejor.id)) mejor = a;
       carga.set(mejor.id, carga.get(mejor.id) + val(x)); de.get(mejor.id).push(x);
     }
     return de;
   }
-  const TODOS = Object.values(PISOS).flatMap(P => P.anaqueles), anaqDe = new Map(TODOS.map(a => [a.id, a]));
+  // anaqueles de cada piso: los del croquis o los editados por el usuario (proy_config/mapa → anaq)
+  const anaqs = n => (M.cfg?.anaq?.[n] || PISOS[n].anaqueles).map(a => ({ ...a, zona: a.zona || (n === 1 ? 'p1' : 'p2'), piso: n }));
+  let anaqDe = new Map();
+  const refrescar = () => { anaqDe = new Map([1, 2].flatMap(n => anaqs(n)).map(a => [a.id, a])); };
+  refrescar();
   const lista = v => (Array.isArray(v) ? v : v ? [v] : []).filter(id => anaqDe.has(id));
   const fijosDe = lab => lista(M.cfg?.fijo?.[lab]);
-  const zonaAnaq = id => id.startsWith('P') ? 'p2' : id.startsWith('Z') ? 'z2' : 'p1';
+  const zonaAnaq = id => anaqDe.get(id)?.zona || 'p1';
   function distribucion() {
+    refrescar();
     const todos = laboratorios(), asig = new Map(), v = x => x.mov || x.st * .1, fijos = new Map();
     for (const x of todos) { x.k = 1; const ids = fijosDe(x.lab); if (ids.length) { x.fijo = ids; x.k = ids.length; for (const id of ids) (fijos.get(id) || fijos.set(id, []).get(id)).push(x); } }
     const labs = todos.filter(x => !x.fijo);
     const p1 = PISOS[1], c = p1.cerca, d = a => Math.hypot(a.x + a.w / 2 - c[0], a.y + a.h / 2 - c[1]);
-    const a1 = [...p1.anaqueles].sort((a, b) => d(a) - d(b));
+    const a1 = anaqs(1).sort((a, b) => d(a) - d(b));
     for (const [id, l] of repartir(labs.filter(x => x.zona === 'p1'), a1, v, fijos)) asig.set(id, l);
-    const a2 = PISOS[2].anaqueles;
+    const a2 = anaqs(2);
     for (const z of ['p2', 'z2']) for (const [id, l] of repartir(labs.filter(x => x.zona === z), a2.filter(a => a.zona === z), v, fijos)) asig.set(id, l);
     for (const x of todos) if (!x.fijo) for (const [id, l] of asig) if (l.includes(x)) x.en = id;
     return { labs: todos, asig };
@@ -108,7 +114,7 @@
   function pintar() {
     if (!S.P || S.ejemplo && !S.P.p.length) return;
     cargarCfg();
-    const { labs, asig } = distribucion(), P = PISOS[M.piso]; M.asig = asig;
+    const { labs, asig } = distribucion(), P = { ...PISOS[M.piso], anaqueles: anaqs(M.piso) }; M.asig = asig;
     const val = id => (asig.get(id) || []).reduce((a, x) => a + (M.medida === 'mov' ? x.mov : x.st) / x.k, 0);
     const vals = P.anaqueles.map(a => val(a.id)), max = Math.max(1e-9, ...vals);
     document.querySelectorAll('#mPiso [data-p]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.p === M.piso));
@@ -117,7 +123,7 @@
     P.anaqueles.forEach((a, i) => {
       const n = (asig.get(a.id) || []).length, t = vals[i] / max, col = n ? calor(t) : '#cfc9c2', cx = a.x + a.w / 2, cy = a.y + a.h / 2;
       if (n) halos += `<ellipse cx="${cx}" cy="${cy}" rx="${a.w / 2 + 10 + 22 * t}" ry="${a.h / 2 + 10 + 22 * t}" fill="${col}" opacity="${.35 + .5 * t}"/>`;
-      cajas += `<rect class="anaq ${M.sel === a.id ? 'sel' : ''}" data-a="${a.id}" x="${a.x}" y="${a.y}" width="${a.w}" height="${a.h}" fill="${col}"><title>${esc(a.t)}: ${(asig.get(a.id) || []).map(x => x.lab).join(', ') || 'vacío'}</title></rect>`;
+      cajas += `<rect class="anaq ${M.sel === a.id ? 'sel' : ''} ${M.editar ? 'ed' : ''}" data-a="${a.id}" x="${a.x}" y="${a.y}" width="${a.w}" height="${a.h}" fill="${col}"><title>${esc(a.t)}: ${(asig.get(a.id) || []).map(x => x.lab).join(', ') || 'vacío'}</title></rect>`;
       const vert = a.h > a.w * 1.5, top = (asig.get(a.id) || [])[0]?.lab || '', largo = Math.max(a.w, a.h);
       textos += `<text class="nt" x="${cx}" y="${cy}" ${vert ? `transform="rotate(-90 ${cx} ${cy})"` : ''}>${esc(a.t)}${top && largo > 120 ? ' · ' + esc(top.slice(0, 24)) : ''}</text>`;
     });
@@ -127,7 +133,8 @@
       <rect x="${vx}" y="${vy}" width="${vw}" height="${vh}" fill="#fff"/>
       <g filter="url(#mBlur)">${halos}</g>
       <image href="${P.fondo}" x="0" y="0" width="841.92" height="595.32" style="mix-blend-mode:multiply"/>
-      ${cajas}${textos}</svg>`;
+      ${cajas}${textos}<rect id="mNuevo" class="nuevo" x="0" y="0" width="0" height="0"/></svg>`;
+    pintarEdicion();
     $('mTitulo').textContent = `${P.nombre} · ${M.medida === 'mov' ? 'movimiento (cajas al mes)' : 'stock en droguería (cajas)'}`;
     $('mSinLab').textContent = M.sinLab ? `${nf0.format(M.sinLab.n)} productos sin laboratorio en el catálogo no se ubican en el mapa.` : '';
     // lista de anaqueles
@@ -143,9 +150,74 @@
       labs.filter(x => !q || x.lab.includes(q)).sort((a, b) => b.mov - a.mov).map(x => `<tr><td class="c1 solo">${esc(x.lab)}</td><td class="n">${nf0.format(x.mov)}</td><td class="n">${nf0.format(x.st)}</td><td class="n">${Math.round(x.pes / x.tot * 100)}%</td>
         <td><select data-lab="${esc(x.lab)}">${Object.entries(ZONAS).map(([k, t]) => `<option value="${k}" ${x.zona === k ? 'selected' : ''}>${t}${k === x.zAuto ? ' (sugerida)' : ''}</option>`).join('')}</select></td>
         <td class="fijos">${x.fijo ? x.fijo.map(id => `<span class="chip">${esc(anaqDe.get(id).t)}<button type="button" data-quitar="${esc(x.lab)}" data-de="${id}" title="Quitar">×</button></span>`).join('') : `<span class="z">Automático (${esc(anaqDe.get(x.en)?.t || '—')})</span>`}
-          <select data-fijar="${esc(x.lab)}" aria-label="Añadir anaquel"><option value="">＋ Añadir anaquel…</option>${[1, 2].map(n => `<optgroup label="${PISOS[n].nombre}">${PISOS[n].anaqueles.filter(a => !x.fijo?.includes(a.id)).map(a => `<option value="${a.id}">${esc(a.t)}</option>`).join('')}</optgroup>`).join('')}</select></td></tr>`).join('') + '</tbody>';
+          <select data-fijar="${esc(x.lab)}" aria-label="Añadir anaquel"><option value="">＋ Añadir anaquel…</option>${[1, 2].map(n => `<optgroup label="${PISOS[n].nombre}">${anaqs(n).filter(a => !x.fijo?.includes(a.id)).map(a => `<option value="${a.id}">${esc(a.t)}</option>`).join('')}</optgroup>`).join('')}</select></td></tr>`).join('') + '</tbody>';
   }
   window.pintarMapa = pintar;
+
+  /* ---------- edición de anaqueles: dibujar, mover, dividir, renombrar, cambiar de zona, quitar ---------- */
+  const propios = n => { M.cfg.anaq ??= {}; return (M.cfg.anaq[n] ??= anaqs(n).map(({ piso, ...a }) => a)); };
+  const nuevoId = () => 'N' + Date.now().toString(36) + Math.random().toString(36).slice(2, 4);
+  function pintarEdicion() {
+    const b = $('mEditar'); b.setAttribute('aria-pressed', !!M.editar); b.textContent = M.editar ? '✓ Terminar edición' : '✎ Editar anaqueles';
+    const box = $('mEdit'); box.hidden = !M.editar; if (!M.editar) return;
+    const a = M.sel && anaqDe.get(M.sel)?.piso === M.piso ? anaqDe.get(M.sel) : null;
+    box.innerHTML = `<button type="button" class="btn sm ${M.dibujar ? 'on' : ''}" data-ed="dibujar">＋ ${M.dibujar ? 'Dibuja el anaquel en el plano…' : 'Añadir anaquel'}</button>
+      ${a ? `<span class="sep"></span><label>Nombre <input data-ed="nombre" value="${esc(a.t)}" maxlength="30"></label>
+        ${M.piso === 2 ? `<label>Zona <select data-ed="zona"><option value="p2" ${a.zona === 'p2' ? 'selected' : ''}>Anaqueles 1</option><option value="z2" ${a.zona === 'z2' ? 'selected' : ''}>Zona 2 (Colgate, dermo, dental)</option></select></label>` : ''}
+        <button type="button" class="btn sm" data-ed="dividir">Dividir en 2</button><button type="button" class="btn sm rojo" data-ed="quitar">Quitar</button>`
+        : '<span class="z">Clic en un anaquel para cambiarlo; arrástralo para moverlo.</span>'}
+      <button type="button" class="btn sm" data-ed="restablecer" style="margin-left:auto">Volver al croquis original</button>`;
+  }
+  function editar(fn, msg) { if (!M.cfg) return; const l = propios(M.piso); fn(l); guardar(); pintar(); if (msg) toast(msg); }
+  $('mEditar').addEventListener('click', () => { M.editar = !M.editar; M.dibujar = false; pintar(); });
+  $('mEdit').addEventListener('click', e => {
+    const b = e.target.closest('[data-ed]'); if (!b || b.tagName !== 'BUTTON') return;
+    const ed = b.dataset.ed, id = M.sel;
+    if (ed === 'dibujar') { M.dibujar = !M.dibujar; return pintarEdicion(); }
+    if (ed === 'restablecer') { if (!confirm(`¿Volver los anaqueles del ${PISOS[M.piso].nombre.toLowerCase()} al croquis original?`)) return; delete M.cfg.anaq?.[M.piso]; M.sel = null; guardar(); pintar(); return toast('Anaqueles como en el croquis'); }
+    if (ed === 'dividir') editar(l => {
+      const i = l.findIndex(a => a.id === id); if (i < 0) return; const a = l[i], h = a.w >= a.h, n1 = nuevoId(), n2 = nuevoId() + 'b';
+      const p1 = h ? { x: a.x, y: a.y, w: a.w / 2, h: a.h } : { x: a.x, y: a.y, w: a.w, h: a.h / 2 };
+      const p2 = h ? { x: a.x + a.w / 2, y: a.y, w: a.w / 2, h: a.h } : { x: a.x, y: a.y + a.h / 2, w: a.w, h: a.h / 2 };
+      l.splice(i, 1, { ...a, ...p1, id: n1, t: a.t + ' A' }, { ...a, ...p2, id: n2, t: a.t + ' B' });
+      for (const [lab, v] of Object.entries(M.cfg.fijo)) { const ids = lista(v).map(x => x === id ? n1 : x); if (ids.length) M.cfg.fijo[lab] = ids.length === 1 ? ids[0] : ids; }
+      if (M.cfg.resp[id]) M.cfg.resp[n1] = M.cfg.resp[id];
+      M.sel = n1;
+    }, 'Anaquel dividido en 2');
+    if (ed === 'quitar') { const a = anaqDe.get(id); if (!a || !confirm(`¿Quitar "${a.t}"? Sus laboratorios se repartirán en los demás.`)) return; editar(l => { l.splice(l.findIndex(x => x.id === id), 1); M.sel = null; }, `"${a.t}" quitado`); }
+  });
+  $('mEdit').addEventListener('change', e => {
+    const c = e.target.closest('[data-ed]'); if (!c || !M.sel) return;
+    editar(l => { const a = l.find(x => x.id === M.sel); if (!a) return; if (c.dataset.ed === 'nombre') a.t = c.value.trim() || a.t; if (c.dataset.ed === 'zona') a.zona = c.value; });
+  });
+  // coordenadas del plano (puntos del PDF) a partir del puntero
+  const enPlano = e => { const svg = $('mPlano').querySelector('svg'), p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+  let ed = null;
+  $('mPlano').addEventListener('pointerdown', e => {
+    if (!M.editar || e.button) return;
+    e.stopImmediatePropagation(); const p = enPlano(e), r = e.target.closest('[data-a]');
+    if (M.dibujar) ed = { tipo: 'dibujar', x0: p.x, y0: p.y };
+    else if (r) { const a = anaqDe.get(r.dataset.a); ed = { tipo: 'mover', id: a.id, dx: p.x - a.x, dy: p.y - a.y, el: r, mov: false }; M.sel = a.id; }
+    else return;
+    $('mPlano').setPointerCapture(e.pointerId);
+  }, true);
+  $('mPlano').addEventListener('pointermove', e => {
+    if (!ed) return; e.stopImmediatePropagation(); const p = enPlano(e);
+    if (ed.tipo === 'dibujar') { const n = $('mNuevo'); n.setAttribute('x', Math.min(p.x, ed.x0)); n.setAttribute('y', Math.min(p.y, ed.y0)); n.setAttribute('width', Math.abs(p.x - ed.x0)); n.setAttribute('height', Math.abs(p.y - ed.y0)); }
+    else { ed.mov = true; ed.x = p.x - ed.dx; ed.y = p.y - ed.dy; ed.el.setAttribute('x', ed.x); ed.el.setAttribute('y', ed.y); }
+  }, true);
+  $('mPlano').addEventListener('pointerup', e => {
+    if (!ed) return; e.stopImmediatePropagation(); const d = ed; ed = null; const p = enPlano(e);
+    if (d.tipo === 'dibujar') {
+      const x = Math.min(p.x, d.x0), y = Math.min(p.y, d.y0), w = Math.abs(p.x - d.x0), h = Math.abs(p.y - d.y0);
+      if (w < 4 || h < 4) return pintar();
+      const n = anaqs(M.piso).length + 1, id = nuevoId();
+      editar(l => l.push({ id, x, y, w, h, t: M.piso === 2 ? 'Anaquel ' + n : 'Nuevo ' + n, zona: M.piso === 2 ? 'p2' : 'p1' }), 'Anaquel añadido: ponle nombre arriba');
+      M.dibujar = false; M.sel = id; pintar();
+    } else if (d.mov) editar(l => { const a = l.find(x => x.id === d.id); if (a) { a.x = d.x; a.y = d.y; } });
+    else pintar();
+  }, true);
+  $('mPlano').addEventListener('click', e => { if (M.editar) e.stopImmediatePropagation(); }, true);
 
   $('mPiso').addEventListener('click', e => { const b = e.target.closest('[data-p]'); if (b) { M.piso = +b.dataset.p; M.sel = null; pintar(); } });
   $('mMed').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (b) { M.medida = b.dataset.m; pintar(); } });
