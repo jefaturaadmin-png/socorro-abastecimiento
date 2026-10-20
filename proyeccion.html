@@ -117,6 +117,26 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .tag.auto { background: var(--bg); color: var(--muted); border: 1px solid var(--line) }
 .more { padding: 12px 16px; display: flex; gap: 12px; align-items: center; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); flex-wrap: wrap }
 
+.tipos-in { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 24px; align-items: center; padding: 4px 24px 22px }
+.dona-g { height: 340px; position: relative }
+.tley { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px }
+.tley button { width: 100%; display: grid; grid-template-columns: 28px 1fr auto auto; gap: 12px; align-items: center; border: 1px solid var(--line); background: var(--surface); padding: 10px 14px; border-radius: 10px; cursor: pointer; font: inherit; color: var(--fg); text-align: left }
+.tley button[aria-pressed="true"] { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg) }
+.tley b { font-family: var(--f-mono); font-size: 22px; font-weight: 600 }
+.tley small { color: var(--muted); font-size: 13px; min-width: 90px; text-align: right }
+@media (max-width: 760px) { .tipos-in { grid-template-columns: minmax(0, 1fr) } .dona-g { height: 260px } }
+.qcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px }
+.qcard { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto auto; column-gap: 12px; align-items: center; text-align: left; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; color: var(--fg); font: inherit }
+.qcard i { grid-row: 1 / span 3; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--proj-soft); color: var(--proj) }
+.qcard i svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round }
+.qcard span { font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted) }
+.qcard b { font-family: var(--f-mono); font-weight: 600; font-size: 26px; line-height: 1.1 }
+.qcard small { color: var(--muted); font-size: 12px }
+.qcard:hover { border-color: var(--muted) }
+.qcard[aria-pressed="true"] { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg) }
+.qcard.roja i { background: #fde2dd; color: #c0392b } .qcard.roja b { color: #c0392b }
+.qcard[data-acc="drog"] i { background: #dff0ec; color: #1f7a6d } .qcard[data-acc="comprar"] i { background: var(--accent-soft); color: var(--accent) }
+@media (max-width: 760px) { .qcards { grid-template-columns: repeat(2, minmax(0, 1fr)) } }
 .ped-grid { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; align-items: start }
 .ped-grid > .card { margin: 0 }
 .torta .dona { height: 230px; padding: 0 16px }
@@ -191,6 +211,10 @@ main.sin-sesion > section { display: none !important }
         <input id="pq" type="search" placeholder="Filtrar medicamento…" aria-label="Filtrar medicamentos" autocomplete="off">
       </div>
     </div>
+    <div class="card tipos">
+      <div class="ch"><h2 id="tH2">Tipos de producto</h2><span class="note">Según los meses con venta del último año. Cambia el laboratorio arriba; clic en un tipo para filtrar la tabla.</span></div>
+      <div class="tipos-in"><div class="dona-g"><canvas id="tChart" aria-label="Porcentaje de productos por tipo"></canvas></div><ul class="ley tley" id="tLey"></ul></div>
+    </div>
     <div class="card">
       <div class="scroll"><table class="cells" id="pTabla"></table></div>
       <div class="more" id="pMore"></div>
@@ -253,14 +277,14 @@ main.sin-sesion > section { display: none !important }
         <input id="rq" type="search" placeholder="Filtrar medicamento…" aria-label="Filtrar medicamentos" autocomplete="off">
       </div>
     </div>
-    <div class="kpis">
+    <div class="kpis" hidden>
       <div class="kpi"><span id="rk1l">Medicamentos a reponer</span><b id="rk1">–</b><small id="rk1s"></small></div>
       <div class="kpi"><span id="rk2l">Cajas a entregar</span><b id="rk2" class="acc">–</b><small id="rk2s"></small></div>
       <div class="kpi"><span>Valor a costo</span><b id="rk3">–</b><small>con IGV</small></div>
       <div class="kpi"><span id="rk4l">Demanda pronosticada</span><b id="rk4">–</b><small id="rk4s"></small></div>
     </div>
     <div class="card">
-      <div class="ch"><h2 id="rH2"></h2><span class="note" id="rNota"></span></div>
+      <div class="ch"><h2 id="rH2"></h2><span class="note" id="rNota" hidden></span></div>
       <div class="scroll"><table class="cells" id="rTabla"></table></div>
       <div class="more" id="rMore"></div>
     </div>
@@ -295,11 +319,11 @@ main.sin-sesion > section { display: none !important }
         <input id="qq" type="search" placeholder="Filtrar medicamento…" aria-label="Filtrar medicamentos" autocomplete="off">
       </div>
     </div>
-    <div class="kpis">
-      <div class="kpi"><span>Alertas</span><b id="qk1" class="acc">–</b><small id="qk1s"></small></div>
-      <div class="kpi"><span>Enviar de droguería</span><b id="qk2">–</b><small id="qk2s"></small></div>
-      <div class="kpi"><span>Pasar de otra sucursal</span><b id="qk3">–</b><small id="qk3s"></small></div>
-      <div class="kpi"><span>Comprar</span><b id="qk4">–</b><small id="qk4s"></small></div>
+    <div class="qcards" id="qCards">
+      <button type="button" class="qcard roja" data-acc=""><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/></svg></i><span>Alertas</span><b id="qk1">–</b><small>productos</small></button>
+      <button type="button" class="qcard" data-acc="drog"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 21V9l9-5 9 5v12"/><path d="M9 21v-6h6v6M10 11h4M12 9v4"/></svg></i><span>Disponible en droguería</span><b id="qk2">–</b><small>productos</small></button>
+      <button type="button" class="qcard" data-acc="pasar"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M10 20v-6h4v6"/></svg></i><span>De otra sucursal</span><b id="qk3">–</b><small>productos</small></button>
+      <button type="button" class="qcard" data-acc="comprar"><i aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.6 12.4a1.5 1.5 0 0 0 1.5 1.1h9.3a1.5 1.5 0 0 0 1.5-1.2L21.5 8H6"/></svg></i><span>Comprar</span><b id="qk4">–</b><small>productos</small></button>
     </div>
     <div class="ped-grid">
       <div class="card">
@@ -413,6 +437,11 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '
 const soles = () => S.unidad === 'soles';
 const fmt = v => v == null || !isFinite(v) ? '–' : soles() ? nf0.format(v) : nf1.format(v);
 // Stock en cajas enteras y fracciones sueltas (24.7 con 10 por caja → "24 / 7 f"), como en LolFar. Sin unidades por caja, con decimales.
+// Enteros y fracciones sin decimales: con fracciones "0 / 7 f"; sin fracciones, entero (o "<1" si es menos de una caja).
+const fmtE = (p, v) => {
+  if (v == null || !isFinite(v) || soles() || (+p?.fr || 0) > 1) return fmtS(p, v);
+  return v > 0 && v < .5 ? '<1' : nf0.format(Math.round(v));
+};
 const fmtS = (p, v) => {
   const fr = +p?.fr || 0;
   if (v == null || !isFinite(v) || soles() || fr <= 1) return fmt(v);
@@ -736,9 +765,23 @@ document.querySelectorAll('.sEtq').forEach(s => s.addEventListener('change', e =
 /* ---------- PRONÓSTICO ---------- */
 $('pFiltro').addEventListener('change', e => { S.pFiltro = e.target.value; S.pMostrar = PAGINA; pintarPron(); });
 $('pq').addEventListener('input', () => { S.pMostrar = PAGINA; pintarPron(); });
+const COL_CAT = { A: '#1f7a6d', B: '#3d5a99', C: '#b8860b', D: '#8a4f9e', E: '#a33b3b' };
+function pintarTipos() {
+  const o = S.P, lista = o.p.filter(p => !S.lab || labDe(p.c) === S.lab), n = lista.length;
+  const cnt = Object.fromEntries('ABCDE'.split('').map(c => [c, 0])); for (const p of lista) cnt[p.cat]++;
+  const cats = 'ABCDE'.split('');
+  $('tH2').textContent = `Tipos de producto · ${S.lab || 'todos los laboratorios'} (${nf0.format(n)})`;
+  dibujar('tChart', { type: 'doughnut', data: { labels: cats.map(c => `${c} · ${NCAT[c]}`), datasets: [{ data: cats.map(c => cnt[c]),
+      backgroundColor: cats.map(c => S.cat && S.cat !== c ? color(COL_CAT[c], .3) : COL_CAT[c]), borderColor: css('--surface') || '#fff', borderWidth: 2 }] },
+    options: { maintainAspectRatio: false, cutout: '52%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${c.label}: ${nf0.format(c.raw)} (${n ? Math.round(c.raw / n * 100) : 0}%)` } } },
+      onClick: (e, els) => { if (els.length) elegirTipo(cats[els[0].index]); } } });
+  $('tLey').innerHTML = cats.map(c => `<li><button type="button" data-cat="${c}" aria-pressed="${S.cat === c}">${catBadge(c)}<span>${NCAT[c]}</span><b>${n ? Math.round(cnt[c] / n * 100) : 0}%</b><small>${nf0.format(cnt[c])} productos</small></button></li>`).join('');
+}
+function elegirTipo(c) { S.cat = S.cat === c ? '' : c; document.querySelectorAll('.sTipo').forEach(x => x.value = S.cat); S.pMostrar = PAGINA; pintarPron(); }
+$('tLey').addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (b) elegirTipo(b.dataset.cat); });
 function pintarPron() {
   const o = S.P, mets = o.metodos, conv = (p, v) => soles() ? v * p.k : v;
-  llenarLabs();
+  llenarLabs(); pintarTipos();
   let lista = o.p;
   if (S.lab) lista = lista.filter(p => labDe(p.c) === S.lab);
   lista = lista.filter(pasaTipo);
@@ -754,7 +797,7 @@ function pintarPron() {
     h += `<tr data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${etiquetas(p)}</td>
       <td style="text-align:center">${catBadge(p.cat)}</td>
       ${(() => { const s = stockTotal(p); return `<td class="n big" title="Droguería ${fmtS(p, conv(p, s.d))} · sucursales y otros almacenes ${fmtS(p, conv(p, s.t - s.d))}">${s.t ? fmtS(p, conv(p, s.t)) : '<span class="z">0</span>'}</td>`; })()}
-      <td class="n">${fmt(conv(p, k.prom))}</td>
+      <td class="n">${fmtE(p, conv(p, k.prom))}</td>
       ${!S.verMet ? '' : mets.map((m, i) => { const x = k.met[m]; const cls = ['w', i === 0 ? 'sep' : '']; if (!x || x.wape == null) return `<td class="${cls.join(' ')} na">–</td>`;
         if (m === k.best) cls.push('best'); if (m === sel) cls.push('sel');
         return `<td class="${cls.join(' ')}" data-m="${esc(m)}" title="Usar ${esc(m)}">${pct(x.wape)}</td>`; }).join('') + `
@@ -1000,7 +1043,7 @@ function pintarRep() {
       : r.nota ? `<span class="tag ped">${r.nota}</span>` : '·';
     h += `<tr class="click" data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}">${esc(p.n)}${etiquetas(p)}${sub}</td>
       <td style="text-align:center">${catBadge(r.cat)}</td>${hv.map(v => celda(v, max)).join('')}
-      <td class="n sep pj big">${fmt(cv(p, r.v))}${r.aprox ? '*' : ''}</td><td class="n pj">${fmt(cv(p, r.diaria))}</td>
+      <td class="n sep pj big">${fmtE(p, cv(p, r.v))}${r.aprox ? '*' : ''}</td><td class="n pj">${fmtE(p, cv(p, r.diaria))}</td>
       <td class="n">${fmtS(p, cv(p, r.st))}</td>${todas ? `<td class="n">${fmtS(p, cv(p, r.sd))}</td>` : ''}<td class="n">${fmt(cv(p, r.nec))}</td>
       <td class="n tot ent">${fin}</td></tr>`;
   }
@@ -1111,6 +1154,7 @@ S.qFarm = ''; S.qAcc = ''; S.qMostrar = PAGINA;
 $('qFarm').addEventListener('change', e => { S.qFarm = e.target.value; S.qMostrar = PAGINA; pintarPed(); });
 $('qAcc').addEventListener('change', e => { S.qAcc = e.target.value; S.qMostrar = PAGINA; pintarPed(); });
 $('qq').addEventListener('input', () => { S.qMostrar = PAGINA; pintarPed(); });
+$('qCards').addEventListener('click', e => { const b = e.target.closest('[data-acc]'); if (!b) return; S.qAcc = b.dataset.acc; S.qMostrar = PAGINA; pintarPed(); $('qTabla').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
 $('qLey').addEventListener('click', e => { const b = e.target.closest('[data-farm]'); if (!b) return; S.qFarm = S.qFarm === b.dataset.farm ? '' : b.dataset.farm; S.qMostrar = PAGINA; pintarPed(); });
 $('qTabla').addEventListener('click', e => { const tr = e.target.closest('tr.click'); if (tr) abrirFichaP(tr.dataset.cod, 'ped'); });
 function pintarPed() {
@@ -1127,10 +1171,9 @@ function pintarPed() {
   const cuenta = t => base.filter(r => r.de.some(d => d.t === t));
   const suma = t => sum(base.flatMap(r => r.de.filter(d => d.t === t).map(d => d.q)));
   $('qEyebrow').textContent = `Ventas de los últimos ${n} días · stock para menos de ${S.seg} días · reponer para ${S.cob} + ${S.seg} días (se cambia en Reposición)`;
-  $('qk1').textContent = nf0.format(base.length); $('qk1s').textContent = 'productos × sucursal';
-  $('qk2').textContent = nf0.format(cuenta('drog').length); $('qk2s').textContent = `${cajas(suma('drog'))} desde el stock de droguería`;
-  $('qk3').textContent = nf0.format(cuenta('pasar').length); $('qk3s').textContent = `${cajas(suma('pasar'))} de sucursales con sobrante`;
-  $('qk4').textContent = nf0.format(cuenta('comprar').length); $('qk4s').textContent = `${cajas(suma('comprar'))} no hay en ninguna parte`;
+  $('qk1').textContent = nf0.format(base.length); $('qk2').textContent = nf0.format(cuenta('drog').length);
+  $('qk3').textContent = nf0.format(cuenta('pasar').length); $('qk4').textContent = nf0.format(cuenta('comprar').length);
+  document.querySelectorAll('#qCards [data-acc]').forEach(b => b.setAttribute('aria-pressed', b.dataset.acc === S.qAcc));
   $('qFarm').innerHTML = `<option value="">Todas</option>` + o.farmacias.map(f => `<option value="${esc(f)}" ${f === S.qFarm ? 'selected' : ''}>${esc(nombreSuc(f))}</option>`).join('');
   $('qAcc').value = S.qAcc;
   $('qH2').textContent = (S.qFarm ? nombreSuc(S.qFarm) : 'Todas las sucursales') + ' · ' + nf0.format(lista.length);
@@ -1143,7 +1186,7 @@ function pintarPed() {
   for (const r of vis) {
     const p = r.p;
     h += `<tr class="click" data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}">${esc(p.n)}${etiquetas(p)}</td>
-      ${S.qFarm ? '' : `<td>${esc(nombreSuc(r.f))}</td>`}<td style="text-align:center">${catBadge(r.cat)}</td><td class="n">${fmtS(p, r.st)}</td><td class="n">${fmt(r.diaria)}</td>
+      ${S.qFarm ? '' : `<td>${esc(nombreSuc(r.f))}</td>`}<td style="text-align:center">${catBadge(r.cat)}</td><td class="n">${fmtS(p, r.st)}</td><td class="n">${fmtE(p, r.diaria)}</td>
       <td class="n ${r.dias < 3 ? 'neg' : ''}">${isFinite(r.dias) ? fmt(r.dias) : '–'}</td><td class="n tot ent">${r.ent ? fmt(r.ent) : '·'}</td><td class="de">${accion(r)}</td></tr>`;
   }
   if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="8">Nada que mostrar con estos filtros.</td></tr>`;
@@ -1267,6 +1310,6 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=202610200300"></script>
+<script type="module" src="proyeccion.js?v=202610200900"></script>
 
 </body></html>
