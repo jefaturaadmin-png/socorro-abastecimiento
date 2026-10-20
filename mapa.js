@@ -52,7 +52,10 @@
   async function cargarCfg() {
     if (M.cfg || M.cargando) return; M.cargando = true;
     try { const d = await S.db?.doc('config/mapa').get(); M.cfg = d?.exists ? d.data() : {}; } catch { M.cfg = {}; }
-    M.cfg.zona ??= {}; M.cfg.resp ??= {}; M.cfg.fijo ??= {}; M.cargando = false; pintar();
+    M.cfg.zona ??= {}; M.cfg.resp ??= {}; M.cfg.fijo ??= {}; M.cargando = false;
+    // el segundo piso por cuadrados se arma solo una vez (después se puede volver a armar con el botón)
+    if (!M.cfg.armado2) { try { armarPiso2(true); } catch (e) { console.warn(e); } }
+    pintar();
   }
   let tGuardar;
   function guardar() { clearTimeout(tGuardar); tGuardar = setTimeout(() => S.db?.doc('config/mapa').set(M.cfg).catch(() => toast('No se pudo guardar el mapa')), 500); }
@@ -174,8 +177,8 @@
   // cuadrados del croquis (puntos del PDF), en orden: columna izquierda de arriba abajo y luego la derecha
   const CELDAS2 = {"P1":[[201.1,128.6,11.9,32.9],[202.6,161.6,11.9,32.8],[204.8,194.6,11.9,32.8],[206.3,227.5,11.9,32.8],[208.5,260.5,11.9,32.8],[210.0,293.4,11.9,32.9],[212.3,326.4,11.9,32.8],[213.8,359.4,11.9,32.8],[215.3,392.3,11.9,32.9],[212.3,128.6,11.9,32.9],[213.8,161.6,11.9,32.8],[216.0,194.6,11.9,32.8],[217.5,227.5,11.9,32.8],[219.8,260.5,11.9,32.8],[221.3,293.4,11.9,32.9],[223.5,326.4,11.9,32.8],[225.0,359.4,11.9,32.8],[226.5,392.3,11.9,32.9]],"P2":[[249.0,129.4,11.9,32.8],[250.5,162.3,11.9,32.9],[252.7,195.3,11.9,32.8],[254.2,228.3,11.9,32.8],[256.5,261.2,11.9,32.9],[258.0,294.2,11.9,32.8],[260.2,327.2,11.9,32.8],[261.7,360.1,11.9,32.8],[263.2,393.1,11.9,32.8],[260.2,129.4,11.9,32.8],[261.7,162.3,11.9,32.9],[264.0,195.3,11.9,32.8],[265.5,228.3,11.9,32.8],[267.7,261.2,11.9,32.9],[269.2,294.2,11.9,32.8],[271.5,327.2,11.9,32.8],[273.0,360.1,11.9,32.8],[274.5,393.1,11.9,32.8]],"P3":[[296.2,130.1,11.9,32.9],[297.7,163.1,11.9,32.8],[299.9,196.1,11.9,32.8],[301.4,229.0,11.9,32.8],[303.7,262.0,11.9,32.8],[305.2,294.9,11.9,32.9],[307.4,327.9,11.9,32.8],[308.9,360.9,11.9,32.8],[310.4,393.8,11.9,32.9],[307.4,130.1,11.9,32.9],[308.9,163.1,11.9,32.8],[311.2,196.1,11.9,32.8],[312.7,229.0,11.9,32.8],[314.9,262.0,11.9,32.8],[316.4,294.9,11.9,32.9],[318.7,327.9,11.9,32.8],[320.2,360.9,11.9,32.8],[321.7,393.8,11.9,32.9]],"P4":[[343.4,130.1,11.9,32.9],[344.9,163.1,11.9,32.8],[347.1,196.1,11.9,32.8],[348.6,229.0,11.9,32.8],[350.9,262.0,11.9,32.8],[352.4,294.9,11.9,32.9],[354.6,327.9,11.9,32.8],[356.9,360.9,11.9,32.8],[358.4,393.8,11.9,32.9],[354.6,130.1,11.9,32.9],[356.1,163.1,11.9,32.8],[358.4,196.1,11.9,32.8],[359.9,229.0,11.9,32.8],[362.1,262.0,11.9,32.8],[363.6,294.9,11.9,32.9],[365.9,327.9,11.9,32.8],[368.1,360.9,11.9,32.8],[369.6,393.8,11.9,32.9]],"P5":[[390.6,130.1,11.9,32.9],[392.1,163.1,11.9,32.8],[394.3,196.1,11.9,32.8],[395.8,229.0,11.9,32.8],[398.1,262.0,11.9,32.8],[399.6,294.9,11.9,32.9],[401.8,327.9,11.9,32.8],[403.3,360.9,11.9,32.8],[404.8,393.8,11.9,32.9],[401.8,130.1,11.9,32.9],[403.3,163.1,11.9,32.8],[405.6,196.1,11.9,32.8],[407.1,229.0,11.9,32.8],[409.3,262.0,11.9,32.8],[410.8,294.9,11.9,32.9],[413.1,327.9,11.9,32.8],[414.6,360.9,11.9,32.8],[416.1,393.8,11.9,32.9]],"P6":[[437.8,130.9,11.9,32.8],[439.3,163.8,11.9,32.9],[441.5,196.8,11.9,32.8],[443.0,229.8,11.9,32.8],[445.3,262.7,11.9,32.9],[446.8,295.7,11.9,32.8],[449.0,328.7,11.9,32.8]],"Z1":[[460.3,363.6,32.2,14.2],[492.9,363.9,32.3,14.2],[526.2,363.6,32.3,14.2],[558.9,363.9,32.2,14.2],[592.1,363.6,32.3,14.2],[624.8,363.9,32.2,14.2],[658.0,363.6,32.3,14.2],[690.7,363.9,32.3,14.2]],"Z2":[[708.0,378.8,14.1,32.3],[708.0,411.8,14.1,32.3],[708.0,444.8,14.1,32.2]],"Z3":[[481.6,402.9,32.3,14.1],[514.6,402.9,32.2,14.1],[547.5,402.9,32.3,14.1],[580.5,402.9,32.2,14.1],[613.4,402.9,32.3,14.1],[646.4,402.9,32.3,14.1],[481.6,417.9,32.3,14.1],[514.6,417.9,32.2,14.1],[547.5,417.9,32.3,14.1],[580.5,417.9,32.2,14.1],[613.4,417.9,32.3,14.1],[646.4,417.9,32.3,14.1]]};
   const GRUPOS2 = [['P1', 'AA', 'p2'], ['P2', 'BB', 'p2'], ['P3', 'CC', 'p2'], ['P4', 'DD', 'p2'], ['P5', 'EE', 'p2'], ['P6', 'FF', 'p2'], ['Z1', 'GG', 'z2'], ['Z3', 'HH', 'z2'], ['Z2', 'II', 'z2']];
-  function armarPiso2() {
-    if (!M.cfg || !confirm('¿Armar el segundo piso con un anaquel por cuadrado (grupos AA, BB, CC…) y colocar ahí todos los laboratorios que no están en el primer piso?\n\nSe mantiene lo que pusiste en el primer piso y lo que ya pusiste en cuadrados con el mismo nombre (AA1, AA2…).')) return;
+  function armarPiso2(solo) {
+    if (!M.cfg || solo !== true && !confirm('¿Armar el segundo piso con un anaquel por cuadrado (grupos AA, BB, CC…) y colocar ahí todos los laboratorios que no están en el primer piso?\n\nSe mantiene lo que pusiste en el primer piso y lo que ya pusiste en cuadrados con el mismo nombre (AA1, AA2…).')) return;
     const viejos = anaqs(2), piso1 = new Set(anaqs(1).map(a => a.id)), grupos = [], nuevos = [];
     for (const [g, pre, z] of GRUPOS2) { const celdas = CELDAS2[g].map(([x, y, w, h], i) => ({ id: pre + (i + 1), x, y, w, h, t: pre + (i + 1), zona: z })); nuevos.push(...celdas); grupos.push({ pre, z, celdas }); }
     const porNombre = new Map(nuevos.map(a => [a.t, a.id])), idNuevo = new Map(viejos.map(a => [a.id, porNombre.get(String(a.t).trim().toUpperCase())]));
@@ -219,7 +222,7 @@
     }
     const resp = M.cfg.resp || {};
     GRUPOS2.forEach(([g, pre]) => { if (resp[g] && !resp[pre]) resp[pre] = resp[g]; });
-    M.cfg.anaq ??= {}; M.cfg.anaq[2] = nuevos; M.cfg.fijo = fijo; M.cfg.manual = true; M.cfg.resp = resp;
+    M.cfg.anaq ??= {}; M.cfg.anaq[2] = nuevos; M.cfg.fijo = fijo; M.cfg.manual = true; M.cfg.resp = resp; M.cfg.armado2 = true;
     refrescar(); for (const [lab, v] of Object.entries(fijo)) M.cfg.zona[lab] = zonaAnaq(lista(v)[0]) || M.cfg.zona[lab];
     M.piso = 2; M.sel = null; guardar(); pintar();
     toast(`Segundo piso armado: ${nuevos.length} cuadrados en ${GRUPOS2.length} grupos; ${resto.length} laboratorios colocados`);
@@ -334,7 +337,7 @@
     if (!M.cfg || !confirm('¿Vaciar todos los anaqueles de los dos pisos? Quedarán todos los laboratorios "sin ubicar" para que los coloques tú, y el reparto automático se apaga.')) return;
     M.cfg.fijo = {}; M.cfg.manual = true; M.sel = null; guardar(); pintar(); toast('Anaqueles vacíos: arrastra los laboratorios desde "Sin ubicar"');
   });
-  $('mArmar2').addEventListener('click', armarPiso2);
+  $('mArmar2').addEventListener('click', () => armarPiso2());
   $('mAuto').addEventListener('click', () => { if (!M.cfg) return; M.cfg.manual = !M.cfg.manual; guardar(); pintar(); toast(M.cfg.manual ? 'Solo se muestran los laboratorios que colocaste' : 'Los laboratorios sin colocar se reparten solos'); });
   // modo: 'mover' (de un anaquel a otro), 'agregar' (un anaquel más) o 'quitar' (de un anaquel)
   function fijar(lab, id, modo = 'mover', de = null) {
