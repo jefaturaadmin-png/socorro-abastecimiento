@@ -129,6 +129,24 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .fechero .dur { font-family: var(--f-mono); color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; font-size: 13px }
 tr.avance td { background: color-mix(in srgb, var(--s2) 8%, transparent) }
 td.av b { color: var(--s2) } td.av small, tr.avance small { display: block; color: var(--muted); font-size: 11px; font-family: inherit; white-space: nowrap }
+.mapa-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start }
+.mapa-grid > .card { margin: 0 }
+.plano { padding: 0 12px 14px } .plano svg { width: 100%; height: auto; display: block }
+.plano .muro { fill: var(--surface); stroke: var(--fg); stroke-width: 7 } .plano .muro2 { fill: none; stroke: var(--fg); stroke-width: 7 }
+.plano .area { fill: color-mix(in srgb, var(--muted) 10%, transparent); stroke: var(--line); stroke-width: 2 }
+.plano .at { font-size: 22px; fill: var(--muted); text-anchor: middle; dominant-baseline: middle }
+.plano .anaq { stroke: rgba(0,0,0,.55); stroke-width: 2; cursor: pointer } .plano .anaq.sel { stroke: var(--fg); stroke-width: 6 }
+.plano .nt { font-size: 17px; font-weight: 700; fill: #111; text-anchor: middle; dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: rgba(255,255,255,.75); stroke-width: 4px }
+.leyenda { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted) }
+.leyenda i { width: 140px; height: 10px; border-radius: 99px; background: linear-gradient(90deg, hsl(120 80% 48%), hsl(60 80% 48%), hsl(0 80% 48%)) }
+.mlista { list-style: none; margin: 0; padding: 0 12px 12px; max-height: 720px; overflow: auto; display: grid; gap: 8px }
+.mlista li { border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; cursor: pointer }
+.mlista li.sel { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg) }
+.mlista .mh { display: flex; align-items: center; gap: 8px } .mlista .mh i { width: 12px; height: 12px; border-radius: 3px }
+.mlista .mh span { margin-left: auto; font-family: var(--f-mono); font-size: 12px; color: var(--muted) }
+.mlista .resp { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin: 6px 0 2px } .mlista .resp input { flex: 1; padding: 3px 7px; font-size: 13px }
+.mlista .ml { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px } .mlista .ml span { font-size: 11px; background: var(--bg); border: 1px solid var(--line); border-radius: 99px; padding: 1px 7px }
+@media (max-width: 960px) { .mapa-grid { grid-template-columns: minmax(0, 1fr) } }
 .qcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px }
 .qcard { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto auto; column-gap: 12px; align-items: center; text-align: left; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; color: var(--fg); font: inherit }
 .qcard i { grid-row: 1 / span 3; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--proj-soft); color: var(--proj) }
@@ -184,6 +202,7 @@ main.sin-sesion > section { display: none !important }
       <button role="tab" data-tab="pron" aria-selected="true">Pronóstico</button>
       <button role="tab" data-tab="rep" aria-selected="false">Reposición</button>
       <button role="tab" data-tab="ped" aria-selected="false">Alertas</button>
+      <button role="tab" data-tab="mapa" aria-selected="false">Mapa de calor</button>
     </div>
     <div class="seg" role="group" aria-label="Unidad">
       <button data-u="cajas" aria-pressed="true">Cajas</button><button data-u="soles" aria-pressed="false">Soles</button>
@@ -351,6 +370,31 @@ main.sin-sesion > section { display: none !important }
         <li><b>De dónde</b>: primero el stock de la droguería; si no alcanza, de otra sucursal que tenga más de lo que necesita; si nada alcanza, comprar.</li>
         <li>Lo bloqueado no se pide ni se reparte.</li>
       </ul>
+    </details>
+  </section>
+
+  <!-- MAPA DE CALOR -->
+  <section id="vMapa" hidden>
+    <div class="head">
+      <div><div class="eyebrow">Droguería FS · cada laboratorio completo en un anaquel</div><h1>Mapa de calor</h1></div>
+      <div class="controls">
+        <div class="field"><span>Piso</span><div class="seg" id="mPiso"><button type="button" data-p="1">Primer piso</button><button type="button" data-p="2">Segundo piso</button></div></div>
+        <div class="field"><span>Calor según</span><div class="seg" id="mMed"><button type="button" data-m="mov">Movimiento</button><button type="button" data-m="st">Stock</button></div></div>
+      </div>
+    </div>
+    <div class="mapa-grid">
+      <div class="card">
+        <div class="ch"><h2 id="mTitulo"></h2><span class="leyenda"><span>menos</span><i></i><span>más</span></span></div>
+        <div class="plano" id="mPlano"></div>
+        <p class="note" id="mSinLab" style="padding:0 16px 12px;margin:0"></p>
+      </div>
+      <div class="card"><div class="ch"><h2>Anaqueles</h2><span class="note">Clic para resaltar</span></div><ul class="mlista" id="mLista"></ul></div>
+    </div>
+    <details class="metodo" open>
+      <summary>Zona de cada laboratorio</summary>
+      <p>Piso 1: laboratorios con mayoría de productos pesados (leches, jarabes, cloruros, sueros…), los de más movimiento más cerca de despacho. Piso 2: el resto, repartido para que cada anaquel tenga una carga pareja (uno grande y luego menores). Zona 2 del segundo piso: Colgate, dermocosmética y dental. Puedes cambiar la zona de cualquier laboratorio; se guarda.</p>
+      <input id="mq" type="search" placeholder="Buscar laboratorio…" autocomplete="off" style="margin:8px 0">
+      <div class="card"><div class="scroll" style="max-height:420px"><table class="cells" id="mZonas"></table></div></div>
     </details>
   </section>
 
@@ -733,10 +777,10 @@ document.querySelectorAll('[data-volver]').forEach(b => b.onclick = () => { S.vi
 function render() {
   const v = S.vista;
   $('vPron').hidden = v !== 'pron'; $('vFichaP').hidden = v !== 'fichaP'; $('vRep').hidden = v !== 'rep';
-  $('vMov').hidden = v !== 'mov'; $('vPed').hidden = v !== 'ped'; $('vFichaM').hidden = v !== 'fichaM';
+  $('vMov').hidden = v !== 'mov'; $('vPed').hidden = v !== 'ped'; $('vMapa').hidden = v !== 'mapa'; $('vFichaM').hidden = v !== 'fichaM';
   if (!S.P) return;
   if (v === 'pron') pintarPron(); else if (v === 'fichaP') pintarFichaP(); else if (v === 'rep') pintarRep();
-  else if (v === 'ped') pintarPed(); else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM();
+  else if (v === 'ped') pintarPed(); else if (v === 'mapa') window.pintarMapa?.(); else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM();
 }
 function abrirFichaP(c, origen) { S.fpDesde = ''; S.cur = c; S.origen = origen; S.fpFarm = origen === 'rep' ? S.farm : ''; S.vista = 'fichaP'; render(); scrollTo({ top: 0 }); }
 
@@ -1376,6 +1420,7 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script type="module" src="proyeccion.js?v=202610201200"></script>
+<script src="mapa.js?v=202610201500"></script>
+<script type="module" src="proyeccion.js?v=202610201500"></script>
 
 </body></html>
