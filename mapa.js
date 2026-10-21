@@ -49,17 +49,51 @@
 
   const M = { piso: 2, medida: 'mov', sel: null, cfg: null, cargando: false };
 
+  // El mapa guardado solo se usa (y solo se puede guardar) cuando se leyó bien de Firebase; si falla, se reintenta.
+  // Nunca se guarda un mapa que no se pudo leer, y antes de cada guardado se comprueba que nadie lo cambió en otra ventana.
   async function cargarCfg() {
-    if (M.cfg || M.cargando) return; M.cargando = true;
-    try { const d = await S.db?.doc('config/mapa').get(); M.cfg = d?.exists ? d.data() : {}; } catch { M.cfg = {}; }
-    M.cfg.zona ??= {}; M.cfg.resp ??= {}; M.cfg.fijo ??= {}; M.cargando = false;
-    // el segundo piso por cuadrados se arma solo una vez (después se puede volver a armar con el botón)
-    if (!M.cfg.armado2) { try { armarPiso2(true); } catch (e) { console.warn(e); } }
-    if (!M.cfg.vacio2) { refrescar(); vaciarPiso2(true); }
-    pintar();
+    if (M.cfg || M.cargando || !S.db || S.ejemplo) return; M.cargando = true;
+    try {
+      const d = await S.db.doc('config/mapa').get();
+      M.cfg = d.exists ? d.data() : {}; M.rev = M.cfg.rev || 0;
+      M.cfg.zona ??= {}; M.cfg.resp ??= {}; M.cfg.fijo ??= {}; M.cargando = false; pintar();
+    } catch (e) {
+      M.cargando = false; console.warn(e);
+      $('mTitulo').textContent = 'No se pudo leer el mapa guardado · reintentando…';
+      setTimeout(() => { if (!M.cfg) pintar(); }, 3000);
+    }
   }
-  let tGuardar;
-  function guardar() { clearTimeout(tGuardar); tGuardar = setTimeout(() => S.db?.doc('config/mapa').set(M.cfg).catch(() => toast('No se pudo guardar el mapa')), 500); }
+  let tGuardar, ultimoRespaldo = 0;
+  function guardar(respaldo) {
+    if (!M.cfg || !S.db) return;
+    if (respaldo) ultimoRespaldo = 0;
+    clearTimeout(tGuardar);
+    tGuardar = setTimeout(async () => {
+      try {
+        const srv = await S.db.doc('config/mapa').get(), actual = srv.exists ? srv.data() : null;
+        if (actual && (actual.rev || 0) > M.rev) { alert('El mapa se cambió en otra ventana o computadora. Se recargará para no perder esos cambios; vuelve a hacer tu último cambio.'); M.cfg = null; pintar(); return; }
+        // copia de respaldo del mapa anterior (máximo una cada 10 minutos, o antes de limpiar/vaciar/armar)
+        if (actual && Date.now() - ultimoRespaldo > 6e5) {
+          const r = await S.db.doc('config/mapa_respaldos').get(), lista = (r.exists ? r.data().v : []) || [];
+          lista.unshift({ t: new Date().toISOString(), cfg: JSON.stringify(actual) });
+          await S.db.doc('config/mapa_respaldos').set({ v: lista.slice(0, 15) }); ultimoRespaldo = Date.now();
+        }
+        M.rev = (M.rev || 0) + 1; M.cfg.rev = M.rev;
+        await S.db.doc('config/mapa').set(M.cfg);
+      } catch (e) { console.warn(e); toast('No se pudo guardar el mapa'); }
+    }, 500);
+  }
+  // volver a una copia anterior del mapa
+  async function restaurar() {
+    if (!M.cfg) return;
+    let lista = [];
+    try { const r = await S.db.doc('config/mapa_respaldos').get(); lista = (r.exists ? r.data().v : []) || []; } catch {}
+    if (!lista.length) return alert('Todavía no hay copias guardadas. Se irán guardando solas mientras trabajas en el mapa.');
+    const txt = lista.map((x, i) => `${i + 1}. ${new Date(x.t).toLocaleString('es-PE')} · ${Object.keys(JSON.parse(x.cfg).fijo || {}).length} laboratorios colocados`).join('\n');
+    const n = +prompt('Copias guardadas (la 1 es la más reciente):\n\n' + txt + '\n\nEscribe el número de la copia a recuperar:'); if (!n || !lista[n - 1]) return;
+    const cfg = JSON.parse(lista[n - 1].cfg); cfg.rev = M.rev; M.cfg = cfg; M.cfg.zona ??= {}; M.cfg.resp ??= {}; M.cfg.fijo ??= {};
+    guardar(true); pintar(); toast('Mapa recuperado de la copia del ' + new Date(lista[n - 1].t).toLocaleString('es-PE'));
+  }
 
   // movimiento (cajas al mes, promedio 3 meses), stock en droguería y peso de cada laboratorio
   function laboratorios() {
@@ -121,8 +155,8 @@
   const calor = t => `hsl(${Math.round(120 * (1 - t))} 80% 48%)`;
 
   function pintar() {
-    if (!S.P || S.ejemplo && !S.P.p.length) return;
-    cargarCfg();
+    if (!S.P || S.ejemplo) return;
+    cargarCfg(); if (!M.cfg) { $('mTitulo').textContent = 'Cargando el mapa guardado…'; return; }
     const { labs, asig } = distribucion(), P = { ...PISOS[M.piso], anaqueles: anaqs(M.piso) }; M.asig = asig;
     const val = id => (asig.get(id) || []).reduce((a, x) => a + (M.medida === 'mov' ? x.mov : x.st) / x.k, 0);
     const vals = P.anaqueles.map(a => val(a.id)), max = Math.max(1e-9, ...vals);
@@ -293,7 +327,7 @@
     GRUPOS2.forEach(([g, pre]) => { if (resp[g] && !resp[pre]) resp[pre] = resp[g]; });
     M.cfg.anaq ??= {}; M.cfg.anaq[2] = nuevos; M.cfg.fijo = fijo; M.cfg.manual = true; M.cfg.resp = resp; M.cfg.armado2 = true;
     refrescar(); for (const [lab, v] of Object.entries(fijo)) M.cfg.zona[lab] = zonaAnaq(lista(v)[0]) || M.cfg.zona[lab];
-    M.piso = 2; M.sel = null; guardar(); pintar();
+    M.piso = 2; M.sel = null; guardar(true); pintar();
     toast(`Segundo piso armado: ${nuevos.length} cuadrados en ${GRUPOS2.length} grupos; ${resto.length} laboratorios colocados`);
   }
 
@@ -404,7 +438,7 @@
   $('mqSin').addEventListener('input', () => pintar());
   $('mLimpiar').addEventListener('click', () => {
     if (!M.cfg || !confirm('¿Vaciar todos los anaqueles de los dos pisos? Quedarán todos los laboratorios "sin ubicar" para que los coloques tú, y el reparto automático se apaga.')) return;
-    M.cfg.fijo = {}; M.cfg.manual = true; M.sel = null; guardar(); pintar(); toast('Anaqueles vacíos: arrastra los laboratorios desde "Sin ubicar"');
+    M.cfg.fijo = {}; M.cfg.manual = true; M.sel = null; guardar(true); pintar(); toast('Anaqueles vacíos: arrastra los laboratorios desde "Sin ubicar"');
   });
   $('mArmar2').addEventListener('click', () => armarPiso2());
   // vaciar el segundo piso: sus cuadrados quedan sin laboratorios (lo del primer piso no se toca)
@@ -415,10 +449,11 @@
       const ids = (Array.isArray(v) ? v : [v]).filter(id => !p2.has(id));
       if (ids.length) M.cfg.fijo[lab] = ids.length === 1 ? ids[0] : ids; else delete M.cfg.fijo[lab];
     }
-    M.cfg.manual = true; M.cfg.vacio2 = true; M.sel = null; guardar();
+    M.cfg.manual = true; M.cfg.vacio2 = true; M.sel = null; guardar(true);
     if (solo !== true) { pintar(); toast('Segundo piso vacío: arrastra los laboratorios desde "Sin ubicar"'); }
   }
   $('mVaciar2').addEventListener('click', () => vaciarPiso2());
+  $('mResp').addEventListener('click', restaurar);
 
   // PDF: los dos pisos con su mapa y la lista completa de laboratorios por anaquel (se guarda con "Guardar como PDF")
   const fondos = {};
