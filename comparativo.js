@@ -69,7 +69,8 @@ const S = {
   histPropio: null,
   ocultos: {},        // quitados del comparativo por el usuario: {cod: true}
   sel: new Set(),     // marcados en la tabla
-  filtro: "comparados", q: "", lab: "", mostrar: PAGINA, ficha: null
+  filtro: "comparados", q: "", lab: "", mostrar: PAGINA, ficha: null,
+  verCosto: (() => { try { return localStorage.getItem("comp_verCosto") === "1"; } catch { return false; } })()   // costo y margen ocultos por defecto
 };
 
 /* ---------- emparejamiento por nombre ---------- */
@@ -233,14 +234,14 @@ function pintar() {
   const vis = lista.slice(0, S.mostrar);
   S.vis = vis.map(r => r.prod.c);
   const todosMarcados = vis.length && vis.every(r => S.sel.has(r.prod.c));
-  $("tabla").innerHTML = `<thead><tr><th class="sel"><input type="checkbox" id="selTodos" aria-label="Marcar todos los visibles" ${todosMarcados ? "checked" : ""}></th><th class="l">Producto</th><th>Nuestro precio</th><th>Costo</th><th>Margen</th>` +
+  $("tabla").innerHTML = `<thead><tr><th class="sel"><input type="checkbox" id="selTodos" aria-label="Marcar todos los visibles" ${todosMarcados ? "checked" : ""}></th><th class="l">Producto</th><th>Nuestro precio</th>${S.verCosto ? "<th>Costo</th><th>Margen</th>" : ""}` +
     TIENDAS.map(t => `<th class="t">${t.nombre}</th>`).join("") + `<th>Dif. vs más barato</th></tr></thead><tbody>` +
     (vis.map(r => `<tr data-cod="${esc(r.prod.c)}"><td class="sel"><input type="checkbox" data-sel="${esc(r.prod.c)}" aria-label="Marcar" ${S.sel.has(r.prod.c) ? "checked" : ""}></td><td class="l"><b>${esc(r.prod.n)}</b><div class="nm">${esc(r.prod.c)} · ${esc(r.prod.ln || r.prod.l || "")}</div></td>` +
-      `<td class="n">${sol(r.nuestro)}</td><td class="n muted">${sol(r.costo)}</td>` +
-      `<td class="n muted">${r.nuestro && r.costo ? pct(1 - r.costo / r.nuestro) : "–"}</td>` +
+      `<td class="n">${sol(r.nuestro)}</td>` +
+      (S.verCosto ? `<td class="n muted">${sol(r.costo)}</td><td class="n muted">${r.nuestro && r.costo ? pct(1 - r.costo / r.nuestro) : "–"}</td>` : "") +
       TIENDAS.map(t => celdaTienda(r, t.k)).join("") +
       `<td class="n dif ${r.dif > 0.005 ? "caro" : r.dif < -0.005 ? "barato" : ""}">${pct(r.dif)}</td></tr>`).join("") ||
-      `<tr><td colspan="${6 + TIENDAS.length}" class="vacio-tabla">${S.lista || S.filtro !== "comparados" ? "Nada con estos filtros." : "Sube la lista de precios de Lolfar para ver la comparación, o cambia el filtro a «Todos»."}</td></tr>`) +
+      `<tr><td colspan="${(S.verCosto ? 6 : 4) + TIENDAS.length}" class="vacio-tabla">${S.lista || S.filtro !== "comparados" ? "Nada con estos filtros." : "Sube la lista de precios de Lolfar para ver la comparación, o cambia el filtro a «Todos»."}</td></tr>`) +
     `</tbody>`;
   $("mas").hidden = lista.length <= S.mostrar;
   pintarSel();
@@ -277,7 +278,7 @@ async function abrir(cod) {
 }
 function pintarFicha() {
   const prod = S.cat.find(p => p.c === S.ficha), r = fila(prod);
-  $("fPrecios").innerHTML = `<div class="kp"><span>Nuestro precio</span><b>${sol(r.nuestro)}</b></div><div class="kp"><span>Costo (kardex)</span><b>${sol(r.costo)}</b></div>` +
+  $("fPrecios").innerHTML = `<div class="kp"><span>Nuestro precio</span><b>${sol(r.nuestro)}</b></div>${S.verCosto ? `<div class="kp"><span>Costo (kardex)</span><b>${sol(r.costo)}</b></div>` : ""}` +
     TIENDAS.map(t => `<div class="kp"><span>${t.nombre}</span><b>${r.t[t.k].p ? sol(r.t[t.k].pr) : "–"}</b></div>`).join("") +
     `<div class="kp"><span>Dif. vs más barato</span><b class="${r.dif > 0.005 ? "caro" : r.dif < -0.005 ? "barato" : ""}">${pct(r.dif)}</b></div>`;
   $("fPares").innerHTML = TIENDAS.map(t => {
@@ -465,6 +466,12 @@ $("fPares").addEventListener("click", e => { const b = e.target.closest("[data-g
 let tb; $("fPares").addEventListener("input", e => { const i = e.target.closest("[data-buscar]"); if (i) { clearTimeout(tb); tb = setTimeout(() => buscarEn(i.dataset.buscar, i.value), 200); } });
 $("fLista").addEventListener("change", e => { if (e.target.files[0]) subirLista(e.target.files[0]); e.target.value = ""; });
 $("confirmar").onclick = confirmarVisibles;
+function pintarVerCosto() { $("verCosto").setAttribute("aria-pressed", S.verCosto); $("verCosto").textContent = S.verCosto ? "Ocultar costo y margen" : "Ver costo y margen"; }
+$("verCosto").onclick = () => {
+  S.verCosto = !S.verCosto; try { localStorage.setItem("comp_verCosto", S.verCosto ? "1" : "0"); } catch {}
+  pintarVerCosto(); pintar(); if (S.ficha) pintarFicha();
+};
+pintarVerCosto();
 $("excel").onclick = exportar;
 
 /* ---------- sesión: solo administrador ---------- */
