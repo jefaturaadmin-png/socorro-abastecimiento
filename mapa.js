@@ -57,6 +57,7 @@
       const d = await S.db.doc('config/mapa').get();
       M.cfg = d.exists ? d.data() : {}; M.rev = M.cfg.rev || 0;
       M.cfg.zona ??= {}; M.cfg.resp ??= {}; M.cfg.fijo ??= {}; M.cargando = false; pintar();
+      if (!M.cfg.recuperado21 && Object.keys(M.cfg.fijo).length < 20) setTimeout(() => recuperarPDF(true), 300);
     } catch (e) {
       M.cargando = false; console.warn(e);
       $('mTitulo').textContent = 'No se pudo leer el mapa guardado · reintentando…';
@@ -82,6 +83,29 @@
         await S.db.doc('config/mapa').set(M.cfg);
       } catch (e) { console.warn(e); toast('No se pudo guardar el mapa'); }
     }, 500);
+  }
+  // Distribución reconstruida de los PDF impresos el 21/10/2026 (anaqueles, nombres, laboratorios por sus iniciales y dibujos)
+  const RECUP = 'planos/recuperado-2026-10-21.json';
+  async function recuperarPDF(preguntar = true) {
+    if (!M.cfg) return;
+    let rec; try { rec = await (await fetch(RECUP + '?v=1')).json(); } catch { return toast('No se encontró la distribución recuperada'); }
+    const labs = laboratorios(), porIni = new Map();
+    for (const x of labs) { const k = inicial(x.lab); (porIni.get(k) || porIni.set(k, []).get(k)).push(x.lab); }
+    const fijo = {}, faltan = new Set(), anaq = {}; let nLab = 0;
+    for (const n of [1, 2]) {
+      anaq[n] = rec.pisos[n].map((a, i) => ({ id: `R${n}_${i + 1}`, x: a.x, y: a.y, w: a.w, h: a.h, t: a.t || `R${n}-${i + 1}`,
+        zona: n === 1 ? 'p1' : (a.y > 355 && a.x > 455 ? 'z2' : 'p2') }));
+      rec.pisos[n].forEach((a, i) => { for (const ini of a.ini || []) {
+        const ls = porIni.get(ini); if (!ls) { faltan.add(ini); continue; }
+        for (const lab of ls) { const v = fijo[lab] || []; if (!v.includes(anaq[n][i].id)) v.push(anaq[n][i].id); fijo[lab] = v; }
+      } });
+    }
+    for (const [lab, v] of Object.entries(fijo)) { fijo[lab] = v.length === 1 ? v[0] : v; nLab++; }
+    if (preguntar && !confirm(`Encontré la distribución que imprimiste el 21/10/2026: ${anaq[1].length + anaq[2].length} anaqueles con sus nombres, ${nLab} laboratorios colocados y tus dibujos.\n\n¿Recuperarla? (Lo que hay ahora queda guardado en "↺ Copias".)`)) return;
+    M.cfg.anaq = { 1: anaq[1], 2: anaq[2] }; M.cfg.fijo = fijo; M.cfg.dibujos = rec.dibujos; M.cfg.manual = true; M.cfg.armado2 = M.cfg.vacio2 = true; M.cfg.recuperado21 = true;
+    refrescar(); for (const [lab, v] of Object.entries(fijo)) M.cfg.zona[lab] = zonaAnaq(lista(v)[0]);
+    M.sel = null; guardar(true); pintar();
+    toast(`Recuperado: ${nLab} laboratorios en sus anaqueles` + (faltan.size ? ` · no reconocí: ${[...faltan].join(', ')}` : ''));
   }
   // volver a una copia anterior del mapa
   async function restaurar() {
@@ -454,6 +478,7 @@
   }
   $('mVaciar2').addEventListener('click', () => vaciarPiso2());
   $('mResp').addEventListener('click', restaurar);
+  $('mRecup').addEventListener('click', () => recuperarPDF(true));
 
   // PDF: los dos pisos con su mapa y la lista completa de laboratorios por anaquel (se guarda con "Guardar como PDF")
   const fondos = {};
