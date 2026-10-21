@@ -123,6 +123,7 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .tley button { width: 100%; display: grid; grid-template-columns: 28px 1fr auto auto; gap: 12px; align-items: center; border: 1px solid var(--line); background: var(--surface); padding: 10px 14px; border-radius: 10px; cursor: pointer; font: inherit; color: var(--fg); text-align: left }
 .tley button[aria-pressed="true"] { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg) }
 .tley b { font-family: var(--f-mono); font-size: 22px; font-weight: 600 }
+.tley span em { font-style: normal; color: var(--muted); font-size: 13px } .tley small.regla { display: block; text-align: left; min-width: 0; font-size: 11.5px }
 .tley small { color: var(--muted); font-size: 13px; min-width: 90px; text-align: right }
 @media (max-width: 760px) { .tipos-in { grid-template-columns: minmax(0, 1fr) } .dona-g { height: 260px } }
 .fechero { display: flex; flex-wrap: wrap; align-items: center; gap: 8px }
@@ -259,7 +260,8 @@ main.sin-sesion > section { display: none !important }
       </div>
     </div>
     <div class="card tipos">
-      <div class="ch"><h2 id="tH2">Tipos de producto</h2><span class="note">Según los meses con venta del último año. Cambia el laboratorio arriba; clic en un tipo para filtrar la tabla.</span></div>
+      <div class="ch"><h2 id="tH2">Tipos de producto</h2>
+        <div class="field"><span>Periodo</span><div class="fechero"><div class="seg" id="tPer" role="group" aria-label="Periodo"></div><label class="z">Otro <input id="tDias" type="number" min="1" max="90" placeholder="días" style="width:70px"></label><b class="dur" id="tDur"></b></div></div></div>
       <div class="tipos-in"><div class="dona-g"><canvas id="tChart" aria-label="Porcentaje de productos por tipo"></canvas></div><ul class="ley tley" id="tLey"></ul></div>
     </div>
     <div class="card">
@@ -846,7 +848,9 @@ const catBadge = c => `<span class="cat ${c}" title="${c} · ${NCAT[c]}">${c}</s
 const etiquetas = p => (p.pap ? '<span class="tag pap" title="Programa de apoyo al paciente">PAP</span>' : '') + (p.est ? '<span class="tag est" title="Venta por temporadas">Estacional</span>' : '');
 // en Reposición por farmacia se usa la categoría de esa farmacia
 const pasaTipo = p => {
-  const c = S.vista === 'rep' && S.farm ? (p.catF?.[S.farm] || 'E') : p.cat;
+  const per = S.vista === 'pron' && S.tPer;
+  if (per && p.fueraP) return false;
+  const c = S.vista === 'rep' && S.farm ? (p.catF?.[S.farm] || 'E') : per ? p.catP : p.cat;
   return (!S.cat || c === S.cat) && (!S.etq || (S.etq === 'pap' ? p.pap : p.est));
 };
 document.querySelectorAll('.sTipo').forEach(s => s.addEventListener('change', e => { S.cat = e.target.value; document.querySelectorAll('.sTipo').forEach(x => x.value = S.cat); S.pMostrar = S.rMostrar = PAGINA; render(); }));
@@ -856,19 +860,52 @@ document.querySelectorAll('.sEtq').forEach(s => s.addEventListener('change', e =
 $('pFiltro').addEventListener('change', e => { S.pFiltro = e.target.value; S.pMostrar = PAGINA; pintarPron(); });
 $('pq').addEventListener('input', () => { S.pMostrar = PAGINA; pintarPron(); });
 const COL_CAT = { A: '#1f7a6d', B: '#3d5a99', C: '#b8860b', D: '#8a4f9e', E: '#a33b3b' };
+// Periodo del gráfico de tipos: 0 = último año (por meses con venta); N = últimos N días (por días con venta, hasta 90).
+// En un periodo de días: A se vende cada ≤3 días, B cada 4–10, C cada 11–30, D menos que eso y E no se movió (solo si tiene stock).
+S.tPer = 0;
+const REGLA = { A: '10–12 meses con venta al año', B: '6–9 meses', C: '3–5 meses', D: '1–2 meses', E: 'sin ventas en el año' };
+const REGLAP = { A: 'se vende cada 1–3 días', B: 'cada 4–10 días', C: 'cada 11–30 días', D: 'cada más de 30 días', E: 'no se movió (tiene stock)' };
+const cadaTxt = d => !isFinite(d) ? 'sin ventas' : d <= 1.5 ? 'diario' : `cada ${nf0.format(d)} días`;
+// días con venta (de todas las sucursales) en los últimos n días, con las ventas por día guardadas
+function diasConVenta(p, n) {
+  const o = S.P; if (!o.dias) return null;
+  const desde = o.dias.n - n, dias = new Set();
+  for (const l of Object.values(p.dv || {})) for (const [i, q] of l) if (i >= desde && q > 0) dias.add(i);
+  return dias.size;
+}
+function tipoPeriodo(p, n) {
+  const d = diasConVenta(p, n); if (d == null) return null;
+  if (!d) return stockTotal(p).t > 0 ? { c: 'E', cada: Infinity } : null;
+  const cada = n / d; return { c: cada <= 3 ? 'A' : cada <= 10 ? 'B' : cada <= 30 ? 'C' : 'D', cada };
+}
+function aplicarPeriodo() {
+  const o = S.P, n = S.tPer;
+  for (const p of o.p) { if (!n) { p.catP = null; p.fueraP = false; continue; } const t = tipoPeriodo(p, n); p.catP = t?.c || null; p.cadaP = t?.cada; p.fueraP = !t; }
+}
 function pintarTipos() {
-  const o = S.P, lista = o.p.filter(p => !S.lab || labDe(p.c) === S.lab), n = lista.length;
-  const cnt = Object.fromEntries('ABCDE'.split('').map(c => [c, 0])); for (const p of lista) cnt[p.cat]++;
+  const o = S.P, per = S.tPer;
+  aplicarPeriodo();
+  const tipo = p => per ? p.catP : p.cat;
+  const lista = o.p.filter(p => (!S.lab || labDe(p.c) === S.lab) && !(per && p.fueraP)), n = lista.length;
+  const cnt = Object.fromEntries('ABCDE'.split('').map(c => [c, 0])); for (const p of lista) cnt[tipo(p)]++;
   const cats = 'ABCDE'.split('');
+  // frecuencia típica de venta de cada tipo (mediana de "cada cuántos días" en el periodo, o en los últimos 90 días)
+  const nf = per || 90, cada = {};
+  for (const c of cats) { const v = lista.filter(p => tipo(p) === c).map(p => { const d = diasConVenta(p, nf); return d ? nf / d : Infinity; }).sort((a, b) => a - b); cada[c] = v.length ? v[Math.floor(v.length / 2)] : null; }
   $('tH2').textContent = `Tipos de producto · ${S.lab || 'todos los laboratorios'} (${nf0.format(n)})`;
+  const cob = o.dias ? Math.min(90, o.dias.n - (o.dias.primero ?? 0)) : 0;
+  $('tPer').innerHTML = [[0, 'Último año'], [7, '7 d'], [15, '15 d'], [30, '30 d'], [60, '60 d'], [90, '90 d']].map(([d, t]) => `<button type="button" data-d="${d}" aria-pressed="${per === d}" ${d && d > cob ? 'disabled title="Aún no hay ventas por día guardadas para tantos días"' : ''}>${t}</button>`).join('');
+  $('tDur').textContent = per ? `${per} días` : '12 meses';
   dibujar('tChart', { type: 'doughnut', data: { labels: cats.map(c => `${c} · ${NCAT[c]}`), datasets: [{ data: cats.map(c => cnt[c]),
       backgroundColor: cats.map(c => S.cat && S.cat !== c ? color(COL_CAT[c], .3) : COL_CAT[c]), borderColor: css('--surface') || '#fff', borderWidth: 2 }] },
     options: { maintainAspectRatio: false, cutout: '52%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${c.label}: ${nf0.format(c.raw)} (${n ? Math.round(c.raw / n * 100) : 0}%)` } } },
       onClick: (e, els) => { if (els.length) elegirTipo(cats[els[0].index]); } } });
-  $('tLey').innerHTML = cats.map(c => `<li><button type="button" data-cat="${c}" aria-pressed="${S.cat === c}">${catBadge(c)}<span>${NCAT[c]}</span><b>${n ? Math.round(cnt[c] / n * 100) : 0}%</b><small>${nf0.format(cnt[c])} productos</small></button></li>`).join('');
+  $('tLey').innerHTML = cats.map(c => `<li><button type="button" data-cat="${c}" aria-pressed="${S.cat === c}">${catBadge(c)}<span>${NCAT[c]} <em>(${cada[c] != null && c !== 'E' ? cadaTxt(cada[c]) : c === 'E' ? 'no se movió' : '—'})</em><small class="regla">${per ? REGLAP[c] : REGLA[c]}</small></span><b>${n ? Math.round(cnt[c] / n * 100) : 0}%</b><small>${nf0.format(cnt[c])} productos</small></button></li>`).join('');
 }
 function elegirTipo(c) { S.cat = S.cat === c ? '' : c; document.querySelectorAll('.sTipo').forEach(x => x.value = S.cat); S.pMostrar = PAGINA; pintarPron(); }
 $('tLey').addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (b) elegirTipo(b.dataset.cat); });
+$('tPer').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b || b.disabled) return; S.tPer = +b.dataset.d; $('tDias').value = ''; S.pMostrar = PAGINA; pintarPron(); });
+$('tDias').addEventListener('change', e => { const v = Math.round(+e.target.value || 0), cob = S.P?.dias ? Math.min(90, S.P.dias.n - (S.P.dias.primero ?? 0)) : 0; S.tPer = v > 0 ? Math.min(v, cob || 90) : 0; e.target.value = S.tPer || ''; S.pMostrar = PAGINA; pintarPron(); });
 function pintarPron() {
   const o = S.P, mets = o.metodos, conv = (p, v) => soles() ? v * p.k : v;
   llenarLabs(); pintarTipos();
@@ -885,7 +922,7 @@ function pintarPron() {
   for (const p of vis) {
     const k = S.calc.get(p.c), sel = elegido(p.c), esMan = manual(p.c);
     h += `<tr data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${etiquetas(p)}</td>
-      <td style="text-align:center">${catBadge(p.cat)}</td>
+      <td style="text-align:center">${catBadge(S.tPer && p.catP ? p.catP : p.cat)}</td>
       ${(() => { const s = stockTotal(p); return `<td class="n big" title="Droguería ${fmtS(p, conv(p, s.d))} · sucursales y otros almacenes ${fmtS(p, conv(p, s.t - s.d))}">${s.t ? fmtS(p, conv(p, s.t)) : '<span class="z">0</span>'}</td>`; })()}
       <td class="n">${fmtE(p, conv(p, k.prom))}</td>
       ${!S.verMet ? '' : mets.map((m, i) => { const x = k.met[m]; const cls = ['w', i === 0 ? 'sep' : '']; if (!x || x.wape == null) return `<td class="${cls.join(' ')} na">–</td>`;
@@ -1468,7 +1505,7 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610211600"></script>
-<script type="module" src="proyeccion.js?v=202610211600"></script>
+<script src="mapa.js?v=202610211700"></script>
+<script type="module" src="proyeccion.js?v=202610211700"></script>
 
 </body></html>
