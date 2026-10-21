@@ -66,6 +66,8 @@ const S = {
   costo: {},          // costo del kardex {cod: [nombre, fra, coscom, fecha]}
   hist: {},           // historial de la competencia (se carga al abrir un producto)
   histPropio: null,
+  ocultos: {},        // quitados del comparativo por el usuario: {cod: true}
+  sel: new Set(),     // marcados en la tabla
   filtro: "comparados", q: "", lab: "", mostrar: PAGINA, ficha: null
 };
 
@@ -162,9 +164,11 @@ async function cargar() {
   S.cat = cat;
   TIENDAS.forEach((t, i) => { if (comps[i]) { S.comp[t.k] = comps[i]; indexar(t.k); } });
   msg("Leyendo parejas y precios guardados…");
-  const [pares, cfg, maestro] = await Promise.all([
-    getDoc(doc(db, "comp_config", "pares")), getDoc(doc(db, "comp_config", "lista")), getDoc(doc(db, "proy_config", "maestro")).catch(() => null)]);
+  const [pares, cfg, maestro, ocu] = await Promise.all([
+    getDoc(doc(db, "comp_config", "pares")), getDoc(doc(db, "comp_config", "lista")), getDoc(doc(db, "proy_config", "maestro")).catch(() => null),
+    getDoc(doc(db, "comp_config", "ocultos"))]);
   S.pares = pares.exists() ? pares.data().m || {} : {};
+  S.ocultos = ocu.exists() ? ocu.data().m || {} : {};
   if (cfg.exists() && cfg.data().asset) { S.lista = await leerBlob(cfg.data().asset); agregarAlCatalogo(); }
   if (maestro?.exists() && maestro.data().asset) S.costo = (await leerBlobProy(maestro.data().asset)).prod || {};
   msg("Buscando coincidencias…");
@@ -191,6 +195,7 @@ function filtrados() {
   const out = [];
   for (const p of S.cat) {
     if (S.lab && p.ln !== S.lab) continue;
+    if ((S.filtro === "quitados") !== (S.ocultos[p.c] === true)) continue;
     if (ws.length) { const t = sinTildes(p.c + " " + p.n + " " + p.ln); if (!ws.every(w => t.includes(w))) continue; }
     const r = fila(p);
     const algo = TIENDAS.some(t => r.t[t.k].p);
@@ -225,16 +230,33 @@ function pintar() {
   $("k4").textContent = pct(med);
   $("cuenta").textContent = `${lista.length.toLocaleString("es-PE")} productos`;
   const vis = lista.slice(0, S.mostrar);
-  $("tabla").innerHTML = `<thead><tr><th class="l">Producto</th><th>Nuestro precio</th><th>Costo</th><th>Margen</th>` +
+  S.vis = vis.map(r => r.prod.c);
+  const todosMarcados = vis.length && vis.every(r => S.sel.has(r.prod.c));
+  $("tabla").innerHTML = `<thead><tr><th class="sel"><input type="checkbox" id="selTodos" aria-label="Marcar todos los visibles" ${todosMarcados ? "checked" : ""}></th><th class="l">Producto</th><th>Nuestro precio</th><th>Costo</th><th>Margen</th>` +
     TIENDAS.map(t => `<th class="t">${t.nombre}</th>`).join("") + `<th>Dif. vs más barato</th></tr></thead><tbody>` +
-    (vis.map(r => `<tr data-cod="${esc(r.prod.c)}"><td class="l"><b>${esc(r.prod.n)}</b><div class="nm">${esc(r.prod.c)} · ${esc(r.prod.ln || r.prod.l || "")}</div></td>` +
+    (vis.map(r => `<tr data-cod="${esc(r.prod.c)}"><td class="sel"><input type="checkbox" data-sel="${esc(r.prod.c)}" aria-label="Marcar" ${S.sel.has(r.prod.c) ? "checked" : ""}></td><td class="l"><b>${esc(r.prod.n)}</b><div class="nm">${esc(r.prod.c)} · ${esc(r.prod.ln || r.prod.l || "")}</div></td>` +
       `<td class="n">${sol(r.nuestro)}</td><td class="n muted">${sol(r.costo)}</td>` +
       `<td class="n muted">${r.nuestro && r.costo ? pct(1 - r.costo / r.nuestro) : "–"}</td>` +
       TIENDAS.map(t => celdaTienda(r, t.k)).join("") +
       `<td class="n dif ${r.dif > 0.005 ? "caro" : r.dif < -0.005 ? "barato" : ""}">${pct(r.dif)}</td></tr>`).join("") ||
-      `<tr><td colspan="7" class="vacio-tabla">${S.lista || S.filtro !== "comparados" ? "Nada con estos filtros." : "Sube la lista de precios de Lolfar para ver la comparación, o cambia el filtro a «Todos»."}</td></tr>`) +
+      `<tr><td colspan="8" class="vacio-tabla">${S.lista || S.filtro !== "comparados" ? "Nada con estos filtros." : "Sube la lista de precios de Lolfar para ver la comparación, o cambia el filtro a «Todos»."}</td></tr>`) +
     `</tbody>`;
   $("mas").hidden = lista.length <= S.mostrar;
+  pintarSel();
+}
+function pintarSel() {
+  const n = S.sel.size, b = $("quitar");
+  b.hidden = !n;
+  b.textContent = S.filtro === "quitados" ? `Restaurar ${n} seleccionados` : `Quitar ${n} seleccionados`;
+}
+// Quitar o restaurar productos del comparativo (se guarda en comp_config/ocultos; no borra nada de Lolfar ni de la competencia).
+async function ocultar(cods, quitar) {
+  const m = Object.fromEntries(cods.map(c => [c, quitar]));
+  try {
+    await setDoc(doc(db, "comp_config", "ocultos"), { m }, { merge: true });
+    Object.assign(S.ocultos, m);
+    toast(`${cods.length.toLocaleString("es-PE")} ${quitar ? "quitados del comparativo" : "restaurados"}`);
+  } catch (e) { toast("No se pudo guardar: " + (e.code || e.message)); }
 }
 
 /* ---------- ficha: historial y corrección de parejas ---------- */
@@ -242,7 +264,8 @@ let grafico;
 async function abrir(cod) {
   S.ficha = cod; const prod = S.cat.find(p => p.c === cod); if (!prod) return;
   $("vLista").hidden = true; $("vFicha").hidden = false; scrollTo({ top: 0 });
-  $("fTitulo").textContent = prod.n; $("fSub").textContent = `${prod.c} · ${prod.ln || ""}`;
+  $("fTitulo").textContent = prod.n;
+  $("fQuitar").textContent = S.ocultos[cod] === true ? "Restaurar al comparativo" : "Quitar del comparativo"; $("fSub").textContent = `${prod.c} · ${prod.ln || ""}`;
   pintarFicha();
   // historiales (se cargan una sola vez)
   await Promise.all(TIENDAS.filter(t => !S.hist[t.k]).map(async t => {
@@ -412,13 +435,30 @@ function exportar() {
 
 /* ---------- eventos ---------- */
 document.querySelectorAll("[data-f]").forEach(b => b.onclick = () => {
-  S.filtro = b.dataset.f; S.mostrar = PAGINA;
+  S.filtro = b.dataset.f; S.mostrar = PAGINA; S.sel.clear();
   document.querySelectorAll("[data-f]").forEach(x => x.setAttribute("aria-pressed", x === b)); pintar();
 });
 let tq; $("q").addEventListener("input", e => { clearTimeout(tq); tq = setTimeout(() => { S.q = e.target.value; S.mostrar = PAGINA; pintar(); }, 200); });
 $("lab").addEventListener("change", e => { S.lab = e.target.value; S.mostrar = PAGINA; pintar(); });
 $("mas").onclick = () => { S.mostrar += PAGINA; pintar(); };
-$("tabla").addEventListener("click", e => { const tr = e.target.closest("tr[data-cod]"); if (tr) abrir(tr.dataset.cod); });
+$("tabla").addEventListener("click", e => {
+  if (e.target.closest(".sel")) return;   // la casilla no abre la ficha
+  const tr = e.target.closest("tr[data-cod]"); if (tr) abrir(tr.dataset.cod);
+});
+$("tabla").addEventListener("change", e => {
+  if (e.target.id === "selTodos") { for (const c of S.vis) e.target.checked ? S.sel.add(c) : S.sel.delete(c); pintar(); return; }
+  const c = e.target.dataset.sel; if (!c) return;
+  e.target.checked ? S.sel.add(c) : S.sel.delete(c); pintarSel();
+});
+$("quitar").onclick = async () => {
+  const cods = [...S.sel], quitar = S.filtro !== "quitados";
+  if (quitar && !confirm(`¿Quitar ${cods.length} productos del comparativo? Podrás restaurarlos desde el filtro «Quitados».`)) return;
+  await ocultar(cods, quitar); S.sel.clear(); pintar();
+};
+$("fQuitar").onclick = async () => {
+  const quitar = S.ocultos[S.ficha] !== true;
+  await ocultar([S.ficha], quitar); $("fQuitar").textContent = quitar ? "Restaurar al comparativo" : "Quitar del comparativo";
+};
 $("fVolver").onclick = () => { $("vFicha").hidden = true; $("vLista").hidden = false; S.ficha = null; pintar(); };
 $("fPares").addEventListener("click", e => { const b = e.target.closest("[data-guardar]"); if (b) guardarPar(b.dataset.guardar); });
 let tb; $("fPares").addEventListener("input", e => { const i = e.target.closest("[data-buscar]"); if (i) { clearTimeout(tb); tb = setTimeout(() => buscarEn(i.dataset.buscar, i.value), 200); } });

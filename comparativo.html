@@ -81,6 +81,10 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .dif { font-weight: 600 }
 .dif.caro { color: var(--caro) } .dif.barato { color: var(--barato) }
 b.caro { color: var(--caro) } b.barato { color: var(--barato) }
+.tabla .sel { width: 34px; text-align: center; padding-right: 0 }
+.tabla .sel input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent) }
+.acciones { display: flex; flex-wrap: wrap; gap: 8px }
+.btn.quitar { color: var(--caro); border-color: var(--caro) }
 .vacio-tabla { text-align: center !important; color: var(--muted); padding: 28px !important }
 .pie { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 16px; font-size: 13px; color: var(--muted) }
 .volver { background: none; border: 0; color: var(--accent); font: inherit; font-weight: 500; cursor: pointer; padding: 0; margin-top: 14px }
@@ -129,13 +133,15 @@ b.caro { color: var(--caro) } b.barato { color: var(--barato) }
         <button type="button" data-f="confirmar" aria-pressed="false">Por confirmar</button>
         <button type="button" data-f="sin" aria-pressed="false">Sin pareja</button>
         <button type="button" data-f="todos" aria-pressed="false">Todos</button>
+        <button type="button" data-f="quitados" aria-pressed="false">Quitados</button>
       </div>
       <input type="search" id="q" placeholder="Buscar producto, código o laboratorio…">
       <select id="lab"></select>
     </div>
     <section class="card">
       <div class="ch"><span class="muted" id="cuenta"></span>
-        <button class="btn" id="confirmar" type="button" title="Confirma las sugerencias de 80 % o más que se ven en la tabla">Confirmar sugeridos ≥ 80 %</button></div>
+        <span class="acciones"><button class="btn quitar" id="quitar" type="button" hidden></button>
+        <button class="btn" id="confirmar" type="button" title="Confirma las sugerencias de 80 % o más que se ven en la tabla">Confirmar sugeridos ≥ 80 %</button></span></div>
       <div class="scroll"><table class="tabla" id="tabla"></table></div>
       <div class="pie"><span>La comparación usa la oferta para todos los medios de pago (no la de tarjeta). <span class="sug">?</span> = pareja sugerida, clic para confirmar o corregir.</span>
         <button class="btn" id="mas" type="button" hidden>Ver más</button></div>
@@ -146,6 +152,7 @@ b.caro { color: var(--caro) } b.barato { color: var(--barato) }
     <button class="volver" id="fVolver" type="button">← Volver a la tabla</button>
     <h1 id="fTitulo"></h1>
     <div class="muted" id="fSub"></div>
+    <button class="btn quitar" id="fQuitar" type="button" style="margin-top:10px"></button>
     <div class="precios" id="fPrecios"></div>
     <section class="card">
       <div class="ch"><h2>Historial de precios</h2><span class="muted">Se guarda un punto cada vez que el precio cambia</span></div>
@@ -155,6 +162,6 @@ b.caro { color: var(--caro) } b.barato { color: var(--barato) }
   </section>
 </main>
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="comparativo.js?v=202610211710"></script>
+<script type="module" src="comparativo.js?v=202610211800"></script>
 </body>
 </html>
