@@ -88,7 +88,7 @@ function rasgos(nombre) {
 // Unidades por presentación: "X 100TAB", "X20SOB", "Caja 100 UN"
 function unidadesDe(nombre) {
   const t = sinTildes(nombre);
-  const m = [...t.matchAll(/X\s*(\d+)\s*(TAB|CAP|COMP|SOB|AMP|UN|UND|GRAG|OVU|PAR|PZA)?/g)].pop()
+  const m = [...t.matchAll(/X\s*(\d+)\s*(TAB|CAP|COMP|COM|SOB|AMP|UN|UND|GRAG|OVU|PAR|PZA)\b/g)].pop()
     || /(\d+)\s*(UN|UND|TAB|CAP|SOB|AMP|COMP)\b/.exec(t);
   return m ? +m[1] : null;
 }
@@ -141,7 +141,7 @@ function fila(prod) {
     const pa = pareja(prod.c, t.k), p = pa.id ? S.comp[t.k]?.p[pa.id] : null;
     if (pa.id && !pa.ok) r.pendiente = true;
     if (!p) { r.t[t.k] = { pa }; continue; }
-    const pr = efectivo(p), uc = p[3] || unidadesDe(p[0] + " " + (p[2] || ""));
+    const pr = efectivo(p), uc = p[3] > 1 && /\bUN\b/i.test(p[2] || "") ? p[3] : unidadesDe(p[0] + " " + (p[2] || ""));
     // Si las presentaciones tienen distinto número de unidades, se compara por unidad
     const porU = u && uc && u !== uc, eq = porU ? pr / uc * u : pr;
     r.t[t.k] = { pa, p, pr, uc, porU, eq };
