@@ -16,7 +16,7 @@ window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, coll
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
 const VERSION_PROY = "202610211800";
-const VERSION_COMP = "202610211600";
+const VERSION_COMP = "202610211700";
 
 /* ===================== utilidades ===================== */
 const $ = id => document.getElementById(id);

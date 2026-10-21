@@ -165,7 +165,7 @@ async function cargar() {
   const [pares, cfg, maestro] = await Promise.all([
     getDoc(doc(db, "comp_config", "pares")), getDoc(doc(db, "comp_config", "lista")), getDoc(doc(db, "proy_config", "maestro")).catch(() => null)]);
   S.pares = pares.exists() ? pares.data().m || {} : {};
-  if (cfg.exists() && cfg.data().asset) S.lista = await leerBlob(cfg.data().asset);
+  if (cfg.exists() && cfg.data().asset) { S.lista = await leerBlob(cfg.data().asset); agregarAlCatalogo(); }
   if (maestro?.exists() && maestro.data().asset) S.costo = (await leerBlobProy(maestro.data().asset)).prod || {};
   msg("Buscando coincidencias…");
   await new Promise(r => setTimeout(r));
@@ -325,42 +325,76 @@ async function confirmarVisibles() {
 }
 
 /* ---------- nuestra lista de precios (Lolfar) ---------- */
-// Busca en la cabecera una columna de código y una de precio de venta.
-// TODO: ajustar los nombres de columna con el archivo real de Lolfar.
-const COL_COD = ["codpro", "codigo", "código", "cod", "cod_producto"];
-const COL_PRE = ["precio", "preven", "pvp", "precio_venta", "pventa", "prevta", "prepub"];
+// Lee .XLS/.XLSX/.CSV/.TXT. Busca la fila de cabecera con una columna de código (C-Producto, codpro…)
+// y una de precio de venta (PVP-F, precio…). Las filas de laboratorio y los totales se saltan solos.
+const ES_COD = h => /^(c-?producto|codpro|cod_?producto|codigo|c[oó]digo|cod)$/i.test(h);
+const ES_PRE = h => /^(pvp(-?f)?|precio(_?venta)?|preven|pventa|prevta|prepub)$/i.test(h);
+const ES_NOM = h => /^(producto|despro|descripcion|descripción|nombre)$/i.test(h);
+const ES_LAB = h => /^(c-?lab|laboratorio|codlab|lab)$/i.test(h);
+const aNum = v => { if (typeof v === "number") return v; const t = String(v ?? "").trim(); return +(/,\d{1,6}$/.test(t) && !/\.\d/.test(t) ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, "")); };
+// Fecha del archivo si viene en el nombre (PRECIO_DROG_ACT_031026 -> 2026-10-03); si no, hoy.
+function fechaDeNombre(nombre) {
+  const m = /(\d{2})(\d{2})(\d{2})(?!\d)/.exec(nombre);
+  if (m && +m[1] >= 1 && +m[1] <= 31 && +m[2] >= 1 && +m[2] <= 12) return `20${m[3]}-${m[2]}-${m[1]}`;
+  return new Date().toISOString().slice(0, 10);
+}
 async function subirLista(f) {
   try {
     msg(`Leyendo ${f.name}…`);
-    const texto = new TextDecoder("windows-1252").decode(await f.arrayBuffer());
-    const lineas = texto.split(/\r?\n/).filter(l => l.trim());
-    const sep = ["\t", ";", ","].sort((a, b) => lineas[0].split(b).length - lineas[0].split(a).length)[0];
-    const cab = lineas[0].split(sep).map(x => x.trim().toLowerCase().replace(/"/g, ""));
-    const ic = cab.findIndex(h => COL_COD.includes(h)), ip = cab.findIndex(h => COL_PRE.includes(h));
-    if (ic < 0 || ip < 0) throw new Error(`No encontré las columnas de código y precio. Columnas del archivo: ${cab.join(", ")}`);
-    const p = {};
-    for (const l of lineas.slice(1)) {
-      const x = l.split(sep), cod = (x[ic] || "").replace(/"/g, "").trim();
-      const t = (x[ip] || "").replace(/"/g, "").trim(), v = +(/,\d{1,2}$/.test(t) ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, ""));
-      if (cod && v > 0) p[cod] = Math.round(v * 100) / 100;
+    const libro = XLSX.read(await f.arrayBuffer(), { type: "array", codepage: 1252 });
+    const filas = XLSX.utils.sheet_to_json(libro.Sheets[libro.SheetNames[0]], { header: 1, raw: true, defval: "" });
+    let ic = -1, ip = -1, inn = -1, il = -1, inicio = 0;
+    for (let r = 0; r < Math.min(30, filas.length) && ip < 0; r++) {
+      const cab = filas[r].map(x => String(x).trim());
+      const c = cab.findIndex(ES_COD), pr = cab.findIndex(ES_PRE);
+      if (c >= 0 && pr >= 0) { ic = c; ip = pr; inn = cab.findIndex(ES_NOM); il = cab.findIndex(ES_LAB); inicio = r + 1; }
     }
-    const n = Object.keys(p).length; if (!n) throw new Error("El archivo no trajo precios.");
-    const fecha = new Date().toISOString().slice(0, 10);
-    msg("Guardando lista e historial…");
-    // historial propio: solo cambios
+    if (ip < 0) throw new Error("No encontré la fila de cabecera con el código (C-Producto) y el precio (PVP-F).");
+    const p = {}, n = {};
+    for (const x of filas.slice(inicio)) {
+      let cod = x[ic]; const v = aNum(x[ip]);
+      if (typeof cod === "number") cod = String(cod).padStart(5, "0");   // por si Excel quitó los ceros de la izquierda
+      cod = String(cod ?? "").trim();
+      if (!cod || !(v > 0) || /total/i.test(cod)) continue;
+      p[cod] = Math.round(v * 100) / 100;
+      n[cod] = [inn >= 0 ? String(x[inn]).trim() : "", il >= 0 ? String(x[il]).trim() : ""];
+    }
+    const total = Object.keys(p).length; if (!total) throw new Error("El archivo no trajo precios.");
+    const fecha = fechaDeNombre(f.name);
+    msg(`Guardando ${total.toLocaleString("es-PE")} precios del ${fechaL(fecha)}…`);
+    // historial propio: un punto solo cuando el precio cambia (un archivo más antiguo no pisa uno más nuevo)
     const hDoc = await getDoc(doc(db, "comp_config", "historial"));
     const hist = hDoc.exists() && hDoc.data().asset ? await leerBlob(hDoc.data().asset) : {};
     let cambios = 0;
-    for (const [c, v] of Object.entries(p)) { const h = hist[c] ??= []; if (!h.length || h[h.length - 1][1] !== v) { h.push([fecha, v]); cambios++; } }
-    const prevL = (await getDoc(doc(db, "comp_config", "lista"))).data()?.asset, prevH = hDoc.data()?.asset;
-    const idL = await subirBlob({ fecha, p }), idH = await subirBlob(hist);
-    await setDoc(doc(db, "comp_config", "lista"), { asset: idL, fecha, n });
+    for (const [c, v] of Object.entries(p)) {
+      const h = hist[c] ??= [];
+      if (h.some(x => x[0] === fecha)) continue;
+      const i = h.findIndex(x => x[0] > fecha), antes = (i < 0 ? h : h.slice(0, i)).at(-1);
+      if (antes && antes[1] === v) continue;
+      h.splice(i < 0 ? h.length : i, 0, [fecha, v]); cambios++;
+    }
+    const lDoc = await getDoc(doc(db, "comp_config", "lista"));
+    const masNueva = !lDoc.exists() || !lDoc.data().fecha || fecha >= lDoc.data().fecha;
+    const idH = await subirBlob(hist);
     await setDoc(doc(db, "comp_config", "historial"), { asset: idH, fecha });
-    if (prevL) borrarBlob(prevL).catch(() => {}); if (prevH) borrarBlob(prevH).catch(() => {});
-    S.lista = { fecha, p }; S.histPropio = hist;
-    msg(""); toast(`${n.toLocaleString("es-PE")} precios cargados · ${cambios.toLocaleString("es-PE")} cambiaron`);
+    if (hDoc.data()?.asset) borrarBlob(hDoc.data().asset).catch(() => {});
+    if (masNueva) {
+      const idL = await subirBlob({ fecha, p, n });
+      await setDoc(doc(db, "comp_config", "lista"), { asset: idL, fecha, n: total, archivo: f.name });
+      if (lDoc.data()?.asset) borrarBlob(lDoc.data().asset).catch(() => {});
+      S.lista = { fecha, p, n }; agregarAlCatalogo();
+    }
+    S.histPropio = hist;
+    msg(masNueva ? "" : `Este archivo es del ${fechaL(fecha)}, más antiguo que la lista vigente (${fechaL(lDoc.data().fecha)}): solo se agregó al historial.`);
+    toast(`${total.toLocaleString("es-PE")} precios leídos · ${cambios.toLocaleString("es-PE")} cambios en el historial`);
     pintarFuente(); pintar();
   } catch (e) { console.error(e); msg("No se pudo leer la lista. " + (e.message || e.code), true); }
+}
+// Productos de la lista que no están en catalogo.json también se comparan.
+function agregarAlCatalogo() {
+  if (!S.lista?.n) return;
+  const ya = new Set(S.cat.map(p => p.c));
+  for (const [c, [nom, lab]] of Object.entries(S.lista.n)) if (!ya.has(c) && nom) S.cat.push({ c, n: nom, l: lab, ln: lab });
 }
 
 /* ---------- Excel ---------- */
