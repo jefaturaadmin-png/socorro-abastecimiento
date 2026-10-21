@@ -256,7 +256,10 @@ main.sin-sesion > section { display: none !important }
         <label class="field"><span>Laboratorio</span><select id="pLab" class="sLab"><option value="">Todos</option></select></label>
         <label class="field"><span>Tipo</span><select class="sTipo"><option value="">Todos</option><option value="A">A · Regular</option><option value="B">B · Ocasional</option><option value="C">C · Esporádico</option><option value="D">D · Golondrino</option><option value="E">E · Sin movimiento</option></select></label>
         <label class="field"><span>Etiqueta</span><select class="sEtq"><option value="">Todas</option><option value="pap">Apoyo al paciente (2+1, 1+1…)</option><option value="est">Estacional</option></select></label>
-        <input id="pq" type="search" placeholder="Filtrar medicamento…" aria-label="Filtrar medicamentos" autocomplete="off">
+        <label class="field"><span>Línea</span><select class="sLin"><option value="">Todas</option></select></label>
+        <label class="field"><span>Genérico</span><input class="sGen" list="dlGen" placeholder="Todos" autocomplete="off" style="width:170px"></label>
+        <label class="field"><span>Familia</span><select class="sFam"><option value="">Todas</option></select></label>
+        <input id="pq" type="search" placeholder="Buscar nombre, código, genérico o familia…" aria-label="Filtrar medicamentos" autocomplete="off">
       </div>
     </div>
     <div class="card tipos">
@@ -281,12 +284,17 @@ main.sin-sesion > section { display: none !important }
   </section>
 
   <!-- FICHA PRONÓSTICO -->
+  <datalist id="dlGen"></datalist>
   <section id="vFichaP" hidden>
     <div class="head"><div>
       <button class="back" data-volver>← Volver</button>
       <div class="eyebrow" id="fpEyebrow"></div>
       <h1 id="fpTitulo"></h1>
     </div></div>
+    <div class="card" id="fpGenC" hidden>
+      <div class="ch"><h2 id="fpGenH"></h2><span class="note">Otros productos con el mismo genérico. Clic para abrir su ficha.</span></div>
+      <div class="scroll"><table class="cells" id="fpGen"></table></div>
+    </div>
     <div class="card">
       <div class="ch"><h2>Métodos comparados</h2><span class="note" id="fpNota"></span></div>
       <div class="scroll"><table class="cells" id="fpTabla"></table></div>
@@ -325,7 +333,10 @@ main.sin-sesion > section { display: none !important }
         <label class="field"><span>Laboratorio</span><select id="rLab" class="sLab"><option value="">Todos</option></select></label>
         <label class="field"><span>Tipo</span><select class="sTipo"><option value="">Todos</option><option value="A">A · Regular</option><option value="B">B · Ocasional</option><option value="C">C · Esporádico</option><option value="D">D · Golondrino</option><option value="E">E · Sin movimiento</option></select></label>
         <label class="field"><span>Etiqueta</span><select class="sEtq"><option value="">Todas</option><option value="pap">Apoyo al paciente (2+1, 1+1…)</option><option value="est">Estacional</option></select></label>
-        <input id="rq" type="search" placeholder="Filtrar medicamento…" aria-label="Filtrar medicamentos" autocomplete="off">
+        <label class="field"><span>Línea</span><select class="sLin"><option value="">Todas</option></select></label>
+        <label class="field"><span>Genérico</span><input class="sGen" list="dlGen" placeholder="Todos" autocomplete="off" style="width:170px"></label>
+        <label class="field"><span>Familia</span><select class="sFam"><option value="">Todas</option></select></label>
+        <input id="rq" type="search" placeholder="Buscar nombre, código, genérico o familia…" aria-label="Filtrar medicamentos" autocomplete="off">
       </div>
     </div>
     <div class="kpis" hidden>
@@ -511,7 +522,7 @@ const S = {
   db: null, assets: null,
   tab: 'pron', vista: 'pron', origen: 'pron', cur: null, unidad: 'cajas',
   pFiltro: 'todos', pMostrar: PAGINA,
-  farm: '', mesObj: '', cob: 15, seg: 15, base: '15', cat: '', etq: '', rMostrar: PAGINA,
+  farm: '', mesObj: '', cob: 15, seg: 15, base: '15', cat: '', etq: '', lin: '', gen: '', fam: '', rMostrar: PAGINA,
   M: null, almacen: '', desde: '', hasta: '', metrica: 'ventas', mMostrar: PAGINA,
   charts: {}
 };
@@ -563,12 +574,12 @@ const Q_ACTUAL = () => ({ pron: $('pq').value, rep: $('rq').value, ped: $('qq').
 function porQueNo(q) {
   const c = String(q || '').trim(); if (!/^\d{3,6}$/.test(c)) return 'Ningún medicamento coincide con el filtro.';
   const cod = c.padStart(5, '0'), p = S.idx.get(cod) || S.idx.get(c);
-  if (p) return `El código ${c} (${p.n}) existe, pero lo ocultan los filtros elegidos (laboratorio, tipo, etiqueta o "Mostrar").`;
+  if (p) return `El código ${c} (${p.n}) existe, pero lo ocultan los filtros elegidos (laboratorio, tipo, línea, genérico, familia, etiqueta o "Mostrar").`;
   const mp = window.MAESTRO?.prod?.[cod] || window.MAESTRO?.prod?.[c];
   if (mp) return `El código ${c} (${mp[0]}) está en el kardex pero todavía no en los cálculos: recarga la página para que se recalcule.`;
   return `El código ${c} no está en nada de lo guardado: ni en el historial de Colab ni en los kardex subidos (no tuvo ningún movimiento en esos archivos). Aparecerá cuando suba un kardex donde tenga movimientos.`;
 }
-const filtroTexto = (lista, q) => { q = q.trim().toUpperCase(); return q ? lista.filter(p => q.split(/\s+/).every(w => (p.c + ' ' + p.n).toUpperCase().includes(w))) : lista; };
+const filtroTexto = (lista, q) => { q = q.trim().toUpperCase(); if (!q) return lista; const ws = q.split(/\s+/); return lista.filter(p => { const t = (p.c + ' ' + p.n + ' ' + textoClas(p.p || p)).toUpperCase(); return ws.every(w => t.includes(w)); }); };
 
 /* ---------- datos de ejemplo (formato del archivo de pronósticos) ---------- */
 function ejemplo() {
@@ -844,6 +855,40 @@ document.querySelectorAll('.sLab').forEach(s => s.addEventListener('change', e =
   S.pMostrar = S.rMostrar = PAGINA; render();
 }));
 
+/* ---------- línea, genérico y familia (clasificacion.json, por nombre del producto) ---------- */
+let CLAS = null;
+const nomN = s => String(s || '').trim().toUpperCase().replace(/\s+/g, ' ');
+fetch('clasificacion.json').then(r => r.json()).then(c => { CLAS = c; clasDe = null; if (S.P) render(); }).catch(() => {});
+let clasDe = null;
+// { t: línea, g: genérico, f: familia } del producto ('' si no se conoce)
+function clas(p) {
+  if (!CLAS) return { t: '', g: '', f: '' };
+  if (clasDe !== CLAS) { clasDe = CLAS; CLAS.cache = new Map(); }
+  let x = CLAS.cache.get(p.c);
+  if (!x) { const a = CLAS.p[nomN(p.n)] || [-1, -1, -1]; x = { t: CLAS.t[a[0]] || '', g: CLAS.g[a[1]] || '', f: CLAS.f[a[2]] || '' }; CLAS.cache.set(p.c, x); }
+  return x;
+}
+const textoClas = p => { const x = clas(p); return x.t + ' ' + x.g + ' ' + x.f; };
+const pasaClas = p => { if (!S.lin && !S.gen && !S.fam) return true; const x = clas(p); return (!S.lin || x.t === S.lin) && (!S.gen || x.g === S.gen) && (!S.fam || x.f === S.fam); };
+let clasLlenos = null;
+function llenarClas() {
+  if (!CLAS || clasLlenos === S.P) return; clasLlenos = S.P;
+  const n = { t: new Map(), g: new Map(), f: new Map() };
+  for (const p of S.P.p) { const x = clas(p); for (const k of ['t', 'g', 'f']) if (x[k]) n[k].set(x[k], (n[k].get(x[k]) || 0) + 1); }
+  const op = (m, todo) => `<option value="">${todo}</option>` + [...m.keys()].sort().map(v => `<option value="${esc(v)}">${esc(v)} (${m.get(v)})</option>`).join('');
+  document.querySelectorAll('.sLin').forEach(s => { s.innerHTML = op(n.t, 'Todas'); s.value = S.lin; });
+  document.querySelectorAll('.sFam').forEach(s => { s.innerHTML = op(n.f, 'Todas'); s.value = S.fam; });
+  $('dlGen').innerHTML = [...n.g.keys()].sort().map(v => `<option value="${esc(v)}">${n.g.get(v)} productos</option>`).join('');
+}
+const unir = (cls, k, ev) => document.querySelectorAll(cls).forEach(s => s.addEventListener(ev, e => {
+  let v = e.target.value.trim();
+  if (k === 'gen' && v) { const u = v.toUpperCase(), g = CLAS?.g.find(x => x === u) || CLAS?.g.find(x => x.startsWith(u)); if (!g) return; v = g; }
+  S[k] = v; document.querySelectorAll(cls).forEach(x => x.value = v);
+  S.pMostrar = S.rMostrar = PAGINA; render();
+}));
+unir('.sLin', 'lin', 'change'); unir('.sFam', 'fam', 'change'); unir('.sGen', 'gen', 'change');
+document.querySelectorAll('.sGen').forEach(s => s.addEventListener('input', e => { if (!e.target.value && S.gen) { S.gen = ''; document.querySelectorAll('.sGen').forEach(x => x.value = ''); render(); } }));
+
 const catBadge = c => `<span class="cat ${c}" title="${c} · ${NCAT[c]}">${c}</span>`;
 const etiquetas = p => (p.pap ? '<span class="tag pap" title="Programa de apoyo al paciente">PAP</span>' : '') + (p.est ? '<span class="tag est" title="Venta por temporadas">Estacional</span>' : '');
 // en Reposición por farmacia se usa la categoría de esa farmacia
@@ -851,7 +896,7 @@ const pasaTipo = p => {
   const per = S.vista === 'pron' && S.tPer;
   if (per && p.fueraP) return false;
   const c = S.vista === 'rep' && S.farm ? (p.catF?.[S.farm] || 'E') : per ? p.catP : p.cat;
-  return (!S.cat || c === S.cat) && (!S.etq || (S.etq === 'pap' ? p.pap : p.est));
+  return (!S.cat || c === S.cat) && (!S.etq || (S.etq === 'pap' ? p.pap : p.est)) && pasaClas(p);
 };
 document.querySelectorAll('.sTipo').forEach(s => s.addEventListener('change', e => { S.cat = e.target.value; document.querySelectorAll('.sTipo').forEach(x => x.value = S.cat); S.pMostrar = S.rMostrar = PAGINA; render(); }));
 document.querySelectorAll('.sEtq').forEach(s => s.addEventListener('change', e => { S.etq = e.target.value; document.querySelectorAll('.sEtq').forEach(x => x.value = S.etq); S.pMostrar = S.rMostrar = PAGINA; render(); }));
@@ -908,7 +953,7 @@ $('tPer').addEventListener('click', e => { const b = e.target.closest('[data-d]'
 $('tDias').addEventListener('change', e => { const v = Math.round(+e.target.value || 0), cob = S.P?.dias ? Math.min(90, S.P.dias.n - (S.P.dias.primero ?? 0)) : 0; S.tPer = v > 0 ? Math.min(v, cob || 90) : 0; e.target.value = S.tPer || ''; S.pMostrar = PAGINA; pintarPron(); });
 function pintarPron() {
   const o = S.P, mets = o.metodos, conv = (p, v) => soles() ? v * p.k : v;
-  llenarLabs(); pintarTipos();
+  llenarLabs(); llenarClas(); pintarTipos();
   let lista = o.p;
   if (S.lab) lista = lista.filter(p => labDe(p.c) === S.lab);
   lista = lista.filter(pasaTipo);
@@ -921,7 +966,7 @@ function pintarPron() {
     <th class="sep"><button type="button" class="btn sm" data-vermet title="${S.verMet ? 'Ocultar' : 'Ver'} el error de cada modelo y el método usado">${S.verMet ? '◂ Ocultar modelos' : 'Modelos ▸'}</button></th>${o.fm.map(m => `<th class="pj">${et(m)}</th>`).join('')}</tr></thead><tbody>`;
   for (const p of vis) {
     const k = S.calc.get(p.c), sel = elegido(p.c), esMan = manual(p.c);
-    h += `<tr data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${etiquetas(p)}</td>
+    h += `<tr data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${etiquetas(p)}${(() => { const x = clas(p); return x.g || x.f ? `<small class="sub">${esc([x.g, x.f].filter(Boolean).join(' · '))}</small>` : ''; })()}</td>
       <td style="text-align:center">${catBadge(S.tPer && p.catP ? p.catP : p.cat)}</td>
       ${(() => { const s = stockTotal(p); return `<td class="n big" title="Droguería ${fmtS(p, conv(p, s.d))} · sucursales y otros almacenes ${fmtS(p, conv(p, s.t - s.d))}">${s.t ? fmtS(p, conv(p, s.t)) : '<span class="z">0</span>'}</td>`; })()}
       <td class="n">${fmtE(p, conv(p, k.prom))}</td>
@@ -986,6 +1031,21 @@ function errores(p) {
   let best = null; for (const [m, x] of Object.entries(met)) if (x.wape != null && (best == null || x.wape < met[best].wape)) best = m;
   return { real, met, best: best || Object.keys(met)[0] || null };
 }
+// en la ficha: línea, genérico y familia, y los otros productos del mismo genérico
+function pintarMismoGen(p) {
+  const x = clas(p), lab = labDe(p.c);
+  $('fpEyebrow').innerHTML += [lab && `Laboratorio <b>${esc(lab)}</b>`, x.t && `Línea <b>${esc(x.t)}</b>`, x.g && `Genérico <b>${esc(x.g)}</b>`, x.f && `Familia <b>${esc(x.f)}</b>`].filter(Boolean).map(s => ' · ' + s).join('');
+  const otros = x.g ? S.P.p.filter(q => q.c !== p.c && clas(q).g === x.g) : [];
+  $('fpGenC').hidden = !otros.length; if (!otros.length) return;
+  otros.sort((a, b) => (S.calc.get(b.c)?.prom || 0) - (S.calc.get(a.c)?.prom || 0));
+  $('fpGenH').textContent = `Mismo genérico: ${x.g} (${otros.length + 1} productos)`;
+  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Producto</th><th style="text-align:left">Laboratorio</th><th>Tipo</th><th>Stock actual</th><th>Prom. 3m</th></tr></thead><tbody>`;
+  for (const q of otros) { const s = stockTotal(q);
+    h += `<tr><td class="c0">${esc(q.c)}</td><td class="c1"><a class="nm" data-gen="${esc(q.c)}">${esc(q.n)}</a></td><td style="text-align:left">${esc(labDe(q.c))}</td><td style="text-align:center">${catBadge(q.cat)}</td>
+      <td class="n">${s.t ? fmtS(q, s.t) : '<span class="z">0</span>'}</td><td class="n">${fmtE(q, S.calc.get(q.c)?.prom || 0)}</td></tr>`; }
+  $('fpGen').innerHTML = h + '</tbody>'; ajustarC0($('fpGen'));
+}
+$('fpGen').addEventListener('click', e => { const a = e.target.closest('[data-gen]'); if (a) abrirFichaP(a.dataset.gen, S.origen); });
 function pintarFichaP() {
   const o = S.P, p0 = S.idx.get(S.cur); if (!p0) { S.vista = 'pron'; return render(); }
   const p = baseLocal(p0), k = errores(p), esMan = manual(p.c);
@@ -995,6 +1055,7 @@ function pintarFichaP() {
   const conv = v => v == null ? null : soles() ? v * p.k : v, nE = v => fmtE(p, conv(v));
   $('fpEyebrow').innerHTML = `Código <code>${esc(p.c)}</code> · ${p.a ? 'apto para SARIMA' : 'baja rotación: solo métodos simples'}`;
   $('fpTitulo').textContent = p.n;
+  pintarMismoGen(p);
   $('fpNota').textContent = sel ? '' : 'Sin ventas en el historial guardado: no hay pronóstico.';
   const av = avance(p), pron0 = sel ? p.f[sel]?.[0] : null;
   const mets = Object.keys(k.met).sort((a, b) => (k.met[a].wape ?? 9) - (k.met[b].wape ?? 9));
@@ -1185,7 +1246,7 @@ function pintarRep() {
   $('rPresL').textContent = todas ? 'Comprar para (días + seguridad)' : 'Repartir para (días + seguridad)';
   $('rCobL').textContent = 'Otro (días)';
   $('rPres').innerHTML = pres.map(([d, s, t]) => `<button type="button" data-d="${d}" data-s="${s}" aria-pressed="${S.cob === d && S.seg === s}">${t}</button>`).join('');
-  llenarLabs();
+  llenarLabs(); llenarClas();
   $('rEyebrow').textContent = `Ventas de los últimos ${n} días · abastecer para ${S.cob} días + ${S.seg} de seguridad`;
   $('rTitulo').textContent = todas ? 'Compra de droguería' : S.farm;
   $('rH2').textContent = todas ? 'Compra sugerida por medicamento' : 'Entrega sugerida desde droguería';
@@ -1260,7 +1321,7 @@ function pintarRepMes() {
   $('rNota').textContent = `Demanda real ${todas ? 'de todas las farmacias' : 'estimada de la farmacia (por su participación)'}; pronóstico con el método elegido en la pestaña Pronóstico.`;
   $('rk1l').textContent = todas ? 'Medicamentos a comprar' : 'Medicamentos a reponer';
   $('rk2l').textContent = todas ? 'Cajas a comprar' : 'Cajas a entregar';
-  llenarLabs();
+  llenarLabs(); llenarClas();
   const lista = [];
   for (const p of o.p) {
     if (S.lab && labDe(p.c) !== S.lab) continue;
@@ -1505,7 +1566,7 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610211700"></script>
-<script type="module" src="proyeccion.js?v=202610211700"></script>
+<script src="mapa.js?v=202610211800"></script>
+<script type="module" src="proyeccion.js?v=202610211800"></script>
 
 </body></html>
