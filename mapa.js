@@ -439,9 +439,9 @@
       const svg = $('mPlano').innerHTML.replace(/href="(planos\/[^"]+)"/g, () => `href="${datos[n]}"`);
       const filas = anaqs(n).map(a => ({ a, l: M.asig.get(a.id) || [] })).filter(x => x.l.length);
       const resp = a => M.cfg.resp?.[grupoDe(a.t) || a.id] || '';
-      paginas += `<section><h1>Droguería FS · ${PISOS[n].nombre}</h1><p class="sub">Distribución de laboratorios por anaquel · calor por ${M.medida === 'mov' ? 'movimiento (cajas al mes)' : 'stock en droguería'} · ${fecha}</p>
+      paginas += `<section class="piso${n}"><h1>Droguería FS · ${PISOS[n].nombre}</h1>
         <div class="plano">${svg}</div>
-        <table><thead><tr><th>Anaquel</th><th>Responsable</th><th>Laboratorios</th></tr></thead><tbody>${filas.map(({ a, l }) => `<tr><td><b>${esc(a.t)}</b></td><td>${esc(resp(a))}</td><td>${l.map(x => `${esc(x.lab)} <i>(${esc(inicial(x.lab))})</i>`).join(' · ')}</td></tr>`).join('') || '<tr><td colspan="3">Sin laboratorios colocados.</td></tr>'}</tbody></table></section>`;
+        <table class="leyenda"><thead><tr><th>Anaquel</th><th>Responsable</th><th>Laboratorios</th></tr></thead><tbody>${filas.map(({ a, l }) => `<tr><td><b>${esc(a.t)}</b></td><td>${esc(resp(a))}</td><td>${l.map(x => `${esc(x.lab)} <i>(${esc(inicial(x.lab))})</i>`).join(' · ')}</td></tr>`).join('') || '<tr><td colspan="3">Sin laboratorios colocados.</td></tr>'}</tbody></table></section>`;
     }
     M.piso = antes.piso; M.sel = antes.sel; M.editar = antes.editar; pintar();
     const css = [...document.styleSheets].map(sh => { try { return [...sh.cssRules].map(r => r.cssText).join('\n'); } catch { return ''; } }).join('\n');
@@ -450,11 +450,20 @@
       section { page-break-after: always } section:last-child { page-break-after: auto } h1 { font-size: 18px; margin: 0 0 2px } .sub { margin: 0 0 6px; color: #555 }
       .plano { padding: 0 } .plano svg { width: 100%; height: auto; max-height: 150mm } table { width: 100%; border-collapse: collapse; margin-top: 8px; page-break-inside: auto }
       th, td { border: 1px solid #ccc; padding: 3px 6px; text-align: left; vertical-align: top } tr { page-break-inside: avoid } th { background: #f2f2f2 } td i { color: #777; font-style: normal }
-      .no-print { position: fixed; top: 8px; right: 8px } @media print { .no-print { display: none } }</style></head>
-      <body><button class="no-print" onclick="print()">Imprimir / Guardar como PDF</button>${paginas}</body></html>`);
+      .no-print { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; padding: 10px 14px; margin-bottom: 10px; background: #f4f4f4; border-bottom: 1px solid #ccc; font-size: 13px }
+      .no-print button { font: inherit; padding: 6px 14px; cursor: pointer } .oculto { display: none !important } .sin-leyenda .leyenda { display: none }
+      .sin-leyenda section { page-break-after: always } .sin-leyenda .plano svg { max-height: 180mm }
+      @media print { .no-print { display: none } }</style></head>
+      <body class="sin-leyenda"><div class="no-print">
+        <label><input type="checkbox" id="p1" checked> Primer piso</label><label><input type="checkbox" id="p2" checked> Segundo piso</label>
+        <label><input type="checkbox" id="ley"> Incluir leyenda (laboratorios de cada anaquel)</label>
+        <button onclick="print()">Imprimir / Guardar como PDF</button></div>${paginas}
+      <script>
+        const v = () => { document.querySelector('.piso1').classList.toggle('oculto', !p1.checked); document.querySelector('.piso2').classList.toggle('oculto', !p2.checked); document.body.classList.toggle('sin-leyenda', !ley.checked); };
+        [p1, p2, ley].forEach(c => c.addEventListener('change', v));
+      <\/script></body></html>`);
     w.document.close();
-    const imprimir = () => { try { w.focus(); w.print(); } catch {} };
-    if (w.document.readyState === 'complete') setTimeout(imprimir, 800); else w.addEventListener('load', () => setTimeout(imprimir, 400));
+    w.focus();
   }
   $('mPDF').addEventListener('click', descargarPDF);
   $('mAuto').addEventListener('click', () => { if (!M.cfg) return; M.cfg.manual = !M.cfg.manual; guardar(); pintar(); toast(M.cfg.manual ? 'Solo se muestran los laboratorios que colocaste' : 'Los laboratorios sin colocar se reparten solos'); });
