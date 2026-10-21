@@ -1,5 +1,5 @@
 """
-Precios de la competencia (Mifarma y Boticas Perú) para el módulo Comparativo.
+Precios de la competencia (Mifarma, Boticas Perú y Farmacias Líder) para el módulo Comparativo.
 
 Lo ejecuta GitHub Actions cada noche (.github/workflows/precios.yml) y guarda en data/competencia/:
   mifarma.json / boticasperu.json   -> catálogo de hoy  {"fecha": "...", "p": {id: [nombre, marca, presentación, unidades, precio, oferta, tarjeta, url]}}
@@ -169,6 +169,59 @@ def boticasperu():
     return out
 
 
+# ============================ FARMACIAS LÍDER ============================
+FL = "https://farmaciaslider.pe"
+
+
+def fl_tarjetas(html, out):
+    """Lee las tarjetas de producto de una página de categoría o de búsqueda."""
+    soup = BeautifulSoup(html, "html.parser")
+    nuevos = 0
+    for card in soup.select("div.card-body"):
+        a = card.select_one("h3.product-name a")
+        pre = card.select_one(".preciocatalogo")
+        if not a or not pre:
+            continue
+        m = re.search(r"/product/[^/]+/(\w+)/?$", a.get("href", ""))
+        if not m or m.group(1) in out:
+            continue
+        precio = num(re.sub(r"[^\d.]", "", pre.get_text().replace(",", "")))
+        if not precio:
+            continue
+        antes = card.select_one(".product-price del")
+        antes = num(re.sub(r"[^\d.]", "", antes.get_text().replace(",", ""))) if antes else None
+        nombre = a.get_text(strip=True)
+        unidad = card.select_one("#productname2")
+        marca = nombre.rsplit(" - ", 1)[1] if " - " in nombre else None
+        # si hay precio tachado, el regular es el tachado y "precio" es la oferta
+        out[m.group(1)] = [nombre, marca, unidad.get_text(strip=True) if unidad else None, unidades(nombre),
+                           antes or precio, precio if antes and antes > precio else None, None, a["href"]]
+        nuevos += 1
+    return nuevos
+
+
+def farmaciaslider():
+    out = {}
+    r = pedir(FL + "/")
+    cats = list(dict.fromkeys(re.findall(r'href="(https://farmaciaslider\.pe/category/p/[^"]+)"', r.text if r else "")))
+    print(f"Farmacias Líder: {len(cats)} categorías")
+    for i, c in enumerate(cats):
+        rr = pedir(c)
+        if rr is not None and rr.status_code == 200:
+            fl_tarjetas(rr.text, out)
+        if i % 20 == 0:
+            print(f"  categoría {i + 1}/{len(cats)} · {len(out)} productos")
+        time.sleep(PAUSA)
+    # Por si alguna categoría no trae todo: búsquedas amplias (el buscador devuelve todo sin páginas)
+    for q in list("aeiou") + ["x", "mg", "ml"]:
+        rr = pedir(FL + "/category_product_search", params={"product_name": q})
+        if rr is not None and rr.status_code == 200:
+            n = fl_tarjetas(rr.text, out)
+            print(f"  búsqueda '{q}': +{n} · total {len(out)}")
+        time.sleep(PAUSA)
+    return out
+
+
 # ============================ GUARDAR ============================
 def guardar(tienda, prods):
     CARPETA.mkdir(parents=True, exist_ok=True)
@@ -192,11 +245,11 @@ def guardar(tienda, prods):
 
 
 if __name__ == "__main__":
-    tiendas = sys.argv[1:] or ["boticasperu", "mifarma"]
+    tiendas = sys.argv[1:] or ["boticasperu", "farmaciaslider", "mifarma"]
     ok = True
     for t in tiendas:
         try:
-            ok &= guardar(t, {"mifarma": mifarma, "boticasperu": boticasperu}[t]())
+            ok &= guardar(t, {"mifarma": mifarma, "boticasperu": boticasperu, "farmaciaslider": farmaciaslider}[t]())
         except SystemExit as e:
             print(e); ok = False
         except Exception as e:

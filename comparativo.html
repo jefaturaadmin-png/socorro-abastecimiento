@@ -13,7 +13,7 @@
 /* Comparativo: verde azulado, para distinguirlo de Bloqueos (azul) y Proyección (naranja) */
 :root {
   --bg: #f2f7f6; --surface: #ffffff; --line: #d8e6e3; --fg: #14211f; --muted: #5d716d;
-  --accent: #0f7b6c; --accent-soft: #d9efeb; --s2: #e2620d; --s3: #3d5a99;
+  --accent: #0f7b6c; --accent-soft: #d9efeb; --s2: #e2620d; --s3: #3d5a99; --s4: #8a4f9e;
   --caro: #b6400b; --caro-soft: #fbe6d6; --barato: #1f7a3d; --barato-soft: #dcf0e2; --warn: #9a6a00; --warn-soft: #f6ead0;
   --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
@@ -21,11 +21,11 @@
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #0f1716; --surface: #172220; --line: #2a3a37; --fg: #e8f1ef; --muted: #96aba6;
-  --accent: #3cc2ad; --accent-soft: #163330; --s2: #ff8a3d; --s3: #8aa6e6;
+  --accent: #3cc2ad; --accent-soft: #163330; --s2: #ff8a3d; --s3: #8aa6e6; --s4: #c48ad6;
   --caro: #ff8a3d; --caro-soft: #3a2416; --barato: #5fd08a; --barato-soft: #16301f; --warn: #e0b543; --warn-soft: #33290f; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #0f1716; --surface: #172220; --line: #2a3a37; --fg: #e8f1ef; --muted: #96aba6;
-  --accent: #3cc2ad; --accent-soft: #163330; --s2: #ff8a3d; --s3: #8aa6e6;
+  --accent: #3cc2ad; --accent-soft: #163330; --s2: #ff8a3d; --s3: #8aa6e6; --s4: #c48ad6;
   --caro: #ff8a3d; --caro-soft: #3a2416; --barato: #5fd08a; --barato-soft: #16301f; --warn: #e0b543; --warn-soft: #33290f; color-scheme: dark }
 * { box-sizing: border-box }
 [hidden] { display: none !important }
@@ -62,7 +62,7 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .card .ch { padding: 12px 16px 6px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between }
 .card h2 { font-family: var(--f-display); font-size: 17px; font-weight: 600; margin: 0 }
 .scroll { overflow: auto; max-height: 70vh; border-top: 1px solid var(--line) }
-.tabla { border-collapse: separate; border-spacing: 0; font-size: 13px; width: 100%; min-width: 980px }
+.tabla { border-collapse: separate; border-spacing: 0; font-size: 13px; width: 100%; min-width: 1180px }
 .tabla th, .tabla td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; vertical-align: top }
 .tabla thead th { position: sticky; top: 0; z-index: 2; background: var(--surface); font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--fg) }
 .tabla .l { text-align: left; min-width: 240px }
@@ -162,6 +162,6 @@ b.caro { color: var(--caro) } b.barato { color: var(--barato) }
   </section>
 </main>
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="comparativo.js?v=202610211800"></script>
+<script type="module" src="comparativo.js?v=202610211900"></script>
 </body>
 </html>

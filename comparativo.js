@@ -55,7 +55,8 @@ async function leerBlobProy(id) {
 }
 
 /* ---------- estado ---------- */
-const TIENDAS = [{ k: "mf", archivo: "mifarma", nombre: "Mifarma" }, { k: "bp", archivo: "boticasperu", nombre: "Boticas Perú" }];
+const TIENDAS = [{ k: "mf", archivo: "mifarma", nombre: "Mifarma", color: "--s2" }, { k: "bp", archivo: "boticasperu", nombre: "Boticas Perú", color: "--s3" },
+  { k: "fl", archivo: "farmaciaslider", nombre: "Farmacias Líder", color: "--s4" }];
 const S = {
   cat: [],            // nuestro catálogo [{c, n, l, ln}]
   comp: {},           // mf/bp: { fecha, p: {id: [nombre, marca, pres, unidades, precio, oferta, tarjeta, url]} }
@@ -239,7 +240,7 @@ function pintar() {
       `<td class="n muted">${r.nuestro && r.costo ? pct(1 - r.costo / r.nuestro) : "–"}</td>` +
       TIENDAS.map(t => celdaTienda(r, t.k)).join("") +
       `<td class="n dif ${r.dif > 0.005 ? "caro" : r.dif < -0.005 ? "barato" : ""}">${pct(r.dif)}</td></tr>`).join("") ||
-      `<tr><td colspan="8" class="vacio-tabla">${S.lista || S.filtro !== "comparados" ? "Nada con estos filtros." : "Sube la lista de precios de Lolfar para ver la comparación, o cambia el filtro a «Todos»."}</td></tr>`) +
+      `<tr><td colspan="${6 + TIENDAS.length}" class="vacio-tabla">${S.lista || S.filtro !== "comparados" ? "Nada con estos filtros." : "Sube la lista de precios de Lolfar para ver la comparación, o cambia el filtro a «Todos»."}</td></tr>`) +
     `</tbody>`;
   $("mas").hidden = lista.length <= S.mostrar;
   pintarSel();
@@ -298,7 +299,7 @@ function pintarGrafico() {
   const fechas = new Set(), series = [];
   const agregar = (nombre, color, h) => { if (!h?.length) return; h.forEach(x => fechas.add(x[0])); series.push({ nombre, color, h }); };
   agregar("Nuestro precio", css("--accent"), (S.histPropio[S.ficha] || []).map(([f, p]) => [f, p]));
-  TIENDAS.forEach((t, i) => { const id = pareja(S.ficha, t.k).id; if (id) agregar(t.nombre, css(i ? "--s3" : "--s2"), (S.hist[t.k][id] || []).map(([f, p, o]) => [f, o && o < p ? o : p])); });
+  TIENDAS.forEach(t => { const id = pareja(S.ficha, t.k).id; if (id) agregar(t.nombre, css(t.color), (S.hist[t.k][id] || []).map(([f, p, o]) => [f, o && o < p ? o : p])); });
   const ejes = [...fechas].sort(); const hoy = new Date().toISOString().slice(0, 10); if (ejes.length && ejes[ejes.length - 1] < hoy) ejes.push(hoy);
   // el precio se mantiene hasta que cambia (solo se guardan los cambios)
   const datos = s => { let i = 0, v = null; return ejes.map(f => { while (i < s.h.length && s.h[i][0] <= f) v = s.h[i++][1]; return v; }); };
