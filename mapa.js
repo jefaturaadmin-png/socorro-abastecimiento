@@ -154,7 +154,9 @@
       <rect x="${vx}" y="${vy}" width="${vw}" height="${vh}" fill="#fff"/>
       <g filter="url(#mBlur)">${halos}</g>
       <image href="${P.fondo}" x="0" y="0" width="841.92" height="595.32" style="mix-blend-mode:multiply"/>
-      ${cajas}${textos}<rect id="mNuevo" class="nuevo" x="0" y="0" width="0" height="0"/></svg>`;
+      ${cajas}${textos}<g class="dibs">${(M.cfg?.dibujos?.[M.piso] || []).map((d, i) => figura(d, i)).join('')}</g><g id="mPrev"></g>
+      <rect id="mNuevo" class="nuevo" x="0" y="0" width="0" height="0"/></svg>`;
+    $('mPlano').classList.toggle('dibujando', !!M.dib); pintarDibujo();
     pintarEdicion();
     $('mAuto').setAttribute('aria-pressed', !M.cfg?.manual); $('mAuto').textContent = M.cfg?.manual ? 'Reparto automático: no' : 'Reparto automático: sí';
     const su = M.sinUbicar || [], qs = ($('mqSin').value || '').trim().toUpperCase();
@@ -178,6 +180,66 @@
           <select data-fijar="${esc(x.lab)}" aria-label="Añadir anaquel"><option value="">＋ Añadir anaquel…</option>${[1, 2].map(n => `<optgroup label="${PISOS[n].nombre}">${anaqs(n).filter(a => !x.fijo?.includes(a.id)).map(a => `<option value="${a.id}">${esc(a.t)}</option>`).join('')}</optgroup>`).join('')}</select></td></tr>`).join('') + '</tbody>';
   }
   window.pintarMapa = pintar;
+
+  /* ---------- dibujos sobre el plano: flecha, círculo, cuadrado, triángulo y texto (se guardan por piso) ---------- */
+  const COLORES = ['#d62828', '#1d4ed8', '#15803d', '#e2620d', '#111111'];
+  function figura(d, i) {
+    const c = d.c || '#d62828', sw = d.g || 2, x = Math.min(d.x1, d.x2), y = Math.min(d.y1, d.y2), w = Math.abs(d.x2 - d.x1), h = Math.abs(d.y2 - d.y1);
+    const sel = M.dib && M.dibSel === i ? ' sel' : '', at = i == null ? '' : ` data-d="${i}"`;
+    const base = `class="dib${sel}"${at} fill="none" stroke="${c}" stroke-width="${sw}" stroke-linejoin="round" stroke-linecap="round"`;
+    if (d.t === 'flecha') {
+      const ang = Math.atan2(d.y2 - d.y1, d.x2 - d.x1), L = 6 + sw * 2.2, a1 = ang + 2.7, a2 = ang - 2.7;
+      return `<g ${base}><line x1="${d.x1}" y1="${d.y1}" x2="${d.x2}" y2="${d.y2}"/><polygon points="${d.x2},${d.y2} ${d.x2 + L * Math.cos(a1)},${d.y2 + L * Math.sin(a1)} ${d.x2 + L * Math.cos(a2)},${d.y2 + L * Math.sin(a2)}" fill="${c}"/><line class="toque" x1="${d.x1}" y1="${d.y1}" x2="${d.x2}" y2="${d.y2}" stroke="transparent" stroke-width="10"/></g>`;
+    }
+    if (d.t === 'circulo') return `<ellipse ${base} cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}"/>`;
+    if (d.t === 'cuadrado') return `<rect ${base} x="${x}" y="${y}" width="${w}" height="${h}"/>`;
+    if (d.t === 'triangulo') return `<polygon ${base} points="${x + w / 2},${y} ${x + w},${y + h} ${x},${y + h}"/>`;
+    if (d.t === 'texto') return `<text class="dib dibt${sel}"${at} x="${d.x1}" y="${d.y1}" fill="${c}" style="font-size:${d.f || 12}px">${esc(d.texto)}</text>`;
+    return '';
+  }
+  function pintarDibujo() {
+    const b = $('mDibujar'); b.setAttribute('aria-pressed', !!M.dib); b.textContent = M.dib ? '✓ Terminar dibujo' : '✏ Dibujar';
+    const box = $('mDib'); box.hidden = !M.dib; if (!M.dib) return;
+    const H = [['flecha', '➜ Flecha'], ['circulo', '◯ Círculo'], ['cuadrado', '▢ Cuadrado'], ['triangulo', '△ Triángulo'], ['texto', 'T Texto'], ['borrar', '⌫ Borrar']];
+    box.innerHTML = H.map(([k, t]) => `<button type="button" class="btn sm ${M.dib.h === k ? 'on' : ''}" data-h="${k}">${t}</button>`).join('') +
+      `<span class="sep"></span>${COLORES.map(c => `<button type="button" class="col ${M.dib.c === c ? 'on' : ''}" data-c="${c}" style="background:${c}" aria-label="Color ${c}"></button>`).join('')}
+      <label>Grosor <select data-g>${[1, 2, 3, 5].map(g => `<option ${M.dib.g === g ? 'selected' : ''}>${g}</option>`).join('')}</select></label>
+      <span class="z">${M.dib.h === 'borrar' ? 'Toca un dibujo para borrarlo.' : M.dib.h === 'texto' ? 'Toca el plano donde va el texto.' : 'Arrastra sobre el plano para dibujar.'}</span>
+      <button type="button" class="btn sm rojo" data-h="todo" style="margin-left:auto">Borrar todos los dibujos de este piso</button>`;
+  }
+  const dibujos = () => { M.cfg.dibujos ??= {}; return (M.cfg.dibujos[M.piso] ??= []); };
+  $('mDibujar').addEventListener('click', () => { M.dib = M.dib ? null : { h: 'flecha', c: COLORES[0], g: 2 }; M.editar = false; M.dibujar = false; pintar(); });
+  $('mDib').addEventListener('click', e => {
+    const h = e.target.closest('[data-h]'), c = e.target.closest('[data-c]');
+    if (c) { M.dib.c = c.dataset.c; return pintarDibujo(); }
+    if (!h) return;
+    if (h.dataset.h === 'todo') { if (M.cfg && confirm('¿Borrar todos los dibujos de este piso?')) { M.cfg.dibujos[M.piso] = []; guardar(); pintar(); } return; }
+    M.dib.h = h.dataset.h; pintarDibujo();
+  });
+  $('mDib').addEventListener('change', e => { if (e.target.matches('[data-g]')) M.dib.g = +e.target.value; });
+  let dz = null;
+  $('mPlano').addEventListener('pointerdown', e => {
+    if (!M.dib || e.button || !M.cfg) return;
+    e.stopImmediatePropagation(); e.preventDefault(); const p = enPlano(e);
+    if (M.dib.h === 'borrar') { const f = e.target.closest('[data-d]'); if (f) { dibujos().splice(+f.dataset.d, 1); guardar(); pintar(); } return; }
+    if (M.dib.h === 'texto') {
+      const t = prompt('Texto:'); if (!t || !t.trim()) return;
+      dibujos().push({ t: 'texto', x1: p.x, y1: p.y, x2: p.x, y2: p.y, c: M.dib.c, f: 6 + M.dib.g * 3, texto: t.trim().slice(0, 80) }); guardar(); pintar(); return;
+    }
+    dz = { t: M.dib.h, x1: p.x, y1: p.y, x2: p.x, y2: p.y, c: M.dib.c, g: M.dib.g }; $('mPlano').setPointerCapture(e.pointerId);
+  }, true);
+  $('mPlano').addEventListener('pointermove', e => {
+    if (!dz) return; e.stopImmediatePropagation(); const p = enPlano(e);
+    dz.x2 = p.x; dz.y2 = p.y; if (e.shiftKey && dz.t !== 'flecha') { const m = Math.max(Math.abs(dz.x2 - dz.x1), Math.abs(dz.y2 - dz.y1)); dz.x2 = dz.x1 + Math.sign(dz.x2 - dz.x1 || 1) * m; dz.y2 = dz.y1 + Math.sign(dz.y2 - dz.y1 || 1) * m; }
+    $('mPrev').innerHTML = figura(dz, null);
+  }, true);
+  $('mPlano').addEventListener('pointerup', e => {
+    if (!dz) return; e.stopImmediatePropagation(); const d = dz; dz = null;
+    if (Math.hypot(d.x2 - d.x1, d.y2 - d.y1) < 3) { $('mPrev').innerHTML = ''; return; }
+    for (const k of ['x1', 'y1', 'x2', 'y2']) d[k] = Math.round(d[k] * 10) / 10;
+    dibujos().push(d); guardar(); pintar();
+  }, true);
+  $('mPlano').addEventListener('click', e => { if (M.dib) e.stopImmediatePropagation(); }, true);
   const grupoDe = t => (/^([A-Z]{2})\d+$/.exec(String(t || '').trim().toUpperCase()) || [])[1] || '';
 
   /* ---------- segundo piso por cuadrados: un anaquel por cuadrado, en grupos AA, BB, CC… ---------- */
@@ -250,7 +312,7 @@
       <button type="button" class="btn sm" data-ed="restablecer" style="margin-left:auto">Volver al croquis original</button>`;
   }
   function editar(fn, msg) { if (!M.cfg) return; const l = propios(M.piso); fn(l); guardar(); pintar(); if (msg) toast(msg); }
-  $('mEditar').addEventListener('click', () => { M.editar = !M.editar; M.dibujar = false; pintar(); });
+  $('mEditar').addEventListener('click', () => { M.editar = !M.editar; M.dibujar = false; M.dib = null; pintar(); });
   $('mEdit').addEventListener('click', e => {
     const b = e.target.closest('[data-ed]'); if (!b || b.tagName !== 'BUTTON') return;
     const ed = b.dataset.ed, id = M.sel;
