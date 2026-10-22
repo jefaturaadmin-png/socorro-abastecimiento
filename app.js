@@ -16,6 +16,7 @@ window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, coll
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
 const VERSION_PROY = "202610220900";
+const VERSION_COMP = "202610212000";
 
 /* ===================== utilidades ===================== */
 const $ = id => document.getElementById(id);
@@ -219,17 +220,19 @@ function pintarNav() {
   const items = esAdmin()
     ? [["vAdmin", "Bloqueos" + (pend ? `<span class="badge">${pend}</span>` : "")],
        ["vUsuarios", "Usuarios" + (solicitudesSucursal().length ? `<span class="badge">${solicitudesSucursal().length}</span>` : "")],
-       ["vProy", "Proyección de compras"]]
+       ["vProy", "Proyección de compras"],
+       ["vComp", "Comparativo", "comp"]]
     : [];   // el químico tiene una sola vista: no hace falta menú
   const actual = S.vista === "vFicha" ? S.origen : S.vista;
-  $("nav").innerHTML = items.map(([v, t]) => `<button type="button" data-ir="${v}" ${v === actual ? 'aria-current="page"' : ""}>${t}</button>`).join("");
+  $("nav").innerHTML = items.map(([v, t, c]) => `<button type="button" data-ir="${v}" ${c ? `class="${c}"` : ""} ${v === actual ? 'aria-current="page"' : ""}>${t}</button>`).join("");
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vFicha"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
+  if (vista === "vComp" && !$("compFrame").src) $("compFrame").src = "comparativo.html?v=" + VERSION_COMP;
   S.vista = vista; mostrar(vista); render(); scrollTo({ top: 0 }); }
 function render() {
   if (!S.perfil) return;

@@ -80,6 +80,13 @@ service cloud.firestore {
       match /partes/{parte} { allow read, write: if esAdmin(); }
     }
 
+    // ---------- comparativo de precios: solo el administrador ----------
+    match /comp_config/{id} { allow read, write: if esAdmin(); }
+    match /comp_blobs/{id} {
+      allow read, write: if esAdmin();
+      match /partes/{parte} { allow read, write: if esAdmin(); }
+    }
+
     // ---------- historial: solo se agrega, nunca se cambia ni se borra ----------
     match /historial/{id} {
       allow read: if esAdmin()

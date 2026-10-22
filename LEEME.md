@@ -51,3 +51,13 @@ Cuando haya productos nuevos, vuelve a correr la celda de Colab que genera `cata
 ## Al publicar cambios
 
 En `index.html` los archivos llevan `?v=AAAAMMDDHHMM` (y `app.js` también al importar `config.js`). Cambia ese número en cada publicación para que los navegadores descarguen los archivos nuevos en vez de usar los guardados.
+
+## Comparativo de precios (solo administrador)
+
+Pestaña **Comparativo** (verde; `comparativo.html` + `comparativo.js`, abierta dentro del panel).
+
+- **Competencia (automático):** cada noche a las 10:37 p. m. GitHub Actions (`.github/workflows/precios.yml`) corre `scripts/precios_competencia.py`, descarga los precios de **Mifarma** (sitemap + su servicio de productos), **Boticas Perú** (grilla de la categoría raíz) y **Farmacias Líder** (sus 131 categorías + búsquedas amplias) y los guarda en `data/competencia/`: el catálogo del día (`mifarma.json`, `boticasperu.json`, `farmaciaslider.json`) y el historial (`hist-*.json`, un punto solo cuando el precio cambia). No usa Firebase. Para correrlo a mano: GitHub → **Actions** → *Precios de la competencia* → **Run workflow**. Si una tienda devuelve mucho menos productos que la vez anterior, no se guarda (protección ante fallas).
+- **Nuestro precio:** botón **Subir lista de precios** (archivo de Lolfar). Se guarda en Firebase (`comp_config/lista`) con su historial (`comp_config/historial`, solo cambios). El **costo** se toma del kardex que ya se sube en Proyección.
+- **Parejas:** la página sugiere el producto equivalente de cada tienda comparando nombre, concentración y presentación (marcado con **?**). Al hacer clic en un producto se confirma, se cambia por otra opción, se busca otro o se marca **No lo vende**. Lo confirmado se guarda en `comp_config/pares` y manda sobre las sugerencias. **Confirmar sugeridos ≥ 80 %** confirma de una vez las de la tabla visible.
+- Si las presentaciones tienen distinto número de unidades (p. ej. caja x100 vs x10), se compara por unidad. La comparación usa la oferta para todos los medios de pago, no la de tarjeta.
+- Reglas: `firestore.rules` incluye `comp_config` y `comp_blobs` (solo administrador); hay que volver a **Publicar** las reglas en Firebase.

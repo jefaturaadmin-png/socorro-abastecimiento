@@ -1,0 +1,40 @@
+# Descarga cada noche los precios de Mifarma y Boticas Perú (módulo Comparativo).
+# Se puede correr a mano: pestaña Actions → "Precios de la competencia" → Run workflow.
+name: Precios de la competencia
+
+on:
+  schedule:
+    - cron: "37 3 * * *"   # 3:37 UTC = 10:37 p. m. de Lima
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: precios
+  cancel-in-progress: false
+
+jobs:
+  precios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests beautifulsoup4
+      - name: Descargar precios
+        env:
+          MIFARMA_API_KEY: ${{ secrets.MIFARMA_API_KEY }}   # opcional: solo si Mifarma empieza a pedir token
+        run: python scripts/precios_competencia.py
+        continue-on-error: true
+      - name: Guardar en el repositorio
+        run: |
+          git config user.name "precios-bot"
+          git config user.email "precios-bot@users.noreply.github.com"
+          git add data/competencia
+          git diff --cached --quiet && echo "Sin cambios" && exit 0
+          git commit -m "Precios competencia $(TZ=America/Lima date +%F)"
+          git pull --rebase origin main
+          git push

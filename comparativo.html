@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Comparativo de precios · Farmacia Socorro</title>
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* Comparativo: verde azulado, para distinguirlo de Bloqueos (azul) y Proyección (naranja) */
+:root {
+  --bg: #f2f7f6; --surface: #ffffff; --line: #d8e6e3; --fg: #14211f; --muted: #5d716d;
+  --accent: #0f7b6c; --accent-soft: #d9efeb; --s2: #e2620d; --s3: #3d5a99; --s4: #8a4f9e;
+  --caro: #b6400b; --caro-soft: #fbe6d6; --barato: #1f7a3d; --barato-soft: #dcf0e2; --warn: #9a6a00; --warn-soft: #f6ead0;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1716; --surface: #172220; --line: #2a3a37; --fg: #e8f1ef; --muted: #96aba6;
+  --accent: #3cc2ad; --accent-soft: #163330; --s2: #ff8a3d; --s3: #8aa6e6; --s4: #c48ad6;
+  --caro: #ff8a3d; --caro-soft: #3a2416; --barato: #5fd08a; --barato-soft: #16301f; --warn: #e0b543; --warn-soft: #33290f; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1716; --surface: #172220; --line: #2a3a37; --fg: #e8f1ef; --muted: #96aba6;
+  --accent: #3cc2ad; --accent-soft: #163330; --s2: #ff8a3d; --s3: #8aa6e6; --s4: #c48ad6;
+  --caro: #ff8a3d; --caro-soft: #3a2416; --barato: #5fd08a; --barato-soft: #16301f; --warn: #e0b543; --warn-soft: #33290f; color-scheme: dark }
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.5 }
+.wrap { max-width: 1440px; margin: 0 auto; padding: 0 20px 48px }
+.bar { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--line) }
+.bar .wrap { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; padding-block: 10px }
+.brand { font-family: var(--f-display); font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 8px; margin-right: auto }
+.brand i { width: 12px; height: 12px; border-radius: 3px; background: var(--accent); display: inline-block }
+select, .seg button, .btn, input[type=search] { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 8px; padding: 7px 10px }
+select { max-width: 240px }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface) }
+.seg button { border: 0; border-radius: 0; cursor: pointer; padding: 7px 11px }
+.seg button + button { border-left: 1px solid var(--line) }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff }
+.btn { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; text-decoration: none }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff }
+label.btn input { display: none }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.fuente { font-size: 13px; color: var(--muted); padding-top: 14px; display: flex; flex-wrap: wrap; gap: 6px 18px }
+.fuente b { color: var(--fg); font-weight: 600 }
+.fuente .falta b { color: var(--warn) }
+.msg { margin-top: 10px; font-size: 13.5px; color: var(--muted) }
+.msg.error { color: var(--caro) }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw, 30px); line-height: 1.15; margin: 14px 0 4px; text-wrap: balance }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 14px 0 }
+.kpi, .kp { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px }
+.kpi span, .kp span { display: block; font-size: 11.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted) }
+.kpi b, .kp b { font-family: var(--f-display); font-size: 24px; font-variant-numeric: tabular-nums }
+.kpi.caro b { color: var(--caro) } .kpi.barato b { color: var(--barato) }
+.controles { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px }
+.controles input[type=search] { flex: 1 1 240px }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0 }
+.card .ch { padding: 12px 16px 6px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between }
+.card h2 { font-family: var(--f-display); font-size: 17px; font-weight: 600; margin: 0 }
+.scroll { overflow: auto; max-height: 70vh; border-top: 1px solid var(--line) }
+.tabla { border-collapse: separate; border-spacing: 0; font-size: 13px; width: 100%; min-width: 1180px }
+.tabla th, .tabla td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; vertical-align: top }
+.tabla thead th { position: sticky; top: 0; z-index: 2; background: var(--surface); font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--fg) }
+.tabla .l { text-align: left; min-width: 240px }
+.tabla .t { text-align: left; min-width: 200px }
+.tabla tbody tr { cursor: pointer }
+.tabla tbody tr:hover td { background: var(--accent-soft) }
+.tabla .n { font-family: var(--f-mono); white-space: nowrap }
+.tabla .muted, .muted { color: var(--muted) }
+.tabla .t .pr { font-family: var(--f-mono); font-weight: 500 }
+.tabla .t.min .pr { color: var(--barato); font-weight: 600 }
+.tabla s { color: var(--muted); font-weight: 400 }
+.nm { font-size: 12px; color: var(--muted); line-height: 1.35 }
+.nm.u { color: var(--warn) }
+.vacio { color: var(--muted) }
+.sug { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--warn-soft); color: var(--warn); font-size: 11px; font-weight: 700; font-family: var(--f-body) }
+.dif { font-weight: 600 }
+.dif.caro { color: var(--caro) } .dif.barato { color: var(--barato) }
+b.caro { color: var(--caro) } b.barato { color: var(--barato) }
+.tabla .sel { width: 34px; text-align: center; padding-right: 0 }
+.tabla .sel input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent) }
+.acciones { display: flex; flex-wrap: wrap; gap: 8px }
+.btn.quitar { color: var(--caro); border-color: var(--caro) }
+.vacio-tabla { text-align: center !important; color: var(--muted); padding: 28px !important }
+.pie { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 16px; font-size: 13px; color: var(--muted) }
+.volver { background: none; border: 0; color: var(--accent); font: inherit; font-weight: 500; cursor: pointer; padding: 0; margin-top: 14px }
+.precios { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 14px 0 }
+.graf { height: 320px; padding: 8px 16px 16px; position: relative }
+.pares { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-top: 16px }
+.par { padding-bottom: 14px }
+.par .ops, .par .buscar, .par > .btn { margin: 0 16px }
+.par > .btn { margin-top: 10px }
+.op { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--line); cursor: pointer }
+.op small { display: block; color: var(--muted); font-size: 12px }
+.op b { font-weight: 500; font-size: 14px }
+.op a { color: var(--accent) }
+.buscar input { width: 100%; margin-top: 10px }
+.pill { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px }
+.pill.ok { background: var(--barato-soft); color: var(--barato) }
+.pill.sug { background: var(--warn-soft); color: var(--warn) }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; z-index: 50 }
+@media (max-width: 640px) { .wrap { padding-inline: 16px } .pares { grid-template-columns: 1fr } }
+</style>
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <div class="brand"><i></i>Comparativo de precios</div>
+  <label class="btn primary">Subir lista de precios<input type="file" id="fLista" accept=".xls,.xlsx,.csv,.txt,.XLS,.XLSX,.CSV,.TXT"></label>
+  <button class="btn" id="excel" type="button">Descargar Excel</button>
+</div></header>
+
+<main class="wrap">
+  <div class="fuente" id="fuente"></div>
+  <p class="msg" id="msg" hidden></p>
+
+  <section id="vLista" hidden>
+    <h1>¿Dónde estamos más caros o más baratos?</h1>
+    <div class="kpis">
+      <div class="kpi"><span>Productos comparados</span><b id="k1">–</b></div>
+      <div class="kpi caro"><span>Estamos más caros</span><b id="k2">–</b></div>
+      <div class="kpi barato"><span>Estamos más baratos</span><b id="k3">–</b></div>
+      <div class="kpi"><span>Diferencia mediana</span><b id="k4">–</b></div>
+    </div>
+    <div class="controles">
+      <div class="seg" role="group" aria-label="Filtro">
+        <button type="button" data-f="comparados" aria-pressed="true">Comparados</button>
+        <button type="button" data-f="caro" aria-pressed="false">Más caros</button>
+        <button type="button" data-f="barato" aria-pressed="false">Más baratos</button>
+        <button type="button" data-f="confirmar" aria-pressed="false">Por confirmar</button>
+        <button type="button" data-f="sin" aria-pressed="false">Sin pareja</button>
+        <button type="button" data-f="todos" aria-pressed="false">Todos</button>
+        <button type="button" data-f="quitados" aria-pressed="false">Quitados</button>
+      </div>
+      <input type="search" id="q" placeholder="Buscar producto, código o laboratorio…">
+      <select id="lab"></select>
+      <button class="btn" id="verCosto" type="button" aria-pressed="false"></button>
+    </div>
+    <section class="card">
+      <div class="ch"><span class="muted" id="cuenta"></span>
+        <span class="acciones"><button class="btn quitar" id="quitar" type="button" hidden></button>
+        <button class="btn" id="confirmar" type="button" title="Confirma las sugerencias de 80 % o más que se ven en la tabla">Confirmar sugeridos ≥ 80 %</button></span></div>
+      <div class="scroll"><table class="tabla" id="tabla"></table></div>
+      <div class="pie"><span>La comparación usa la oferta para todos los medios de pago (no la de tarjeta). <span class="sug">?</span> = pareja sugerida, clic para confirmar o corregir.</span>
+        <button class="btn" id="mas" type="button" hidden>Ver más</button></div>
+    </section>
+  </section>
+
+  <section id="vFicha" hidden>
+    <button class="volver" id="fVolver" type="button">← Volver a la tabla</button>
+    <h1 id="fTitulo"></h1>
+    <div class="muted" id="fSub"></div>
+    <button class="btn quitar" id="fQuitar" type="button" style="margin-top:10px"></button>
+    <div class="precios" id="fPrecios"></div>
+    <section class="card">
+      <div class="ch"><h2>Historial de precios</h2><span class="muted">Se guarda un punto cada vez que el precio cambia</span></div>
+      <div class="graf"><canvas id="fGraf"></canvas><p class="muted" id="fVacio" hidden>Aún no hay historial para este producto.</p></div>
+    </section>
+    <div class="pares" id="fPares"></div>
+  </section>
+</main>
+<div class="toast" id="toast" hidden></div>
+<script type="module" src="comparativo.js?v=202610212000"></script>
+</body>
+</html>
