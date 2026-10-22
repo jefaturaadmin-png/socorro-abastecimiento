@@ -1263,19 +1263,19 @@ function pintarRep() {
     + `Tipo A–E según los meses con venta del último año${todas ? ' (total empresa)' : ' en esta farmacia'}.`;
   $('rk1l').textContent = todas ? 'Medicamentos a comprar' : 'Medicamentos a reponer';
   $('rk2l').textContent = todas ? 'Cajas a comprar' : 'Cajas a entregar';
-  const lista = [];
+  const lista = [], busca = !!$('rq').value.trim(); // al buscar se listan también los que no tienen venta ni stock
   for (const p of o.p) {
     if (S.lab && labDe(p.c) !== S.lab) continue;
     if (!pasaTipo(p)) continue;
     let r;
     if (!todas) {
       const x = plan2(p, S.farm);
-      if (!x.v && !x.st && !S.cat) continue;
+      if (!x.v && !x.st && !S.cat && !busca) continue;
       r = { ...x, cat: x.c, final: x.ent, h: (p.hf?.[S.farm] || []).slice(-6), nb: x.bloq ? 1 : 0 };
     } else {
       let v = 0, st = 0, ent = 0, nec = 0, nb = 0, aprox = false;
       for (const f of o.farmacias) { const x = plan2(p, f); v += x.v; st += x.st; ent += x.ent; nec += x.nec; if (x.bloq) nb++; aprox ||= x.aprox; }
-      if (!v && !st && !p.sd && !S.cat) continue;
+      if (!v && !st && !p.sd && !S.cat && !busca) continue;
       const general = bloqueado(p.c, 'TODAS'), sd = p.sd || 0;
       const nota = ['C', 'D', 'E'].includes(p.cat) ? (p.cat === 'C' ? 'a pedido' : p.cat === 'D' ? 'solo con pedido' : (st + sd > 0 ? 'liquidar' : 'sin mov.')) : '';
       r = { v, diaria: v / n, nec, st, sd, ent, nb, general, nota, aprox, cat: p.cat,
@@ -1328,20 +1328,20 @@ function pintarRepMes() {
   $('rk1l').textContent = todas ? 'Medicamentos a comprar' : 'Medicamentos a reponer';
   $('rk2l').textContent = todas ? 'Cajas a comprar' : 'Cajas a entregar';
   llenarLabs(); llenarClas();
-  const lista = [];
+  const lista = [], busca = !!$('rq').value.trim();
   for (const p of o.p) {
     if (S.lab && labDe(p.c) !== S.lab) continue;
     if (!pasaTipo(p)) continue;
     let r;
     if (!todas) {
       const x = plan(p, S.farm, obj); const sh = p.s?.[S.farm] || 0;
-      if (!x.pron && !x.stock) continue;
+      if (!x.pron && !x.stock && !busca) continue;
       r = { ...x, final: x.entrega, h: p.h.slice(-6).map(v => v == null ? null : v * sh) };
       if (x.bloq) r.nb = 1;
     } else {
       let pron = 0, stock = 0, ent = 0, nb = 0;
       for (const f of o.farmacias) { const x = plan(p, f, obj); pron += x.pron; stock += x.stock; ent += x.entrega; if (x.bloq) nb++; }
-      if (!pron && !stock) continue;
+      if (!pron && !stock && !busca) continue;
       const general = bloqueado(p.c, 'TODAS');
       r = { pron, stock, entrega: ent, sd: p.sd || 0, final: general ? 0 : Math.max(0, Math.ceil(ent - (p.sd || 0))), h: p.h.slice(-6), nb, general };
     }
@@ -1572,7 +1572,7 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610220900"></script>
-<script type="module" src="proyeccion.js?v=202610220900"></script>
+<script src="mapa.js?v=202610221000"></script>
+<script type="module" src="proyeccion.js?v=202610221000"></script>
 
 </body></html>
