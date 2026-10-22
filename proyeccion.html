@@ -206,6 +206,11 @@ td.fijos .chip button { border: 0; background: none; cursor: pointer; color: var
 .kpi small { color: var(--muted); font-size: 12px }
 .chartbox { position: relative; height: 330px; padding: 4px 12px 12px }
 
+details.plegable > summary { cursor: pointer; list-style: none }
+details.plegable > summary::-webkit-details-marker { display: none }
+details.plegable > summary h2::before { content: '▸ '; color: var(--muted) }
+details.plegable[open] > summary h2::before { content: '▾ ' }
+details.plegable:not([open]) > summary { border-bottom: 0 }
 details.metodo { margin-top: 14px; font-size: 13.5px; color: var(--muted) }
 details.metodo summary { cursor: pointer; color: var(--fg); font-weight: 500 }
 details.metodo ul { margin: 8px 0 0; padding-left: 20px; max-width: 95ch; display: grid; gap: 4px }
@@ -291,10 +296,6 @@ main.sin-sesion > section { display: none !important }
       <div class="eyebrow" id="fpEyebrow"></div>
       <h1 id="fpTitulo"></h1>
     </div></div>
-    <div class="card" id="fpGenC" hidden>
-      <div class="ch"><h2 id="fpGenH"></h2><span class="note">Otros productos con el mismo genérico. Clic para abrir su ficha.</span></div>
-      <div class="scroll"><table class="cells" id="fpGen"></table></div>
-    </div>
     <div class="card">
       <div class="ch"><h2>Métodos comparados</h2><span class="note" id="fpNota"></span></div>
       <div class="scroll"><table class="cells" id="fpTabla"></table></div>
@@ -314,6 +315,10 @@ main.sin-sesion > section { display: none !important }
       <div class="scroll"><table class="cells" id="fpFTabla"></table></div>
       <div class="chartbox"><canvas id="fpFChart" aria-label="Demanda y pronóstico de la farmacia"></canvas></div>
     </div>
+    <details class="card plegable" id="fpGenC" hidden>
+      <summary class="ch"><h2 id="fpGenH"></h2><span class="note">Otros productos con el mismo genérico. Clic para abrir su ficha.</span></summary>
+      <div class="scroll"><table class="cells" id="fpGen"></table></div>
+    </details>
   </section>
 
   <!-- REPOSICIÓN -->
@@ -1036,7 +1041,8 @@ function pintarMismoGen(p) {
   const x = clas(p), lab = labDe(p.c);
   $('fpEyebrow').innerHTML += [lab && `Laboratorio <b>${esc(lab)}</b>`, x.t && `Línea <b>${esc(x.t)}</b>`, x.g && `Genérico <b>${esc(x.g)}</b>`, x.f && `Familia <b>${esc(x.f)}</b>`].filter(Boolean).map(s => ' · ' + s).join('');
   const otros = x.g ? S.P.p.filter(q => q.c !== p.c && clas(q).g === x.g) : [];
-  $('fpGenC').hidden = !otros.length; if (!otros.length) return;
+  const gc = $('fpGenC'); if (gc.dataset.c !== p.c) { gc.open = false; gc.dataset.c = p.c; }
+  gc.hidden = !otros.length; if (!otros.length) return;
   otros.sort((a, b) => (S.calc.get(b.c)?.prom || 0) - (S.calc.get(a.c)?.prom || 0));
   $('fpGenH').textContent = `Mismo genérico: ${x.g} (${otros.length + 1} productos)`;
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Producto</th><th style="text-align:left">Laboratorio</th><th>Tipo</th><th>Stock actual</th><th>Prom. 3m</th></tr></thead><tbody>`;
@@ -1566,7 +1572,7 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610211800"></script>
-<script type="module" src="proyeccion.js?v=202610211800"></script>
+<script src="mapa.js?v=202610220900"></script>
+<script type="module" src="proyeccion.js?v=202610220900"></script>
 
 </body></html>
