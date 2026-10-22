@@ -121,6 +121,7 @@
       </div>
     </div>
     <div class="wrap cuerpo">
+      <div class="aviso cierre-aviso" id="qCierre" hidden></div>
       <div class="grid-q">
         <form class="card bloque" id="bqForm" data-pre="bq">
           <h2><svg width="18" height="18"><use href="#i-candado"/></svg>Bloquear nuevo producto</h2>
@@ -173,6 +174,10 @@
         <h1>Bloqueos de abastecimiento</h1>
         <p class="muted">Todas las farmacias. Aprueba las reactivaciones, bloquea productos y revisa lo que pidieron los químicos.</p>
       </div>
+      <div class="cierre-caja">
+        <button class="btn" type="button" id="ciAbrir"><svg width="18" height="18"><use href="#i-candado"/></svg>Cerrar ingreso de información</button>
+        <div class="cierre-estado" id="ciEstado" hidden></div>
+      </div>
     </div>
     <div class="wrap cuerpo">
       <div class="kpis">
@@ -181,6 +186,22 @@
         <div class="card kpi"><span><i class="pt rojo">!</i>Para revisar</span><b id="k3" class="mal">–</b><small>fecha de revisión vencida</small></div>
         <div class="card kpi"><span><i class="pt verde">✓</i>Reactivados</span><b id="k4">–</b><small>últimos 30 días</small></div>
       </div>
+
+      <form class="card cierre-form" id="ciForm" hidden>
+        <h2><svg width="18" height="18"><use href="#i-candado"/></svg>Cerrar el ingreso de información</h2>
+        <p class="muted">Desde la fecha y hora que elijas, los usuarios elegidos ya no podrán bloquear productos, pedir reactivaciones ni pedir cambio de sucursal. Pueden seguir entrando y viendo sus bloqueos.</p>
+        <div class="cierre-grid">
+          <div class="campo"><label for="ciDesde">Cerrar desde</label><input id="ciDesde" type="datetime-local" required></div>
+          <div class="campo"><label for="ciHasta">Volver a abrir el (opcional)</label><input id="ciHasta" type="datetime-local"></div>
+          <div class="campo"><label for="ciMot">Mensaje para los usuarios (opcional)</label><input id="ciMot" maxlength="140" placeholder="Ej. cierre de mes, inventario"></div>
+        </div>
+        <fieldset><legend>¿A quiénes?</legend>
+          <div class="pills"><label><input type="radio" name="ciQuien" value="todos" checked>Todos los usuarios</label><label><input type="radio" name="ciQuien" value="algunos">Elegir usuarios</label></div>
+          <div class="cierre-usuarios" id="ciUsuarios" hidden></div>
+        </fieldset>
+        <div class="msg" id="ciMsg" hidden></div>
+        <div class="botones-fila"><button class="btn primario" type="submit" id="ciBtn">Programar cierre</button><button class="btn" type="button" id="ciQuitar">Quitar cierre (abrir a todos)</button><button class="btn" type="button" id="ciCancelar">Cancelar</button></div>
+      </form>
 
       <section class="card" id="aSolCard">
         <div class="lh"><h2>Solicitudes de reactivación</h2></div>

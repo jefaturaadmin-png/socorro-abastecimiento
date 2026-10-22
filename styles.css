@@ -341,3 +341,22 @@ legend { padding: 0; margin-bottom: 8px }
   .lista-cuerpo { grid-template-columns: minmax(0, 1fr) }
   .torta { border-left: 0; border-top: 1px solid var(--line) }
 }
+
+/* cierre del ingreso de información */
+.cierre-caja { display: flex; flex-direction: column; align-items: flex-end; gap: 6px }
+.cierre-estado { font-size: 12.5px; font-weight: 600; padding: 6px 10px; border-radius: 8px; background: var(--warn-soft); color: #7A4A00; max-width: 46ch; text-align: right }
+.cierre-estado.activo { background: var(--bad-soft); color: var(--bad) }
+.cierre-form { margin-bottom: 18px; display: grid; gap: 12px }
+.cierre-form h2 { margin: 0 }
+.cierre-form p { margin: 0 }
+.cierre-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px }
+.cierre-form fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 10px }
+.cierre-form legend { font-size: 13px; font-weight: 600; margin-bottom: 8px }
+.cierre-usuarios { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 4px 14px; max-height: 280px; overflow: auto; padding: 8px; border: 1px solid var(--field); border-radius: 8px }
+.cierre-usuarios label { display: flex; gap: 8px; align-items: center; justify-content: flex-start; font-size: 13px; font-weight: 500; min-height: 30px }
+.cierre-usuarios input[type=checkbox] { width: 16px; height: 16px; min-height: 0; flex: none; margin: 0; padding: 0; accent-color: var(--brand) }
+.cierre-usuarios small { color: var(--muted) }
+.cierre-usuarios .todo { grid-column: 1 / -1; font-weight: 600 }
+.cierre-aviso { background: var(--bad-soft); color: var(--bad); margin: 0 0 16px }
+.cierre-aviso.prox { background: var(--warn-soft); color: #7A4A00 }
+@media (max-width: 640px) { .cierre-caja { align-items: stretch } .cierre-estado { text-align: left } }

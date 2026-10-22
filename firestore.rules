@@ -17,6 +17,13 @@ service cloud.firestore {
     function esAdmin()    { return conPerfil() && rol() == 'admin'; }
     function esQuimico()  { return conPerfil() && rol() == 'quimico'; }
     function miFarmacia() { return perfil().farmacia; }
+    // Cierre del ingreso de información que programa el administrador en el usuario:
+    // cierre = { desde: fecha y hora, hasta: fecha y hora o null }. Vigente entre esas horas.
+    function cerrado() {
+      let c = perfil().get('cierre', null);
+      return c != null && request.time >= c.desde
+        && (c.get('hasta', null) == null || request.time < c.hasta);
+    }
 
     // ---------- usuarios: solo el administrador los crea o cambia ----------
     match /usuarios/{uid} {
@@ -31,7 +38,8 @@ service cloud.firestore {
       // Cada usuario puede pedir (o anular) su cambio de sucursal; solo el administrador lo aprueba.
       allow update: if request.auth != null && request.auth.uid == uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['solicitudSucursal'])
-        && request.resource.data.solicitudSucursal.estado in ['pendiente', 'cancelada'];
+        && request.resource.data.solicitudSucursal.estado in ['pendiente', 'cancelada']
+        && !cerrado();
     }
 
     // ---------- estado actual de cada producto en cada farmacia ----------
@@ -59,11 +67,11 @@ service cloud.firestore {
       allow read: if esAdmin()
         || (esQuimico() && (resource.data.farmacia == miFarmacia() || resource.data.farmacia == 'TODAS'));
 
-      allow create: if esAdmin() || (esQuimico() && nuevoBloqueoQuimico());
+      allow create: if esAdmin() || (esQuimico() && !cerrado() && nuevoBloqueoQuimico());
 
       // Reactivar (estado -> activo) solo lo hace el administrador.
       allow update: if esAdmin()
-        || (esQuimico() && resource.data.farmacia == miFarmacia() && (
+        || (esQuimico() && !cerrado() && resource.data.farmacia == miFarmacia() && (
               (resource.data.estado == 'activo' && nuevoBloqueoQuimico())
            || (resource.data.estado == 'bloqueado' && soloSolicitud())
            ));
@@ -93,7 +101,7 @@ service cloud.firestore {
         || (esQuimico() && (resource.data.farmacia == miFarmacia() || resource.data.farmacia == 'TODAS'));
 
       allow create: if (esAdmin() && request.resource.data.porUid == request.auth.uid)
-        || (esQuimico()
+        || (esQuimico() && !cerrado()
             && request.resource.data.porUid == request.auth.uid
             && request.resource.data.farmacia == miFarmacia()
             && request.resource.data.tipo in ['bloqueo', 'solicitud']);

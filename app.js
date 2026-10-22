@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
 import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, where,
-  serverTimestamp, writeBatch
+  serverTimestamp, writeBatch, deleteField
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610151900";
 
@@ -190,7 +190,7 @@ function iniciar() {
       S.usuarios = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
       if (S.usuariosListos && solicitudesSucursal().length > antes) toast("Nueva solicitud de cambio de sucursal");
       S.usuariosListos = true;
-      pintarNav(); pintarSolSucursal();
+      pintarNav(); pintarSolSucursal(); pintarCierreAdmin();
       if (S.vista === "vUsuarios" && !S.editando) pintarUsuarios();   // no borrar lo que se está editando
     }, e => avisar(e)));
     ir("vAdmin");
@@ -208,6 +208,7 @@ function iniciar() {
     S.subs.push(onSnapshot(doc(db, "usuarios", S.perfil.uid), snap => {
       const d = snap.data() || {};
       S.perfil.solicitudSucursal = d.solicitudSucursal; pintarPedidoSucursal();
+      S.perfil.cierre = d.cierre; render();
       if (d.farmacia !== S.perfil.farmacia || String(d.rol || "").trim().toLowerCase() !== S.perfil.rol || [false, "false"].includes(d.activo) || d.cambiarClave === true) location.reload();
     }));
     ir("vQuimico");
@@ -290,14 +291,14 @@ function pintarSel(pre) {
       : b ? `Ya está bloqueado${b.farmacia === "TODAS" ? " en todas las farmacias" : ""}: ${b.motivo}`
       : !f.manual ? `Ese código sí está en la lista: ${f.n}`
       : `Se registrará como: ${codVis(f.c) === "Sin código" ? "sin código" : f.c} · ${f.n}`;
-    btn.disabled = !listo || !!b;
+    btn.disabled = !listo || !!b || (pre === "bq" && cerradoParaMi());
     return;
   }
   const b = estadoEn(p.c, farm);
   box.innerHTML = `<span class="cod">${esc(p.c)}${p.l ? " · Lab. " + esc(p.l) : ""}</span><b>${esc(p.n)}</b>` +
     (b ? `<span class="est mal">Ya está bloqueado${b.farmacia === "TODAS" ? " en todas las farmacias" : ""}: ${esc(b.motivo)}</span>`
        : `<span class="est ok">Se abastece a ${esc(corto(farm))}</span>`);
-  btn.disabled = !!b;
+  btn.disabled = !!b || (pre === "bq" && cerradoParaMi());
 }
 function cablearBuscador(pre) {
   const inp = $(pre + "Bus"), res = $(pre + "Res");
@@ -350,6 +351,7 @@ $("abFarm").addEventListener("change", () => pintarSel("ab"));
 async function enviarBloqueo(e) {
   e.preventDefault();
   const pre = e.currentTarget.dataset.pre, elegido = S.sel[pre], farm = farmDeForm(pre);
+  if (pre === "bq" && cerradoParaMi()) return msg(pre + "Msg", "El ingreso de información está cerrado por Abastecimiento.", true);
   const motivo = document.querySelector(`input[name="${pre}Motivo"]:checked`)?.value;
   if (!elegido) return msg(pre + "Msg", "Elige un producto.", true);
   if (elegido.manual && !elegido.c.trim() && elegido.n.trim().length < 3) return msg(pre + "Msg", "Escribe el código o el nombre del producto.", true);
@@ -397,6 +399,7 @@ $("csAbrir").addEventListener("click", () => {
 $("csCancelar").addEventListener("click", () => { $("csForm").hidden = true; msg("csMsg", ""); pintarPedidoSucursal(); });
 $("csForm").addEventListener("submit", async e => {
   e.preventDefault();
+  if (cerradoParaMi()) return msg("csMsg", "El ingreso de información está cerrado por Abastecimiento.", true);
   const farmacia = $("csSel").value; if (!farmacia) return msg("csMsg", "Elige la sucursal.", true);
   const sol = { farmacia, motivo: $("csMot").value.trim(), estado: "pendiente", fecha: serverTimestamp() };
   try {
@@ -410,6 +413,101 @@ $("csAnular").addEventListener("click", async () => {
   catch (err) { toast(textoError(err)); }
 });
 
+/* ===================== cierre del ingreso de información ===================== */
+// El cierre se guarda en el usuario de cada químico: cierre = { desde, hasta (o null), motivo, porNombre }.
+// Mientras está vigente, el químico no puede bloquear, pedir reactivación ni pedir cambio de sucursal
+// (las reglas de Firestore también lo rechazan). El administrador no tiene cierre.
+const aDate = v => v?.toDate ? v.toDate() : v ? new Date(v) : null;
+const fmtDH = d => d.toLocaleString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+const aInput = d => d ? new Date(d - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 16) : "";
+function estadoCierre(c, ahora = Date.now()) {
+  const d = aDate(c?.desde), h = aDate(c?.hasta);
+  if (!d || (h && ahora >= h)) return null;   // sin cierre o ya terminó
+  return { desde: d, hasta: h, motivo: c.motivo || "", vigente: ahora >= d };
+}
+const cerradoParaMi = () => !esAdmin() && !!estadoCierre(S.perfil?.cierre)?.vigente;
+const textoCierre = e => e.vigente
+  ? `Ingreso de información cerrado ${e.hasta ? "hasta el " + fmtDH(e.hasta) : "hasta nuevo aviso"}`
+  : `El ingreso de información se cerrará el ${fmtDH(e.desde)}${e.hasta ? " y se abrirá el " + fmtDH(e.hasta) : ""}`;
+function pintarCierreQuimico() {
+  const e = estadoCierre(S.perfil?.cierre), a = $("qCierre");
+  a.hidden = !e;
+  if (e) {
+    a.className = "aviso cierre-aviso" + (e.vigente ? "" : " prox");
+    const t = textoCierre(e), punto = t.endsWith(".") ? " " : ". ";
+    a.textContent = t + (e.vigente ? punto + "Mientras tanto no puedes bloquear productos ni enviar solicitudes." : punto.trim()) + (e.motivo ? " Motivo: " + e.motivo : "");
+  }
+  $("csAbrir").disabled = !!e?.vigente;
+}
+const quimicos = () => S.usuarios.filter(u => String(u.rol || "").trim().toLowerCase() !== "admin" && ![false, "false"].includes(u.activo));
+function pintarCierreAdmin() {
+  const el = $("ciEstado"); if (!el) return;
+  const qs = quimicos(), con = qs.map(u => [u, estadoCierre(u.cierre)]).filter(([, e]) => e);
+  el.hidden = !con.length; if (!con.length) return;
+  const e = con.find(([, x]) => x.vigente)?.[1] || con[0][1];
+  const varios = new Set(con.map(([, x]) => +x.desde + "|" + +(x.hasta || 0))).size > 1;
+  el.className = "cierre-estado" + (e.vigente ? " activo" : "");
+  el.textContent = `${e.vigente ? "🔒 Ingreso cerrado" : "⏱ Cierre programado"} para ${con.length === qs.length ? "todos los usuarios" : con.length + " de " + qs.length + " usuarios"}: `
+    + (e.vigente ? "desde " : "") + fmtDH(e.desde) + (e.hasta ? " → " + fmtDH(e.hasta) : " · sin fecha de apertura") + (varios ? " (hay horarios distintos)" : "");
+}
+function pintarUsuariosCierre() {
+  const qs = quimicos().sort((a, b) => (a.farmacia + a.usuario).localeCompare(b.farmacia + b.usuario));
+  $("ciUsuarios").innerHTML = `<label class="todo"><input type="checkbox" data-todos> Marcar todos</label>` + qs.map(u =>
+    `<label><input type="checkbox" value="${esc(u.uid)}" ${estadoCierre(u.cierre) ? "checked" : ""}> ${esc(u.nombre || u.usuario)} <small>${esc(corto(u.farmacia || ""))}</small></label>`).join("");
+}
+$("ciAbrir").addEventListener("click", () => {
+  const f = $("ciForm"); f.hidden = !f.hidden; if (f.hidden) return;
+  const qs = quimicos(), con = qs.filter(u => estadoCierre(u.cierre)), e = con.length ? estadoCierre(con[0].cierre) : null;
+  const ahora = new Date(); ahora.setSeconds(0, 0);
+  $("ciDesde").value = aInput(e?.desde || ahora); $("ciHasta").value = aInput(e?.hasta); $("ciMot").value = e?.motivo || "";
+  const algunos = con.length && con.length < qs.length;
+  document.querySelector(`input[name="ciQuien"][value="${algunos ? "algunos" : "todos"}"]`).checked = true;
+  pintarUsuariosCierre(); $("ciUsuarios").hidden = !algunos; msg("ciMsg", "");
+  f.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+$("ciCancelar").addEventListener("click", () => { $("ciForm").hidden = true; });
+document.querySelectorAll('input[name="ciQuien"]').forEach(r => r.addEventListener("change", () => { $("ciUsuarios").hidden = r.value !== "algunos" || !r.checked; }));
+$("ciUsuarios").addEventListener("change", e => { if (e.target.matches("[data-todos]")) $("ciUsuarios").querySelectorAll("input[value]").forEach(x => x.checked = e.target.checked); });
+// Guarda el cierre en los usuarios elegidos y lo quita de los demás.
+async function guardarCierre(elegidos, cierre) {
+  const lote = writeBatch(db); let n = 0;
+  for (const u of quimicos()) {
+    if (elegidos.has(u.uid)) { lote.update(doc(db, "usuarios", u.uid), { cierre }); n++; }
+    else if (u.cierre) lote.update(doc(db, "usuarios", u.uid), { cierre: deleteField() });
+  }
+  await lote.commit(); return n;
+}
+$("ciForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const desde = $("ciDesde").value ? new Date($("ciDesde").value) : null, hasta = $("ciHasta").value ? new Date($("ciHasta").value) : null;
+  if (!desde) return msg("ciMsg", "Elige la fecha y hora del cierre.", true);
+  if (hasta && hasta <= desde) return msg("ciMsg", "La fecha para volver a abrir debe ser posterior al cierre.", true);
+  if (hasta && hasta <= new Date()) return msg("ciMsg", "La fecha para volver a abrir ya pasó.", true);
+  const todos = document.querySelector('input[name="ciQuien"]:checked').value === "todos";
+  const elegidos = new Set(todos ? quimicos().map(u => u.uid) : [...$("ciUsuarios").querySelectorAll("input[value]:checked")].map(x => x.value));
+  if (!elegidos.size) return msg("ciMsg", "Elige al menos un usuario.", true);
+  $("ciBtn").disabled = true;
+  try {
+    const n = await guardarCierre(elegidos, { desde, hasta, motivo: $("ciMot").value.trim(), porNombre: S.perfil.nombre || S.perfil.usuario, fecha: serverTimestamp() });
+    $("ciForm").hidden = true; msg("ciMsg", "");
+    toast(`${desde <= new Date() ? "Ingreso cerrado" : "Cierre programado para el " + fmtDH(desde)} · ${n} usuario(s)`);
+  } catch (err) { msg("ciMsg", textoError(err), true); }
+  finally { $("ciBtn").disabled = false; }
+});
+$("ciQuitar").addEventListener("click", async () => {
+  if (!quimicos().some(u => u.cierre)) { $("ciForm").hidden = true; return toast("No hay ningún cierre"); }
+  if (!confirm("¿Quitar el cierre? Todos los usuarios podrán volver a ingresar información.")) return;
+  try { await guardarCierre(new Set(), null); $("ciForm").hidden = true; toast("Ingreso abierto para todos"); }
+  catch (err) { msg("ciMsg", textoError(err), true); }
+});
+// El cierre empieza y termina solo a la hora elegida: revisar cada 20 segundos.
+setInterval(() => {
+  if (!S.perfil) return;
+  if (esAdmin()) return pintarCierreAdmin();
+  const v = cerradoParaMi() + "|" + !!estadoCierre(S.perfil.cierre);
+  if (v !== S.cierreVisto) { S.cierreVisto = v; render(); }
+}, 20000);
+
 /* ===================== vista químico ===================== */
 $("qFil").addEventListener("input", () => pintarQuimico());
 function etiquetaSolicitud(d) {
@@ -419,6 +517,7 @@ function etiquetaSolicitud(d) {
   return "";
 }
 function pintarQuimico() {
+  pintarCierreQuimico();
   const q = norm($("qFil").value).trim();
   const activos = [...S.bloqueos.values()].filter(d => d.estado === "bloqueado" && d.farmacia === miFarm());
   const lista = activos
@@ -450,6 +549,7 @@ $("qTabla").addEventListener("click", e => { const b = e.target.closest("[data-f
 $("aChips").addEventListener("click", e => { const b = e.target.closest("[data-farm]"); if (b) { S.af.farm = b.dataset.farm; pintarAdmin(); } });
 
 function pintarAdmin() {
+  pintarCierreAdmin();
   const todos = [...S.bloqueos.values()], act = todos.filter(d => d.estado === "bloqueado");
   const pend = act.filter(d => d.solicitud?.estado === "pendiente");
   const hoy = hoyISO(), hace30 = Date.now() - 30 * 864e5;
@@ -608,7 +708,7 @@ function pintarFicha() {
         <fieldset><legend>Motivo</legend>${radios("fMot")}</fieldset>
         <div class="campo"><label for="fCom">Comentario</label><textarea id="fCom" rows="3"></textarea></div>
         <div class="msg" id="fMsg" hidden></div>
-        <button class="btn verde" type="button" data-pedir>Enviar solicitud a Abastecimiento</button>`;
+        <button class="btn verde" type="button" data-pedir ${cerradoParaMi() ? "disabled" : ""}>Enviar solicitud a Abastecimiento</button>`;
     }
   } else {
     A.innerHTML = (s?.estado === "pendiente"
@@ -632,6 +732,7 @@ $("fAccion").addEventListener("click", async e => {
     return reactivar(d, motivo, comentario);
   }
   if (e.target.closest("[data-pedir]")) {
+    if (cerradoParaMi()) return msg("fMsg", "El ingreso de información está cerrado por Abastecimiento.", true);
     if (!motivo) return msg("fMsg", "Elige el motivo.", true);
     const ahora = serverTimestamp(), quien = { porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario };
     const lote = writeBatch(db);

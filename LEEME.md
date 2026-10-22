@@ -61,3 +61,8 @@ Pestaña **Comparativo** (verde; `comparativo.html` + `comparativo.js`, abierta 
 - **Parejas:** la página sugiere el producto equivalente de cada tienda comparando nombre, concentración y presentación (marcado con **?**). Al hacer clic en un producto se confirma, se cambia por otra opción, se busca otro o se marca **No lo vende**. Lo confirmado se guarda en `comp_config/pares` y manda sobre las sugerencias. **Confirmar sugeridos ≥ 80 %** confirma de una vez las de la tabla visible.
 - Si las presentaciones tienen distinto número de unidades (p. ej. caja x100 vs x10), se compara por unidad. La comparación usa la oferta para todos los medios de pago, no la de tarjeta.
 - Reglas: `firestore.rules` incluye `comp_config` y `comp_blobs` (solo administrador); hay que volver a **Publicar** las reglas en Firebase.
+
+## Cierre del ingreso de información (solo administrador)
+
+En **Bloqueos**, botón **Cerrar ingreso de información**: se elige desde qué fecha y hora (y, si se quiere, hasta cuándo), a quiénes (todos los químicos o algunos) y un mensaje. Se guarda en cada usuario (`usuarios/{uid}.cierre = { desde, hasta, motivo }`). Mientras está vigente el químico ve un aviso y no puede bloquear productos, pedir reactivaciones ni pedir cambio de sucursal; puede seguir entrando y viendo. **Quitar cierre** lo borra de todos.
+- Reglas: `firestore.rules` rechaza esas escrituras con la hora del servidor mientras el cierre está vigente; hay que volver a **Publicar** las reglas en Firebase para que también se haga cumplir desde el servidor.
