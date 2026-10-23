@@ -222,6 +222,7 @@ main.sin-sesion > section { display: none !important }
 
 @media (max-width: 860px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) } .chartbox { height: 270px } .cells .c1 { max-width: 160px } }
 @media (max-width: 480px) { .wrap { padding-inline: 16px } select { max-width: 100% } .field { flex: 1 1 130px } }
+body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { display: none }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important } }
 </style>
 
@@ -829,6 +830,11 @@ window.aplicarStock = function (m) {
 };
 
 /* ---------- navegación ---------- */
+// El Mapa de calor es un módulo aparte de la página principal: se abre con ?solo=mapa y sin las pestañas de la proyección.
+if (new URLSearchParams(location.search).get('solo') === 'mapa') {
+  S.tab = S.vista = 'mapa'; document.body.classList.add('solo-mapa');
+  document.querySelector('.bar .brand').innerHTML = '<i></i>Mapa de calor';
+} else document.querySelector('[data-tab="mapa"]').remove();
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; S.vista = S.tab; document.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-selected', x === b)); render(); });
 document.querySelectorAll('[data-u]').forEach(b => b.onclick = () => { S.unidad = b.dataset.u; document.querySelectorAll('[data-u]').forEach(x => x.setAttribute('aria-pressed', x === b)); render(); });
 document.querySelectorAll('[data-volver]').forEach(b => b.onclick = () => { S.vista = S.origen; render(); });
@@ -1572,7 +1578,7 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610231000"></script>
-<script type="module" src="proyeccion.js?v=202610231000"></script>
+<script src="mapa.js?v=202610231100"></script>
+<script type="module" src="proyeccion.js?v=202610231100"></script>
 
 </body></html>

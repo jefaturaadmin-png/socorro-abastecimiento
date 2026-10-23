@@ -32,6 +32,9 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .nav button.comp { color: #0f7b6c }
 .nav button.comp:hover { background: #e3f3f0; color: #0b5e53 }
 .nav button.comp[aria-current="page"] { color: #fff; background: #0f7b6c }
+.nav button.mapa { color: #b4321c }
+.nav button.mapa:hover { background: #fbe3de; color: #8f2716 }
+.nav button.mapa[aria-current="page"] { color: #fff; background: #b4321c }
 .nav .badge { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 6px; border-radius: 99px; background: var(--brand); color: #fff; font-size: 11.5px; font-weight: 700 }
 .quien { display: flex; align-items: center; gap: 10px }
 .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--soft); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted) }
