@@ -74,7 +74,7 @@
   const VER = { enviar: r => r.pide > 0, urgente: r => r.urgente, comprar: r => r.comprar > 0, exceso: r => r.exceso > 0, '': r => r.d > 0 || r.st > 0 };
   const colorCob = (r, o) => r.d <= 0 ? '#9e9e9e' : r.cob < o.Sg ? '#d9302c' : r.cob < o.C + o.Sg ? '#f0ad4e' : r.cob <= (o.C + o.Sg) * 2 ? '#43a047' : '#1e6bb8';
   const cobTxt = r => r.d <= 0 ? 'sin venta' : r.cob > 999 ? '> 999 d' : nf0.format(Math.floor(r.cob)) + ' d';
-  const corto2 = f => String(f).replace(/^ALMACEN /, '');
+  const corto2 = f => nomSuc(f);
   /* ---------- lista para el equipo: faltantes de droguería (0 en droguería y alguna sucursal lo pide) ---------- */
   // Se publica en faltantes/actual (la leen los usuarios con la vista "faltantes") y sus respuestas llegan de faltantes_estado.
   const FB = window.parent?.FB; S.suEstados = new Map();

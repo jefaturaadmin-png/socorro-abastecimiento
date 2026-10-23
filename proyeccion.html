@@ -117,15 +117,35 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .tag.auto { background: var(--bg); color: var(--muted); border: 1px solid var(--line) }
 .more { padding: 12px 16px; display: flex; gap: 12px; align-items: center; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); flex-wrap: wrap }
 
-.tipos-in { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 24px; align-items: center; padding: 4px 24px 22px }
-.dona-g { height: 340px; position: relative }
+.tipos-in { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; padding: 4px 24px 22px; min-height: 400px }
+.dona-g { height: 390px; width: min(390px, 100%); position: relative }
+.tipos-in .tley { position: absolute; top: 4px; right: 20px; width: 300px }
+@media (max-width: 1100px) { .tipos-in .tley { position: static; width: 100%; margin-top: 12px } }
 .tley { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px }
-.tley button { width: 100%; display: grid; grid-template-columns: 28px 1fr auto auto; gap: 12px; align-items: center; border: 1px solid var(--line); background: var(--surface); padding: 10px 14px; border-radius: 10px; cursor: pointer; font: inherit; color: var(--fg); text-align: left }
+.tley button { width: 100%; display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: center; border: 1px solid var(--line); background: var(--surface); padding: 7px 12px; border-radius: 10px; cursor: pointer; font: inherit; font-size: 13.5px; color: var(--fg); text-align: left }
 .tley button[aria-pressed="true"] { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg) }
 .tley b { font-family: var(--f-mono); font-size: 22px; font-weight: 600 }
 .tley span em { font-style: normal; color: var(--muted); font-size: 13px } .tley small.regla { display: block; text-align: left; min-width: 0; font-size: 11.5px }
 .tley small { color: var(--muted); font-size: 13px; min-width: 90px; text-align: right }
 @media (max-width: 760px) { .tipos-in { grid-template-columns: minmax(0, 1fr) } .dona-g { height: 260px } }
+.filtros-p { display: grid; gap: 10px; justify-items: start }
+.filtros-p .fila-f { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: flex-end }
+.filtros-p #pq, .filtros-p #kq { min-width: min(420px, 80vw) }
+.rango { display: grid; gap: 6px; min-width: min(380px, 86vw) }
+.rango-f { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.rango-f input[type=date] { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--fg) }
+.rango-s { position: relative; height: 26px }
+.rango-pista { position: absolute; left: 9px; right: 9px; top: 11px; height: 4px; border-radius: 4px; background: var(--line) }
+.rango-pista i { position: absolute; top: 0; bottom: 0; background: var(--accent); border-radius: 4px }
+.rango-s input[type=range] { position: absolute; inset: 0; width: 100%; margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; height: 26px }
+.rango-s input[type=range]::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.2) }
+.rango-s input[type=range]::-moz-range-thumb { pointer-events: auto; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); cursor: pointer }
+.rango-s input[type=range]::-webkit-slider-runnable-track { background: none } .rango-s input[type=range]::-moz-range-track { background: none }
+.pj small.av { display: block; font-size: 11px; font-weight: 500; color: var(--muted); white-space: nowrap }
+td.comprar { font-weight: 700; color: var(--accent) }
+.k-scroll { max-height: 640px; overflow: auto }
+#kTabla th, #kTabla td { white-space: nowrap }
+#kTabla td.drog, #kTabla th.drog { background: color-mix(in srgb, var(--accent) 7%, var(--surface)) }
 .fechero { display: flex; flex-wrap: wrap; align-items: center; gap: 8px }
 .fechero .dur { font-family: var(--f-mono); color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; font-size: 13px }
 tr.avance td { background: color-mix(in srgb, var(--s2) 8%, transparent) }
@@ -275,12 +295,12 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { d
       <button role="tab" data-tab="pron" aria-selected="true">Pronóstico</button>
       <button role="tab" data-tab="rep" aria-selected="false">Reposición</button>
       <button role="tab" data-tab="ped" aria-selected="false">Alertas</button>
+      <button role="tab" data-tab="kar" aria-selected="false">Kardex</button>
       <button role="tab" data-tab="mapa" aria-selected="false">Mapa de calor</button>
     </div>
     <div class="seg" role="group" aria-label="Unidad">
       <button data-u="cajas" aria-pressed="true">Cajas</button><button data-u="soles" aria-pressed="false">Soles</button>
     </div>
-    <label class="btn primary" for="fPron" id="btnPron" title="Uno o varios archivos .TXT del kardex de LolFar. Lo repetido se descarta solo.">Subir kardex (.TXT)</label>
     <input id="fPron" type="file" accept=".txt,.TXT,.gz,.json" multiple hidden>
   </div>
 </div>
@@ -293,26 +313,27 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { d
   <section id="vPron">
     <div class="head">
       <div><div class="eyebrow" id="pEyebrow"></div><h1>Elección de método por medicamento</h1></div>
-      <div class="controls">
-        <label class="field"><span>Mostrar</span>
-          <select id="pFiltro">
-            <option value="todos">Todos los medicamentos</option>
-            <option value="apto">Solo aptos para SARIMA</option>
-            <option value="man">Elegidos por mí</option>
-            <option value="auto">Sin elegir (automático)</option>
-          </select></label>
-        <label class="field"><span>Laboratorio</span><select id="pLab" class="sLab"><option value="">Todos</option></select></label>
-        <label class="field"><span>Tipo</span><select class="sTipo"><option value="">Todos</option><option value="A">A · Regular</option><option value="B">B · Ocasional</option><option value="C">C · Esporádico</option><option value="D">D · Golondrino</option><option value="E">E · Sin movimiento</option></select></label>
-        <label class="field"><span>Etiqueta</span><select class="sEtq"><option value="">Todas</option><option value="pap">Apoyo al paciente (2+1, 1+1…)</option><option value="est">Estacional</option></select></label>
-        <label class="field"><span>Línea</span><select class="sLin"><option value="">Todas</option></select></label>
-        <label class="field"><span>Genérico</span><input class="sGen" list="dlGen" placeholder="Todos" autocomplete="off" style="width:170px"></label>
-        <label class="field"><span>Familia</span><select class="sFam"><option value="">Todas</option></select></label>
-        <input id="pq" type="search" placeholder="Buscar nombre, código, genérico o familia…" aria-label="Filtrar medicamentos" autocomplete="off">
+      <div class="controls filtros-p">
+        <div class="fila-f"><input id="pq" type="search" placeholder="Buscar nombre, código, genérico o familia…" aria-label="Filtrar medicamentos" autocomplete="off"><button type="button" class="btn sm" id="pLimpiar">✕ Limpiar filtros</button></div>
+        <div class="fila-f">
+          <label class="field"><span>Laboratorio</span><select id="pLab" class="sLab"><option value="">Todos</option></select></label>
+          <label class="field"><span>Tipo</span><select class="sTipo"><option value="">Todos</option></select></label>
+          <div class="field"><span>Comprar para (días de stock + seguridad)</span><div class="seg" id="pPres" role="group" aria-label="Días a cubrir"><button type="button" data-d="7" data-s="7">7 + 7</button><button type="button" data-d="15" data-s="15">15 + 15</button><button type="button" data-d="30" data-s="30">30 + 30</button></div></div>
+          <label class="field"><span>Días de stock</span><input id="pCob" type="number" min="0" max="180" value="15" style="width:70px"></label>
+          <label class="field"><span>Días de seguridad</span><input id="pSeg" type="number" min="0" max="180" value="15" style="width:70px"></label>
+        </div>
+        <div class="fila-f">
+          <label class="field"><span>Línea</span><select class="sLin"><option value="">Todas</option></select></label>
+          <label class="field"><span>Familia</span><select class="sFam"><option value="">Todas</option></select></label>
+        </div>
       </div>
     </div>
     <div class="card tipos">
       <div class="ch"><h2 id="tH2">Tipos de producto</h2>
-        <div class="field"><span>Periodo</span><div class="fechero"><div class="seg" id="tPer" role="group" aria-label="Periodo"></div><label class="z">Otro <input id="tDias" type="number" min="1" max="90" placeholder="días" style="width:70px"></label><b class="dur" id="tDur"></b></div></div></div>
+        <div class="field"><span>Periodo</span><div class="rango" id="tRango">
+          <div class="rango-f"><input type="date" id="tDesde" aria-label="Desde"><span class="z">→</span><input type="date" id="tHasta" aria-label="Hasta"><b class="dur" id="tDur"></b></div>
+          <div class="rango-s"><div class="rango-pista"><i id="tPista"></i></div><input type="range" id="tR1" min="0" max="364" value="0" aria-label="Inicio del periodo"><input type="range" id="tR2" min="0" max="364" value="364" aria-label="Fin del periodo"></div>
+        </div></div></div>
       <div class="tipos-in"><div class="dona-g"><canvas id="tChart" aria-label="Porcentaje de productos por tipo"></canvas></div><ul class="ley tley" id="tLey"></ul></div>
     </div>
     <div class="card">
@@ -379,10 +400,8 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { d
         <label class="field"><span id="rCobL">Cobertura (días)</span><input id="rCob" type="number" min="0" max="180" value="15"></label>
         <label class="field"><span>Seguridad (días)</span><input id="rSeg" type="number" min="0" max="60" value="15"></label>
         <label class="field"><span>Laboratorio</span><select id="rLab" class="sLab"><option value="">Todos</option></select></label>
-        <label class="field"><span>Tipo</span><select class="sTipo"><option value="">Todos</option><option value="A">A · Regular</option><option value="B">B · Ocasional</option><option value="C">C · Esporádico</option><option value="D">D · Golondrino</option><option value="E">E · Sin movimiento</option></select></label>
-        <label class="field"><span>Etiqueta</span><select class="sEtq"><option value="">Todas</option><option value="pap">Apoyo al paciente (2+1, 1+1…)</option><option value="est">Estacional</option></select></label>
+        <label class="field"><span>Tipo</span><select class="sTipo"><option value="">Todos</option></select></label>
         <label class="field"><span>Línea</span><select class="sLin"><option value="">Todas</option></select></label>
-        <label class="field"><span>Genérico</span><input class="sGen" list="dlGen" placeholder="Todos" autocomplete="off" style="width:170px"></label>
         <label class="field"><span>Familia</span><select class="sFam"><option value="">Todas</option></select></label>
         <input id="rq" type="search" placeholder="Buscar nombre, código, genérico o familia…" aria-label="Filtrar medicamentos" autocomplete="off">
       </div>
@@ -550,6 +569,27 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { d
         <li>No se envían productos bloqueados en esa sucursal ni en todas.</li>
       </ul>
     </details>
+  </section>
+
+  <section id="vKar" hidden>
+    <div class="head">
+      <div><div class="eyebrow" id="kEyebrow"></div><h1>Kardex · stock actual</h1></div>
+      <div class="controls filtros-p">
+        <div class="fila-f"><input id="kq" type="search" placeholder="Buscar nombre, código, genérico o familia…" aria-label="Filtrar medicamentos" autocomplete="off">
+          <label class="btn primary" for="fPron" id="btnPron" title="Uno o varios archivos .TXT del kardex de LolFar. Lo repetido se descarta solo.">Subir kardex (.TXT)</label></div>
+        <div class="fila-f">
+          <label class="field"><span>Laboratorio</span><select id="kLab" class="sLab"><option value="">Todos</option></select></label>
+          <label class="field"><span>Mostrar</span><select id="kVer"><option value="stock">Con stock</option><option value="drog0">En 0 en droguería y con stock en sucursales</option><option value="cero">Sin stock en ningún lado</option><option value="">Todos</option></select></label>
+          <label class="field"><span>Línea</span><select class="sLin"><option value="">Todas</option></select></label>
+          <label class="field"><span>Familia</span><select class="sFam"><option value="">Todas</option></select></label>
+          <button type="button" class="btn sm" id="kXls">⬇ Descargar Excel</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="scroll k-scroll"><table class="cells" id="kTabla"></table></div>
+      <div class="more" id="kMore"></div>
+    </div>
   </section>
 
   <section id="vPed" hidden>
@@ -809,7 +849,10 @@ function validar(o) {
    del total (para la compra) y de cada farmacia (para el reparto). Etiquetas: apoyo al paciente (2+1…) y estacional. */
 const PAP = /\(\s*\d+\s*\+\s*\d+\s*\)/;
 const catDe = n => n >= 10 ? 'A' : n >= 6 ? 'B' : n >= 3 ? 'C' : n >= 1 ? 'D' : 'E';
-const NCAT = { A: 'Regular', B: 'Ocasional', C: 'Esporádico', D: 'Golondrino', E: 'Sin movimiento' };
+const NCAT = { A: 'Venta mensual', B: 'Venta cada 2 meses', C: 'Venta cada 4 meses', D: 'Ventas al año', E: 'Sin venta' };
+// nombre corto de la sucursal como se ve en la página principal (ALMACEN PRINCIPAL = REAL, ALMACEN SUCURSAL = PUNO)
+const VISIBLES = { 'ALMACEN PRINCIPAL': 'REAL', 'ALMACEN SUCURSAL': 'PUNO' };
+const nomSuc = f => VISIBLES[f] || String(f || '').replace(/^ALMACEN /, '');
 function clasificar(o) {
   // ventas del mes en curso (aún incompleto): cuentan como un mes con venta dentro de los últimos 12
   let iAct = Infinity;
@@ -1027,10 +1070,10 @@ document.querySelectorAll('[data-volver]').forEach(b => b.onclick = () => { S.vi
 function render() {
   const v = S.vista;
   $('vPron').hidden = v !== 'pron'; $('vFichaP').hidden = v !== 'fichaP'; $('vRep').hidden = v !== 'rep';
-  $('vMov').hidden = v !== 'mov'; $('vPed').hidden = v !== 'ped'; $('vFre').hidden = v !== 'fre'; $('vSuc').hidden = v !== 'suc'; $('vMapa').hidden = v !== 'mapa'; $('vFichaM').hidden = v !== 'fichaM';
+  $('vMov').hidden = v !== 'mov'; $('vPed').hidden = v !== 'ped'; $('vFre').hidden = v !== 'fre'; $('vSuc').hidden = v !== 'suc'; $('vKar').hidden = v !== 'kar'; $('vMapa').hidden = v !== 'mapa'; $('vFichaM').hidden = v !== 'fichaM';
   if (!S.P) return;
   if (v === 'pron') pintarPron(); else if (v === 'fichaP') pintarFichaP(); else if (v === 'rep') pintarRep();
-  else if (v === 'ped') pintarPed(); else if (v === 'fre') window.pintarEst?.(); else if (v === 'suc') window.pintarSuc?.(); else if (v === 'mapa') window.pintarMapa?.(); else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM();
+  else if (v === 'ped') pintarPed(); else if (v === 'fre') window.pintarEst?.(); else if (v === 'kar') pintarKar(); else if (v === 'suc') window.pintarSuc?.(); else if (v === 'mapa') window.pintarMapa?.(); else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM();
 }
 function abrirFichaP(c, origen) { S.fpDesde = ''; S.cur = c; S.origen = origen; S.fpFarm = origen === 'rep' ? S.farm : ''; S.vista = 'fichaP'; render(); scrollTo({ top: 0 }); }
 
@@ -1090,7 +1133,7 @@ const catBadge = c => `<span class="cat ${c}" title="${c} · ${NCAT[c]}">${c}</s
 const etiquetas = p => (p.pap ? '<span class="tag pap" title="Programa de apoyo al paciente">PAP</span>' : '') + (p.est ? '<span class="tag est" title="Venta por temporadas">Estacional</span>' : '');
 // en Reposición por farmacia se usa la categoría de esa farmacia
 const pasaTipo = p => {
-  const per = S.vista === 'pron' && S.tPer;
+  const per = S.vista === 'pron' && S.tR;
   if (per && p.fueraP) return false;
   const c = S.vista === 'rep' && S.farm ? (p.catF?.[S.farm] || 'E') : per ? p.catP : p.cat;
   return (!S.cat || c === S.cat) && (!S.etq || (S.etq === 'pap' ? p.pap : p.est)) && pasaClas(p);
@@ -1099,74 +1142,143 @@ document.querySelectorAll('.sTipo').forEach(s => s.addEventListener('change', e 
 document.querySelectorAll('.sEtq').forEach(s => s.addEventListener('change', e => { S.etq = e.target.value; document.querySelectorAll('.sEtq').forEach(x => x.value = S.etq); S.pMostrar = S.rMostrar = PAGINA; render(); }));
 
 /* ---------- PRONÓSTICO ---------- */
-$('pFiltro').addEventListener('change', e => { S.pFiltro = e.target.value; S.pMostrar = PAGINA; pintarPron(); });
+document.querySelectorAll('.sTipo').forEach(x => x.innerHTML = `<option value="">Todos</option>` + 'ABCDE'.split('').map(c => `<option value="${c}">${c} · ${NCAT[c]}</option>`).join(''));
+S.pCob = 15; S.pSeg = 15;
+const marcarPres = () => document.querySelectorAll('#pPres [data-d]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.d === S.pCob && +b.dataset.s === S.pSeg));
+$('pPres').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b) return; S.pCob = +b.dataset.d; S.pSeg = +b.dataset.s; $('pCob').value = S.pCob; $('pSeg').value = S.pSeg; marcarPres(); pintarPron(); });
+$('pCob').addEventListener('change', e => { S.pCob = Math.max(0, +e.target.value || 0); marcarPres(); pintarPron(); });
+$('pSeg').addEventListener('change', e => { S.pSeg = Math.max(0, +e.target.value || 0); marcarPres(); pintarPron(); });
+marcarPres();
+$('pLimpiar').addEventListener('click', () => {
+  S.lab = S.cat = S.lin = S.fam = S.gen = S.etq = ''; S.tR = null; $('pq').value = '';
+  document.querySelectorAll('.sLab, .sTipo, .sLin, .sFam, .sEtq').forEach(x => x.value = ''); document.querySelectorAll('.sGen').forEach(x => x.value = '');
+  S.pMostrar = S.rMostrar = PAGINA; render();
+});
 $('pq').addEventListener('input', () => { S.pMostrar = PAGINA; pintarPron(); });
 const COL_CAT = { A: '#1f7a6d', B: '#3d5a99', C: '#b8860b', D: '#8a4f9e', E: '#a33b3b' };
-// Periodo del gráfico de tipos: 0 = último año (por meses con venta); N = últimos N días (por días con venta, hasta 90).
-// En un periodo de días: A se vende cada ≤3 días, B cada 4–10, C cada 11–30, D menos que eso y E no se movió (solo si tiene stock).
-S.tPer = 0;
-const REGLA = { A: '10–12 meses con venta al año', B: '6–9 meses', C: '3–5 meses', D: '1–2 meses', E: 'sin ventas en el año' };
-const REGLAP = { A: 'se vende cada 1–3 días', B: 'cada 4–10 días', C: 'cada 11–30 días', D: 'cada más de 30 días', E: 'no se movió (tiene stock)' };
-const cadaTxt = d => !isFinite(d) ? 'sin ventas' : d <= 1.5 ? 'diario' : `cada ${nf0.format(d)} días`;
-// días con venta (de todas las sucursales) en los últimos n días, con las ventas por día guardadas
-function diasConVenta(p, n) {
-  const o = S.P; if (!o.dias) return null;
-  const desde = o.dias.n - n, dias = new Set();
-  for (const l of Object.values(p.dv || {})) for (const [i, q] of l) if (i >= desde && q > 0) dias.add(i);
+// Periodo del gráfico de tipos: por defecto los últimos 12 meses (por meses con venta). Se elige un rango de fechas
+// dentro del último año: si cae en los días con ventas por día guardadas (hasta 90), el tipo sale de cada cuántos días
+// se vendió; si no, de en cuántos de los meses del rango hubo venta (proporcional a 12 meses).
+S.tR = null;
+const REGLA = { A: 'vendió en 10 a 12 de cada 12 meses', B: 'vendió en 6 a 9 de cada 12 meses', C: 'vendió en 3 a 5 de cada 12 meses', D: 'vendió en 1 o 2 de cada 12 meses', E: 'no vendió (tiene stock)' };
+const REGLAP = { A: 'en el periodo se vendió cada 1 a 3 días', B: 'en el periodo se vendió cada 4 a 10 días', C: 'en el periodo se vendió cada 11 a 30 días', D: 'en el periodo se vendió cada más de 30 días', E: 'no se vendió en el periodo (tiene stock)' };
+const isoDe = d => d.toISOString().slice(0, 10);
+const diaK = k => { const d = new Date(S.P.corte + 'T12:00:00'); d.setDate(d.getDate() - (364 - k)); return isoDe(d); };
+const kDe = iso => Math.round((new Date(S.P.corte + 'T12:00:00') - new Date(iso + 'T12:00:00')) / 864e5);
+const idxDia = iso => S.P.dias.n - 1 - Math.round((new Date(S.P.dias.hasta + 'T12:00:00') - new Date(iso + 'T12:00:00')) / 864e5);
+// modo del rango: 'dias' (hay ventas por día para todo el rango) o 'meses'
+function modoRango(r) {
+  const o = S.P; if (!r) return null;
+  if (o.dias) { const ini = fechaDia(o.dias.primero ?? 0); if (r.a >= ini && r.b <= o.dias.hasta) return { modo: 'dias', i1: idxDia(r.a), i2: idxDia(r.b), n: idxDia(r.b) - idxDia(r.a) + 1 }; }
+  const meses = []; for (let m = r.a.slice(0, 7); m <= r.b.slice(0, 7); m = sumaMes(m, 1)) meses.push(m);
+  return { modo: 'meses', meses };
+}
+const sumaMes = (m, k) => { let [y, mo] = m.split('-').map(Number); mo += k; while (mo > 12) { mo -= 12; y++; } while (mo < 1) { mo += 12; y--; } return `${y}-${String(mo).padStart(2, '0')}`; };
+function diasConVentaR(p, i1, i2) {
+  const dias = new Set();
+  for (const l of Object.values(p.dv || {})) for (const [i, q] of l) if (i >= i1 && i <= i2 && q > 0) dias.add(i);
   return dias.size;
 }
-function tipoPeriodo(p, n) {
-  const d = diasConVenta(p, n); if (d == null) return null;
-  if (!d) return stockTotal(p).t > 0 ? { c: 'E', cada: Infinity } : null;
-  const cada = n / d; return { c: cada <= 3 ? 'A' : cada <= 10 ? 'B' : cada <= 30 ? 'C' : 'D', cada };
+function tipoRango(p, M) {
+  if (M.modo === 'dias') {
+    const d = diasConVentaR(p, M.i1, M.i2);
+    if (!d) return stockTotal(p).t > 0 ? { c: 'E', cada: Infinity } : null;
+    const cada = M.n / d; return { c: cada <= 3 ? 'A' : cada <= 10 ? 'B' : cada <= 30 ? 'C' : 'D', cada };
+  }
+  const o = S.P, av = avance(p); let con = 0;
+  for (const m of M.meses) { const i = o.meses.indexOf(m), v = i >= 0 ? p.h[i] : av && av.mes === m ? av.v : 0; if (v > 0) con++; }
+  if (!con) return stockTotal(p).t > 0 ? { c: 'E' } : null;
+  const r = con / M.meses.length * 12;
+  return { c: r >= 9.5 ? 'A' : r >= 5.5 ? 'B' : r >= 2.5 ? 'C' : 'D', con, de: M.meses.length };
 }
 function aplicarPeriodo() {
-  const o = S.P, n = S.tPer;
-  for (const p of o.p) { if (!n) { p.catP = null; p.fueraP = false; continue; } const t = tipoPeriodo(p, n); p.catP = t?.c || null; p.cadaP = t?.cada; p.fueraP = !t; }
+  const o = S.P, M = modoRango(S.tR);
+  for (const p of o.p) { if (!M) { p.catP = null; p.fueraP = false; continue; } const t = tipoRango(p, M); p.catP = t?.c || null; p.cadaP = t?.cada; p.fueraP = !t; }
+  return M;
 }
+// etiquetas dentro del gráfico: porcentaje y cantidad en cada parte, y el total al centro
+const etqDona = { id: 'etqDona', afterDatasetsDraw(ch) {
+  const { ctx } = ch, ds = ch.data.datasets[0], tot = ds.data.reduce((a, b) => a + b, 0); if (!tot) return;
+  ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ch.getDatasetMeta(0).data.forEach((arc, i) => {
+    const v = ds.data[i]; if (!v || v / tot < .025) return;
+    const { x, y } = arc.tooltipPosition(); ctx.fillStyle = '#fff';
+    ctx.font = '700 16px system-ui, sans-serif'; ctx.fillText(Math.round(v / tot * 100) + '%', x, y - 8);
+    ctx.font = '500 12px system-ui, sans-serif'; ctx.fillText(nf0.format(v), x, y + 9);
+  });
+  const a = ch.getDatasetMeta(0).data[0]; if (a) {
+    ctx.fillStyle = css('--fg') || '#222'; ctx.font = '700 26px system-ui, sans-serif'; ctx.fillText(nf0.format(tot), a.x, a.y - 8);
+    ctx.fillStyle = css('--muted') || '#777'; ctx.font = '500 12px system-ui, sans-serif'; ctx.fillText('productos', a.x, a.y + 14);
+  }
+  ctx.restore();
+} };
+function pintarRango() {
+  const r = S.tR, k1 = r ? kDe(r.a) : 364, k2 = r ? kDe(r.b) : 0;
+  const a = 364 - k1, b = 364 - k2;   // posiciones en el deslizador (0 = hace un año, 364 = hoy)
+  $('tR1').value = a; $('tR2').value = b;
+  $('tDesde').min = $('tHasta').min = diaK(0); $('tDesde').max = $('tHasta').max = diaK(364);
+  $('tDesde').value = diaK(a); $('tHasta').value = diaK(b);
+  $('tPista').style.left = (a / 364 * 100) + '%'; $('tPista').style.right = (100 - b / 364 * 100) + '%';
+}
+function fijarRango(a, b) {
+  a = Math.max(0, Math.min(364, a)); b = Math.max(0, Math.min(364, b)); if (a > b) [a, b] = [b, a];
+  S.tR = a === 0 && b === 364 ? null : { a: diaK(a), b: diaK(b) }; S.pMostrar = PAGINA; pintarPron();
+}
+['tR1', 'tR2'].forEach(id => {
+  $(id).addEventListener('input', () => { let a = +$('tR1').value, b = +$('tR2').value; if (a > b) { if (id === 'tR1') a = b; else b = a; $(id).value = id === 'tR1' ? a : b; }
+    $('tDesde').value = diaK(a); $('tHasta').value = diaK(b); $('tPista').style.left = (a / 364 * 100) + '%'; $('tPista').style.right = (100 - b / 364 * 100) + '%'; $('tDur').textContent = `${b - a + 1} días`; });
+  $(id).addEventListener('change', () => fijarRango(+$('tR1').value, +$('tR2').value));
+});
+['tDesde', 'tHasta'].forEach(id => $(id).addEventListener('change', () => {
+  if (!$('tDesde').value || !$('tHasta').value) return;
+  fijarRango(364 - kDe($('tDesde').value), 364 - kDe($('tHasta').value));
+}));
 function pintarTipos() {
-  const o = S.P, per = S.tPer;
-  aplicarPeriodo();
+  const o = S.P, M = aplicarPeriodo(), per = !!M;
   const tipo = p => per ? p.catP : p.cat;
-  const lista = o.p.filter(p => (!S.lab || labDe(p.c) === S.lab) && !(per && p.fueraP)), n = lista.length;
+  const lista = o.p.filter(p => (!S.lab || labDe(p.c) === S.lab) && pasaClas(p) && !(per && p.fueraP)), n = lista.length;
   const cnt = Object.fromEntries('ABCDE'.split('').map(c => [c, 0])); for (const p of lista) cnt[tipo(p)]++;
   const cats = 'ABCDE'.split('');
-  // frecuencia típica de venta de cada tipo (mediana de "cada cuántos días" en el periodo, o en los últimos 90 días)
-  const nf = per || 90, cada = {};
-  for (const c of cats) { const v = lista.filter(p => tipo(p) === c).map(p => { const d = diasConVenta(p, nf); return d ? nf / d : Infinity; }).sort((a, b) => a - b); cada[c] = v.length ? v[Math.floor(v.length / 2)] : null; }
-  $('tH2').textContent = `Tipos de producto · ${S.lab || 'todos los laboratorios'} (${nf0.format(n)})`;
-  const cob = o.dias ? Math.min(90, o.dias.n - (o.dias.primero ?? 0)) : 0;
-  $('tPer').innerHTML = [[0, 'Último año'], [7, '7 d'], [15, '15 d'], [30, '30 d'], [60, '60 d'], [90, '90 d']].map(([d, t]) => `<button type="button" data-d="${d}" aria-pressed="${per === d}" ${d && d > cob ? 'disabled title="Aún no hay ventas por día guardadas para tantos días"' : ''}>${t}</button>`).join('');
-  $('tDur').textContent = per ? `${per} días` : '12 meses';
+  $('tH2').textContent = `Tipos de producto · ${S.lab || 'todos los laboratorios'}`;
+  pintarRango();
+  $('tDur').textContent = !M ? 'últimos 12 meses' : M.modo === 'dias' ? `${M.n} días · por días con venta` : `${M.meses.length} meses · por meses con venta`;
   dibujar('tChart', { type: 'doughnut', data: { labels: cats.map(c => `${c} · ${NCAT[c]}`), datasets: [{ data: cats.map(c => cnt[c]),
       backgroundColor: cats.map(c => S.cat && S.cat !== c ? color(COL_CAT[c], .3) : COL_CAT[c]), borderColor: css('--surface') || '#fff', borderWidth: 2 }] },
-    options: { maintainAspectRatio: false, cutout: '52%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${c.label}: ${nf0.format(c.raw)} (${n ? Math.round(c.raw / n * 100) : 0}%)` } } },
-      onClick: (e, els) => { if (els.length) elegirTipo(cats[els[0].index]); } } });
-  $('tLey').innerHTML = cats.map(c => `<li><button type="button" data-cat="${c}" aria-pressed="${S.cat === c}">${catBadge(c)}<span>${NCAT[c]} <em>(${cada[c] != null && c !== 'E' ? cadaTxt(cada[c]) : c === 'E' ? 'no se movió' : '—'})</em><small class="regla">${per ? REGLAP[c] : REGLA[c]}</small></span><b>${n ? Math.round(cnt[c] / n * 100) : 0}%</b><small>${nf0.format(cnt[c])} productos</small></button></li>`).join('');
+    options: { maintainAspectRatio: false, cutout: '48%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${c.label}: ${nf0.format(c.raw)} (${n ? Math.round(c.raw / n * 100) : 0}%)` } } },
+      onClick: (e, els) => { if (els.length) elegirTipo(cats[els[0].index]); } }, plugins: [etqDona] });
+  const regla = M?.modo === 'dias' ? REGLAP : REGLA;
+  $('tLey').innerHTML = cats.map(c => `<li><button type="button" data-cat="${c}" aria-pressed="${S.cat === c}">${catBadge(c)}<span>${NCAT[c]}<small class="regla">${regla[c]}</small></span></button></li>`).join('');
 }
 function elegirTipo(c) { S.cat = S.cat === c ? '' : c; document.querySelectorAll('.sTipo').forEach(x => x.value = S.cat); S.pMostrar = PAGINA; pintarPron(); }
 $('tLey').addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (b) elegirTipo(b.dataset.cat); });
-$('tPer').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b || b.disabled) return; S.tPer = +b.dataset.d; $('tDias').value = ''; S.pMostrar = PAGINA; pintarPron(); });
-$('tDias').addEventListener('change', e => { const v = Math.round(+e.target.value || 0), cob = S.P?.dias ? Math.min(90, S.P.dias.n - (S.P.dias.primero ?? 0)) : 0; S.tPer = v > 0 ? Math.min(v, cob || 90) : 0; e.target.value = S.tPer || ''; S.pMostrar = PAGINA; pintarPron(); });
+// Lo que se necesita para los próximos H días desde el corte, con el pronóstico de cada mes
+// (en el mes en curso, lo que falta vender del pronóstico repartido en los días que quedan).
+function necesidad(p, H) {
+  const o = S.P, av = avance(p), c = new Date(o.corte + 'T12:00:00'); let t = 0;
+  for (let d = 1; d <= H; d++) {
+    const x = new Date(c); x.setDate(x.getDate() + d); const m = isoDe(x).slice(0, 7);
+    let j = o.fm.indexOf(m);
+    if (av && m === av.mes) t += Math.max(0, pronDe(p, Math.max(0, j)) - av.v) / Math.max(1, av.dm - av.dia);
+    else { if (j < 0) j = m < o.fm[0] ? 0 : o.fm.length - 1; t += pronDe(p, j) / diasMes(m); }
+  }
+  return t;
+}
 function pintarPron() {
   const o = S.P, mets = o.metodos, conv = (p, v) => soles() ? v * p.k : v;
   llenarLabs(); llenarClas(); pintarTipos();
   let lista = o.p;
   if (S.lab) lista = lista.filter(p => labDe(p.c) === S.lab);
   lista = lista.filter(pasaTipo);
-  if (S.pFiltro === 'apto') lista = lista.filter(p => p.a);
-  if (S.pFiltro === 'man') lista = lista.filter(p => manual(p.c));
-  if (S.pFiltro === 'auto') lista = lista.filter(p => !manual(p.c));
-  const fil = filtroTexto(lista, $('pq').value), vis = fil.slice(0, S.pMostrar);
+  const fil = filtroTexto(lista, $('pq').value), vis = fil.slice(0, S.pMostrar), H = S.pCob + S.pSeg;
+  const compra = p => { const nec = necesidad(p, H); return { nec, cmp: Math.max(0, Math.ceil(nec - stockTotal(p).t - 1e-9)) }; };
 
-  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th title="Categoría por movimiento (últimos 12 meses)">Tipo</th><th title="Droguería + todas las sucursales y almacenes">Stock actual</th><th>Prom. 3m</th>${S.verMet ? mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="Error del método (WAPE). Clic en una celda para usarlo.">${esc(corto(m))}</th>`).join('') + '<th class="sep">Método usado</th>' : ''}
-    <th class="sep"><button type="button" class="btn sm" data-vermet title="${S.verMet ? 'Ocultar' : 'Ver'} el error de cada modelo y el método usado">${S.verMet ? '◂ Ocultar modelos' : 'Modelos ▸'}</button></th>${o.fm.map(m => `<th class="pj">${et(m)}</th>`).join('')}</tr></thead><tbody>`;
+  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th title="Categoría por movimiento (últimos 12 meses)">Tipo</th><th title="Droguería + todas las sucursales y almacenes">Stock actual</th>${S.verMet ? mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="Error del método (WAPE). Clic en una celda para usarlo.">${esc(corto(m))}</th>`).join('') + '<th class="sep">Método usado</th>' : ''}
+    <th class="sep"><button type="button" class="btn sm" data-vermet title="${S.verMet ? 'Ocultar' : 'Ver'} el error de cada modelo y el método usado">${S.verMet ? '◂ Ocultar modelos' : 'Modelos ▸'}</button></th>${o.fm.map(m => `<th class="pj">${et(m)}</th>`).join('')}<th class="sep" title="Pronóstico de los próximos ${H} días (${S.pCob} de stock + ${S.pSeg} de seguridad)">Necesita ${S.pCob} + ${S.pSeg} d</th><th title="Lo que necesita menos el stock actual (droguería + sucursales)">Comprar</th></tr></thead><tbody>`;
   for (const p of vis) {
     const k = S.calc.get(p.c), sel = elegido(p.c), esMan = manual(p.c);
     h += `<tr data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${etiquetas(p)}${(() => { const x = clas(p); return x.g || x.f ? `<small class="sub">${esc([x.g, x.f].filter(Boolean).join(' · '))}</small>` : ''; })()}</td>
-      <td style="text-align:center">${catBadge(S.tPer && p.catP ? p.catP : p.cat)}</td>
+      <td style="text-align:center">${catBadge(S.tR && p.catP ? p.catP : p.cat)}</td>
       ${(() => { const s = stockTotal(p); return `<td class="n big" title="Droguería ${fmtS(p, conv(p, s.d))} · sucursales y otros almacenes ${fmtS(p, conv(p, s.t - s.d))}">${s.t ? fmtS(p, conv(p, s.t)) : '<span class="z">0</span>'}</td>`; })()}
-      <td class="n">${fmtE(p, conv(p, k.prom))}</td>
       ${!S.verMet ? '' : mets.map((m, i) => { const x = k.met[m]; const cls = ['w', i === 0 ? 'sep' : '']; if (!x || x.wape == null) return `<td class="${cls.join(' ')} na">–</td>`;
         if (m === k.best) cls.push('best'); if (m === sel) cls.push('sel');
         return `<td class="${cls.join(' ')}" data-m="${esc(m)}" title="Usar ${esc(m)}">${pct(x.wape)}</td>`; }).join('') + `
@@ -1175,11 +1287,14 @@ function pintarPron() {
         ${Object.keys(k.met).map(m => `<option value="${esc(m)}" ${esMan && m === sel ? 'selected' : ''}>${esc(corto(m))}</option>`).join('')}
       </select></td>`}
       <td class="sep z" style="text-align:center">${S.verMet ? '' : esc(corto(sel || '–'))}</td>
-      ${o.fm.map((_, j) => `<td class="n pj big">${fmt(conv(p, pronDe(p, j)))}</td>`).join('')}</tr>`;
+      ${(() => { const av = avance(p); return o.fm.map((m, j) => { const v = pronDe(p, j);
+        return av && m === av.mes ? `<td class="n pj big">${fmt(conv(p, v))}<small class="av">vendido ${fmt(conv(p, av.v))} al ${av.dia} · falta ${fmt(conv(p, Math.max(0, v - av.v)))}</small></td>` : `<td class="n pj big">${fmt(conv(p, v))}</td>`; }).join(''); })()}
+      ${(() => { const x = compra(p); return `<td class="n sep">${fmtE(p, conv(p, x.nec))}</td><td class="n comprar">${x.cmp ? fmt(conv(p, x.cmp)) : '<span class="z">·</span>'}</td>`; })()}</tr>`;
   }
-  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${(S.verMet ? mets.length + 1 : 0) + o.fm.length + 5}">${esc(porQueNo(Q_ACTUAL()))}</td></tr>`;
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${(S.verMet ? mets.length + 1 : 0) + o.fm.length + 6}">${esc(porQueNo(Q_ACTUAL()))}</td></tr>`;
   $('pTabla').innerHTML = h + '</tbody>'; ajustarC0($('pTabla'));
-  $('pMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(fil.length)} medicamentos, de mayor a menor demanda</span>` +
+  let tc = 0, ts = 0; for (const p of fil) { const x = compra(p).cmp; tc += x; ts += x * (p.k || 0); }
+  $('pMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(fil.length)} medicamentos, de mayor a menor demanda · <b>a comprar para ${S.pCob} + ${S.pSeg} días: ${nf0.format(tc)} cajas · S/ ${nf0.format(ts)}</b></span>` +
     (fil.length > vis.length ? `<button class="btn" id="pMas">Ver ${Math.min(PAGINA, fil.length - vis.length)} más</button>` : '');
   if ($('pMas')) $('pMas').onclick = () => { S.pMostrar += PAGINA; pintarPron(); };
 }
@@ -1189,6 +1304,50 @@ $('pTabla').addEventListener('click', e => {
   const td = e.target.closest('td.w[data-m]'); if (td) elegir(td.closest('tr').dataset.cod, td.dataset.m);
 });
 $('pTabla').addEventListener('change', e => { const s = e.target.closest('select[data-sel]'); if (s) elegir(s.dataset.sel, s.value); });
+
+/* ---------- KARDEX: stock actual de cada producto en droguería y en cada sucursal ---------- */
+S.kMostrar = PAGINA;
+function filasKar() {
+  const o = S.P, farms = o.farmacias, ver = $('kVer').value, q = $('kq').value;
+  const filas = [];
+  for (const p of o.p) {
+    if (S.lab && labDe(p.c) !== S.lab) continue; if (!pasaClas(p)) continue;
+    const st = window.STOCK_TODOS?.[p.c] || {}, v = f => Math.max(0, +(st[f]?.[0] ?? (f === 'DROGUERIA FS' ? p.sd : p.st?.[f]) ?? 0) || 0);
+    const drog = v('DROGUERIA FS'), sf = farms.map(v), suc = sf.reduce((a, b) => a + b, 0), tot = drog + suc;
+    if (ver === 'stock' && !tot) continue; if (ver === 'drog0' && (drog > 0 || !suc)) continue; if (ver === 'cero' && tot) continue;
+    filas.push({ p, c: p.c, n: p.n, drog, sf, tot });
+  }
+  return filtroTexto(filas, q).sort((a, b) => b.tot * (soles() ? b.p.k : 1) - a.tot * (soles() ? a.p.k : 1));
+}
+function pintarKar() {
+  llenarLabs(); llenarClas();
+  const o = S.P, farms = o.farmacias, conv = (p, v) => soles() ? v * p.k : v, cel = (p, v) => v ? fmtS(p, conv(p, v)) : '<span class="z">0</span>';
+  const filas = filasKar(), vis = filas.slice(0, S.kMostrar);
+  $('kEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · en ${soles() ? 'soles' : 'cajas y fracciones'} · del último kardex subido`;
+  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th class="drog">Droguería</th>${farms.map(f => `<th>${esc(nomSuc(f))}</th>`).join('')}<th class="sep">Sucursales</th><th>Total</th></tr></thead><tbody>`;
+  for (const r of vis) {
+    const p = r.p;
+    h += `<tr><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a><small class="sub">${esc(labDe(p.c))}</small></td>
+      <td class="n big drog">${cel(p, r.drog)}</td>${r.sf.map(v => `<td class="n">${cel(p, v)}</td>`).join('')}<td class="n sep">${cel(p, r.tot - r.drog)}</td><td class="n big">${cel(p, r.tot)}</td></tr>`;
+  }
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${farms.length + 4}">Nada que mostrar con estos filtros.</td></tr>`;
+  $('kTabla').innerHTML = h + '</tbody>'; ajustarC0($('kTabla'));
+  const sum = (k) => filas.reduce((a, r) => a + (soles() ? r[k] * (r.p.k || 0) : r[k]), 0);
+  $('kMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(filas.length)} productos · total ${soles() ? 'S/ ' + nf0.format(sum('tot')) : nf0.format(sum('tot')) + ' cajas'} (droguería ${soles() ? 'S/ ' + nf0.format(sum('drog')) : nf0.format(sum('drog'))})</span>` +
+    (filas.length > vis.length ? `<button class="btn" id="kMas">Ver ${Math.min(PAGINA, filas.length - vis.length)} más</button>` : '');
+  if ($('kMas')) $('kMas').onclick = () => { S.kMostrar += PAGINA; pintarKar(); };
+}
+$('kq').addEventListener('input', () => { S.kMostrar = PAGINA; pintarKar(); });
+$('kVer').addEventListener('change', () => { S.kMostrar = PAGINA; pintarKar(); });
+$('kTabla').addEventListener('click', e => { const a = e.target.closest('[data-abrir]'); if (a) abrirFichaP(a.dataset.abrir, 'kar'); });
+$('kXls').addEventListener('click', () => {
+  const o = S.P, farms = o.farmacias, filas = filasKar(), num = v => String(Math.round(v * 1000) / 1000).replace('.', ',');
+  const t = [['Código', 'Medicamento', 'Laboratorio', 'Droguería', ...farms.map(nomSuc), 'Sucursales', 'Total'],
+    ...filas.map(r => [r.p.c, r.p.n, labDe(r.p.c), num(r.drog), ...r.sf.map(num), num(r.tot - r.drog), num(r.tot)])];
+  const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' }));
+  a.download = `stock_${o.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
 
 /* ---------- FICHA PRONÓSTICO ---------- */
 // Fecha (AAAA-MM-DD) del índice de día de las ventas por día (0 = el más antiguo de la ventana de 90 días).
@@ -1764,10 +1923,10 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610232350"></script>
-<script src="frepple.js?v=202610232350"></script>
-<script src="sucursales.js?v=202610232340"></script>
-<script src="estadistica.js?v=202610232350"></script>
-<script type="module" src="proyeccion.js?v=202610232350"></script>
+<script src="mapa.js?v=202610241000"></script>
+<script src="frepple.js?v=202610241000"></script>
+<script src="sucursales.js?v=202610241000"></script>
+<script src="estadistica.js?v=202610241000"></script>
+<script type="module" src="proyeccion.js?v=202610241000"></script>
 
 </body></html>
