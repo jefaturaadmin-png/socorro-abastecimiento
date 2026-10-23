@@ -15,7 +15,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610232330";
+const VERSION_PROY = "202610232350";
 const VERSION_COMP = "202610212000";
 
 /* ===================== utilidades ===================== */
@@ -270,7 +270,7 @@ function render() {
   else if (S.vista === "vAdmin") pintarAdmin();
   else if (S.vista === "vUsuarios") pintarUsuarios();
   else if (S.vista === "vFicha") pintarFicha();
-  else if (S.vista === "vFalt") { escucharFalt(); pintarFalt(); }
+  else if (S.vista === "vFalt") { escucharFalt(); pintarFalt(); }   // escucharFalt vuelve a conectar si se había cortado
   pintarSel("bq"); pintarSel("ab");
 }
 
@@ -936,7 +936,8 @@ function escucharFalt() {
   if (S.faltSubs) return; S.faltSubs = true;
   S.subs.push(onSnapshot(doc(db, "faltantes", "actual"), sn => { S.falt = sn.exists() ? sn.data() : { items: [] }; pintarNav(); if (S.vista === "vFalt") pintarFalt(); },
     e => { S.faltSubs = false; avisar(e); }));
-  S.subs.push(onSnapshot(collection(db, "faltantes_estado"), sn => { S.fEst = new Map(sn.docs.map(d => [d.id, d.data()])); pintarNav(); if (S.vista === "vFalt" && !S.fAbierto) pintarFalt(); }, () => {}));
+  S.subs.push(onSnapshot(collection(db, "faltantes_estado"), sn => { S.fEst = new Map(sn.docs.map(d => [d.id, d.data()])); pintarNav(); if (S.vista === "vFalt" && !S.fAbierto) pintarFalt(); },
+    () => { S.faltSubs = false; }));
 }
 const sumarDias = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 const fDia = v => v ? new Date(v + "T12:00:00").toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
@@ -958,6 +959,8 @@ async function generarFalt() {
     for (let i = 0; i < 120 && !(w = $("sucFrame").contentWindow)?.publicarFaltantes; i++) await new Promise(r => setTimeout(r, 500));
     const r = w?.publicarFaltantes ? await w.publicarFaltantes() : { ok: false, error: "no se pudo abrir Atención a sucursales" };
     $("fsGenMsg").textContent = r.ok ? `Lista publicada: ${nf(r.n)} productos.` : "No se pudo: " + r.error;
+    // se lee de nuevo y se vuelve a escuchar, por si la conexión en vivo se había cortado
+    if (r.ok) { const sn = await getDoc(doc(db, "faltantes", "actual")); S.falt = sn.exists() ? sn.data() : { items: [] }; S.faltSubs = false; escucharFalt(); pintarNav(); pintarFalt(); }
   } catch (e) { $("fsGenMsg").textContent = "No se pudo: " + (e.message || e); }
   finally { S.fGenerando = false; $("fsGenBtn").disabled = false; }
 }
