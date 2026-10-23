@@ -15,7 +15,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610231700";
+const VERSION_PROY = "202610231900";
 const VERSION_COMP = "202610212000";
 
 /* ===================== utilidades ===================== */
@@ -224,17 +224,19 @@ function pintarNav() {
        ["vProy", "Proyección de compras"],
        ["vComp", "Comparativo", "comp"],
        ["vMapa", "Mapa de calor", "mapa"],
-       ["vEst", "Estadística Proyx", "est"]]
+       ["vEst", "Estadística Proyx", "est"],
+       ["vSuc", "Atención a sucursales", "suc"]]
     : [];   // el químico tiene una sola vista: no hace falta menú
   const actual = S.vista === "vFicha" ? S.origen : S.vista;
   $("nav").innerHTML = items.map(([v, t, c]) => `<button type="button" data-ir="${v}" ${c ? `class="${c}"` : ""} ${v === actual ? 'aria-current="page"' : ""}>${t}</button>`).join("");
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFicha"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
+  if (vista === "vSuc" && !$("sucFrame").src) $("sucFrame").src = "proyeccion.html?solo=suc&v=" + VERSION_PROY;
   if (vista === "vEst" && !$("estFrame").src) $("estFrame").src = "proyeccion.html?solo=est&v=" + VERSION_PROY;
   if (vista === "vMapa" && !$("mapaFrame").src) $("mapaFrame").src = "proyeccion.html?solo=mapa&v=" + VERSION_PROY;
   if (vista === "vComp" && !$("compFrame").src) $("compFrame").src = "comparativo.html?v=" + VERSION_COMP;

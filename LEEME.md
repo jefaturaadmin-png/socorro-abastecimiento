@@ -70,3 +70,7 @@ En **Bloqueos**, botón **Cerrar ingreso de información**: se elige desde qué 
 ## Estadística Proyx (solo administrador)
 
 Módulo del menú principal (`proyeccion.html?solo=est`, código en `estadistica.js` y `frepple.js`). Planificación de inventario con la estructura de la pantalla "Inventory planning" de frePPLe: lista de productos con estado del inventario, stock de seguridad, punto de pedido, cantidad a pedir, riesgo de quiebre y valor en soles; y por producto las pestañas **Atributos**, **Pronóstico** (venta real vs pronóstico, corrección por mes, método elegible), **Plan** (12 meses, parámetros de stock de seguridad y cantidad a pedir) y **Pedidos propuestos**. El motor de pronóstico (`frepple.js`) es un port del código abierto de frePPLe (licencia MIT). Los ajustes por producto se guardan en `proy_config/estadistica`. Botón para descargar los pedidos propuestos en Excel (CSV).
+
+## Atención a sucursales (solo administrador)
+
+Módulo del menú principal (`proyeccion.html?solo=suc`, código en `sucursales.js`). Lista lo que hay que enviar a cada sucursal para cubrir N días + N días de seguridad (7 + 7, 15 + 15, 30 + 30 u otros), según la venta de cada sucursal (ventas de los últimos 15/30/60/90 días del kardex o el motor estadístico sobre su venta mensual). Muestra la cobertura en días con colores, reparte el stock de droguería primero a las sucursales con menos cobertura y marca lo que falta para pasar de otra sucursal con exceso o para comprar. Resumen por sucursal, detalle por producto en toda la red y lista de despacho en Excel (CSV).

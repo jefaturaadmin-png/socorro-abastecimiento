@@ -222,6 +222,12 @@ main.sin-sesion > section { display: none !important }
 
 @media (max-width: 860px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) } .chartbox { height: 270px } .cells .c1 { max-width: 160px } }
 @media (max-width: 480px) { .wrap { padding-inline: 16px } select { max-width: 100% } .field { flex: 1 1 130px } }
+.su-cob { color: #fff; font-weight: 700; text-align: center; font-family: var(--f-mono); white-space: nowrap }
+#suTabla tr.sel td, #suRed tr.sel td { background: color-mix(in srgb, var(--accent) 10%, var(--surface)) }
+.su-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px }
+.su-chip { display: grid; gap: 2px; text-align: left; font: inherit; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; color: var(--fg) }
+.su-chip b { font-size: 13px } .su-chip span { font-size: 12px; color: var(--muted) } .su-chip i { font-style: normal; font-size: 11.5px; font-weight: 700; color: #c0392b }
+.su-chip[aria-pressed="true"] { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg) }
 #frTabla td.estado-inv { color: #fff; font-weight: 700; text-align: center; font-family: var(--f-mono) }
 #frTabla tr.sel td { background: color-mix(in srgb, var(--accent) 10%, var(--surface)) }
 .est-lista { max-height: 520px; overflow: auto }
@@ -485,6 +491,58 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { d
         <li><b>Cantidad a pedir</b>: cantidad económica de pedido (EOQ) = √(2 × venta anual × costo por pedido ÷ (costo de mantener × costo de la caja)), limitada entre la cobertura mínima y máxima en días.</li>
         <li><b>Estado del inventario</b>: el menor entre el stock de hoy y el esperado al llegar un pedido, como % de seguridad + cantidad a pedir (100 % = bien cubierto, 0 % = sin cobertura).</li>
         <li><b>Plan</b>: mes a mes, cuando el stock baja del punto de pedido se propone comprar hasta punto de pedido + cantidad a pedir. Stock = droguería + todas las sucursales; no se descuentan órdenes de compra en camino ni se incluyen los productos bloqueados en todas las farmacias.</li>
+      </ul>
+    </details>
+  </section>
+
+  <section id="vSuc" hidden>
+    <div class="head">
+      <div><div class="eyebrow" id="suEyebrow"></div><h1 id="suTitulo">Atención a sucursales</h1></div>
+      <div class="controls">
+        <label class="field"><span>Sucursal</span><select id="suFarm"><option value="">Todas las sucursales</option></select></label>
+        <div class="field"><span>Atender para (días + seguridad)</span><div class="seg" id="suPres" role="group" aria-label="Días a cubrir"><button type="button" data-d="7" data-s="7">7 + 7</button><button type="button" data-d="15" data-s="15">15 + 15</button><button type="button" data-d="30" data-s="30">30 + 30</button></div></div>
+        <label class="field"><span>Días a atender</span><input id="suCob" type="number" min="1" max="180" value="7" style="width:72px"></label>
+        <label class="field"><span>Stock de seguridad (días)</span><input id="suSeg" type="number" min="0" max="90" value="7" style="width:72px"></label>
+        <label class="field"><span>Venta diaria según</span><select id="suFte"><option value="15">Ventas de los últimos 15 días</option><option value="30" selected>Ventas de los últimos 30 días</option><option value="60">Ventas de los últimos 60 días</option><option value="90">Ventas de los últimos 3 meses</option><option value="motor">Motor estadístico de la sucursal</option></select></label>
+        <label class="field"><span>Qué atender</span><select id="suTip"><option value="ab">Tipo A completo, tipo B 1 unidad</option><option value="todos">Todo lo que se vende en la sucursal</option></select></label>
+        <label class="field"><span>Mostrar</span><select id="suVer"><option value="enviar">Enviar</option><option value="urgente">Urgentes</option><option value="comprar">No alcanza lo de droguería</option><option value="exceso">Exceso en la sucursal</option><option value="">Todos</option></select></label>
+        <label class="field"><span>Laboratorio</span><select id="suLab" class="sLab"><option value="">Todos</option></select></label>
+        <label class="field"><span>Línea</span><select class="sLin"><option value="">Todas</option></select></label>
+        <label class="field"><span>Genérico</span><input class="sGen" list="dlGen" placeholder="Todos" autocomplete="off" style="width:150px"></label>
+        <label class="field"><span>Familia</span><select class="sFam"><option value="">Todas</option></select></label>
+        <input id="suq" type="search" placeholder="Buscar nombre, código, genérico o familia…" aria-label="Filtrar productos" autocomplete="off">
+      </div>
+    </div>
+    <div class="qcards" id="suCards">
+      <button type="button" class="qcard" data-ver="enviar"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg></i><span>Enviar</span><b id="suk1">–</b><small id="suk1s">productos</small></button>
+      <button type="button" class="qcard roja" data-ver="urgente"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/></svg></i><span>Urgentes</span><b id="suk2">–</b><small>stock menor a los días de seguridad</small></button>
+      <button type="button" class="qcard" data-ver="comprar"><i aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.6 12.4a1.5 1.5 0 0 0 1.5 1.1h9.3a1.5 1.5 0 0 0 1.5-1.2L21.5 8H6"/></svg></i><span>No alcanza droguería</span><b id="suk3">–</b><small id="suk3s">productos</small></button>
+      <button type="button" class="qcard" data-ver="exceso"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4M3 17l9 4 9-4"/></svg></i><span>Exceso en sucursal</span><b id="suk4">–</b><small id="suk4s">productos</small></button>
+    </div>
+    <div class="su-chips" id="suChips"></div>
+    <div class="card">
+      <div class="ch"><h2 id="suH2"></h2><button type="button" class="btn sm" id="suXls">⬇ Lista de despacho (Excel)</button></div>
+      <div class="scroll est-lista"><table class="cells" id="suTabla"></table></div>
+      <div class="more" id="suMore"></div>
+    </div>
+    <div class="card est-det" id="suDet" hidden>
+      <div class="est-cab">
+        <div><h2 id="suDTit"></h2><div class="z" id="suDSub"></div></div>
+        <div class="est-bot"><button type="button" class="btn sm" id="suFicha">Ficha de pronóstico</button><button type="button" class="btn sm" id="suCerrar" aria-label="Cerrar">✕</button></div>
+      </div>
+      <div class="est-panel">
+        <div class="chartbox est-chart"><canvas id="suChart" aria-label="Venta mensual en la sucursal"></canvas></div>
+        <div class="est-box"><h3>El producto en toda la red</h3><div class="scroll"><table class="cells" id="suRed"></table></div></div>
+      </div>
+    </div>
+    <details class="metodo">
+      <summary>Cómo se calcula</summary>
+      <ul>
+        <li><b>Venta diaria de cada sucursal</b>: sus ventas de los últimos días del kardex (los días que el kardex no cubre se completan con su historial), o el motor estadístico aplicado a su venta mensual.</li>
+        <li><b>Necesita</b> = venta diaria × (días a atender + días de seguridad). <b>Enviar</b> = lo que necesita − su stock. Por defecto, como en Reposición: tipo A lo que necesite, tipo B 1 unidad si no tiene, C y D a pedido; puedes elegir atender todo lo que se vende.</li>
+        <li><b>Cobertura</b>: días que alcanza el stock de la sucursal. Rojo: menos que los días de seguridad (urgente). Amarillo: menos que días + seguridad. Verde: bien. Azul: más del doble (sobra).</li>
+        <li><b>Reparto</b>: el stock de droguería se reparte primero a las sucursales con menos cobertura. Lo que no alcanza se toma de otra sucursal que tenga exceso de ese producto (más del doble de lo que necesita, o stock sin venta); si tampoco hay, se marca para comprar.</li>
+        <li>No se envían productos bloqueados en esa sucursal ni en todas.</li>
       </ul>
     </details>
   </section>
@@ -950,6 +1008,9 @@ const SOLO = new URLSearchParams(location.search).get('solo');
 if (SOLO === 'mapa') {
   S.tab = S.vista = 'mapa'; document.body.classList.add('solo-mapa');
   document.querySelector('.bar .brand').innerHTML = '<i></i>Mapa de calor';
+} else if (SOLO === 'suc') {
+  S.tab = S.vista = 'suc'; document.body.classList.add('solo-mapa');
+  document.querySelector('.bar .brand').innerHTML = '<i></i>Atención a sucursales';
 } else if (SOLO === 'est') {
   S.tab = S.vista = 'fre'; document.body.classList.add('solo-mapa');
   document.querySelector('.bar .brand').innerHTML = '<i></i>Estadística Proyx';
@@ -961,10 +1022,10 @@ document.querySelectorAll('[data-volver]').forEach(b => b.onclick = () => { S.vi
 function render() {
   const v = S.vista;
   $('vPron').hidden = v !== 'pron'; $('vFichaP').hidden = v !== 'fichaP'; $('vRep').hidden = v !== 'rep';
-  $('vMov').hidden = v !== 'mov'; $('vPed').hidden = v !== 'ped'; $('vFre').hidden = v !== 'fre'; $('vMapa').hidden = v !== 'mapa'; $('vFichaM').hidden = v !== 'fichaM';
+  $('vMov').hidden = v !== 'mov'; $('vPed').hidden = v !== 'ped'; $('vFre').hidden = v !== 'fre'; $('vSuc').hidden = v !== 'suc'; $('vMapa').hidden = v !== 'mapa'; $('vFichaM').hidden = v !== 'fichaM';
   if (!S.P) return;
   if (v === 'pron') pintarPron(); else if (v === 'fichaP') pintarFichaP(); else if (v === 'rep') pintarRep();
-  else if (v === 'ped') pintarPed(); else if (v === 'fre') window.pintarEst?.(); else if (v === 'mapa') window.pintarMapa?.(); else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM();
+  else if (v === 'ped') pintarPed(); else if (v === 'fre') window.pintarEst?.(); else if (v === 'suc') window.pintarSuc?.(); else if (v === 'mapa') window.pintarMapa?.(); else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM();
 }
 function abrirFichaP(c, origen) { S.fpDesde = ''; S.cur = c; S.origen = origen; S.fpFarm = origen === 'rep' ? S.farm : ''; S.vista = 'fichaP'; render(); scrollTo({ top: 0 }); }
 
@@ -1698,9 +1759,10 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610231700"></script>
-<script src="frepple.js?v=202610231700"></script>
-<script src="estadistica.js?v=202610231700"></script>
-<script type="module" src="proyeccion.js?v=202610231700"></script>
+<script src="mapa.js?v=202610231900"></script>
+<script src="frepple.js?v=202610231900"></script>
+<script src="sucursales.js?v=202610231900"></script>
+<script src="estadistica.js?v=202610231900"></script>
+<script type="module" src="proyeccion.js?v=202610231900"></script>
 
 </body></html>
