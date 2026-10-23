@@ -74,3 +74,9 @@ Módulo del menú principal (`proyeccion.html?solo=est`, código en `estadistica
 ## Atención a sucursales (solo administrador)
 
 Módulo del menú principal (`proyeccion.html?solo=suc`, código en `sucursales.js`). Lista lo que hay que enviar a cada sucursal para cubrir N días + N días de seguridad (7 + 7, 15 + 15, 30 + 30 u otros), según la venta de cada sucursal (ventas de los últimos 15/30/60/90 días del kardex o el motor estadístico sobre su venta mensual). Muestra la cobertura en días con colores, reparte el stock de droguería primero a las sucursales con menos cobertura y marca lo que falta para pasar de otra sucursal con exceso o para comprar. Resumen por sucursal, detalle por producto en toda la red y lista de despacho en Excel (CSV).
+
+## Faltantes de droguería y vistas por usuario
+
+- **Rol Colaborador**: usuario sin sucursal que solo ve las **vistas** que le marque el administrador (al crear o editar el usuario). Las vistas se guardan en `usuarios/{uid}.vistas` y se definen en `VISTAS` (app.js); un químico también puede recibir vistas además de sus bloqueos.
+- **Faltantes de droguería** (vista `faltantes`): productos en 0 en droguería que piden las sucursales, consolidados y ordenados de más sucursales y más cantidad a menos. La lista la publica el administrador desde Atención a sucursales (`faltantes/actual`, se publica sola al abrir el módulo y con el botón "Actualizar lista del equipo"). El colaborador responde por producto: A. Descontinuado, B. Agotado en laboratorio (1 semana, 2 semanas, 1 mes, 2 meses, 3 meses u otra fecha), C. En tránsito (fecha de llegada opcional), D. Pendiente de solicitud, E. Existe otro medicamento (hasta 2 del catálogo). Respuestas en `faltantes_estado/{código}`; el administrador las ve en Atención a sucursales.
+- Reglas: hay que volver a **Publicar** `firestore.rules` en Firebase.

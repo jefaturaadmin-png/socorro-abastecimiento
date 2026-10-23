@@ -222,6 +222,10 @@ main.sin-sesion > section { display: none !important }
 
 @media (max-width: 860px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) } .chartbox { height: 270px } .cells .c1 { max-width: 160px } }
 @media (max-width: 480px) { .wrap { padding-inline: 16px } select { max-width: 100% } .field { flex: 1 1 130px } }
+.su-pub { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; padding: 0 16px 10px; font-size: 13px }
+.tag.su-est { margin-left: 6px; background: #ece6fa; color: #47308a; white-space: normal }
+.tag.su-est.descontinuado { background: #eee; color: #444 } .tag.su-est.agotado { background: #fde2dd; color: #a33b3b }
+.tag.su-est.transito { background: #dff0ec; color: #1f6b5f } .tag.su-est.pendiente { background: #fcf0d9; color: #7a4a00 }
 .su-cob { color: #fff; font-weight: 700; text-align: center; font-family: var(--f-mono); white-space: nowrap }
 #suTabla tr.sel td, #suRed tr.sel td { background: color-mix(in srgb, var(--accent) 10%, var(--surface)) }
 .su-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px }
@@ -522,6 +526,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { d
     <div class="su-chips" id="suChips"></div>
     <div class="card">
       <div class="ch"><h2 id="suH2"></h2><button type="button" class="btn sm" id="suXls">⬇ Lista de despacho (Excel)</button></div>
+      <div class="su-pub"><span id="suPub" class="z">La lista del equipo (productos en 0 en droguería) se publica al abrir este módulo.</span><button type="button" class="btn sm" id="suPubBtn" title="Publica la lista con los días elegidos arriba">Actualizar lista del equipo</button></div>
       <div class="scroll est-lista"><table class="cells" id="suTabla"></table></div>
       <div class="more" id="suMore"></div>
     </div>
@@ -1759,10 +1764,10 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610231900"></script>
-<script src="frepple.js?v=202610231900"></script>
-<script src="sucursales.js?v=202610231900"></script>
-<script src="estadistica.js?v=202610231900"></script>
-<script type="module" src="proyeccion.js?v=202610231900"></script>
+<script src="mapa.js?v=202610232100"></script>
+<script src="frepple.js?v=202610232100"></script>
+<script src="sucursales.js?v=202610232100"></script>
+<script src="estadistica.js?v=202610232100"></script>
+<script type="module" src="proyeccion.js?v=202610232100"></script>
 
 </body></html>

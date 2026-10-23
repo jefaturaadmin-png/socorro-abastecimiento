@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610231900">
+<link rel="stylesheet" href="styles.css?v=202610232100">
 </head>
 <body>
 
@@ -250,6 +250,33 @@
     </div>
   </section>
 
+  <!-- ============ FALTANTES DE DROGUERÍA (vista para colaboradores) ============ -->
+  <section id="vFalt" hidden>
+    <div class="wrap cabeza">
+      <div>
+        <h1>Faltantes de droguería</h1>
+        <p class="muted" id="fsSub">Productos que están en 0 en droguería y que piden las sucursales. Primero los que faltan en más sucursales y en más cantidad. Indica qué pasa con cada uno.</p>
+      </div>
+    </div>
+    <div class="wrap cuerpo">
+      <div class="fs-chips" id="fsChips"></div>
+      <section class="card lista">
+        <div class="lh">
+          <h2 id="fsTit">Productos</h2>
+          <div class="filtros">
+            <label class="filtro">Estado <select id="fsEst"></select></label>
+            <label class="filtro">Laboratorio <select id="fsLab"><option value="">Todos</option></select></label>
+            <label class="filtro">Sucursal <select id="fsSuc"><option value="">Todas</option></select></label>
+            <label class="filtro">Buscar <input id="fsQ" type="search" placeholder="Código o nombre"></label>
+            <button class="btn" id="fsXls" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button>
+          </div>
+        </div>
+        <div class="tabla-wrap"><table class="tabla" id="fsTabla"></table></div>
+        <div class="fs-mas" id="fsMas"></div>
+      </section>
+    </div>
+  </section>
+
   <!-- ============ ADMIN: USUARIOS ============ -->
   <section id="vUsuarios" hidden>
     <div class="wrap cabeza">
@@ -271,7 +298,8 @@
             <div class="campo"><label for="uNom">Nombre (opcional)</label><input id="uNom" placeholder="Q.F. Nombre Apellido"><small class="ayuda">Si lo dejas vacío, lo escribirá la química en su primer ingreso.</small></div>
           </div>
           <div class="col">
-            <div class="campo"><label for="uRolSel">Rol</label><select id="uRolSel"><option value="quimico">Químico de farmacia</option><option value="admin">Administrador (abastecimiento)</option></select></div>
+            <div class="campo"><label for="uRolSel">Rol</label><select id="uRolSel"><option value="quimico">Químico de farmacia</option><option value="colaborador">Colaborador (solo las vistas que le des)</option><option value="admin">Administrador (abastecimiento)</option></select></div>
+            <div class="campo"><span class="lbl">Vistas que puede ver</span><div class="vistas-chk" id="uVistas"></div><small class="ayuda">Además de lo que le corresponde por su rol.</small></div>
             <div class="campo"><label for="uFarm">Farmacia</label><select id="uFarm"></select></div>
           </div>
           <div class="col">
@@ -339,6 +367,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610231900"></script>
+<script type="module" src="app.js?v=202610232100"></script>
 </body>
 </html>

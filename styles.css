@@ -369,3 +369,29 @@ legend { padding: 0; margin-bottom: 8px }
 .cierre-aviso { background: var(--bad-soft); color: var(--bad); margin: 0 0 16px }
 .cierre-aviso.prox { background: var(--warn-soft); color: #7A4A00 }
 @media (max-width: 640px) { .cierre-caja { align-items: stretch } .cierre-estado { text-align: left } }
+
+/* faltantes de droguería */
+.vistas-chk { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 4px }
+.campo .lbl { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px }
+.fs-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px }
+.fs-chip { display: grid; gap: 2px; text-align: left; font: inherit; padding: 10px 14px; border: 1px solid var(--line, #dde3ea); border-radius: 10px; background: #fff; cursor: pointer; min-width: 120px }
+.fs-chip b { font-size: 22px; line-height: 1.1 } .fs-chip span { font-size: 12px; color: var(--muted, #667) }
+.fs-chip[aria-pressed="true"] { border-color: var(--brand-deep, #1d3a6b); box-shadow: inset 0 0 0 1px var(--brand-deep, #1d3a6b) }
+.fs-chip.sin b { color: var(--bad) } .fs-chip.agotado b { color: var(--bad) } .fs-chip.transito b { color: var(--ok) } .fs-chip.pendiente b { color: var(--warn) } .fs-chip.alternativa b { color: #5b3fa8 }
+.fs-sucs { display: flex; flex-wrap: wrap; gap: 4px; max-width: 520px }
+.fs-n { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--bad-soft); color: var(--bad) }
+.fs-suc { font-size: 12px; padding: 2px 8px; border-radius: 99px; background: #eef2f7; color: #334 }
+.fs-tag { white-space: normal; max-width: 280px; display: inline-block }
+.fs-tag.descontinuado { background: #eee; color: #444 } .fs-tag.agotado { background: var(--bad-soft); color: var(--bad) }
+.fs-tag.transito { background: var(--ok-soft); color: var(--ok) } .fs-tag.pendiente { background: var(--warn-soft); color: #7A4A00 } .fs-tag.alternativa { background: #ece6fa; color: #47308a }
+.fs-quien { display: block; margin-top: 3px; color: var(--muted, #667); font-size: 11.5px }
+.fs-form { display: grid; gap: 12px; padding: 6px 4px; max-width: 860px }
+.fs-form fieldset { border: 0; padding: 0; margin: 0 } .fs-form legend { font-weight: 600; font-size: 13px; margin-bottom: 6px }
+.fs-pills label.descontinuado { background: #eee; color: #444 } .fs-pills label.agotado { background: var(--bad-soft); color: var(--bad) }
+.fs-pills label.transito { background: var(--ok-soft); color: var(--ok) } .fs-pills label.pendiente { background: var(--warn-soft); color: #7A4A00 } .fs-pills label.alternativa { background: #ece6fa; color: #47308a }
+.fs-plazos { margin-bottom: 6px }
+.fs-alts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px }
+.fs-alt { font-size: 13px; padding: 4px 10px; border-radius: 8px; background: #ece6fa; color: #47308a }
+.fs-form .buscador { position: relative }
+.fs-mas { padding: 12px; text-align: center }
+tr.abierta td { background: #f6f8fb }

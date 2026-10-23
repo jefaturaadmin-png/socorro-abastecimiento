@@ -15,7 +15,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610231900";
+const VERSION_PROY = "202610232100";
 const VERSION_COMP = "202610212000";
 
 /* ===================== utilidades ===================== */
@@ -57,6 +57,11 @@ const S = {
   af: { farm: "", motivo: "", estado: "bloqueado", q: "" }
 };
 const esAdmin = () => S.perfil?.rol === "admin";
+// Vistas que el administrador puede darle a cualquier usuario (se guardan en usuarios/{uid}.vistas). Para agregar otra
+// más adelante basta con sumarla aquí y crear su sección en index.html.
+const VISTAS = [{ id: "faltantes", nombre: "Faltantes de droguería", vista: "vFalt" }];
+const misVistas = () => esAdmin() ? VISTAS : VISTAS.filter(v => (S.perfil?.vistas || []).includes(v.id));
+const NOMBRE_ROL = { admin: "Administrador", quimico: "Químico", colaborador: "Colaborador" };
 const miFarm = () => S.perfil?.farmacia;
 
 /* ===================== catálogo ===================== */
@@ -163,7 +168,7 @@ $("fClave").addEventListener("submit", async e => {
 // Si el perfil se creó a mano con algún dato mal escrito, Firebase rechazará lo que se guarde: avisarlo claro.
 function revisarPerfil() {
   const p = S.perfil, prob = [];
-  if (!["admin", "quimico"].includes(p.rol)) prob.push(`el campo «rol» debe ser admin o quimico (ahora dice "${p.rol}")`);
+  if (!["admin", "quimico", "colaborador"].includes(p.rol)) prob.push(`el campo «rol» debe ser admin, quimico o colaborador (ahora dice "${p.rol}")`);
   if (p.activo !== undefined && p.activo !== true && p.activo !== "true") prob.push(`el campo «activo» debe ser boolean true`);
   if (p.rol === "quimico" && !FARMACIAS.includes(p.farmacia)) prob.push(`el campo «farmacia» ("${p.farmacia || ""}") no coincide con ninguna farmacia de config.js`);
   if (prob.length) avisar({ message: "Tu usuario está mal configurado en Firebase (colección usuarios): " + prob.join("; ") + "." });
@@ -173,7 +178,7 @@ function revisarPerfil() {
 function iniciar() {
   $("top").hidden = false;
   $("uNombre").textContent = S.perfil.nombre || S.perfil.usuario;
-  $("uRol").textContent = esAdmin() ? "Abastecimiento" : nombreFarm(S.perfil.farmacia);
+  $("uRol").textContent = esAdmin() ? "Abastecimiento" : S.perfil.rol === "colaborador" ? "Colaborador" : nombreFarm(S.perfil.farmacia);
   montarMotivos("bqMot", "bqMotivo"); montarMotivos("abMot", "abMotivo");
 
   if (esAdmin()) {
@@ -193,7 +198,13 @@ function iniciar() {
       pintarNav(); pintarSolSucursal(); pintarCierreAdmin();
       if (S.vista === "vUsuarios" && !S.editando) pintarUsuarios();   // no borrar lo que se está editando
     }, e => avisar(e)));
+    escucharFalt();
     ir("vAdmin");
+  } else if (S.perfil.rol === "colaborador") {
+    // Colaborador: solo ve las vistas que le dio el administrador.
+    vigilarPerfil();
+    const v = misVistas()[0];
+    if (v) ir(v.vista); else { mostrar("vFalt"); avisar({ message: "Tu usuario aún no tiene vistas asignadas. Pide a Abastecimiento que te las habilite." }); }
   } else {
     $("qFarm").textContent = nombreFarm(miFarm());
     const mapas = { propia: new Map(), todas: new Map() };
@@ -209,10 +220,19 @@ function iniciar() {
       const d = snap.data() || {};
       S.perfil.solicitudSucursal = d.solicitudSucursal; pintarPedidoSucursal();
       S.perfil.cierre = d.cierre; render();
-      if (d.farmacia !== S.perfil.farmacia || String(d.rol || "").trim().toLowerCase() !== S.perfil.rol || [false, "false"].includes(d.activo) || d.cambiarClave === true) location.reload();
+      if (d.farmacia !== S.perfil.farmacia || String(d.rol || "").trim().toLowerCase() !== S.perfil.rol || [false, "false"].includes(d.activo) || d.cambiarClave === true
+        || JSON.stringify(d.vistas || []) !== JSON.stringify(S.perfil.vistas || [])) location.reload();
     }));
     ir("vQuimico");
   }
+}
+// Si el administrador le cambia el rol, las vistas o lo deshabilita, se recarga con los datos nuevos.
+function vigilarPerfil() {
+  S.subs.push(onSnapshot(doc(db, "usuarios", S.perfil.uid), snap => {
+    const d = snap.data() || {};
+    if (String(d.rol || "").trim().toLowerCase() !== S.perfil.rol || [false, "false"].includes(d.activo) || d.cambiarClave === true
+      || JSON.stringify(d.vistas || []) !== JSON.stringify(S.perfil.vistas || [])) location.reload();
+  }));
 }
 function avisar(e) { const a = $("avisoGlobal"); a.hidden = false; a.textContent = e?.code ? textoError(e) : e.message; }
 
@@ -225,14 +245,16 @@ function pintarNav() {
        ["vComp", "Comparativo", "comp"],
        ["vMapa", "Mapa de calor", "mapa"],
        ["vEst", "Estadística Proyx", "est"],
-       ["vSuc", "Atención a sucursales", "suc"]]
-    : [];   // el químico tiene una sola vista: no hace falta menú
+       ["vSuc", "Atención a sucursales", "suc"],
+       ...VISTAS.map(v => [v.vista, v.nombre + (v.id === "faltantes" && faltSinResp() ? `<span class="badge">${faltSinResp()}</span>` : "")])]
+    : [...(S.perfil?.rol === "quimico" ? [["vQuimico", "Bloqueos"]] : []), ...misVistas().map(v => [v.vista, v.nombre])];
+  if (!esAdmin() && items.length < 2) items.length = 0;   // con una sola vista no hace falta menú
   const actual = S.vista === "vFicha" ? S.origen : S.vista;
   $("nav").innerHTML = items.map(([v, t, c]) => `<button type="button" data-ir="${v}" ${c ? `class="${c}"` : ""} ${v === actual ? 'aria-current="page"' : ""}>${t}</button>`).join("");
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vFicha"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
@@ -248,6 +270,7 @@ function render() {
   else if (S.vista === "vAdmin") pintarAdmin();
   else if (S.vista === "vUsuarios") pintarUsuarios();
   else if (S.vista === "vFicha") pintarFicha();
+  else if (S.vista === "vFalt") { escucharFalt(); pintarFalt(); }
   pintarSel("bq"); pintarSel("ab");
 }
 
@@ -750,13 +773,16 @@ $("fAccion").addEventListener("click", async e => {
 });
 
 /* ===================== usuarios (solo admin) ===================== */
-$("uRolSel").addEventListener("change", () => { $("uFarm").disabled = $("uRolSel").value === "admin"; });
+$("uRolSel").addEventListener("change", () => { $("uFarm").disabled = $("uRolSel").value !== "quimico"; });
+const chkVistas = (sel = []) => VISTAS.map(v => `<label class="check"><input type="checkbox" data-vista="${esc(v.id)}" ${sel.includes(v.id) ? "checked" : ""}> ${esc(v.nombre)}</label>`).join("");
+$("uVistas").innerHTML = chkVistas();
+const vistasDe = el => [...el.querySelectorAll("[data-vista]:checked")].map(x => x.dataset.vista);
 function pintarUsuarios() {
   const lista = [...S.usuarios].sort((a, b) => (a.rol + a.farmacia + a.usuario).localeCompare(b.rol + b.farmacia + b.usuario));
   const opcFarm = sel => FARMACIAS.map(f => `<option value="${esc(f)}" ${f === sel ? "selected" : ""}>${esc(corto(f))}</option>`).join("");
   const fila = u => `<tr class="${u.activo === false ? "inactivo" : ""}">
       <td class="f">${esc(u.usuario)}</td><td>${u.nombre ? esc(u.nombre) : '<span class="muted">Lo escribirá al ingresar</span>'}</td>
-      <td>${u.rol === "admin" ? "Administrador" : "Químico"}</td><td>${esc(u.farmacia ? corto(u.farmacia) : "–")}</td>
+      <td>${NOMBRE_ROL[u.rol] || esc(u.rol)}${(u.vistas || []).map(id => `<br><span class="tag">${esc(VISTAS.find(v => v.id === id)?.nombre || id)}</span>`).join("")}</td><td>${esc(u.farmacia ? corto(u.farmacia) : "–")}</td>
       <td>${u.cambiarClave === true ? '<span class="tag t-pend">Aún no cambia su contraseña</span>' : '<span class="tag t-ok">Contraseña propia</span>'}${u.activo === false ? ' <span class="tag t-rech">Deshabilitado</span>' : ""}</td>
       <td class="der"><div class="botones-fila">${u.uid === S.perfil.uid ? '<span class="muted">Tú</span>' :
         `<button class="btn sm" type="button" data-editar="${esc(u.uid)}">Editar</button>
@@ -766,8 +792,9 @@ function pintarUsuarios() {
   const edicion = u => `<tr class="editando"><td colspan="6">
       <div class="edit-grid" data-uid="${esc(u.uid)}">
         <label class="filtro">Nombre<input data-e="nombre" value="${esc(u.nombre || "")}" maxlength="60" placeholder="Nombre completo"></label>
-        <label class="filtro">Sucursal<select data-e="farmacia" ${u.rol === "admin" ? "disabled" : ""}>${opcFarm(u.farmacia)}</select></label>
-        <label class="filtro">Rol<select data-e="rol"><option value="quimico" ${u.rol !== "admin" ? "selected" : ""}>Químico</option><option value="admin" ${u.rol === "admin" ? "selected" : ""}>Administrador</option></select></label>
+        <label class="filtro">Sucursal<select data-e="farmacia" ${u.rol !== "quimico" ? "disabled" : ""}>${opcFarm(u.farmacia)}</select></label>
+        <label class="filtro">Rol<select data-e="rol">${["quimico", "colaborador", "admin"].map(r => `<option value="${r}" ${u.rol === r || (r === "quimico" && !NOMBRE_ROL[u.rol]) ? "selected" : ""}>${NOMBRE_ROL[r]}</option>`).join("")}</select></label>
+        <div class="filtro">Vistas<div class="vistas-chk">${chkVistas(u.vistas || [])}</div></div>
         <label class="check"><input type="checkbox" data-e="cambiarClave" ${u.cambiarClave === true ? "checked" : ""}> Pedirle nombre y contraseña nueva en su próximo ingreso</label>
         <div class="botones-fila"><button class="btn sm primario" type="button" data-guardar>Guardar cambios</button><button class="btn sm" type="button" data-cancelar>Cancelar</button></div>
       </div>
@@ -778,7 +805,7 @@ function pintarUsuarios() {
 }
 $("uTabla").addEventListener("change", e => {
   // Un administrador no tiene sucursal.
-  if (e.target.dataset.e === "rol") e.target.closest(".edit-grid").querySelector('[data-e="farmacia"]').disabled = e.target.value === "admin";
+  if (e.target.dataset.e === "rol") e.target.closest(".edit-grid").querySelector('[data-e="farmacia"]').disabled = e.target.value !== "quimico";
 });
 $("uTabla").addEventListener("click", async e => {
   const ed = e.target.closest("[data-editar]");
@@ -788,8 +815,8 @@ $("uTabla").addEventListener("click", async e => {
     const g = e.target.closest(".edit-grid"), v = k => g.querySelector(`[data-e="${k}"]`);
     const rol = v("rol").value, cambio = {
       nombre: v("nombre").value.trim().replace(/\s+/g, " "),
-      rol, farmacia: rol === "admin" ? "" : v("farmacia").value,
-      cambiarClave: v("cambiarClave").checked
+      rol, farmacia: rol === "quimico" ? v("farmacia").value : "",
+      cambiarClave: v("cambiarClave").checked, vistas: vistasDe(g)
     };
     try { await setDoc(doc(db, "usuarios", g.dataset.uid), cambio, { merge: true }); S.editando = null; toast("Usuario actualizado"); pintarUsuarios(); }
     catch (err) { toast(textoError(err)); }
@@ -875,22 +902,170 @@ $("lCrear").addEventListener("click", async () => {
 $("fUsr").addEventListener("submit", async e => {
   e.preventDefault();
   const usuario = $("uUsr").value.trim().toLowerCase(), rol = $("uRolSel").value;
-  const farmacia = rol === "admin" ? "" : $("uFarm").value;
+  const farmacia = rol === "quimico" ? $("uFarm").value : "";
   if (S.usuarios.some(u => u.usuario === usuario)) return msg("uMsg", "Ese usuario ya existe.", true);
   $("uBtn").disabled = true; msg("uMsg", "Creando…");
   // Una segunda conexión crea el usuario sin cerrar tu sesión.
   const app2 = initializeApp(firebaseConfig, "crear-" + Date.now()), auth2 = getAuth(app2);
   try {
     const cred = await createUserWithEmailAndPassword(auth2, `${usuario}@${DOMINIO}`, $("uPass").value);
-    await setDoc(doc(db, "usuarios", cred.user.uid), { usuario, nombre: $("uNom").value.trim(), rol, farmacia, activo: true, cambiarClave: true });
+    await setDoc(doc(db, "usuarios", cred.user.uid), { usuario, nombre: $("uNom").value.trim(), rol, farmacia, activo: true, cambiarClave: true, vistas: vistasDe($("uVistas")) });
     await signOut(auth2);
     msg("uMsg", `Usuario "${usuario}" creado con la contraseña inicial "${$("uPass").value}". Entrégasela: al ingresar deberá cambiarla.`);
-    e.target.reset(); $("uFarm").disabled = false;
+    e.target.reset(); $("uFarm").disabled = false; $("uVistas").innerHTML = chkVistas();
   } catch (err) {
     const t = err?.code === "auth/email-already-in-use" ? "Ese usuario ya existe en Authentication."
       : err?.code === "auth/weak-password" ? "La contraseña debe tener al menos 6 caracteres." : textoError(err);
     msg("uMsg", t, true);
   } finally { $("uBtn").disabled = false; }
+});
+
+/* ===================== faltantes de droguería (vista para colaboradores y el administrador) ===================== */
+// La lista la publica el administrador desde Atención a sucursales (faltantes/actual); cada respuesta es un
+// documento en faltantes_estado/{código}.
+const ESTADOS_F = [
+  { id: "descontinuado", letra: "A", txt: "Descontinuado" },
+  { id: "agotado", letra: "B", txt: "Agotado en laboratorio" },
+  { id: "transito", letra: "C", txt: "En tránsito" },
+  { id: "pendiente", letra: "D", txt: "Pendiente de solicitud" },
+  { id: "alternativa", letra: "E", txt: "Existe otro medicamento" }];
+const PLAZOS = [["1s", "1 semana", 7], ["2s", "2 semanas", 14], ["1m", "1 mes", 30], ["2m", "2 meses", 60], ["3m", "3 meses", 90], ["otra", "Otra fecha", 0]];
+S.falt = null; S.fEst = new Map(); S.fFil = { est: "sin", lab: "", suc: "", q: "" }; S.fAbierto = null; S.fAlt = []; S.fMostrar = 100;
+const faltSinResp = () => (S.falt?.items || []).filter(i => !S.fEst.has(i.c)).length;
+function escucharFalt() {
+  if (S.faltSubs) return; S.faltSubs = true;
+  S.subs.push(onSnapshot(doc(db, "faltantes", "actual"), sn => { S.falt = sn.exists() ? sn.data() : { items: [] }; pintarNav(); if (S.vista === "vFalt") pintarFalt(); },
+    e => { S.faltSubs = false; avisar(e); }));
+  S.subs.push(onSnapshot(collection(db, "faltantes_estado"), sn => { S.fEst = new Map(sn.docs.map(d => [d.id, d.data()])); pintarNav(); if (S.vista === "vFalt" && !S.fAbierto) pintarFalt(); }, () => {}));
+}
+const sumarDias = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const fDia = v => v ? new Date(v + "T12:00:00").toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
+function textoEstado(e) {
+  if (!e) return "";
+  const t = ESTADOS_F.find(x => x.id === e.estado)?.txt || e.estado;
+  return e.estado === "agotado" && e.hasta ? `${t} hasta el ${fDia(e.hasta)}`
+    : e.estado === "transito" && e.llega ? `${t} · llega el ${fDia(e.llega)}`
+    : e.estado === "alternativa" ? `${t}: ${(e.alternativas || []).map(a => `${a.c} ${a.n}`).join(" / ")}` : t;
+}
+function pintarFalt() {
+  const F = S.falt, items = F?.items || [], f = S.fFil;
+  $("fsSub").textContent = F?.publicado
+    ? `Productos en 0 en droguería que piden las sucursales para ${F.C} días + ${F.Sg} de seguridad (datos al ${fmtF(F.corte)}, lista del ${new Date(F.publicado).toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}). Primero los que faltan en más sucursales y en más cantidad.`
+    : "Aún no hay lista publicada. Abastecimiento la publica desde Atención a sucursales.";
+  // conteos por estado
+  const cuenta = { sin: 0, todos: items.length }; for (const x of ESTADOS_F) cuenta[x.id] = 0;
+  for (const i of items) { const e = S.fEst.get(i.c); cuenta[e ? e.estado : "sin"]++; }
+  const opc = [["sin", "Sin responder"], ...ESTADOS_F.map(x => [x.id, `${x.letra}. ${x.txt}`]), ["todos", "Todos"]];
+  $("fsChips").innerHTML = opc.map(([id, t]) => `<button type="button" class="fs-chip ${id}" data-est="${id}" aria-pressed="${f.est === id}"><b>${nf(cuenta[id] || 0)}</b><span>${esc(t)}</span></button>`).join("");
+  $("fsEst").innerHTML = opc.map(([id, t]) => `<option value="${id}" ${f.est === id ? "selected" : ""}>${esc(t)} (${nf(cuenta[id] || 0)})</option>`).join("");
+  const labs = [...new Set(items.map(i => i.l).filter(Boolean))].sort();
+  $("fsLab").innerHTML = `<option value="">Todos</option>` + labs.map(l => `<option ${l === f.lab ? "selected" : ""}>${esc(l)}</option>`).join("");
+  const sucs = [...new Set(items.flatMap(i => i.s.map(x => x[0])))].sort();
+  $("fsSuc").innerHTML = `<option value="">Todas</option>` + sucs.map(x => `<option value="${esc(x)}" ${x === f.suc ? "selected" : ""}>${esc(corto(x))}</option>`).join("");
+  const q = norm(f.q).trim();
+  const lista = items.filter(i => {
+    const e = S.fEst.get(i.c);
+    if (f.est === "sin" ? e : f.est !== "todos" && e?.estado !== f.est) return false;
+    if (f.lab && i.l !== f.lab) return false;
+    if (f.suc && !i.s.some(x => x[0] === f.suc)) return false;
+    return !q || q.split(/\s+/).every(w => norm(i.c + " " + i.n + " " + i.l).includes(w));
+  });
+  S.fLista = lista;
+  const vis = lista.slice(0, S.fMostrar);
+  $("fsTit").textContent = `${opc.find(x => x[0] === f.est)?.[1] || ""}: ${nf(lista.length)} productos`;
+  $("fsTabla").innerHTML = `<thead><tr><th>Producto</th><th>Le falta a</th><th class="der">Total</th><th>Estado</th><th class="der">Acción</th></tr></thead><tbody>` +
+    (vis.length ? vis.map(i => {
+      const e = S.fEst.get(i.c), ab = S.fAbierto === i.c;
+      return `<tr class="${ab ? "abierta" : ""}"><td class="p"><b>${esc(i.c)} - ${esc(i.n)}</b><code>${esc(i.l || "")}</code></td>
+        <td><div class="fs-sucs"><span class="fs-n">${i.s.length} suc.</span>${i.s.map(([s, n]) => `<span class="fs-suc">${esc(corto(s))} <b>${nf(n)}</b></span>`).join("")}</div></td>
+        <td class="der"><b>${nf(i.t)}</b></td>
+        <td>${e ? `<span class="tag fs-tag ${esc(e.estado)}">${esc(textoEstado(e))}</span><small class="fs-quien">${esc(e.porNombre || "")} · ${fmtF(e.fecha)}${e.comentario ? " · " + esc(e.comentario) : ""}</small>` : '<span class="muted">Sin responder</span>'}</td>
+        <td class="der"><button class="btn sm${e ? "" : " primario"}" type="button" data-resp="${esc(i.c)}">${ab ? "Cerrar" : e ? "Cambiar" : "Responder"}</button></td></tr>`
+        + (ab ? `<tr class="editando"><td colspan="5">${formResp(i, e)}</td></tr>` : "");
+    }).join("") : `<tr class="vacia"><td colspan="5">${items.length ? "Nada con estos filtros." : "Sin productos."}</td></tr>`) + "</tbody>";
+  $("fsMas").innerHTML = lista.length > vis.length ? `<button class="btn" type="button" id="fsMasBtn">Ver ${Math.min(100, lista.length - vis.length)} más (de ${nf(lista.length)})</button>` : "";
+}
+const nf = v => Number(v || 0).toLocaleString("es-PE");
+function formResp(i, e) {
+  const st = S.fForm || {};
+  const est = st.estado ?? e?.estado ?? "";
+  const plazo = st.plazo ?? (e?.plazo || "1m");
+  const alts = S.fAlt;
+  return `<div class="fs-form" data-c="${esc(i.c)}">
+    <fieldset><legend>¿Qué pasa con este producto?</legend><div class="pills fs-pills">${ESTADOS_F.map(x => `<label class="${x.id}"><input type="radio" name="fsEstado" value="${x.id}" ${est === x.id ? "checked" : ""}>${x.letra}. ${esc(x.txt)}</label>`).join("")}</div></fieldset>
+    ${est === "agotado" ? `<div class="campo"><span class="lbl">¿Hasta cuándo?</span><div class="pills verde fs-plazos">${PLAZOS.map(([id, t]) => `<label><input type="radio" name="fsPlazo" value="${id}" ${plazo === id ? "checked" : ""}>${t}</label>`).join("")}</div>
+      ${plazo === "otra" ? `<input type="date" id="fsHasta" value="${esc(st.hasta ?? e?.hasta ?? "")}" min="${hoyISO()}">` : `<small class="ayuda">Hasta el ${fDia(sumarDias(PLAZOS.find(p => p[0] === plazo)?.[2] || 30))}</small>`}</div>` : ""}
+    ${est === "transito" ? `<div class="campo"><label for="fsLlega">Fecha estimada de llegada (opcional)</label><input type="date" id="fsLlega" value="${esc(st.llega ?? e?.llega ?? "")}"></div>` : ""}
+    ${est === "alternativa" ? `<div class="campo buscador"><label for="fsBus">Medicamento que lo reemplaza (hasta 2)</label>
+      <div class="fs-alts">${alts.map((a, k) => `<span class="fs-alt">${esc(a.c)} - ${esc(a.n)} <button type="button" class="enlace" data-quitar-alt="${k}">Quitar</button></span>`).join("")}</div>
+      ${alts.length < 2 ? `<input id="fsBus" type="search" autocomplete="off" placeholder="Código o nombre del otro medicamento"><div class="resultados" id="fsRes" hidden></div>` : ""}</div>` : ""}
+    <div class="campo"><label for="fsCom">Comentario (opcional)</label><input id="fsCom" maxlength="200" value="${esc(st.comentario ?? e?.comentario ?? "")}" placeholder="Ej. proveedor confirma reposición"></div>
+    <div class="msg" id="fsMsg" hidden></div>
+    <div class="botones-fila"><button class="btn sm primario" type="button" data-guardar-f>Guardar</button>${e ? '<button class="btn sm" type="button" data-borrar-f>Quitar respuesta</button>' : ""}<button class="btn sm" type="button" data-cerrar-f>Cancelar</button></div>
+  </div>`;
+}
+function leerForm() {
+  const g = n => document.querySelector(`input[name="${n}"]:checked`)?.value;
+  S.fForm = { ...S.fForm, estado: g("fsEstado") ?? S.fForm?.estado, plazo: g("fsPlazo") ?? S.fForm?.plazo,
+    hasta: $("fsHasta")?.value ?? S.fForm?.hasta, llega: $("fsLlega")?.value ?? S.fForm?.llega, comentario: $("fsCom")?.value ?? S.fForm?.comentario };
+}
+function abrirResp(c) {
+  if (S.fAbierto === c) { S.fAbierto = null; S.fForm = null; return pintarFalt(); }
+  const e = S.fEst.get(c); S.fAbierto = c; S.fForm = null; S.fAlt = (e?.alternativas || []).slice(0, 2);
+  pintarFalt();
+}
+$("fsChips").addEventListener("click", ev => { const b = ev.target.closest("[data-est]"); if (b) { S.fFil.est = b.dataset.est; S.fMostrar = 100; pintarFalt(); } });
+$("fsEst").addEventListener("change", ev => { S.fFil.est = ev.target.value; S.fMostrar = 100; pintarFalt(); });
+$("fsLab").addEventListener("change", ev => { S.fFil.lab = ev.target.value; pintarFalt(); });
+$("fsSuc").addEventListener("change", ev => { S.fFil.suc = ev.target.value; pintarFalt(); });
+$("fsQ").addEventListener("input", ev => { S.fFil.q = ev.target.value; pintarFalt(); });
+$("fsMas").addEventListener("click", ev => { if (ev.target.closest("#fsMasBtn")) { S.fMostrar += 100; pintarFalt(); } });
+$("fsTabla").addEventListener("change", ev => {
+  if (ev.target.name === "fsEstado" || ev.target.name === "fsPlazo") { leerForm(); pintarFalt(); }
+});
+$("fsTabla").addEventListener("input", ev => {
+  if (ev.target.id !== "fsBus") return;
+  const r = buscarCat(ev.target.value).filter(p => p.c !== S.fAbierto && !S.fAlt.some(a => a.c === p.c)).slice(0, 8), box = $("fsRes");
+  box.hidden = !r.length;
+  box.innerHTML = r.map(p => `<button type="button" data-alt="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)}${p.ln ? ` <small>${esc(p.ln)}</small>` : ""}</button>`).join("");
+});
+$("fsTabla").addEventListener("click", async ev => {
+  const r = ev.target.closest("[data-resp]"); if (r) return abrirResp(r.dataset.resp);
+  const a = ev.target.closest("[data-alt]");
+  if (a) { const p = S.catIdx.get(a.dataset.alt); if (p && S.fAlt.length < 2) S.fAlt.push({ c: p.c, n: p.n }); leerForm(); pintarFalt(); $("fsBus")?.focus(); return; }
+  const q = ev.target.closest("[data-quitar-alt]"); if (q) { S.fAlt.splice(+q.dataset.quitarAlt, 1); leerForm(); return pintarFalt(); }
+  if (ev.target.closest("[data-cerrar-f]")) { S.fAbierto = null; S.fForm = null; return pintarFalt(); }
+  const c = S.fAbierto; if (!c) return;
+  if (ev.target.closest("[data-borrar-f]")) {
+    try { await deleteDoc(doc(db, "faltantes_estado", c)); S.fAbierto = null; S.fForm = null; toast("Respuesta quitada"); pintarFalt(); }
+    catch (err) { msg("fsMsg", textoError(err), true); }
+    return;
+  }
+  if (!ev.target.closest("[data-guardar-f]")) return;
+  leerForm(); const f = S.fForm || {}, prev = S.fEst.get(c) || {};
+  const estado = f.estado ?? prev.estado;
+  if (!estado) return msg("fsMsg", "Elige una opción (A a E).", true);
+  const item = (S.falt?.items || []).find(i => i.c === c) || {};
+  const d = { codpro: c, producto: item.n || "", laboratorio: item.l || "", estado, comentario: (f.comentario ?? prev.comentario ?? "").trim(),
+    porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario, fecha: serverTimestamp() };
+  if (estado === "agotado") {
+    const plazo = f.plazo ?? prev.plazo ?? "1m";
+    d.plazo = plazo; d.hasta = plazo === "otra" ? (f.hasta ?? prev.hasta ?? "") : sumarDias(PLAZOS.find(p => p[0] === plazo)?.[2] || 30);
+    if (!d.hasta) return msg("fsMsg", "Elige la fecha hasta la que estará agotado.", true);
+  }
+  if (estado === "transito") d.llega = f.llega ?? prev.llega ?? "";
+  if (estado === "alternativa") { if (!S.fAlt.length) return msg("fsMsg", "Busca y elige el medicamento que lo reemplaza (hasta 2).", true); d.alternativas = S.fAlt.slice(0, 2); }
+  try { await setDoc(doc(db, "faltantes_estado", c), d); S.fAbierto = null; S.fForm = null; toast("Respuesta guardada"); pintarFalt(); }
+  catch (err) { msg("fsMsg", textoError(err), true); }
+});
+$("fsXls").addEventListener("click", () => {
+  const filas = [["Código", "Producto", "Laboratorio", "N° sucursales", "Total cajas", "Le falta a", "Estado", "Detalle", "Comentario", "Respondió", "Fecha"],
+    ...(S.fLista || []).map(i => { const e = S.fEst.get(i.c);
+      return [i.c, i.n, i.l, i.s.length, i.t, i.s.map(([x, n]) => `${corto(x)} ${n}`).join(" / "), e ? ESTADOS_F.find(x => x.id === e.estado)?.txt : "Sin responder",
+        e ? textoEstado(e) : "", e?.comentario || "", e?.porNombre || "", e ? fmtF(e.fecha) : ""]; })];
+  const t = filas.map(f => f.map(v => { const x = String(v ?? ""); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(";")).join("\r\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\ufeff" + t], { type: "text/csv;charset=utf-8" }));
+  a.download = `faltantes_drogueria_${hoyISO()}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 });
 
 /* ===================== exportar a Excel ===================== */

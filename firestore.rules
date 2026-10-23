@@ -17,6 +17,8 @@ service cloud.firestore {
     function esAdmin()    { return conPerfil() && rol() == 'admin'; }
     function esQuimico()  { return conPerfil() && rol() == 'quimico'; }
     function miFarmacia() { return perfil().farmacia; }
+    // Vistas que el administrador le da a un usuario (p. ej. "faltantes"); el administrador las tiene todas.
+    function tieneVista(v) { return conPerfil() && (rol() == 'admin' || v in perfil().get('vistas', [])); }
     // Cierre del ingreso de información que programa el administrador en el usuario:
     // cierre = { desde: fecha y hora, hasta: fecha y hora o null }. Vigente entre esas horas.
     function cerrado() {
@@ -93,6 +95,19 @@ service cloud.firestore {
     match /comp_blobs/{id} {
       allow read, write: if esAdmin();
       match /partes/{parte} { allow read, write: if esAdmin(); }
+    }
+
+    // ---------- faltantes de droguería: la lista la publica el administrador; responden los usuarios con la vista ----------
+    match /faltantes/{id} {
+      allow read: if tieneVista('faltantes');
+      allow write: if esAdmin();
+    }
+    match /faltantes_estado/{cod} {
+      allow read: if tieneVista('faltantes');
+      allow create, update: if tieneVista('faltantes')
+        && request.resource.data.porUid == request.auth.uid
+        && request.resource.data.estado in ['descontinuado', 'agotado', 'transito', 'pendiente', 'alternativa'];
+      allow delete: if tieneVista('faltantes');
     }
 
     // ---------- historial: solo se agrega, nunca se cambia ni se borra ----------

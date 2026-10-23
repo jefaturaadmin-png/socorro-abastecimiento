@@ -75,9 +75,49 @@
   const colorCob = (r, o) => r.d <= 0 ? '#9e9e9e' : r.cob < o.Sg ? '#d9302c' : r.cob < o.C + o.Sg ? '#f0ad4e' : r.cob <= (o.C + o.Sg) * 2 ? '#43a047' : '#1e6bb8';
   const cobTxt = r => r.d <= 0 ? 'sin venta' : r.cob > 999 ? '> 999 d' : nf0.format(Math.floor(r.cob)) + ' d';
   const corto2 = f => String(f).replace(/^ALMACEN /, '');
+  /* ---------- lista para el equipo: faltantes de droguería (0 en droguería y alguna sucursal lo pide) ---------- */
+  // Se publica en faltantes/actual (la leen los usuarios con la vista "faltantes") y sus respuestas llegan de faltantes_estado.
+  const FB = window.parent?.FB; S.suEstados = new Map();
+  const fDia = v => v ? new Date(v + 'T12:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+  const estadoTxt = e => !e ? '' : {
+    descontinuado: 'Descontinuado', pendiente: 'Pendiente de solicitud',
+    agotado: `Agotado en laboratorio${e.hasta ? ' hasta el ' + fDia(e.hasta) : ''}`,
+    transito: `En tránsito${e.llega ? ' · llega el ' + fDia(e.llega) : ''}`,
+    alternativa: `Hay otro: ${(e.alternativas || []).map(a => a.n).join(' / ')}`
+  }[e.estado] || e.estado;
+  const tagEstado = c => { const e = S.suEstados.get(c); return e ? `<span class="tag su-est ${esc(e.estado)}" title="${esc((e.porNombre || '') + (e.comentario ? ': ' + e.comentario : ''))}">${esc(estadoTxt(e))}</span>` : ''; };
+  function escucharEstados() {
+    if (!FB || S.ejemplo || escucharEstados.ok) return; escucharEstados.ok = true;
+    FB.onSnapshot(FB.collection(FB.db, 'faltantes_estado'), sn => { S.suEstados = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === 'suc') window.pintarSuc(); }, () => {});
+  }
+  function listaFaltantes() {
+    const items = [];
+    for (const [c, x] of cache.porProd) {
+      if (x.drog > 0) continue;
+      const s = x.red.filter(r => r.pide > 0); if (!s.length) continue;
+      items.push({ c, n: s[0].p.n, l: labDe(c) || '', t: s.reduce((a, r) => a + r.pide, 0), s: s.sort((a, b) => b.pide - a.pide).map(r => [r.f, r.pide]) });
+    }
+    return items.sort((a, b) => b.s.length - a.s.length || b.t - a.t).slice(0, 3000);
+  }
+  async function publicar(o, aviso) {
+    if (!FB || S.ejemplo) { if (aviso) alert('Con datos de ejemplo la lista del equipo no se publica.'); return; }
+    const items = listaFaltantes();
+    $('suPub').textContent = 'Publicando la lista del equipo…';
+    try {
+      await FB.setDoc(FB.doc(FB.db, 'faltantes', 'actual'), { items, corte: S.P.corte, publicado: new Date().toISOString(), C: o.C, Sg: o.Sg, fte: o.fte, tipos: o.tipos });
+      $('suPub').textContent = `Lista del equipo (0 en droguería): ${nf0.format(items.length)} productos · para ${o.C} + ${o.Sg} días · publicada a las ${new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}`;
+    } catch (e) {
+      $('suPub').textContent = 'No se pudo publicar la lista del equipo: ' + (e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules) en Firebase.' : e.message);
+    }
+  }
+  $('suPubBtn').addEventListener('click', () => publicar(opciones(), true));
+
   window.pintarSuc = function () {
     llenarLabs(); llenarClas();
     const o = opciones(), { filas } = calcular(o);
+    escucharEstados();
+    // la primera vez que se abre en la sesión se publica la lista del equipo con los parámetros por defecto
+    if (!S.suAuto && FB && S.db && !S.ejemplo) { S.suAuto = true; publicar(o); }
     // sucursales
     const farms = S.P.farmacias;
     if ($('suFarm').options.length !== farms.length + 1) $('suFarm').innerHTML = `<option value="">Todas las sucursales</option>` + farms.map(f => `<option value="${esc(f)}">${esc(corto2(f))}</option>`).join('');
@@ -105,7 +145,7 @@
       <th>Venta diaria</th><th>Stock sucursal</th><th title="Venta diaria × (días + seguridad)">Necesita</th><th class="sep">Enviar</th><th title="Lo que se puede mandar desde droguería">De droguería</th><th style="text-align:left">Lo que falta</th><th>Valor</th></tr></thead><tbody>`;
     for (const r of vis) {
       const p = r.p, sel = S.suCur === p.c + '|' + r.f ? ' sel' : '';
-      const falta = r.falta > 0 ? [...(r.desde || []).map(([f, q]) => `${nf0.format(q)} de ${esc(corto2(f))}`), r.comprar ? `<span class="neg">${nf0.format(r.comprar)} comprar</span>` : ''].filter(Boolean).join(' · ') : '';
+      const falta = r.falta > 0 ? [...(r.desde || []).map(([f, q]) => `${nf0.format(q)} de ${esc(corto2(f))}`), r.comprar ? `<span class="neg">${nf0.format(r.comprar)} comprar</span>` : ''].filter(Boolean).join(' · ') + tagEstado(p.c) : '';
       h += `<tr class="click${sel}" data-cod="${esc(p.c)}" data-f="${esc(r.f)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}">${esc(p.n)}${etiquetas(p)}<small class="sub">${esc(labDe(p.c))}${r.nota ? ' · ' + esc(r.nota) : ''}</small></td>
         ${todas ? `<td>${esc(corto2(r.f))}</td>` : ''}<td style="text-align:center">${catBadge(r.cat)}</td>
         <td class="su-cob" style="background:${colorCob(r, o)}">${cobTxt(r)}</td><td class="n">${fmtE(p, r.d)}</td><td class="n">${fmtS(p, r.st)}</td><td class="n">${fmtE(p, r.nec)}</td>
@@ -128,7 +168,7 @@
     box.hidden = !red; if (!red) return;
     const r = red.red.find(x => x.f === f) || red.red[0];
     $('suDTit').textContent = p.n;
-    $('suDSub').innerHTML = `Código <code>${esc(p.c)}</code> · ${esc(labDe(p.c) || 'sin laboratorio')} · <b>${esc(corto2(r.f))}</b> · venta diaria según ${esc(r.metodo)}`;
+    $('suDSub').innerHTML = `Código <code>${esc(p.c)}</code> · ${esc(labDe(p.c) || 'sin laboratorio')} · <b>${esc(corto2(r.f))}</b> · venta diaria según ${esc(r.metodo)}${S.suEstados.get(p.c) ? ' · ' + tagEstado(p.c) : ''}`;
     const hv = S.P.hfm && p.hf?.[r.f] ? p.hf[r.f] : [], hm = (S.P.hfm || []).slice(-hv.length), n = Math.min(24, hv.length);
     const fut = motor.get(p.c + '|' + r.f)?.f || [];
     dibujar('suChart', { type: 'line', data: { labels: [...hm.slice(-n), ...S.P.fm.slice(0, fut.length)].map(et), datasets: [
