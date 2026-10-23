@@ -310,7 +310,7 @@ const r1 = v => Math.round(v * 10) / 10;
 
 // ventas por día de los últimos 90 días hasta el corte, leídas de los meses guardados.
 // primero = índice del primer día con datos (los días anteriores no se conocen); null si no hay ninguno.
-async function ventasDiarias(corte, metas) {
+async function ventasDiarias(corte, metas, leer = leerMes) {
   metas ??= await mesesMeta();
   const DIAS = 90, finD = new Date(corte + "T12:00:00"), dias = [];
   for (let i = DIAS - 1; i >= 0; i--) { const d = new Date(finD); d.setDate(d.getDate() - i); dias.push(d.toISOString().slice(0, 10)); }
@@ -318,7 +318,7 @@ async function ventasDiarias(corte, metas) {
   const vd = new Map(); let conDiario = 0, primero = null;
   for (const mes of mesesDia) {
     const meta = metas.get(mes); if (!meta) continue;
-    const { v, kd } = await leerMes(meta);
+    const { v, kd } = await leer(meta, mes);
     if (kd === null || (kd && kd.size)) conDiario++;
     for (const cod in v) for (const alm in v[cod]) for (const dd in v[cod][alm]) {
       const i = diaIdx.get(`${mes}-${dd}`); if (i == null) continue;
@@ -348,6 +348,26 @@ async function leerBase() {
   const r = await assetsShim.fetch(id); if (!r.ok) return null;
   const o = await r.json();
   return { id, o: window.validar ? window.validar(o) : o };
+}
+
+// Resumen por mes (proy_config/resumen): la venta neta por producto y farmacia de cada mes guardado, y las ventas
+// por día de los meses recientes. Así, al subir el kardex del día solo se vuelven a leer los meses que cambiaron
+// (normalmente el mes en curso) y no todos desde 2024. Cada mes se reconoce por su archivo (asset): si se vuelve a
+// guardar, cambia su asset y se relee.
+const RES_VER = 1;
+async function leerResumen() {
+  try {
+    const c = await getDoc(doc(db, "proy_config", "resumen")); if (!c.exists()) return null;
+    const r = await assetsShim.fetch(c.data().asset); if (!r.ok) return null;
+    const o = await r.json(); return o.ver === RES_VER ? { id: c.data().asset, m: o.m || {} } : null;
+  } catch (e) { console.warn(e); return null; }
+}
+async function guardarResumen(prev, m) {
+  try {
+    const { id } = await assetsShim.upload(new Blob([JSON.stringify({ ver: RES_VER, m })]));
+    await setDoc(doc(db, "proy_config", "resumen"), { asset: id, actualizado: new Date().toISOString() });
+    if (prev?.id) assetsShim.delete(prev.id).catch(() => {});
+  } catch (e) { console.warn("No se pudo guardar el resumen por mes", e); }
 }
 
 // Versión del cálculo: si cambia, los pronósticos guardados se rehacen solos al abrir la página.
@@ -382,16 +402,30 @@ async function recalcular() {
       for (const alm of Object.keys(bp.s || {})) if (!pf.has(alm)) pf.set(alm, Array(meses.length).fill(0));
     }
   }
-  for (let i = 0; i < meses.length; i++) {
-    const meta = metas.get(meses[i]); if (!meta) continue;
-    msg(`Leyendo ${meses[i]}…`); conDatos.add(i); conK.add(i);
-    const { d } = await leerMes(meta);
+  // meses cuyas ventas por día se usan (los 90 días hasta el corte)
+  const finD = new Date(corte + "T12:00:00"), iniD = new Date(finD); iniD.setDate(iniD.getDate() - 89);
+  const mesesV = new Set(); for (let m = iniD.toISOString().slice(0, 7); m <= mesCorte; m = sumaM(m, 1)) mesesV.add(m);
+  const res = await leerResumen(), cache = res?.m || {}, nuevoRes = {}; let releidos = 0;
+  async function resumenMes(mes, meta) {
+    const c = cache[mes], conV = mesesV.has(mes);
+    if (c && c.a === meta.asset && (!conV || c.v)) return (nuevoRes[mes] = conV ? c : { a: c.a, d: c.d });
+    msg(`Leyendo ${mes}…`); releidos++;
+    const { d, v, kd } = await leerMes(meta), dm = {};
     for (const cod in d) for (const alm in d[cod]) {
       if (alm === DROG) continue;
-      const t = d[cod][alm], v = (t[VENTA]?.[1] || 0) - (t[ANULA]?.[0] || 0);
-      if (!t[VENTA] && !t[ANULA]) continue;
+      const t = d[cod][alm]; if (!t[VENTA] && !t[ANULA]) continue;
+      (dm[cod] ??= {})[alm] = Math.round(((t[VENTA]?.[1] || 0) - (t[ANULA]?.[0] || 0)) * 1000) / 1000;
+    }
+    const r = { a: meta.asset, d: dm }; if (conV) { r.v = v; r.kd = kd === null || !!(kd && kd.size) ? 1 : 0; }
+    return (nuevoRes[mes] = r);
+  }
+  for (let i = 0; i < meses.length; i++) {
+    const meta = metas.get(meses[i]); if (!meta) continue;
+    conDatos.add(i); conK.add(i);
+    const { d } = await resumenMes(meses[i], meta);
+    for (const cod in d) for (const alm in d[cod]) {
       const pf = (demK.get(cod) ?? demK.set(cod, new Map()).get(cod));
-      (pf.get(alm) ?? pf.set(alm, Array(meses.length).fill(0)).get(alm))[i] += v;
+      (pf.get(alm) ?? pf.set(alm, Array(meses.length).fill(0)).get(alm))[i] += d[cod][alm];
     }
   }
   const totK = Array(meses.length).fill(0), totB = Array(meses.length).fill(0);
@@ -412,7 +446,10 @@ async function recalcular() {
   }
   // ventas por día de los últimos 90 días hasta el corte (para "ventas de los últimos N días")
   msg("Leyendo ventas por día…");
-  const { vd, dias: diasInfo } = await ventasDiarias(corte, metas);
+  const { vd, dias: diasInfo } = await ventasDiarias(corte, metas, async (meta, mes) => {
+    const r = await resumenMes(mes, meta); return { v: r.v || {}, kd: r.kd ? null : new Set() };
+  });
+  if (releidos || Object.keys(cache).some(m => !nuevoRes[m])) { msg("Guardando resumen por mes…"); await guardarResumen(res, nuevoRes); }
   // también las farmacias que solo aparecen en el stock o las ventas por día del kardex
   for (const st of Object.values(maestro.stock || {})) for (const alm in st) if (alm !== DROG && !ignorar(alm) && !farmVol.has(alm)) farmVol.set(alm, 0);
   for (const fs of vd.values()) for (const alm in fs) if (!farmVol.has(alm)) farmVol.set(alm, 0);
