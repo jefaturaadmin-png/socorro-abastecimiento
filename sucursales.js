@@ -44,7 +44,7 @@
         let pide = 0, nota = '';
         if (bloq) nota = 'bloqueado';
         else if (o.tipos === 'todos' ? d > 0 : c === 'A') pide = Math.max(0, Math.ceil(nec - st - 1e-9));
-        else if (o.tipos !== 'todos' && c === 'B') pide = st < 1 && d > 0 ? 1 : 0;
+        else if (o.tipos !== 'todos' && c === 'B') pide = d > 0 && st < nec ? 1 : 0;   // B: 1 caja solo si su stock no cubre los días elegidos
         else if (d > 0) nota = c === 'C' ? 'a pedido' : c === 'D' ? 'solo con pedido' : '';
         const exceso = !bloq && st > 0 && (d === 0 ? st >= 1 : st - nec * 2 >= 1) ? Math.floor(d === 0 ? st : st - nec) : 0;
         red.push({ p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide, nota, bloq, exceso, urgente: d > 0 && st < seg && !bloq });
@@ -171,7 +171,7 @@
       .sort((a, b) => S.suVer === 'exceso' ? b.exceso * (b.p.k || 0) - a.exceso * (a.p.k || 0) : (b.urgente - a.urgente) || a.cob - b.cob || b.pide - a.pide);
     const vis = lista.slice(0, S.suMostrar), todas = !S.suFarm;
     $('suTitulo').textContent = todas ? 'Todas las sucursales' : corto2(S.suFarm);
-    $('suEyebrow').textContent = `Atender para ${o.C} días + ${o.Sg} de seguridad · venta diaria: ${o.fte === 'motor' ? 'motor estadístico de cada sucursal' : `ventas de los últimos ${o.fte} días`} · ${o.tipos === 'todos' ? 'todos los productos con venta' : 'tipo A completo, tipo B 1 unidad'}`;
+    $('suEyebrow').textContent = `Atender para ${o.C} días + ${o.Sg} de seguridad · venta diaria: ${o.fte === 'motor' ? 'motor estadístico de cada sucursal' : `ventas de los últimos ${o.fte} días`} · ${o.tipos === 'todos' ? 'todos los productos con venta' : 'tipo A completo, tipo B 1 unidad si no le alcanza'}`;
     $('suH2').textContent = { enviar: 'Enviar', urgente: 'Urgentes: menos stock que los días de seguridad', comprar: 'No alcanza lo de droguería', exceso: 'Exceso en la sucursal', '': 'Todos' }[S.suVer];
     let h = `<thead><tr><th class="c0">Código</th><th class="c1">Producto</th>${todas ? '<th style="text-align:left">Sucursal</th>' : ''}<th>Tipo</th><th title="Días que alcanza el stock de la sucursal">Cobertura</th>
       <th>Venta diaria</th><th>Stock sucursal</th><th title="Venta diaria × (días + seguridad)">Necesita</th><th class="sep">Enviar</th><th title="Lo que se puede mandar desde droguería">De droguería</th><th style="text-align:left">Lo que falta</th><th>Valor</th></tr></thead><tbody>`;

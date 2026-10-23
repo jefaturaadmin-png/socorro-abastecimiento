@@ -15,7 +15,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610241100";
+const VERSION_PROY = "202610241300";
 const VERSION_COMP = "202610212000";
 
 /* ===================== utilidades ===================== */
@@ -1117,7 +1117,7 @@ function pintarAten() {
   const fte = A.fte === "motor" ? "pronóstico estadístico de tu sucursal" : `ventas de los últimos ${A.fte} días`;
   $("atFiltro").innerHTML = `<b>Criterio usado por Abastecimiento:</b> atender para <b>${A.C} días</b> de venta + <b>${A.Sg} días</b> de seguridad
     · cubre hasta el <b>${hasta.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" })}</b>
-    · venta diaria según ${esc(fte)} · ${A.tipos === "todos" ? "todo lo que se vende en la sucursal" : "productos de venta frecuente (tipo A; tipo B 1 unidad)"}
+    · venta diaria según ${esc(fte)} · ${A.tipos === "todos" ? "todo lo que se vende en la sucursal" : "productos de venta frecuente (tipo A lo necesario; tipo B 1 unidad si no le alcanza)"}
     <br><small class="muted">Datos al ${fmtF(A.corte)} · publicado el ${fFecha(A.publicado)}</small>`;
   const q = norm(S.atQ).trim();
   const lista = (A.items || []).filter(i => (S.atVer !== "urg" || i.urg) && (S.atVer !== "env" || i.pide > 0)

@@ -527,7 +527,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { d
         <label class="field"><span>Días a atender</span><input id="suCob" type="number" min="1" max="180" value="7" style="width:72px"></label>
         <label class="field"><span>Stock de seguridad (días)</span><input id="suSeg" type="number" min="0" max="90" value="7" style="width:72px"></label>
         <label class="field"><span>Venta diaria según</span><select id="suFte"><option value="15">Ventas de los últimos 15 días</option><option value="30" selected>Ventas de los últimos 30 días</option><option value="60">Ventas de los últimos 60 días</option><option value="90">Ventas de los últimos 3 meses</option><option value="motor">Motor estadístico de la sucursal</option></select></label>
-        <label class="field"><span>Qué atender</span><select id="suTip"><option value="ab">Tipo A completo, tipo B 1 unidad</option><option value="todos">Todo lo que se vende en la sucursal</option></select></label>
+        <label class="field"><span>Qué atender</span><select id="suTip"><option value="ab">Tipo A completo, tipo B 1 unidad si no le alcanza</option><option value="todos">Todo lo que se vende en la sucursal</option></select></label>
         <label class="field"><span>Mostrar</span><select id="suVer"><option value="enviar">Enviar</option><option value="urgente">Urgentes</option><option value="comprar">No alcanza lo de droguería</option><option value="exceso">Exceso en la sucursal</option><option value="">Todos</option></select></label>
         <label class="field"><span>Laboratorio</span><select id="suLab" class="sLab"><option value="">Todos</option></select></label>
         <label class="field"><span>Línea</span><select class="sLin"><option value="">Todas</option></select></label>
@@ -563,7 +563,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { d
       <summary>Cómo se calcula</summary>
       <ul>
         <li><b>Venta diaria de cada sucursal</b>: sus ventas de los últimos días del kardex (los días que el kardex no cubre se completan con su historial), o el motor estadístico aplicado a su venta mensual.</li>
-        <li><b>Necesita</b> = venta diaria × (días a atender + días de seguridad). <b>Enviar</b> = lo que necesita − su stock. Por defecto, como en Reposición: tipo A lo que necesite, tipo B 1 unidad si no tiene, C y D a pedido; puedes elegir atender todo lo que se vende.</li>
+        <li><b>Necesita</b> = venta diaria × (días a atender + días de seguridad). <b>Enviar</b> = lo que necesita − su stock. Por defecto, como en Reposición: tipo A lo que necesite, tipo B 1 caja solo si su stock no alcanza para los días elegidos, C y D a pedido; puedes elegir atender todo lo que se vende.</li>
         <li><b>Cobertura</b>: días que alcanza el stock de la sucursal. Rojo: menos que los días de seguridad (urgente). Amarillo: menos que días + seguridad. Verde: bien. Azul: más del doble (sobra).</li>
         <li><b>Reparto</b>: el stock de droguería se reparte primero a las sucursales con menos cobertura. Lo que no alcanza se toma de otra sucursal que tenga exceso de ese producto (más del doble de lo que necesita, o stock sin venta); si tampoco hay, se marca para comprar.</li>
         <li>No se envían productos bloqueados en esa sucursal ni en todas.</li>
@@ -1565,7 +1565,7 @@ $('rBase').addEventListener('change', e => { S.base = e.target.value; if (S.base
 $('rSeg').addEventListener('input', e => { S.seg = Math.max(0, +e.target.value || 0); pintarRep(); });
 $('rq').addEventListener('input', () => { S.rMostrar = PAGINA; pintarRep(); });
 /* Ventas de los últimos N días (del kardex por día) → venta diaria × (días + seguridad) − stock, según la categoría:
-   A: lo necesario · B: máximo 1 unidad · C: a pedido · D: solo con pedido confirmado · E: no se repone (devolver o liquidar). */
+   A: lo necesario · B: 1 unidad si su stock no cubre días + seguridad · C: a pedido · D: solo con pedido confirmado · E: no se repone (devolver o liquidar). */
 // Venta diaria de la farmacia según su historial mensual (promedio de los últimos 3 meses con dato).
 const diariaHist = (p, f) => {
   const hv = S.P.hfm && p.hf?.[f] ? p.hf[f] : (p.h || []).map(v => v == null ? null : v * (p.s?.[f] || 0));
@@ -1591,7 +1591,7 @@ function plan2(p, f) {
   let ent = 0, nota = '';
   if (bloq) nota = '';
   else if (c === 'A') ent = Math.max(0, Math.ceil(nec - st - 1e-9));
-  else if (c === 'B') ent = st < 1 ? 1 : 0;
+  else if (c === 'B') ent = st < nec || st <= 0 ? 1 : 0;   // B: 1 caja solo si su stock no cubre días + seguridad
   else nota = c === 'C' ? 'a pedido' : c === 'D' ? 'solo con pedido' : (st > 0 ? 'liquidar' : 'sin mov.');
   return { v, diaria, nec, st, ent, nota, c, bloq, aprox };
 }
@@ -1923,10 +1923,10 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610241100"></script>
-<script src="frepple.js?v=202610241100"></script>
-<script src="sucursales.js?v=202610241100"></script>
-<script src="estadistica.js?v=202610241100"></script>
-<script type="module" src="proyeccion.js?v=202610241100"></script>
+<script src="mapa.js?v=202610241300"></script>
+<script src="frepple.js?v=202610241300"></script>
+<script src="sucursales.js?v=202610241300"></script>
+<script src="estadistica.js?v=202610241300"></script>
+<script type="module" src="proyeccion.js?v=202610241300"></script>
 
 </body></html>
