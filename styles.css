@@ -396,3 +396,10 @@ legend { padding: 0; margin-bottom: 8px }
 .fs-mas { padding: 12px; text-align: center }
 tr.abierta td { background: #f6f8fb }
 .fs-gen { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 360px; text-align: right }
+
+/* lo que me van a atender */
+.aviso.prueba { background: #fff4d6; color: #7a5200; border: 1px dashed #e0b040; margin: 0 0 14px }
+.at-filtro { background: #fff; border: 1px solid var(--line, #dde3ea); border-radius: 10px; padding: 12px 14px; font-size: 13.5px; margin-bottom: 16px; line-height: 1.6 }
+.at-cob { display: inline-block; color: #fff; font-weight: 700; border-radius: 6px; padding: 2px 8px; font-size: 12.5px; white-space: nowrap }
+.at-cat { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; color: #fff; font-weight: 700; font-size: 12px; background: #888 }
+.at-cat.A { background: #1f7a6d } .at-cat.B { background: #3d5a99 } .at-cat.C { background: #b8860b } .at-cat.D { background: #8a4f9e } .at-cat.E { background: #a33b3b }

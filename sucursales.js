@@ -111,12 +111,29 @@
       const datos = { items, corte: S.P.corte, publicado: new Date().toISOString(), C: o.C, Sg: o.Sg, fte: o.fte, tipos: o.tipos };
       await FB.setDoc(FB.doc(FB.db, 'faltantes', 'actual'), window.parent.JSON.parse(JSON.stringify(datos)));
       $('suPub').textContent = `Lista del equipo (0 en droguería): ${nf0.format(items.length)} productos · para ${o.C} + ${o.Sg} días · publicada a las ${new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}`;
-      S.suAuto = true; return { ok: true, n: items.length };
+      S.suAuto = true;
+      const at = await publicarAtencion(o);
+      if (!at.ok) $('suPub').textContent += ' · no se pudo publicar lo de cada sucursal: ' + at.error;
+      return { ok: true, n: items.length };
     } catch (e) {
       const t = e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules) en Firebase.' : e.message;
       $('suPub').textContent = 'No se pudo publicar la lista del equipo: ' + t; S.suAuto = false;
       return { ok: false, error: t };
     }
+  }
+  // Lo que se le va a atender a cada sucursal (atencion/{SUCURSAL}): lo lee el químico de esa sucursal si tiene la vista.
+  async function publicarAtencion(o) {
+    const r3 = v => Math.round(v * 1000) / 1000, hoy = new Date().toISOString();
+    try {
+      for (const f of S.P.farmacias) {
+        const items = cache.filas.filter(r => r.f === f && (r.pide > 0 || r.urgente)).sort((a, b) => (b.urgente - a.urgente) || a.cob - b.cob || b.pide - a.pide).slice(0, 2500)
+          .map(r => ({ c: r.p.c, n: r.p.n, l: labDe(r.p.c) || '', cat: r.cat, fr: r.p.fr || 1, d: r3(r.d), st: r3(r.st), nec: r3(r.nec), cob: isFinite(r.cob) ? Math.floor(r.cob) : null,
+            pide: r.pide, drog: r.drog || 0, falta: r.falta || 0, urg: !!r.urgente }));
+        const datos = { suc: f, nombre: nomSuc(f), items, corte: S.P.corte, publicado: hoy, C: o.C, Sg: o.Sg, fte: o.fte, tipos: o.tipos };
+        await FB.setDoc(FB.doc(FB.db, 'atencion', f), window.parent.JSON.parse(JSON.stringify(datos)));
+      }
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules) en Firebase.' : e.message }; }
   }
   $('suPubBtn').addEventListener('click', () => publicar(opciones(), true));
   // La página principal (Faltantes de droguería) la llama para generar la lista sin abrir este módulo:

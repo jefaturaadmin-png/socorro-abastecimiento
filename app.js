@@ -15,7 +15,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610241000";
+const VERSION_PROY = "202610241100";
 const VERSION_COMP = "202610212000";
 
 /* ===================== utilidades ===================== */
@@ -59,7 +59,8 @@ const S = {
 const esAdmin = () => S.perfil?.rol === "admin";
 // Vistas que el administrador puede darle a cualquier usuario (se guardan en usuarios/{uid}.vistas). Para agregar otra
 // más adelante basta con sumarla aquí y crear su sección en index.html.
-const VISTAS = [{ id: "faltantes", nombre: "Faltantes de droguería", vista: "vFalt" }];
+const VISTAS = [{ id: "faltantes", nombre: "Faltantes de droguería", vista: "vFalt" },
+  { id: "atencion", nombre: "Lo que me van a atender", vista: "vAten", ayuda: "solo químicos: ve su sucursal" }];
 const misVistas = () => esAdmin() ? VISTAS : VISTAS.filter(v => (S.perfil?.vistas || []).includes(v.id));
 const NOMBRE_ROL = { admin: "Administrador", quimico: "Químico", colaborador: "Colaborador" };
 const miFarm = () => S.perfil?.farmacia;
@@ -254,7 +255,7 @@ function pintarNav() {
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vFicha"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
@@ -270,7 +271,8 @@ function render() {
   else if (S.vista === "vAdmin") pintarAdmin();
   else if (S.vista === "vUsuarios") pintarUsuarios();
   else if (S.vista === "vFicha") pintarFicha();
-  else if (S.vista === "vFalt") { escucharFalt(); pintarFalt(); }   // escucharFalt vuelve a conectar si se había cortado
+  else if (S.vista === "vFalt") { escucharFalt(); pintarFalt(); }
+  else if (S.vista === "vAten") { escucharAten(); pintarAten(); }   // escucharFalt vuelve a conectar si se había cortado
   pintarSel("bq"); pintarSel("ab");
 }
 
@@ -774,7 +776,7 @@ $("fAccion").addEventListener("click", async e => {
 
 /* ===================== usuarios (solo admin) ===================== */
 $("uRolSel").addEventListener("change", () => { $("uFarm").disabled = $("uRolSel").value !== "quimico"; });
-const chkVistas = (sel = []) => VISTAS.map(v => `<label class="check"><input type="checkbox" data-vista="${esc(v.id)}" ${sel.includes(v.id) ? "checked" : ""}> ${esc(v.nombre)}</label>`).join("");
+const chkVistas = (sel = []) => VISTAS.map(v => `<label class="check"><input type="checkbox" data-vista="${esc(v.id)}" ${sel.includes(v.id) ? "checked" : ""}> ${esc(v.nombre)}${v.ayuda ? ` <small class="muted">(${esc(v.ayuda)})</small>` : ""}</label>`).join("");
 $("uVistas").innerHTML = chkVistas();
 const vistasDe = el => [...el.querySelectorAll("[data-vista]:checked")].map(x => x.dataset.vista);
 function pintarUsuarios() {
@@ -1088,6 +1090,52 @@ $("fsXls").addEventListener("click", () => {
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\ufeff" + t], { type: "text/csv;charset=utf-8" }));
   a.download = `faltantes_drogueria_${hoyISO()}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 });
+
+/* ===================== lo que me van a atender (por sucursal; módulo de prueba) ===================== */
+// Lo publica el administrador desde Atención a sucursales en atencion/{SUCURSAL}. El químico ve la de su sucursal;
+// el administrador elige cuál ver.
+S.aten = null; S.atSuc = null; S.atVer = ""; S.atQ = "";
+function escucharAten() {
+  const suc = esAdmin() ? (S.atSuc || FARMACIAS[0]) : miFarm();
+  if (S.atSubSuc === suc) return;
+  S.atUnsub?.(); S.atSubSuc = suc; S.aten = null;
+  S.atUnsub = onSnapshot(doc(db, "atencion", suc), sn => { S.aten = sn.exists() ? sn.data() : { items: [] }; if (S.vista === "vAten") pintarAten(); },
+    e => { S.atSubSuc = null; avisar(e); });
+  S.subs.push(() => S.atUnsub?.());
+}
+const fCaja = (v, fr) => { if (!(fr > 1)) return Number(v || 0).toLocaleString("es-PE", { maximumFractionDigits: 1 }); const u = Math.round((v || 0) * fr), e = Math.trunc(u / fr), f = Math.abs(u % fr); return f ? `${nf(e)} / ${f} f` : nf(e); };
+const fFecha = iso => iso ? new Date(iso).toLocaleString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+function pintarAten() {
+  const A = S.aten, suc = esAdmin() ? (S.atSuc || FARMACIAS[0]) : miFarm();
+  $("atSucF").hidden = !esAdmin();
+  if (esAdmin() && !$("atSuc").options.length) $("atSuc").innerHTML = FARMACIAS.map(f => `<option value="${esc(f)}">${esc(corto(f))}</option>`).join("");
+  if (esAdmin()) $("atSuc").value = suc;
+  $("atSub").textContent = `Productos que Abastecimiento tiene previsto enviar a ${nombreFarm(suc)}.`;
+  if (!A) { $("atFiltro").innerHTML = ""; $("atTabla").innerHTML = `<tbody><tr class="vacia"><td>Cargando…</td></tr></tbody>`; return; }
+  if (!A.publicado) { $("atFiltro").innerHTML = '<span class="muted">Aún no hay información publicada para tu sucursal.</span>'; $("atTabla").innerHTML = ""; $("atTit").textContent = "Productos"; return; }
+  const hasta = new Date(A.publicado); hasta.setDate(hasta.getDate() + (A.C || 0));
+  const fte = A.fte === "motor" ? "pronóstico estadístico de tu sucursal" : `ventas de los últimos ${A.fte} días`;
+  $("atFiltro").innerHTML = `<b>Criterio usado por Abastecimiento:</b> atender para <b>${A.C} días</b> de venta + <b>${A.Sg} días</b> de seguridad
+    · cubre hasta el <b>${hasta.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" })}</b>
+    · venta diaria según ${esc(fte)} · ${A.tipos === "todos" ? "todo lo que se vende en la sucursal" : "productos de venta frecuente (tipo A; tipo B 1 unidad)"}
+    <br><small class="muted">Datos al ${fmtF(A.corte)} · publicado el ${fFecha(A.publicado)}</small>`;
+  const q = norm(S.atQ).trim();
+  const lista = (A.items || []).filter(i => (S.atVer !== "urg" || i.urg) && (S.atVer !== "env" || i.pide > 0)
+    && (!q || q.split(/\s+/).every(w => norm(i.c + " " + i.n + " " + i.l).includes(w))));
+  $("atTit").textContent = `${nf(lista.length)} productos · ${nf(lista.filter(i => i.urg).length)} urgentes`;
+  const colCob = i => i.d <= 0 ? "#9e9e9e" : i.cob == null ? "#1e6bb8" : i.cob < A.Sg ? "#d9302c" : i.cob < A.C + A.Sg ? "#e0a030" : "#43a047";
+  $("atTabla").innerHTML = `<thead><tr><th>Producto</th><th>Tipo</th><th class="der">Cobertura</th><th class="der">Venta diaria</th><th class="der">Tu stock</th><th class="der">Necesita (${A.C} + ${A.Sg} d)</th><th class="der">Se te enviará</th><th>Nota</th></tr></thead><tbody>` +
+    (lista.length ? lista.map(i => `<tr><td class="p"><b>${esc(i.c)} - ${esc(i.n)}</b><code>${esc(i.l)}</code></td>
+      <td><span class="at-cat ${esc(i.cat)}">${esc(i.cat)}</span></td>
+      <td class="der"><span class="at-cob" style="background:${colCob(i)}">${i.d <= 0 ? "sin venta" : i.cob == null ? "–" : nf(i.cob) + " días"}</span></td>
+      <td class="der">${fCaja(i.d, i.fr)}</td><td class="der">${fCaja(i.st, i.fr)}</td><td class="der">${fCaja(i.nec, i.fr)}</td>
+      <td class="der"><b>${i.pide ? nf(i.pide) : "–"}</b></td>
+      <td>${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}</td></tr>`).join("")
+      : `<tr class="vacia"><td colspan="8">Nada que mostrar.</td></tr>`) + "</tbody>";
+}
+$("atVer").addEventListener("change", e => { S.atVer = e.target.value; pintarAten(); });
+$("atQ").addEventListener("input", e => { S.atQ = e.target.value; pintarAten(); });
+$("atSuc").addEventListener("change", e => { S.atSuc = e.target.value; escucharAten(); pintarAten(); });
 
 /* ===================== exportar a Excel ===================== */
 let XLSX = null;

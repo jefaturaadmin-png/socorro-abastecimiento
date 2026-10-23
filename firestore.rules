@@ -110,6 +110,12 @@ service cloud.firestore {
       allow delete: if tieneVista('faltantes');
     }
 
+    // ---------- lo que se le va a atender a cada sucursal (solo lectura; lo publica el administrador) ----------
+    match /atencion/{suc} {
+      allow read: if tieneVista('atencion') && (rol() == 'admin' || perfil().get('farmacia', '') == suc);
+      allow write: if esAdmin();
+    }
+
     // ---------- historial: solo se agrega, nunca se cambia ni se borra ----------
     match /historial/{id} {
       allow read: if esAdmin()
