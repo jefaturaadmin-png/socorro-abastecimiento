@@ -104,7 +104,9 @@
     const items = listaFaltantes();
     $('suPub').textContent = 'Publicando la lista del equipo…';
     try {
-      await FB.setDoc(FB.doc(FB.db, 'faltantes', 'actual'), { items, corte: S.P.corte, publicado: new Date().toISOString(), C: o.C, Sg: o.Sg, fte: o.fte, tipos: o.tipos });
+      // Firebase solo acepta objetos creados en la ventana principal: se copian allá antes de guardar
+      const datos = { items, corte: S.P.corte, publicado: new Date().toISOString(), C: o.C, Sg: o.Sg, fte: o.fte, tipos: o.tipos };
+      await FB.setDoc(FB.doc(FB.db, 'faltantes', 'actual'), window.parent.JSON.parse(JSON.stringify(datos)));
       $('suPub').textContent = `Lista del equipo (0 en droguería): ${nf0.format(items.length)} productos · para ${o.C} + ${o.Sg} días · publicada a las ${new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}`;
       S.suAuto = true; return { ok: true, n: items.length };
     } catch (e) {
