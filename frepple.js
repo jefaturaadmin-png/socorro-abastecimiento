@@ -312,8 +312,11 @@
     return { adi, cv2, patron: adi < 1.32 ? (cv2 < 0.49 ? 'smooth' : 'erratic') : (cv2 < 0.49 ? 'intermittent' : 'lumpy') };
   }
 
+  const METODOS = { media: movingAverage, constante: singleExponential, tendencia: doubleExponential, estacional: seasonal, intermitente: croston };
   // h: venta mensual (null = mes sin dato). Devuelve el método elegido, su sMAPE, la desviación y n meses de pronóstico.
-  function pronosticar(h, n = 3) {
+  // forzado: 'media' | 'constante' | 'tendencia' | 'estacional' | 'intermitente' para usar ese método (como el
+  // "forecast method" que se elige a mano en frePPLe); si no se puede aplicar, se usa la elección automática.
+  function pronosticar(h, n = 3, forzado = '') {
     let i0 = 0; while (i0 < h.length && !h[i0]) i0++;   // se salta hasta el primer mes con venta
     const serie = h.slice(i0);
     const pat = patron(serie.map(v => v || 0));
@@ -328,6 +331,8 @@
     ts.push(0);
     let zero = 0, inactivos = 0; for (let i = 0; i < count; i++) if (ts[i] === 0) { zero++; inactivos++; } else inactivos = 0;
     let metodos;
+    const fz = METODOS[forzado] && METODOS[forzado](ts, count);
+    if (fz) return { metodo: fz.metodo, smape: fz.smape, sd: fz.sd, periodo: fz.periodo, f: fz.futuro(n), forzado: true, evaluados: [[fz.metodo, fz.smape]], ...pat };
     if (count <= SKIP + 5) metodos = [movingAverage];
     else if (inactivos >= DEAD_BUCKETS) return { metodo: 'Manual (sin venta en 1 año)', smape: 0, sd: 0, f: Array(n).fill(0), ...pat };
     else if (zero > 0.33 * count) metodos = [croston];
