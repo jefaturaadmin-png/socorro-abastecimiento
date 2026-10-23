@@ -15,7 +15,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610232300";
+const VERSION_PROY = "202610232330";
 const VERSION_COMP = "202610212000";
 
 /* ===================== utilidades ===================== */
@@ -978,14 +978,14 @@ function pintarFalt() {
   $("fsEst").innerHTML = opc.map(([id, t]) => `<option value="${id}" ${f.est === id ? "selected" : ""}>${esc(t)} (${nf(cuenta[id] || 0)})</option>`).join("");
   const labs = [...new Set(items.map(i => i.l).filter(Boolean))].sort();
   $("fsLab").innerHTML = `<option value="">Todos</option>` + labs.map(l => `<option ${l === f.lab ? "selected" : ""}>${esc(l)}</option>`).join("");
-  const sucs = [...new Set(items.flatMap(i => i.s.map(x => x[0])))].sort();
+  const sucs = [...new Set(items.flatMap(i => i.s.map(x => x.f)))].sort();
   $("fsSuc").innerHTML = `<option value="">Todas</option>` + sucs.map(x => `<option value="${esc(x)}" ${x === f.suc ? "selected" : ""}>${esc(corto(x))}</option>`).join("");
   const q = norm(f.q).trim();
   const lista = items.filter(i => {
     const e = S.fEst.get(i.c);
     if (f.est === "sin" ? e : f.est !== "todos" && e?.estado !== f.est) return false;
     if (f.lab && i.l !== f.lab) return false;
-    if (f.suc && !i.s.some(x => x[0] === f.suc)) return false;
+    if (f.suc && !i.s.some(x => x.f === f.suc)) return false;
     return !q || q.split(/\s+/).every(w => norm(i.c + " " + i.n + " " + i.l).includes(w));
   });
   S.fLista = lista;
@@ -995,7 +995,7 @@ function pintarFalt() {
     (vis.length ? vis.map(i => {
       const e = S.fEst.get(i.c), ab = S.fAbierto === i.c;
       return `<tr class="${ab ? "abierta" : ""}"><td class="p"><b>${esc(i.c)} - ${esc(i.n)}</b><code>${esc(i.l || "")}</code></td>
-        <td><div class="fs-sucs"><span class="fs-n">${i.s.length} suc.</span>${i.s.map(([s, n]) => `<span class="fs-suc">${esc(corto(s))} <b>${nf(n)}</b></span>`).join("")}</div></td>
+        <td><div class="fs-sucs"><span class="fs-n">${i.s.length} suc.</span>${i.s.map(x => `<span class="fs-suc">${esc(corto(x.f))} <b>${nf(x.q)}</b></span>`).join("")}</div></td>
         <td class="der"><b>${nf(i.t)}</b></td>
         <td>${e ? `<span class="tag fs-tag ${esc(e.estado)}">${esc(textoEstado(e))}</span><small class="fs-quien">${esc(e.porNombre || "")} · ${fmtF(e.fecha)}${e.comentario ? " · " + esc(e.comentario) : ""}</small>` : '<span class="muted">Sin responder</span>'}</td>
         <td class="der"><button class="btn sm${e ? "" : " primario"}" type="button" data-resp="${esc(i.c)}">${ab ? "Cerrar" : e ? "Cambiar" : "Responder"}</button></td></tr>`
@@ -1079,7 +1079,7 @@ $("fsTabla").addEventListener("click", async ev => {
 $("fsXls").addEventListener("click", () => {
   const filas = [["Código", "Producto", "Laboratorio", "N° sucursales", "Total cajas", "Le falta a", "Estado", "Detalle", "Comentario", "Respondió", "Fecha"],
     ...(S.fLista || []).map(i => { const e = S.fEst.get(i.c);
-      return [i.c, i.n, i.l, i.s.length, i.t, i.s.map(([x, n]) => `${corto(x)} ${n}`).join(" / "), e ? ESTADOS_F.find(x => x.id === e.estado)?.txt : "Sin responder",
+      return [i.c, i.n, i.l, i.s.length, i.t, i.s.map(x => `${corto(x.f)} ${x.q}`).join(" / "), e ? ESTADOS_F.find(x => x.id === e.estado)?.txt : "Sin responder",
         e ? textoEstado(e) : "", e?.comentario || "", e?.porNombre || "", e ? fmtF(e.fecha) : ""]; })];
   const t = filas.map(f => f.map(v => { const x = String(v ?? ""); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(";")).join("\r\n");
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\ufeff" + t], { type: "text/csv;charset=utf-8" }));

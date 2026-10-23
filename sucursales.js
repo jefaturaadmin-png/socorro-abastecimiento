@@ -95,9 +95,12 @@
     for (const [c, x] of cache.porProd) {
       if (x.drog > 0) continue;
       const s = x.red.filter(r => r.pide > 0); if (!s.length) continue;
-      items.push({ c, n: s[0].p.n, l: labDe(c) || '', t: s.reduce((a, r) => a + r.pide, 0), s: s.sort((a, b) => b.pide - a.pide).map(r => [r.f, r.pide]) });
+      items.push({ c, n: s[0].p.n, l: labDe(c) || '', t: s.reduce((a, r) => a + r.pide, 0), s: s.sort((a, b) => b.pide - a.pide).map(r => ({ f: r.f, q: r.pide })) });   // Firestore no acepta listas dentro de listas
     }
-    return items.sort((a, b) => b.s.length - a.s.length || b.t - a.t).slice(0, 3000);
+    items.sort((a, b) => b.s.length - a.s.length || b.t - a.t);
+    // un documento de Firestore admite hasta 1 MB: se publican los más importantes hasta ~900 KB
+    let bytes = 0, n = 0; while (n < items.length && (bytes += JSON.stringify(items[n]).length + 1) < 900000) n++;
+    return items.slice(0, n);
   }
   async function publicar(o, aviso) {
     if (!FB || S.ejemplo) { if (aviso) alert('Con datos de ejemplo la lista del equipo no se publica.'); return { ok: false, error: 'datos de ejemplo' }; }
