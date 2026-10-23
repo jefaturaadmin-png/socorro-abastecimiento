@@ -382,7 +382,11 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { d
       <div class="controls">
         <label class="field"><span>Tiempo de entrega (días)</span><input id="frLT" type="number" min="1" max="120" value="7" style="width:80px"></label>
         <label class="field"><span>Nivel de servicio</span><select id="frSL"><option value="0.9">90 %</option><option value="0.95" selected>95 %</option><option value="0.98">98 %</option><option value="0.99">99 %</option></select></label>
-        <label class="field"><span>Pedir para (días)</span><input id="frROQ" type="number" min="1" max="180" value="30" style="width:80px"></label>
+        <label class="field"><span>Pronóstico</span><select id="frFte"><option value="frepple">Motor de frePPLe</option><option value="mio">El elegido en Pronóstico</option></select></label>
+        <label class="field" title="Cobertura mínima del pedido (ROQ), en días de venta"><span>Pedido mín. (días)</span><input id="frROQmin" type="number" min="0" max="365" value="15" style="width:72px"></label>
+        <label class="field" title="Cobertura máxima del pedido (ROQ), en días de venta"><span>Pedido máx. (días)</span><input id="frROQmax" type="number" min="1" max="365" value="60" style="width:72px"></label>
+        <label class="field" title="Costo fijo de hacer un pedido (frePPLe: fixed_order_cost = 20)"><span>Costo por pedido S/</span><input id="frS" type="number" min="0" step="1" value="20" style="width:72px"></label>
+        <label class="field" title="Costo de tener el producto en stock, % de su costo al año (frePPLe: holding_cost = 0.05)"><span>Mantener % año</span><input id="frH" type="number" min="1" max="100" step="1" value="5" style="width:72px"></label>
         <label class="field"><span>Mostrar</span><select id="frVer"><option value="ahora">Pedir ahora</option><option value="semana">Pedir en los próximos 7 días</option><option value="riesgo">Riesgo de quiebre ≥ 50 %</option><option value="exceso">Exceso de stock</option><option value="">Todos con pronóstico</option></select></label>
         <label class="field"><span>Laboratorio</span><select id="frLab" class="sLab"><option value="">Todos</option></select></label>
         <input id="frq" type="search" placeholder="Buscar nombre, código, genérico o familia…" aria-label="Filtrar medicamentos" autocomplete="off">
@@ -402,14 +406,15 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { d
     <details class="metodo">
       <summary>Cómo calcula (igual que frePPLe)</summary>
       <ul>
-        <li><b>Pronóstico</b>: el método elegido para cada producto en Pronóstico (el de menor error si no elegiste), para el mes que viene. Venta diaria = pronóstico ÷ 30.</li>
-        <li><b>Demanda en el tiempo de entrega</b> = venta diaria × días de entrega. Su <b>variabilidad</b> sale del error real del pronóstico en los últimos 6 meses (prueba abr–sep), llevada a los días de entrega.</li>
-        <li><b>Distribución</b>, como frePPLe: <b>Normal</b> si la demanda en el tiempo de entrega es de 20 unidades de venta o más (cajas, o fracciones si se vende fraccionado); con menos, <b>Poisson</b> si la variabilidad es parecida a la media, o <b>Binomial negativa</b> si es mayor (venta irregular).</li>
-        <li><b>Punto de pedido (ROP)</b>: la cantidad que cubre la demanda del tiempo de entrega con el nivel de servicio elegido (por ejemplo 95 % de las veces). <b>Stock de seguridad</b> = ROP − demanda media en el tiempo de entrega.</li>
-        <li><b>Cantidad a pedir (ROQ)</b> = venta diaria × "Pedir para (días)", mínimo 1 caja.</li>
-        <li><b>Posición</b> = stock de droguería + todas las sucursales. Si la posición está en el ROP o debajo, se pide hasta llegar a ROP + ROQ. Si no, se calcula la fecha en que se llegará al ROP: ese día hay que pedir.</li>
-        <li><b>Riesgo de quiebre</b>: probabilidad de que la venta del tiempo de entrega supere el stock actual. <b>Exceso</b>: la posición pasa de ROP + 3 × ROQ.</li>
-        <li>No se incluyen los productos bloqueados en todas las farmacias. Las órdenes de compra en camino no se conocen aquí, así que no se descuentan.</li>
+        <li><b>Pronóstico</b>: el motor de pronóstico de frePPLe, copiado de su código abierto (<code>src/forecast/timeseries.cpp</code>, licencia MIT) con sus mismos parámetros. Prueba <b>media móvil</b> (5 meses), <b>constante</b> (suavizado exponencial), <b>tendencia</b> (doble suavizado, la pendiente se amortigua 20 % por mes) y <b>estacional</b> (Holt-Winters; busca ciclos de 2 a 14 meses), y elige el de menor <b>sMAPE</b> ponderado (los meses recientes pesan más, 0.95 por mes). Corrige los picos raros (más de 4 desviaciones) antes de medir.</li>
+        <li>Como en frePPLe: con 10 meses de historia o menos solo usa media móvil; si más de un tercio de los meses no tuvo venta usa <b>Croston</b> (intermitente); si no vendió nada en 12 meses el pronóstico es 0; si la estacionalidad es muy clara (autocorrelación &gt; 0.8) usa estacional sí o sí. Los meses sin dato se rellenan con el promedio del anterior y el siguiente.</li>
+        <li><b>Patrón</b> de la demanda, igual que frePPLe: ADI (cada cuántos meses hay venta) y CV² (cuánto varía la cantidad). Suave: ADI &lt; 1.32 y CV² &lt; 0.49; Errático: ADI &lt; 1.32 y CV² ≥ 0.49; Intermitente: ADI ≥ 1.32 y CV² &lt; 0.49; Irregular: el resto.</li>
+        <li><b>Venta diaria</b> = promedio de los próximos 6 meses ÷ 30 (frePPLe promedia 180 días para que el stock de seguridad y el pedido no salten de un mes a otro). La <b>variabilidad</b> es la desviación estándar del método elegido, llevada a los días de entrega.</li>
+        <li><b>Distribución</b>: Normal si la demanda en el tiempo de entrega es de 20 unidades de venta o más; con menos, Poisson si la variabilidad es parecida a la media, o Binomial negativa si es mayor.</li>
+        <li><b>Punto de pedido (ROP)</b>: la cantidad que cubre la demanda del tiempo de entrega con el nivel de servicio elegido. <b>Stock de seguridad</b> = ROP − demanda media en el tiempo de entrega.</li>
+        <li><b>Cantidad a pedir (ROQ)</b>: cantidad económica de pedido EOQ = √(2 × venta anual × costo por pedido ÷ (costo de mantener × costo de la caja)), limitada entre la cobertura mínima y máxima en días (los parámetros "roq minimum/maximum period of cover" de frePPLe). Los valores por defecto del costo por pedido (20) y de mantener (0.05) son los de frePPLe.</li>
+        <li><b>Posición</b> = stock de droguería + todas las sucursales. Si está en el ROP o debajo, se pide hasta llegar a ROP + ROQ; si no, se calcula el día en que llegará al ROP.</li>
+        <li>El cálculo del stock de seguridad y del pedido es de la edición de pago de frePPLe (no está en su código abierto): aquí se arma con los parámetros que publica en su documentación. No se descuentan órdenes de compra en camino, ni se incluyen los productos bloqueados en todas las farmacias.</li>
       </ul>
     </details>
   </section>
@@ -976,33 +981,52 @@ function distribucion(mu, v) {
   return { tipo, q: sl => { let c = 0, pk = pmf0, k = 0; for (; k < 5000; k++) { c += pk; if (c >= sl) break; pk = sig(k, pk); } return k; },
     cola: x => x < 0 ? 1 : 1 - cdf(Math.floor(x)) };
 }
-function planFre(p, LT, SL, diasROQ) {
-  const sel = elegido(p.c); if (!sel || !p.f[sel]) return null;
-  const mes = p.f[sel][0] || 0, diaria = mes / 30; if (diaria <= 0) return null;
-  // error del pronóstico (prueba de 6 meses) → desviación mensual → a los días de entrega
-  const k = S.calc.get(p.c), real = k?.real || [], b = p.b?.[sel] || [];
-  const e = b.map((v, i) => v != null && real[i] != null ? v - real[i] : null).filter(v => v != null);
-  const sdMes = e.length ? Math.sqrt(e.reduce((a, x) => a + x * x, 0) / e.length) : Math.sqrt(mes);
-  const mu = diaria * LT, v = sdMes * sdMes * LT / 30;
+// Pronóstico con el motor portado de frePPLe (frepple.js): 6 meses, como su ventana de 180 días para promediar la demanda.
+let frCache = null, frCacheDe = null;
+function frepplePron(p) {
+  if (frCacheDe !== S.P) { frCacheDe = S.P; frCache = new Map(); }
+  let r = frCache.get(p.c); if (!r) { r = window.FREPPLE.pronosticar(p.h, 6); frCache.set(p.c, r); } return r;
+}
+const PATRON = { smooth: 'Suave', erratic: 'Errático', intermittent: 'Intermitente', lumpy: 'Irregular' };
+function planFre(p, o) {
+  const fp = frepplePron(p);
+  let mes, sdMes, metodo;
+  if (o.fte === 'frepple') { mes = fp.f.reduce((a, v) => a + v, 0) / fp.f.length; sdMes = fp.sd; metodo = fp.metodo; }
+  else {
+    const sel = elegido(p.c); if (!sel || !p.f[sel]) return null;
+    mes = p.f[sel][0] || 0; metodo = corto(sel);
+    // error del pronóstico (prueba de 6 meses) → desviación mensual
+    const real = S.calc.get(p.c)?.real || [], b = p.b?.[sel] || [];
+    const e = b.map((v, i) => v != null && real[i] != null ? v - real[i] : null).filter(v => v != null);
+    sdMes = e.length ? Math.sqrt(e.reduce((a, x) => a + x * x, 0) / e.length) : Math.sqrt(mes);
+  }
+  const diaria = mes / 30; if (!(diaria > 0)) return null;
+  const LT = o.LT, mu = diaria * LT, v = sdMes * sdMes * LT / 30;
   // como frePPLe, la demanda se cuenta en la unidad de venta: en fracciones si el producto se vende fraccionado
   const u = p.fr > 1 ? p.fr : 1, dist = distribucion(mu * u, v * u * u);
-  const rop = Math.max(0, dist.q(SL)) / u, ss = rop - mu, roq = Math.max(1, diaria * diasROQ);
+  const rop = Math.max(0, dist.q(o.SL)) / u, ss = rop - mu;
+  // ROQ: cantidad económica de pedido (EOQ) limitada por la cobertura mínima y máxima en días
+  const eoq = p.k > 0 && o.H > 0 ? Math.sqrt(2 * diaria * 365 * o.S / (o.H * p.k)) : 0;
+  const roq = Math.max(1, Math.min(Math.max(eoq, diaria * o.min), diaria * o.max));
   const pos = stockTotal(p).t, riesgo = dist.cola(pos * u);
   const pedir = pos <= rop ? Math.ceil(rop + roq - pos - 1e-9) : 0;
   const enDias = pos > rop ? (pos - rop) / diaria : 0;
-  return { sel, mes, diaria, mu, sd: Math.sqrt(v), dist: dist.tipo, rop, ss, roq, pos, riesgo, pedir, enDias, exceso: pos > rop + 3 * roq };
+  return { metodo, smape: o.fte === 'frepple' ? fp.smape : null, patron: PATRON[fp.patron] || '', mes, f1: o.fte === 'frepple' ? fp.f[0] : mes,
+    diaria, mu, sd: Math.sqrt(v), dist: dist.tipo, rop, ss, roq, eoq, pos, riesgo, pedir, enDias, exceso: pos > rop + 3 * roq };
 }
 const frVal = { ahora: r => r.pedir > 0, semana: r => !r.pedir && r.enDias <= 7, riesgo: r => r.riesgo >= .5, exceso: r => r.exceso, '': () => true };
 function pintarFre() {
   llenarLabs(); llenarClas();
-  const LT = Math.max(1, +$('frLT').value || 7), SL = +$('frSL').value, dR = Math.max(1, +$('frROQ').value || 30), cv = (p, v) => soles() ? v * p.k : v;
+  const o = { LT: Math.max(1, +$('frLT').value || 7), SL: +$('frSL').value, fte: $('frFte').value, min: Math.max(0, +$('frROQmin').value || 0),
+    max: Math.max(1, +$('frROQmax').value || 60), S: Math.max(0, +$('frS').value || 0), H: Math.max(0, +$('frH').value || 0) / 100 };
+  const LT = o.LT, SL = o.SL, cv = (p, v) => soles() ? v * p.k : v;
   const hoy = new Date((S.P.corte || '') + 'T12:00:00'), fecha = n => { const d = new Date(hoy); d.setDate(d.getDate() + Math.floor(n)); return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' }); };
-  $('frEyebrow').textContent = `Al ${S.P.corte.split('-').reverse().join('/')} · entrega en ${LT} días · nivel de servicio ${pct(SL)} · pedir para ${dR} días`;
+  $('frEyebrow').textContent = `Al ${S.P.corte.split('-').reverse().join('/')} · entrega en ${LT} días · nivel de servicio ${pct(SL)} · pronóstico: ${o.fte === 'frepple' ? 'motor de frePPLe' : 'el elegido en Pronóstico'} · pedido entre ${o.min} y ${o.max} días`;
   const todos = [];
   for (const p of S.P.p) {
     if (S.lab && labDe(p.c) !== S.lab) continue;
     if (!pasaClas(p) || bloqueado(p.c, 'TODAS')) continue;
-    const r = planFre(p, LT, SL, dR); if (r) { r.p = p; r.c = p.c; r.n = p.n; todos.push(r); }
+    const r = planFre(p, o); if (r) { r.p = p; r.c = p.c; r.n = p.n; todos.push(r); }
   }
   const cuenta = f => todos.filter(frVal[f]).length, ahora = todos.filter(frVal.ahora);
   $('frk1').textContent = nf0.format(ahora.length); $('frk1s').textContent = `${fmt(ahora.reduce((a, r) => a + cv(r.p, r.pedir), 0))} ${soles() ? 'soles' : 'cajas'} a pedir`;
@@ -1014,24 +1038,24 @@ function pintarFre() {
   const vis = lista.slice(0, S.frMostrar);
   $('frH2').textContent = { ahora: 'Pedir ahora', semana: 'Pedir en los próximos 7 días', riesgo: 'Riesgo de quiebre en el tiempo de entrega', exceso: 'Exceso de stock', '': 'Todos los productos con pronóstico' }[S.frVer];
   $('frNota').textContent = 'Clic en un producto para ver su ficha.';
-  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th>Tipo</th><th title="Pronóstico del mes que viene (método en uso)">Pronóst. mes</th><th>Venta diaria</th><th title="Demanda media en el tiempo de entrega ± desviación">Demanda en entrega</th><th>Distribución</th>
-    <th class="sep" title="Stock de seguridad">Seguridad</th><th title="Punto de pedido">ROP</th><th title="Cantidad a pedir">ROQ</th><th class="sep" title="Droguería + sucursales">Posición</th><th title="Probabilidad de quedarse sin stock antes de que llegue el pedido">Riesgo quiebre</th><th class="sep">Pedir</th><th>Cuándo</th></tr></thead><tbody>`;
+  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th>Tipo</th><th title="Patrón de la demanda (ADI y CV²)">Patrón</th><th title="Pronóstico de este mes">Pronóst. mes</th><th title="Promedio de los próximos 6 meses (frePPLe) ÷ 30">Venta diaria</th><th title="Demanda media en el tiempo de entrega ± desviación">Demanda en entrega</th><th>Distribución</th>
+    <th class="sep" title="Stock de seguridad">Seguridad</th><th title="Punto de pedido">ROP</th><th title="Cantidad a pedir: EOQ limitada por la cobertura mínima y máxima">ROQ</th><th class="sep" title="Droguería + sucursales">Posición</th><th title="Probabilidad de quedarse sin stock antes de que llegue el pedido">Riesgo quiebre</th><th class="sep">Pedir</th><th>Cuándo</th></tr></thead><tbody>`;
   for (const r of vis) {
     const p = r.p;
-    h += `<tr class="click" data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}">${esc(p.n)}${etiquetas(p)}<small class="sub">${esc(labDe(p.c))} · ${esc(corto(r.sel))}</small></td>
-      <td style="text-align:center">${catBadge(p.cat)}</td><td class="n">${fmtE(p, cv(p, r.mes))}</td><td class="n">${fmtE(p, cv(p, r.diaria))}</td>
+    h += `<tr class="click" data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}">${esc(p.n)}${etiquetas(p)}<small class="sub">${esc(labDe(p.c))} · ${esc(r.metodo)}${r.smape != null ? ` (sMAPE ${pct(r.smape)})` : ''}</small></td>
+      <td style="text-align:center">${catBadge(p.cat)}</td><td>${esc(r.patron)}</td><td class="n">${fmtE(p, cv(p, r.f1))}</td><td class="n">${fmtE(p, cv(p, r.diaria))}</td>
       <td class="n">${fmtE(p, cv(p, r.mu))} <small class="z">± ${fmtE(p, cv(p, r.sd))}</small></td><td><span class="tag">${r.dist}</span></td>
       <td class="n sep">${fmtE(p, cv(p, Math.max(0, r.ss)))}</td><td class="n big">${fmtE(p, cv(p, r.rop))}</td><td class="n">${fmtE(p, cv(p, r.roq))}</td>
       <td class="n sep ${r.pos <= r.rop ? 'neg' : ''}">${fmtS(p, cv(p, r.pos))}</td><td class="n ${r.riesgo >= .5 ? 'neg' : r.riesgo < .05 ? 'pos' : ''}">${pct(r.riesgo)}</td>
       <td class="n sep tot ent">${r.pedir ? fmt(cv(p, r.pedir)) : '·'}</td><td>${r.pedir ? '<span class="tag bloq">hoy</span>' : r.exceso ? '<span class="tag">exceso</span>' : r.enDias > 365 ? '> 1 año' : fecha(r.enDias) + ` <small class="z">(${nf0.format(Math.floor(r.enDias))} d)</small>`}</td></tr>`;
   }
-  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="13">Nada que mostrar con estos filtros.</td></tr>`;
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="14">Nada que mostrar con estos filtros.</td></tr>`;
   $('frTabla').innerHTML = h + '</tbody>'; ajustarC0($('frTabla'));
   $('frMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(lista.length)} medicamentos</span>` +
     (lista.length > vis.length ? `<button class="btn" id="frMas">Ver ${Math.min(PAGINA, lista.length - vis.length)} más</button>` : '');
   if ($('frMas')) $('frMas').onclick = () => { S.frMostrar += PAGINA; pintarFre(); };
 }
-['frLT', 'frSL', 'frROQ'].forEach(id => $(id).addEventListener('change', () => { S.frMostrar = PAGINA; pintarFre(); }));
+['frLT', 'frSL', 'frFte', 'frROQmin', 'frROQmax', 'frS', 'frH'].forEach(id => $(id).addEventListener('change', () => { S.frMostrar = PAGINA; pintarFre(); }));
 $('frVer').addEventListener('change', e => { S.frVer = e.target.value; S.frMostrar = PAGINA; pintarFre(); });
 $('frq').addEventListener('input', () => { S.frMostrar = PAGINA; pintarFre(); });
 $('frCards').addEventListener('click', e => { const b = e.target.closest('[data-ver]'); if (!b) return; S.frVer = b.dataset.ver; S.frMostrar = PAGINA; pintarFre(); });
@@ -1703,7 +1727,8 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610231300"></script>
-<script type="module" src="proyeccion.js?v=202610231300"></script>
+<script src="mapa.js?v=202610231500"></script>
+<script src="frepple.js?v=202610231500"></script>
+<script type="module" src="proyeccion.js?v=202610231500"></script>
 
 </body></html>
