@@ -100,24 +100,34 @@
     return items.sort((a, b) => b.s.length - a.s.length || b.t - a.t).slice(0, 3000);
   }
   async function publicar(o, aviso) {
-    if (!FB || S.ejemplo) { if (aviso) alert('Con datos de ejemplo la lista del equipo no se publica.'); return; }
+    if (!FB || S.ejemplo) { if (aviso) alert('Con datos de ejemplo la lista del equipo no se publica.'); return { ok: false, error: 'datos de ejemplo' }; }
     const items = listaFaltantes();
     $('suPub').textContent = 'Publicando la lista del equipo…';
     try {
       await FB.setDoc(FB.doc(FB.db, 'faltantes', 'actual'), { items, corte: S.P.corte, publicado: new Date().toISOString(), C: o.C, Sg: o.Sg, fte: o.fte, tipos: o.tipos });
       $('suPub').textContent = `Lista del equipo (0 en droguería): ${nf0.format(items.length)} productos · para ${o.C} + ${o.Sg} días · publicada a las ${new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}`;
+      S.suAuto = true; return { ok: true, n: items.length };
     } catch (e) {
-      $('suPub').textContent = 'No se pudo publicar la lista del equipo: ' + (e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules) en Firebase.' : e.message);
+      const t = e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules) en Firebase.' : e.message;
+      $('suPub').textContent = 'No se pudo publicar la lista del equipo: ' + t; S.suAuto = false;
+      return { ok: false, error: t };
     }
   }
   $('suPubBtn').addEventListener('click', () => publicar(opciones(), true));
+  // La página principal (Faltantes de droguería) la llama para generar la lista sin abrir este módulo:
+  // espera a que estén cargados los datos, calcula con los parámetros por defecto y publica.
+  window.publicarFaltantes = async () => {
+    for (let i = 0; i < 240 && !(S.P && S.db && !S.ejemplo); i++) await new Promise(r => setTimeout(r, 500));
+    if (!S.P || S.ejemplo) return { ok: false, error: 'los datos de la proyección no terminaron de cargar' };
+    const o = opciones(); calcular(o); return publicar(o, false);
+  };
 
   window.pintarSuc = function () {
     llenarLabs(); llenarClas();
     const o = opciones(), { filas } = calcular(o);
     escucharEstados();
     // la primera vez que se abre en la sesión se publica la lista del equipo con los parámetros por defecto
-    if (!S.suAuto && FB && S.db && !S.ejemplo) { S.suAuto = true; publicar(o); }
+    if (!S.suAuto && !S.suPublicando && FB && S.db && !S.ejemplo) { S.suPublicando = true; publicar(o).finally(() => S.suPublicando = false); }
     // sucursales
     const farms = S.P.farmacias;
     if ($('suFarm').options.length !== farms.length + 1) $('suFarm').innerHTML = `<option value="">Todas las sucursales</option>` + farms.map(f => `<option value="${esc(f)}">${esc(corto2(f))}</option>`).join('');

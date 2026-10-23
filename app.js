@@ -15,7 +15,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610232100";
+const VERSION_PROY = "202610232200";
 const VERSION_COMP = "202610212000";
 
 /* ===================== utilidades ===================== */
@@ -947,8 +947,26 @@ function textoEstado(e) {
     : e.estado === "transito" && e.llega ? `${t} · llega el ${fDia(e.llega)}`
     : e.estado === "alternativa" ? `${t}: ${(e.alternativas || []).map(a => `${a.c} ${a.n}`).join(" / ")}` : t;
 }
+// Solo el administrador: genera y publica la lista con los datos de la proyección (abre en segundo plano el
+// módulo Atención a sucursales, que es el que la calcula).
+async function generarFalt() {
+  if (!esAdmin() || S.fGenerando) return; S.fGenerando = true;
+  $("fsGenBtn").disabled = true; $("fsGenMsg").textContent = "Calculando con los datos de la proyección… (puede tardar un minuto)";
+  try {
+    if (!$("sucFrame").src) $("sucFrame").src = "proyeccion.html?solo=suc&v=" + VERSION_PROY;
+    let w = null;
+    for (let i = 0; i < 120 && !(w = $("sucFrame").contentWindow)?.publicarFaltantes; i++) await new Promise(r => setTimeout(r, 500));
+    const r = w?.publicarFaltantes ? await w.publicarFaltantes() : { ok: false, error: "no se pudo abrir Atención a sucursales" };
+    $("fsGenMsg").textContent = r.ok ? `Lista publicada: ${nf(r.n)} productos.` : "No se pudo: " + r.error;
+  } catch (e) { $("fsGenMsg").textContent = "No se pudo: " + (e.message || e); }
+  finally { S.fGenerando = false; $("fsGenBtn").disabled = false; }
+}
+$("fsGenBtn").addEventListener("click", generarFalt);
 function pintarFalt() {
   const F = S.falt, items = F?.items || [], f = S.fFil;
+  $("fsGen").hidden = !esAdmin();
+  // si aún no hay lista, el administrador la genera al abrir esta vista
+  if (esAdmin() && S.falt && !F?.publicado && !S.fAutoGen) { S.fAutoGen = true; generarFalt(); }
   $("fsSub").textContent = F?.publicado
     ? `Productos en 0 en droguería que piden las sucursales para ${F.C} días + ${F.Sg} de seguridad (datos al ${fmtF(F.corte)}, lista del ${new Date(F.publicado).toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}). Primero los que faltan en más sucursales y en más cantidad.`
     : "Aún no hay lista publicada. Abastecimiento la publica desde Atención a sucursales.";

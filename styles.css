@@ -395,3 +395,4 @@ legend { padding: 0; margin-bottom: 8px }
 .fs-form .buscador { position: relative }
 .fs-mas { padding: 12px; text-align: center }
 tr.abierta td { background: #f6f8fb }
+.fs-gen { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 360px; text-align: right }
