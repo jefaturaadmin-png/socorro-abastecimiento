@@ -76,9 +76,20 @@
     for (const p of S.P.p) {
       const red = [];
       for (const f of S.P.farmacias) {
+        const r = filaBase(p, f);
+        if (r.d || r.st || r.aj) red.push(r);   // los productos con ajuste se listan siempre
+      }
+      if (!red.length) continue;
+      repartir(p, red);
+      porProd.set(p.c, { red, drog: red.drogIni });
+      filas.push(...red);
+    }
+    cache = { filas, porProd }; return cache;
+  }
+  // fila de un producto en una sucursal con su criterio (también para los que no tienen venta ni stock)
+  function filaBase(p, f) {
         const st = +(window.STOCK_TODOS?.[p.c]?.[f]?.[0] ?? p.st?.[f] ?? 0) || 0, c = p.catF?.[f] || 'E';
         const o = cfgDe(f, p.c), aj = ajProd(f, p.c), dv = diaria(p, f, o), d = dv.d;
-        if (!d && !st) continue;
         const bloq = bloqueado(p.c, f), nec = d * (o.C + o.Sg), seg = d * o.Sg, cob = d > 0 ? st / d : Infinity;
         let pide = 0, nota = '';
         if (bloq) nota = 'bloqueado';
@@ -88,12 +99,12 @@
         else if (o.tipos !== 'todos' && c === 'B') pide = d > 0 && st < nec ? 1 : 0;   // B: 1 caja solo si su stock no cubre los días elegidos
         else if (d > 0) nota = c === 'C' ? 'a pedido' : c === 'D' ? 'solo con pedido' : '';
         const exceso = !bloq && st > 0 && (d === 0 ? st >= 1 : st - nec * 2 >= 1) ? Math.floor(d === 0 ? st : st - nec) : 0;
-        red.push({ p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide, nota, bloq, exceso, o, aj, urgente: d > 0 && st < seg && !bloq && o.modo !== 'excluir' });
-      }
-      if (!red.length) continue;
+        return { p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide, nota, bloq, exceso, o, aj, urgente: d > 0 && st < seg && !bloq && o.modo !== 'excluir' };
+  }
+  function repartir(p, red) {
       // reparto de lo que hay en droguería: primero las sucursales con menos días de cobertura
       let disp = Math.max(0, +(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) || 0);
-      const dispIni = disp;
+      red.drogIni = disp;
       for (const r of [...red].filter(r => r.pide > 0).sort((a, b) => a.cob - b.cob)) {
         r.drog = Math.min(r.pide, Math.floor(disp)); disp -= r.drog; r.falta = r.pide - r.drog;
       }
@@ -104,10 +115,11 @@
         for (const x of conExc) { if (!falta) break; const q = Math.min(falta, x.exceso - (x.dado || 0)); if (q > 0) { r.desde.push([x.f, q]); x.dado = (x.dado || 0) + q; falta -= q; } }
         r.comprar = falta;
       }
-      porProd.set(p.c, { red, drog: dispIni });
-      filas.push(...red);
-    }
-    cache = { filas, porProd }; return cache;
+  }
+  // el producto en toda la red aunque no esté en la lista (sin venta ni stock en ninguna sucursal)
+  function redDe(p) {
+    const x = cache?.porProd.get(p.c); if (x) return x;
+    const red = S.P.farmacias.map(f => filaBase(p, f)); repartir(p, red); return { red, drog: red.drogIni };
   }
   let cacheDe = null;
 
@@ -211,12 +223,19 @@
     $('suChips').innerHTML = [...porF.entries()].sort((a, b) => b[1].u - a[1].u || b[1].v - a[1].v).map(([f, x]) =>
       `<button type="button" class="su-chip" data-farm="${esc(f)}" aria-pressed="${S.suFarm === f}"><b>${esc(corto2(f))}</b><span>${nf0.format(x.n)} prod. · ${nf0.format(x.cj)} cj · ${soles2(x.v)}</span>${x.u ? `<i>${x.u} urgentes</i>` : ''}</button>`).join('')
       || '<span class="z">Ninguna sucursal necesita envíos con estos parámetros.</span>';
-    const lista = filtroTexto(base.filter(r => S.suVer !== 'ajuste' ? VER[S.suVer](r) : !!r.aj).map(r => Object.assign(r, { c: r.p.c, n: r.p.n })), val('suq'))
+    // al buscar se muestran todas las coincidencias de la sucursal, aunque no tengan venta ni stock ni pasen "Mostrar"
+    const q = val('suq').trim();
+    const deBusqueda = () => {
+      const prods = filtroTexto(S.P.p.filter(p => (!S.lab || labDe(p.c) === S.lab) && pasaClas(p)), q).slice(0, 300), out = [];
+      for (const p of prods) { const red = redDe(p).red; for (const f of S.suFarm ? [S.suFarm] : S.P.farmacias) { let r = red.find(x => x.f === f); if (!r && S.suFarm) r = filaBase(p, f); if (r) out.push(r); } }
+      return out;
+    };
+    const lista = (q ? deBusqueda() : base.filter(r => S.suVer !== 'ajuste' ? VER[S.suVer](r) : !!r.aj)).map(r => Object.assign(r, { c: r.p.c, n: r.p.n }))
       .sort((a, b) => S.suVer === 'exceso' ? b.exceso * (b.p.k || 0) - a.exceso * (a.p.k || 0) : (b.urgente - a.urgente) || a.cob - b.cob || b.pide - a.pide);
     const vis = lista.slice(0, S.suMostrar), todas = !S.suFarm;
     $('suTitulo').textContent = todas ? 'Todas las sucursales' : corto2(S.suFarm);
     $('suEyebrow').textContent = (todas ? 'Cada sucursal con su criterio · general: ' : '') + `atender para ${o.C} días + ${o.Sg} de seguridad · venta diaria: ${o.fte === 'motor' ? 'motor estadístico' : `ventas de los últimos ${o.fte} días`} · ${o.tipos === 'todos' ? 'todos los productos con venta' : 'tipo A completo, tipo B 1 unidad si no le alcanza'}`;
-    $('suH2').textContent = { enviar: 'Enviar', urgente: 'Urgentes: menos stock que los días de seguridad', comprar: 'No alcanza lo de droguería', exceso: 'Exceso en la sucursal', ajuste: 'Productos con ajuste propio', '': 'Todos' }[S.suVer];
+    $('suH2').textContent = q ? `Búsqueda "${q}" en ${todas ? 'todas las sucursales' : corto2(S.suFarm)} (sin filtro Mostrar)` : { enviar: 'Enviar', urgente: 'Urgentes: menos stock que los días de seguridad', comprar: 'No alcanza lo de droguería', exceso: 'Exceso en la sucursal', ajuste: 'Productos con ajuste propio', '': 'Todos' }[S.suVer];
     let h = `<thead><tr><th class="c0">Código</th><th class="c1">Producto</th>${todas ? '<th style="text-align:left">Sucursal</th>' : ''}<th>Tipo</th><th title="Días que alcanza el stock de la sucursal">Cobertura</th>
       <th>Venta diaria</th><th>Stock sucursal</th><th title="Venta diaria × (días + seguridad)">Necesita</th><th class="sep">Enviar</th><th title="Lo que se puede mandar desde droguería">De droguería</th><th style="text-align:left">Lo que falta</th><th>Valor</th></tr></thead><tbody>`;
     for (const r of vis) {
@@ -240,9 +259,9 @@
   /* ---------- detalle: el producto en la sucursal y en toda la red ---------- */
   function pintarDetalle(o) {
     const [c, f] = (S.suCur || '').split('|'), p = c && S.idx.get(c), box = $('suDet');
-    const red = p && cache?.porProd.get(c);
+    const red = p && redDe(p);
     box.hidden = !red; if (!red) return;
-    const r = red.red.find(x => x.f === f) || red.red[0];
+    const r = red.red.find(x => x.f === f) || filaBase(p, f);
     $('suDTit').textContent = p.n;
     pintarAjuste(p, r);
     $('suDSub').innerHTML = `Código <code>${esc(p.c)}</code> · ${esc(labDe(p.c) || 'sin laboratorio')} · <b>${esc(corto2(r.f))}</b> · venta diaria según ${esc(r.metodo)}${S.suEstados.get(p.c) ? ' · ' + tagEstado(p.c) : ''}`;
@@ -252,7 +271,7 @@
       { label: `Venta en ${corto2(r.f)}`, data: [...hv.slice(-n), ...fut.map(() => null)], borderColor: '#7cb342', backgroundColor: '#7cb342', tension: .15, pointRadius: 2 },
       ...(fut.length ? [{ label: 'Pronóstico', data: [...hv.slice(-n).map(() => null), ...fut], borderColor: '#e53935', backgroundColor: '#e53935', tension: .15, pointRadius: 2 }] : [])
     ] }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'right' } }, scales: { y: { beginAtZero: true } } } });
-    const filas = [...red.red].sort((a, b) => (a.f === r.f ? -1 : b.f === r.f ? 1 : a.cob - b.cob));
+    const filas = [...(red.red.includes(r) ? red.red : [r, ...red.red])].sort((a, b) => (a.f === r.f ? -1 : b.f === r.f ? 1 : a.cob - b.cob));
     $('suRed').innerHTML = `<thead><tr><th class="c1 solo">Sucursal</th><th>Tipo</th><th>Venta diaria</th><th>Stock</th><th>Cobertura</th><th>Necesita</th><th>Enviar</th><th>De droguería</th><th>Sobra</th></tr></thead><tbody>
       <tr class="tot"><td class="c1 solo"><b>Droguería FS</b></td><td></td><td></td><td class="n"><b>${fmtS(p, red.drog)}</b></td><td></td><td></td><td></td><td></td><td></td></tr>` +
       filas.map(x => `<tr${x.f === r.f ? ' class="sel"' : ''}><td class="c1 solo">${esc(corto2(x.f))}</td><td style="text-align:center">${catBadge(x.cat)}</td><td class="n">${fmtE(p, x.d)}</td><td class="n">${fmtS(p, x.st)}</td>
