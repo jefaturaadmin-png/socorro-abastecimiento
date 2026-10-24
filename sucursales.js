@@ -37,11 +37,18 @@
   function pintarControles() {
     const o = cfgSuc(S.suFarm);
     $('suCob').value = o.C; $('suSeg').value = o.Sg; $('suFte').value = o.fte; $('suTip').value = o.tipos; marcarPres();
-    const nP = Object.keys(CFG.prod[S.suFarm || '*'] || {}).length, propias = Object.keys(CFG.suc).length;
+    // productos con ajuste que aplican aquí: los de esta sucursal y los de "todas las sucursales"
+    // con "Todas": los ajustes de todas las sucursales, cada uno con su sucursal
+    const ajs = S.suFarm
+      ? [...Object.entries(CFG.prod[S.suFarm] || {}).map(([c, a]) => [c, a, S.suFarm]), ...Object.entries(CFG.prod['*'] || {}).filter(([c]) => !CFG.prod[S.suFarm]?.[c]).map(([c, a]) => [c, a, '*'])]
+      : Object.entries(CFG.prod).flatMap(([k, m]) => Object.entries(m).map(([c, a]) => [c, a, k]));
+    const nP = ajs.length, propias = Object.keys(CFG.suc).length;
+    const lista = nP ? ` <button type="button" class="btn sm" id="suVerAj">✎ Ver ${nP} producto${nP > 1 ? 's' : ''} con ajuste</button>
+      <span class="su-ajs">${ajs.slice(0, 12).map(([c, a, d]) => `<button type="button" class="su-ajp" data-aj="${esc(c)}" data-f="${esc(d)}" title="${esc(ajTxt(a))}">${esc(c)} ${esc(S.idx.get(c)?.n || '')} · <b>${d === '*' ? 'todas' : esc(nomSuc(d))}</b></button>`).join('')}${nP > 12 ? ` <span class="z">y ${nP - 12} más</span>` : ''}</span>` : '';
     $('suCrit').innerHTML = !S.suFarm
-      ? `<b>Criterio general</b>: lo usan las sucursales que no tienen uno propio${propias ? ` (${propias} tienen criterio propio: ${Object.keys(CFG.suc).map(nomSuc).map(esc).join(', ')})` : ''}.${nP ? ` ${nP} productos con ajuste para todas las sucursales.` : ''}`
-      : CFG.suc[S.suFarm] ? `<b>Criterio propio de ${esc(nomSuc(S.suFarm))}</b>. <button type="button" class="btn sm" id="suGeneral">Usar el criterio general</button>${nP ? ` · ${nP} productos con ajuste en esta sucursal.` : ''}`
-      : `${esc(nomSuc(S.suFarm))} usa el <b>criterio general</b>. Si cambias algo arriba, se guarda solo para ${esc(nomSuc(S.suFarm))}.${nP ? ` ${nP} productos con ajuste en esta sucursal.` : ''}`;
+      ? `<b>Criterio general</b>: lo usan las sucursales que no tienen uno propio${propias ? ` (${propias} tienen criterio propio: ${Object.keys(CFG.suc).map(nomSuc).map(esc).join(', ')})` : ''}.${lista}`
+      : CFG.suc[S.suFarm] ? `<b>Criterio propio de ${esc(nomSuc(S.suFarm))}</b>. <button type="button" class="btn sm" id="suGeneral">Usar el criterio general</button>${lista}`
+      : `${esc(nomSuc(S.suFarm))} usa el <b>criterio general</b>. Si cambias algo arriba, se guarda solo para ${esc(nomSuc(S.suFarm))}.${lista}`;
   }
   function leerControles() {
     const o = { C: Math.max(1, +val('suCob') || 7), Sg: Math.max(0, +val('suSeg') || 0), fte: val('suFte'), tipos: val('suTip') };
@@ -304,7 +311,14 @@
     for (const k of Object.keys(CFG.prod)) if (!Object.keys(CFG.prod[k]).length) delete CFG.prod[k];
     guardarCfg(); window.pintarSuc();
   });
-  $('suCrit').addEventListener('click', e => { if (e.target.closest('#suGeneral') && S.suFarm) { delete CFG.suc[S.suFarm]; guardarCfg(); otra(); } });
+  $('suCrit').addEventListener('click', e => {
+    if (e.target.closest('#suGeneral') && S.suFarm) { delete CFG.suc[S.suFarm]; guardarCfg(); return otra(); }
+    // ver la lista de productos con ajuste, o abrir uno
+    if (e.target.closest('#suVerAj')) { S.suVer = 'ajuste'; $('suq').value = ''; otra(); return $('suTabla').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    const b = e.target.closest('[data-aj]'); if (!b) return;
+    const c = b.dataset.aj, f = S.suFarm || (b.dataset.f !== '*' ? b.dataset.f : S.P.farmacias[0]);
+    S.suCur = c + '|' + f; window.pintarSuc(); $('suDet').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 
   /* ---------- exportar a Excel (CSV): lista de despacho ---------- */
   $('suXls').addEventListener('click', () => {
