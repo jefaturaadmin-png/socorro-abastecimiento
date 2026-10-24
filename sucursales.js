@@ -70,17 +70,19 @@
 
   /* ---------- venta diaria de la sucursal ---------- */
   const motor = new Map(); let motorDe = null;
-  function diaria(p, f, o) {
-    if (o.fte === 'motor') {
-      if (motorDe !== S.P) { motor.clear(); motorDe = S.P; }
-      const k = p.c + '|' + f; let r = motor.get(k);
-      if (r === undefined) {
-        const hv = S.P.hfm && p.hf?.[f] ? p.hf[f] : (p.h || []).map(v => v == null ? null : v * (p.s?.[f] || 0));
-        const fp = window.FREPPLE.pronosticar(hv, 3); r = { d: Math.max(0, fp.f.reduce((a, v) => a + v, 0) / 3 / 30), metodo: fp.metodo, hv, f: fp.f };
-        motor.set(k, r);
-      }
-      return r;
+  // pronóstico estadístico de la venta mensual del producto en una sucursal (se guarda para no repetirlo)
+  function motorEn(p, f) {
+    if (motorDe !== S.P) { motor.clear(); motorDe = S.P; }
+    const k = p.c + '|' + f; let r = motor.get(k);
+    if (r === undefined) {
+      const hv = S.P.hfm && p.hf?.[f] ? p.hf[f] : (p.h || []).map(v => v == null ? null : v * (p.s?.[f] || 0));
+      const fp = window.FREPPLE.pronosticar(hv, 3); r = { d: Math.max(0, fp.f.reduce((a, v) => a + v, 0) / 3 / 30), metodo: fp.metodo, hv, f: fp.f, fp };
+      motor.set(k, r);
     }
+    return r;
+  }
+  function diaria(p, f, o) {
+    if (o.fte === 'motor') return motorEn(p, f);
     const n = +o.fte, v = ventaDias(p, f, n);
     return { d: v == null ? diariaHist(p, f) : v / n, metodo: v == null ? 'historial (sin kardex por día)' : `ventas de ${n} días` };
   }
@@ -200,9 +202,19 @@
     try {
       for (const f of S.P.farmacias) {
         const items = cache.filas.filter(r => r.f === f && (r.pide > 0 || r.urgente)).sort((a, b) => (b.urgente - a.urgente) || a.cob - b.cob || b.pide - a.pide).slice(0, 2500)
-          .map(r => ({ c: r.p.c, n: r.p.n, l: labDe(r.p.c) || '', cat: r.cat, fr: r.p.fr || 1, d: r3(r.d), st: r3(r.st), nec: r3(r.nec), cob: isFinite(r.cob) ? Math.floor(r.cob) : null,
-            pide: r.pide, drog: r.drog || 0, falta: r.falta || 0, urg: !!r.urgente, ...(r.aj ? { aj: ajTxt(r.aj) } : {}) }));
-        const o = cfgSuc(f), datos = { suc: f, nombre: nomSuc(f), items, corte: S.P.corte, publicado: hoy, C: o.C, Sg: o.Sg, fte: o.fte, tipos: o.tipos, propio: !!CFG.suc[f] };
+          .map(r => {
+            // información del producto en esta sucursal para el botón ⓘ: su venta de 12 meses, pronóstico y patrón
+            const m = motorEn(r.p, f), hv = (m.hv || []).slice(-12).map(v => r3(v || 0)), x = clas(r.p);
+            return { c: r.p.c, n: r.p.n, l: labDe(r.p.c) || '', cat: r.cat, fr: r.p.fr || 1, d: r3(r.d), st: r3(r.st), nec: r3(r.nec), cob: isFinite(r.cob) ? Math.floor(r.cob) : null,
+              pide: r.pide, drog: r.drog || 0, falta: r.falta || 0, urg: !!r.urgente, ...(r.aj ? { aj: ajTxt(r.aj) } : {}),
+              ...(r.desde?.length ? { de: r.desde.map(([g, q]) => ({ f: nomSuc(g), q })) } : {}), ...(r.comprar ? { cmp: r.comprar } : {}),
+              hv, pr: m.f.map(r3), met: m.metodo, pat: m.fp?.patron || '', adi: m.fp?.adi != null ? r3(m.fp.adi) : null, cv2: m.fp?.cv2 != null ? r3(m.fp.cv2) : null,
+              li: x.t || '', ge: x.g || '', fa: x.f || '', k: r3(r.p.k || 0), vd: r.metodo };
+          });
+        // un documento de Firestore admite hasta 1 MB
+        while (items.length && JSON.stringify(items).length > 880000) items.pop();
+        const o = cfgSuc(f), datos = { suc: f, nombre: nomSuc(f), items, corte: S.P.corte, publicado: hoy, C: o.C, Sg: o.Sg, fte: o.fte, tipos: o.tipos, propio: !!CFG.suc[f],
+          meses: (S.P.hfm || []).slice(-12), fm: S.P.fm.slice(0, 3) };
         await FB.setDoc(FB.doc(FB.db, 'atencion', f), window.parent.JSON.parse(JSON.stringify(datos)));
       }
       return { ok: true };

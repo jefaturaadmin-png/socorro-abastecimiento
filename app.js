@@ -15,7 +15,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610241500";
+const VERSION_PROY = "202610242100";
 const VERSION_COMP = "202610212000";
 
 /* ===================== utilidades ===================== */
@@ -1126,15 +1126,55 @@ function pintarAten() {
   $("atTit").textContent = `${nf(lista.length)} productos · ${nf(lista.filter(i => i.urg).length)} urgentes`;
   const colCob = i => i.d <= 0 ? "#9e9e9e" : i.cob == null ? "#1e6bb8" : i.cob < A.Sg ? "#d9302c" : i.cob < A.C + A.Sg ? "#e0a030" : "#43a047";
   $("atTabla").innerHTML = `<thead><tr><th>Producto</th><th>Tipo</th><th class="der">Cobertura</th><th class="der">Venta diaria</th><th class="der">Tu stock</th><th class="der">Necesita (${A.C} + ${A.Sg} d)</th><th class="der">Se te enviará</th><th>Nota</th></tr></thead><tbody>` +
-    (lista.length ? lista.map(i => `<tr><td class="p"><b>${esc(i.c)} - ${esc(i.n)}</b><code>${esc(i.l)}</code></td>
+    (lista.length ? lista.map(i => `<tr><td class="p"><b>${esc(i.c)} - ${esc(i.n)}</b><code>${esc(i.l)}</code>${i.hv ? `<button type="button" class="at-ibtn" data-info="${esc(i.c)}" title="Ver la información de este producto en tu local">ⓘ Información</button>` : ""}</td>
       <td><span class="at-cat ${esc(i.cat)}">${esc(i.cat)}</span></td>
       <td class="der"><span class="at-cob" style="background:${colCob(i)}">${i.d <= 0 ? "sin venta" : i.cob == null ? "–" : nf(i.cob) + " días"}</span></td>
       <td class="der">${fCaja(i.d, i.fr)}</td><td class="der">${fCaja(i.st, i.fr)}</td><td class="der">${fCaja(i.nec, i.fr)}</td>
       <td class="der"><b>${i.pide ? nf(i.pide) : "–"}</b></td>
-      <td>${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td></tr>`).join("")
+      <td>${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${(i.de || []).map(x => `<span class="tag t-ok">${nf(x.q)} de ${esc(x.f)}</span>`).join(" ")}${i.cmp ? `<span class="tag t-rech">${nf(i.cmp)} por comprar</span>` : ""}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td></tr>`).join("")
       : `<tr class="vacia"><td colspan="8">Nada que mostrar.</td></tr>`) + "</tbody>";
 }
 $("atVer").addEventListener("change", e => { S.atVer = e.target.value; pintarAten(); });
+// ⓘ Información del producto en el local: datos, movimiento de 12 meses, pronóstico y lo que se le enviará
+const MESES_C = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const etM = m => { const [y, mo] = String(m).split("-"); return MESES_C[+mo - 1] + " " + y.slice(2); };
+const PATRON_T = { smooth: "Suave (vende parejo)", erratic: "Errático (cantidades muy variables)", intermittent: "Intermitente (meses sin venta)", lumpy: "Irregular" };
+const NOM_TIPO = { A: "Venta mensual", B: "Venta cada 2 meses", C: "Venta cada 4 meses", D: "Ventas al año", E: "Sin venta" };
+function graficoMeses(meses, hv, fm, pr, fr) {
+  const vals = [...hv, ...pr], max = Math.max(1, ...vals), W = 640, H = 200, n = vals.length, bw = W / n;
+  const barras = vals.map((v, i) => { const h = v / max * (H - 44), x = i * bw + 4, fut = i >= hv.length;
+    return `<rect x="${x}" y="${H - 20 - h}" width="${bw - 8}" height="${h}" rx="3" fill="${fut ? "#e53935" : "#7cb342"}" ${fut ? 'opacity=".75"' : ""}><title>${etM([...meses, ...fm][i] || "")}: ${fCaja(v, fr)}</title></rect>
+      <text x="${x + (bw - 8) / 2}" y="${H - 24 - h}" text-anchor="middle" font-size="10" fill="#555">${v ? fCaja(v, fr) : ""}</text>
+      <text x="${x + (bw - 8) / 2}" y="${H - 6}" text-anchor="middle" font-size="10" fill="#777">${etM([...meses, ...fm][i] || "")}</text>`; }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" class="at-graf" role="img" aria-label="Venta mensual y pronóstico">${barras}</svg>
+    <div class="at-ley"><span><i style="background:#7cb342"></i>Venta en tu local</span><span><i style="background:#e53935;opacity:.75"></i>Pronóstico</span></div>`;
+}
+function abrirInfo(c) {
+  const A = S.aten, i = (A?.items || []).find(x => x.c === c); if (!i) return;
+  const fila = (k, v) => `<tr><th>${k}</th><td>${v}</td></tr>`, s6 = i.hv.slice(-6).reduce((a, v) => a + v, 0), s12 = i.hv.reduce((a, v) => a + v, 0), conV = i.hv.filter(v => v > 0).length;
+  const soles = v => i.k ? " · S/ " + nf(Math.round(v * i.k)) : "";
+  $("atInfoC").innerHTML = `<div class="at-info-cab"><div><h2>${esc(i.n)}</h2><div class="muted">Código ${esc(i.c)} · ${esc(i.l)} · ${esc(nombreFarm(A.suc))}</div></div>
+      <button type="button" class="btn sm" data-cerrar-info aria-label="Cerrar">✕</button></div>
+    <div class="at-info-g">
+      <section class="at-box"><h3>Producto</h3><table class="at-kv">
+        ${fila("Laboratorio", esc(i.l) || "–")}${fila("Línea", esc(i.li) || "–")}${fila("Genérico", esc(i.ge) || "–")}${fila("Familia", esc(i.fa) || "–")}
+        ${fila("Tipo en tu local", `<span class="at-cat ${esc(i.cat)}">${esc(i.cat)}</span> ${NOM_TIPO[i.cat] || ""}`)}
+        ${fila("Patrón de venta", esc(PATRON_T[i.pat] || "–"))}
+        ${fila("Venta últimos 6 meses", fCaja(s6, i.fr) + soles(s6))}${fila("Venta últimos 12 meses", fCaja(s12, i.fr) + soles(s12))}
+        ${fila("Meses con venta (últimos 12)", conV)}</table></section>
+      <section class="at-box"><h3>En tu local hoy</h3><table class="at-kv">
+        ${fila("Tu stock", fCaja(i.st, i.fr))}${fila("Venta diaria", `${fCaja(i.d, i.fr)} <small class="muted">(${esc(i.vd || "")})</small>`)}
+        ${fila("Cobertura", i.d <= 0 ? "sin venta" : i.cob == null ? "–" : nf(i.cob) + " días")}${fila(`Necesita (${A.C} + ${A.Sg} días)`, fCaja(i.nec, i.fr))}
+        ${fila("Se te enviará", `<b>${i.pide ? nf(i.pide) : "–"}</b>`)}
+        ${i.pide ? fila("Sale de", [i.drog ? `${nf(i.drog)} de droguería` : "", ...(i.de || []).map(x => `${nf(x.q)} de ${esc(x.f)}`), i.cmp ? `${nf(i.cmp)} por comprar` : ""].filter(Boolean).join(" · ") || "–") : ""}
+        ${i.aj ? fila("Criterio propio", esc(i.aj)) : ""}</table></section>
+    </div>
+    <section class="at-box"><h3>Movimiento en tu local y pronóstico</h3>${graficoMeses(A.meses || [], i.hv, A.fm || [], i.pr || [], i.fr)}
+      <p class="muted" style="margin:6px 12px 12px">Pronóstico de los próximos 3 meses con el método estadístico (${esc(i.met || "")}).</p></section>`;
+  $("atInfo").showModal();
+}
+$("atTabla").addEventListener("click", e => { const b = e.target.closest("[data-info]"); if (b) abrirInfo(b.dataset.info); });
+$("atInfo").addEventListener("click", e => { if (e.target.closest("[data-cerrar-info]") || e.target === $("atInfo")) $("atInfo").close(); });
 $("atQ").addEventListener("input", e => { S.atQ = e.target.value; pintarAten(); });
 $("atSuc").addEventListener("change", e => { S.atSuc = e.target.value; escucharAten(); pintarAten(); });
 
