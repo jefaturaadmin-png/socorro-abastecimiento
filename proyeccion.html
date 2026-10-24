@@ -248,6 +248,8 @@ main.sin-sesion > section { display: none !important }
 .tag.su-est.transito { background: #dff0ec; color: #1f6b5f } .tag.su-est.pendiente { background: #fcf0d9; color: #7a4a00 }
 .su-crit { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; font-size: 13.5px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center }
 .su-aj { color: #5b3fa8; font-weight: 600 }
+.su-masivo { margin: 0 0 14px } .su-masivo > p { margin: 10px 12px; font-size: 13.5px }
+.su-est-g { font-size: 12px; font-weight: 600; color: var(--ok, #1f7a6d); margin-right: 6px }
 .su-ajs { display: inline-flex; flex-wrap: wrap; gap: 6px }
 .su-ajp { font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 99px; border: 1px solid #d8cdf3; background: #f3effc; color: #47308a; cursor: pointer }
 .su-ajp:hover { border-color: #5b3fa8 }
@@ -542,6 +544,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { d
       </div>
     </div>
     <div class="su-crit" id="suCrit"></div>
+    <div class="est-box su-masivo" id="suMasivo" hidden></div>
     <div class="qcards" id="suCards">
       <button type="button" class="qcard" data-ver="enviar"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg></i><span>Enviar</span><b id="suk1">–</b><small id="suk1s">productos</small></button>
       <button type="button" class="qcard roja" data-ver="urgente"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/></svg></i><span>Urgentes</span><b id="suk2">–</b><small>stock menor a los días de seguridad</small></button>
@@ -1932,7 +1935,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610241500"></script>
 <script src="frepple.js?v=202610241500"></script>
-<script src="sucursales.js?v=202610241800"></script>
+<script src="sucursales.js?v=202610241900"></script>
 <script src="estadistica.js?v=202610241500"></script>
 <script type="module" src="proyeccion.js?v=202610241500"></script>
 

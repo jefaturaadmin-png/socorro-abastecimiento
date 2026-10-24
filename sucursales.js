@@ -12,10 +12,13 @@
   const DEF = { C: 7, Sg: 7, fte: '30', tipos: 'ab' };
   let CFG = { def: { ...DEF }, suc: {}, prod: {} }, cfgListo = false, cfgCargando = false, cfgVer = 0;
   async function cargarCfg() {
-    if (cfgListo || cfgCargando) return; cfgCargando = true;
+    // Se lee solo cuando ya están tus datos (al abrir, la página muestra un momento datos de ejemplo):
+    // así no se trabaja con el criterio por defecto ni se pisa lo guardado.
+    if (cfgListo || cfgCargando || !S.db || S.ejemplo) return; cfgCargando = true;
     try {
-      if (S.db && !S.ejemplo) { const d = await S.db.doc('config/atencion_cfg').get(); if (d.exists) { const x = d.data(); CFG = { def: { ...DEF, ...(x.def || {}) }, suc: x.suc || {}, prod: x.prod || {} }; } cfgListo = true; }
-      else if (S.ejemplo) cfgListo = true;
+      const d = await S.db.doc('config/atencion_cfg').get();
+      if (d.exists) { const x = d.data(); CFG = { def: { ...DEF, ...(x.def || {}) }, suc: x.suc || {}, prod: x.prod || {} }; }
+      cfgListo = true;
     } catch (e) { console.warn(e); }
     cfgCargando = false; cfgVer++; if (cfgListo && S.vista === 'suc') window.pintarSuc();
   }
@@ -23,8 +26,11 @@
   function guardarCfg() {
     cfgVer++; clearTimeout(tGuardar);
     tGuardar = setTimeout(async () => {
-      if (!S.db || S.ejemplo) return;
-      try { await S.db.doc('config/atencion_cfg').set(CFG); $('suPub').textContent = 'Criterio guardado. Actualizando lo que ven las sucursales…'; await publicar(); }
+      if (!S.db || S.ejemplo || !cfgListo) return;
+      try {
+        await S.db.doc('config/atencion_cfg').set(CFG); S.suGuardado = new Date();
+        $('suPub').textContent = 'Criterio guardado. Actualizando lo que ven las sucursales…'; pintarControles(); await publicar();
+      }
       catch (e) { $('suPub').textContent = 'No se pudo guardar el criterio: ' + (e.message || e); }
     }, 1200);
   }
@@ -49,8 +55,13 @@
       ? `<b>Criterio general</b>: lo usan las sucursales que no tienen uno propio${propias ? ` (${propias} tienen criterio propio: ${Object.keys(CFG.suc).map(nomSuc).map(esc).join(', ')})` : ''}.${lista}`
       : CFG.suc[S.suFarm] ? `<b>Criterio propio de ${esc(nomSuc(S.suFarm))}</b>. <button type="button" class="btn sm" id="suGeneral">Usar el criterio general</button>${lista}`
       : `${esc(nomSuc(S.suFarm))} usa el <b>criterio general</b>. Si cambias algo arriba, se guarda solo para ${esc(nomSuc(S.suFarm))}.${lista}`;
+    $('suCrit').innerHTML = `<span class="su-est-g">${!cfgListo && !S.ejemplo ? '⏳ Leyendo criterios guardados…' : S.suGuardado ? `✓ Guardado a las ${S.suGuardado.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}` : '✓ Criterios guardados'}</span>`
+      + $('suCrit').innerHTML + ` <button type="button" class="btn sm" id="suMasivoBtn">✎ Ajustar varios productos a la vez</button>`;
   }
+  // no se cambia nada hasta tener leído lo guardado
+  const puedeEditar = () => { if (cfgListo || S.ejemplo) return true; alert('Todavía se están leyendo los criterios guardados. Espera unos segundos y vuelve a intentarlo.'); pintarControles(); return false; };
   function leerControles() {
+    if (!puedeEditar()) return;
     const o = { C: Math.max(1, +val('suCob') || 7), Sg: Math.max(0, +val('suSeg') || 0), fte: val('suFte'), tipos: val('suTip') };
     if (S.suFarm) CFG.suc[S.suFarm] = o; else CFG.def = o;
     guardarCfg();
@@ -260,6 +271,7 @@
       (lista.length > vis.length ? `<button class="btn" id="suMas">Ver ${Math.min(PAGINA, lista.length - vis.length)} más</button>` : '');
     if ($('suMas')) $('suMas').onclick = () => { S.suMostrar += PAGINA; window.pintarSuc(); };
     S.suLista = lista;
+    pintarMasivo();
     pintarDetalle(o);
   };
 
@@ -302,6 +314,7 @@
     const [c, f] = (S.suCur || '').split('|'); if (!c) return;
     if (e.target.closest('#ajQuitar')) { for (const k of [f, '*']) if (CFG.prod[k]) { delete CFG.prod[k][c]; if (!Object.keys(CFG.prod[k]).length) delete CFG.prod[k]; } guardarCfg(); return window.pintarSuc(); }
     if (!e.target.closest('#ajGuardar')) return;
+    if (!puedeEditar()) return;
     const n = id => val(id) === '' ? undefined : Math.max(0, +val(id));
     const a = { fte: val('ajFte') || undefined, C: n('ajC'), Sg: n('ajSg'), modo: val('ajModo') || undefined };
     Object.keys(a).forEach(k => a[k] === undefined && delete a[k]);
@@ -311,7 +324,39 @@
     for (const k of Object.keys(CFG.prod)) if (!Object.keys(CFG.prod[k]).length) delete CFG.prod[k];
     guardarCfg(); window.pintarSuc();
   });
+  // ajuste de varios productos: el mismo ajuste a todos los productos de la lista que se ve (con sus filtros)
+  function pintarMasivo() {
+    const box = $('suMasivo'); box.hidden = !S.suMasivo; if (!S.suMasivo) return;
+    const cods = [...new Set((S.suLista || []).map(r => r.p.c))], donde = S.suFarm || '*', base = cfgSuc(S.suFarm);
+    const op = (v, t) => `<option value="${v}">${t}</option>`;
+    box.innerHTML = `<h3>Ajustar varios productos a la vez</h3>
+      <p>Se aplica a los <b>${nf0.format(cods.length)} productos de la lista de abajo</b> (usa los filtros de arriba: Mostrar, laboratorio, línea, familia o la búsqueda) en <b>${S.suFarm ? esc(nomSuc(S.suFarm)) : 'todas las sucursales'}</b>.
+        Los demás productos siguen con el criterio de la sucursal.</p>
+      <div class="est-grid">
+        <label>Venta diaria según</label><div><select id="maFte">${op('', `Igual que la sucursal (${esc(fteTxt(base.fte))})`)}${['15', '30', '60', '90'].map(n => op(n, `Ventas de los últimos ${n} días`)).join('')}${op('motor', 'Motor estadístico')}</select></div>
+        <label>Días a atender</label><div><input class="est-in" id="maC" type="number" min="1" max="180" placeholder="${base.C}"> + <input class="est-in" id="maSg" type="number" min="0" max="180" placeholder="${base.Sg}"> días de seguridad</div>
+        <label>Atender</label><div><select id="maModo">${op('', 'Según su tipo (A, B…)')}${op('forzar', 'Siempre que le falte')}${op('excluir', 'No atender')}</select></div>
+      </div>
+      <div class="est-bot" style="padding:0 12px 12px"><button type="button" class="btn sm primary" id="maAplicar" ${cods.length ? '' : 'disabled'}>Aplicar a ${nf0.format(cods.length)} productos</button>
+        <button type="button" class="btn sm" id="maQuitar" ${cods.length ? '' : 'disabled'}>Quitar el ajuste a estos ${nf0.format(cods.length)}</button><button type="button" class="btn sm" id="maCerrar">Cerrar</button></div>`;
+    box.dataset.donde = donde;
+  }
+  $('suMasivo').addEventListener('click', e => {
+    if (e.target.closest('#maCerrar')) { S.suMasivo = false; return pintarMasivo(); }
+    const aplicar = e.target.closest('#maAplicar'), quitar = e.target.closest('#maQuitar'); if (!aplicar && !quitar) return;
+    if (!puedeEditar()) return;
+    const cods = [...new Set((S.suLista || []).map(r => r.p.c))], donde = $('suMasivo').dataset.donde;
+    const n = id => val(id) === '' ? undefined : Math.max(0, +val(id));
+    const a = { fte: val('maFte') || undefined, C: n('maC'), Sg: n('maSg'), modo: val('maModo') || undefined };
+    Object.keys(a).forEach(k => a[k] === undefined && delete a[k]);
+    if (aplicar && !Object.keys(a).length) return alert('Elige al menos un cambio (venta diaria, días o atender).');
+    if (!confirm(aplicar ? `¿Aplicar este ajuste a ${cods.length} productos en ${donde === '*' ? 'todas las sucursales' : nomSuc(donde)}?` : `¿Quitar el ajuste a ${cods.length} productos en ${donde === '*' ? 'todas las sucursales' : nomSuc(donde)}?`)) return;
+    for (const c of cods) { if (aplicar) (CFG.prod[donde] ??= {})[c] = { ...a }; else if (CFG.prod[donde]) delete CFG.prod[donde][c]; }
+    for (const k of Object.keys(CFG.prod)) if (!Object.keys(CFG.prod[k]).length) delete CFG.prod[k];
+    S.suMasivo = false; guardarCfg(); otra();
+  });
   $('suCrit').addEventListener('click', e => {
+    if (e.target.closest('#suMasivoBtn')) { S.suMasivo = !S.suMasivo; pintarMasivo(); return $('suMasivo').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
     if (e.target.closest('#suGeneral') && S.suFarm) { delete CFG.suc[S.suFarm]; guardarCfg(); return otra(); }
     // ver la lista de productos con ajuste, o abrir uno
     if (e.target.closest('#suVerAj')) { S.suVer = 'ajuste'; $('suq').value = ''; otra(); return $('suTabla').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
