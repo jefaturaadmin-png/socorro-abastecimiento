@@ -52,7 +52,8 @@
     const lista = nP ? ` <button type="button" class="btn sm" id="suVerAj">✎ Ver ${nP} producto${nP > 1 ? 's' : ''} con ajuste</button>
       <span class="su-ajs">${ajs.slice(0, 12).map(([c, a, d]) => `<button type="button" class="su-ajp" data-aj="${esc(c)}" data-f="${esc(d)}" title="${esc(ajTxt(a))}">${esc(c)} ${esc(S.idx.get(c)?.n || '')} · <b>${d === '*' ? 'todas' : esc(nomSuc(d))}</b></button>`).join('')}${nP > 12 ? ` <span class="z">y ${nP - 12} más</span>` : ''}</span>` : '';
     $('suCrit').innerHTML = !S.suFarm
-      ? `<b>Criterio general</b>: lo usan las sucursales que no tienen uno propio${propias ? ` (${propias} tienen criterio propio: ${Object.keys(CFG.suc).map(nomSuc).map(esc).join(', ')})` : ''}.${lista}`
+      ? `<b>Criterio general</b>: lo usan las sucursales que no tienen uno propio${propias ? `. ${propias === 1 ? 'Esta sucursal tiene' : `Estas ${propias} sucursales tienen`} criterio propio (clic para verla): <span class="su-ajs">${Object.entries(CFG.suc).map(([f, x]) =>
+        `<button type="button" class="su-ajp" data-suc="${esc(f)}" title="Ver ${esc(nomSuc(f))}"><b>${esc(nomSuc(f))}</b> · ${x.C} + ${x.Sg} días · ${esc(fteTxt(x.fte))} · ${x.tipos === 'todos' ? 'todo lo que se vende' : 'tipo A y B'}</button>`).join('')}</span>` : ''}.${lista}`
       : CFG.suc[S.suFarm] ? `<b>Criterio propio de ${esc(nomSuc(S.suFarm))}</b>. <button type="button" class="btn sm" id="suGeneral">Usar el criterio general</button>${lista}`
       : `${esc(nomSuc(S.suFarm))} usa el <b>criterio general</b>. Si cambias algo arriba, se guarda solo para ${esc(nomSuc(S.suFarm))}.${lista}`;
     $('suCrit').innerHTML = `<span class="su-est-g">${!cfgListo && !S.ejemplo ? '⏳ Leyendo criterios guardados…' : S.suGuardado ? `✓ Guardado a las ${S.suGuardado.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}` : '✓ Criterios guardados'}</span>`
@@ -239,7 +240,7 @@
     // resumen por sucursal (lo que hay que enviar a cada una)
     const porF = new Map(); for (const r of filas) if (r.pide > 0 && (!S.lab || labDe(r.p.c) === S.lab) && pasaClas(r.p)) { const x = porF.get(r.f) || { n: 0, u: 0, cj: 0, v: 0 }; x.n++; x.cj += r.pide; x.v += r.pide * (r.p.k || 0); if (r.urgente) x.u++; porF.set(r.f, x); }
     $('suChips').innerHTML = [...porF.entries()].sort((a, b) => b[1].u - a[1].u || b[1].v - a[1].v).map(([f, x]) =>
-      `<button type="button" class="su-chip" data-farm="${esc(f)}" aria-pressed="${S.suFarm === f}"><b>${esc(corto2(f))}</b><span>${nf0.format(x.n)} prod. · ${nf0.format(x.cj)} cj · ${soles2(x.v)}</span>${x.u ? `<i>${x.u} urgentes</i>` : ''}</button>`).join('')
+      `<button type="button" class="su-chip" data-farm="${esc(f)}" aria-pressed="${S.suFarm === f}"><b>${esc(corto2(f))}${CFG.suc[f] ? ' <em class="su-propio">criterio propio</em>' : ''}</b><span>${nf0.format(x.n)} prod. · ${nf0.format(x.cj)} cj · ${soles2(x.v)}</span>${x.u ? `<i>${x.u} urgentes</i>` : ''}</button>`).join('')
       || '<span class="z">Ninguna sucursal necesita envíos con estos parámetros.</span>';
     // al buscar se muestran todas las coincidencias de la sucursal, aunque no tengan venta ni stock ni pasen "Mostrar"
     const q = val('suq').trim();
@@ -358,6 +359,7 @@
   $('suCrit').addEventListener('click', e => {
     if (e.target.closest('#suMasivoBtn')) { S.suMasivo = !S.suMasivo; pintarMasivo(); return $('suMasivo').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
     if (e.target.closest('#suGeneral') && S.suFarm) { delete CFG.suc[S.suFarm]; guardarCfg(); return otra(); }
+    const bs = e.target.closest('[data-suc]'); if (bs) { S.suFarm = bs.dataset.suc; return otra(); }
     // ver la lista de productos con ajuste, o abrir uno
     if (e.target.closest('#suVerAj')) { S.suVer = 'ajuste'; $('suq').value = ''; otra(); return $('suTabla').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     const b = e.target.closest('[data-aj]'); if (!b) return;
