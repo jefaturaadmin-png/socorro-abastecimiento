@@ -246,6 +246,8 @@ main.sin-sesion > section { display: none !important }
 .tag.su-est { margin-left: 6px; background: #ece6fa; color: #47308a; white-space: normal }
 .tag.su-est.descontinuado { background: #eee; color: #444 } .tag.su-est.agotado { background: #fde2dd; color: #a33b3b }
 .tag.su-est.transito { background: #dff0ec; color: #1f6b5f } .tag.su-est.pendiente { background: #fcf0d9; color: #7a4a00 }
+.su-crit { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; font-size: 13.5px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center }
+.su-aj { color: #5b3fa8; font-weight: 600 }
 .su-cob { color: #fff; font-weight: 700; text-align: center; font-family: var(--f-mono); white-space: nowrap }
 #suTabla tr.sel td, #suRed tr.sel td { background: color-mix(in srgb, var(--accent) 10%, var(--surface)) }
 .su-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px }
@@ -528,7 +530,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { d
         <label class="field"><span>Stock de seguridad (días)</span><input id="suSeg" type="number" min="0" max="90" value="7" style="width:72px"></label>
         <label class="field"><span>Venta diaria según</span><select id="suFte"><option value="15">Ventas de los últimos 15 días</option><option value="30" selected>Ventas de los últimos 30 días</option><option value="60">Ventas de los últimos 60 días</option><option value="90">Ventas de los últimos 3 meses</option><option value="motor">Motor estadístico de la sucursal</option></select></label>
         <label class="field"><span>Qué atender</span><select id="suTip"><option value="ab">Tipo A completo, tipo B 1 unidad si no le alcanza</option><option value="todos">Todo lo que se vende en la sucursal</option></select></label>
-        <label class="field"><span>Mostrar</span><select id="suVer"><option value="enviar">Enviar</option><option value="urgente">Urgentes</option><option value="comprar">No alcanza lo de droguería</option><option value="exceso">Exceso en la sucursal</option><option value="">Todos</option></select></label>
+        <label class="field"><span>Mostrar</span><select id="suVer"><option value="enviar">Enviar</option><option value="urgente">Urgentes</option><option value="comprar">No alcanza lo de droguería</option><option value="exceso">Exceso en la sucursal</option><option value="ajuste">Con ajuste propio</option><option value="">Todos</option></select></label>
         <label class="field"><span>Laboratorio</span><select id="suLab" class="sLab"><option value="">Todos</option></select></label>
         <label class="field"><span>Línea</span><select class="sLin"><option value="">Todas</option></select></label>
         <label class="field"><span>Genérico</span><input class="sGen" list="dlGen" placeholder="Todos" autocomplete="off" style="width:150px"></label>
@@ -536,6 +538,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { d
         <input id="suq" type="search" placeholder="Buscar nombre, código, genérico o familia…" aria-label="Filtrar productos" autocomplete="off">
       </div>
     </div>
+    <div class="su-crit" id="suCrit"></div>
     <div class="qcards" id="suCards">
       <button type="button" class="qcard" data-ver="enviar"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg></i><span>Enviar</span><b id="suk1">–</b><small id="suk1s">productos</small></button>
       <button type="button" class="qcard roja" data-ver="urgente"><i aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/></svg></i><span>Urgentes</span><b id="suk2">–</b><small>stock menor a los días de seguridad</small></button>
@@ -556,6 +559,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { d
       </div>
       <div class="est-panel">
         <div class="chartbox est-chart"><canvas id="suChart" aria-label="Venta mensual en la sucursal"></canvas></div>
+        <div class="est-box"><h3>Ajuste de este producto</h3><div id="suAj"></div></div>
         <div class="est-box"><h3>El producto en toda la red</h3><div class="scroll"><table class="cells" id="suRed"></table></div></div>
       </div>
     </div>
@@ -1923,10 +1927,10 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610241300"></script>
-<script src="frepple.js?v=202610241300"></script>
-<script src="sucursales.js?v=202610241300"></script>
-<script src="estadistica.js?v=202610241300"></script>
-<script type="module" src="proyeccion.js?v=202610241300"></script>
+<script src="mapa.js?v=202610241500"></script>
+<script src="frepple.js?v=202610241500"></script>
+<script src="sucursales.js?v=202610241500"></script>
+<script src="estadistica.js?v=202610241500"></script>
+<script type="module" src="proyeccion.js?v=202610241500"></script>
 
 </body></html>

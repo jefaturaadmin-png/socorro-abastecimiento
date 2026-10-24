@@ -6,8 +6,47 @@
   S.suFarm = ''; S.suVer = 'enviar'; S.suMostrar = PAGINA; S.suCur = null;
   const soles2 = v => 'S/ ' + nf0.format(Math.round(v || 0));
   const val = id => $(id).value;
-  function opciones() {
-    return { C: Math.max(1, +val('suCob') || 7), Sg: Math.max(0, +val('suSeg') || 0), fte: val('suFte'), tipos: val('suTip') };
+  /* ---------- criterios: general, por sucursal y por producto (proy_config/atencion_cfg) ----------
+     def: el criterio general · suc[SUCURSAL]: el propio de una sucursal · prod[SUCURSAL | '*'][código]: el de un producto
+     (en esa sucursal o en todas). Cada nivel pisa al anterior; lo que no se indica se toma del nivel de arriba. */
+  const DEF = { C: 7, Sg: 7, fte: '30', tipos: 'ab' };
+  let CFG = { def: { ...DEF }, suc: {}, prod: {} }, cfgListo = false, cfgCargando = false, cfgVer = 0;
+  async function cargarCfg() {
+    if (cfgListo || cfgCargando) return; cfgCargando = true;
+    try {
+      if (S.db && !S.ejemplo) { const d = await S.db.doc('config/atencion_cfg').get(); if (d.exists) { const x = d.data(); CFG = { def: { ...DEF, ...(x.def || {}) }, suc: x.suc || {}, prod: x.prod || {} }; } cfgListo = true; }
+      else if (S.ejemplo) cfgListo = true;
+    } catch (e) { console.warn(e); }
+    cfgCargando = false; cfgVer++; if (cfgListo && S.vista === 'suc') window.pintarSuc();
+  }
+  let tGuardar = null;
+  function guardarCfg() {
+    cfgVer++; clearTimeout(tGuardar);
+    tGuardar = setTimeout(async () => {
+      if (!S.db || S.ejemplo) return;
+      try { await S.db.doc('config/atencion_cfg').set(CFG); $('suPub').textContent = 'Criterio guardado. Actualizando lo que ven las sucursales…'; await publicar(); }
+      catch (e) { $('suPub').textContent = 'No se pudo guardar el criterio: ' + (e.message || e); }
+    }, 1200);
+  }
+  const ajProd = (f, c) => CFG.prod[f]?.[c] || CFG.prod['*']?.[c] || null;
+  const cfgSuc = f => ({ ...CFG.def, ...(f ? CFG.suc[f] || {} : {}) });
+  const cfgDe = (f, c) => { const o = { ...cfgSuc(f), ...(CFG.prod['*']?.[c] || {}), ...(CFG.prod[f]?.[c] || {}) }; o.C = Math.max(1, +o.C || 7); o.Sg = Math.max(0, +o.Sg || 0); return o; };
+  const fteTxt = fte => fte === 'motor' ? 'motor estadístico' : `ventas de ${fte} días`;
+  const ajTxt = a => !a ? '' : [a.fte ? fteTxt(a.fte) : '', a.C != null || a.Sg != null ? `${a.C ?? '–'} + ${a.Sg ?? '–'} días` : '', a.modo === 'forzar' ? 'atender siempre que le falte' : a.modo === 'excluir' ? 'no atender' : ''].filter(Boolean).join(' · ');
+  // los controles de arriba muestran y cambian el criterio de la sucursal elegida (o el general con "Todas")
+  function pintarControles() {
+    const o = cfgSuc(S.suFarm);
+    $('suCob').value = o.C; $('suSeg').value = o.Sg; $('suFte').value = o.fte; $('suTip').value = o.tipos; marcarPres();
+    const nP = Object.keys(CFG.prod[S.suFarm || '*'] || {}).length, propias = Object.keys(CFG.suc).length;
+    $('suCrit').innerHTML = !S.suFarm
+      ? `<b>Criterio general</b>: lo usan las sucursales que no tienen uno propio${propias ? ` (${propias} tienen criterio propio: ${Object.keys(CFG.suc).map(nomSuc).map(esc).join(', ')})` : ''}.${nP ? ` ${nP} productos con ajuste para todas las sucursales.` : ''}`
+      : CFG.suc[S.suFarm] ? `<b>Criterio propio de ${esc(nomSuc(S.suFarm))}</b>. <button type="button" class="btn sm" id="suGeneral">Usar el criterio general</button>${nP ? ` · ${nP} productos con ajuste en esta sucursal.` : ''}`
+      : `${esc(nomSuc(S.suFarm))} usa el <b>criterio general</b>. Si cambias algo arriba, se guarda solo para ${esc(nomSuc(S.suFarm))}.${nP ? ` ${nP} productos con ajuste en esta sucursal.` : ''}`;
+  }
+  function leerControles() {
+    const o = { C: Math.max(1, +val('suCob') || 7), Sg: Math.max(0, +val('suSeg') || 0), fte: val('suFte'), tipos: val('suTip') };
+    if (S.suFarm) CFG.suc[S.suFarm] = o; else CFG.def = o;
+    guardarCfg();
   }
 
   /* ---------- venta diaria de la sucursal ---------- */
@@ -29,8 +68,8 @@
 
   /* ---------- cálculo de toda la red (todas las sucursales, para repartir lo de droguería) ---------- */
   let cache = null, cacheClave = '';
-  function calcular(o) {
-    const clave = JSON.stringify(o);
+  function calcular() {
+    const clave = cfgVer + '|' + JSON.stringify(CFG);
     if (cache && cacheDe === S.P && cacheClave === clave) return cache;
     cacheDe = S.P; cacheClave = clave;
     const filas = [], porProd = new Map();
@@ -38,16 +77,18 @@
       const red = [];
       for (const f of S.P.farmacias) {
         const st = +(window.STOCK_TODOS?.[p.c]?.[f]?.[0] ?? p.st?.[f] ?? 0) || 0, c = p.catF?.[f] || 'E';
-        const dv = diaria(p, f, o), d = dv.d;
+        const o = cfgDe(f, p.c), aj = ajProd(f, p.c), dv = diaria(p, f, o), d = dv.d;
         if (!d && !st) continue;
         const bloq = bloqueado(p.c, f), nec = d * (o.C + o.Sg), seg = d * o.Sg, cob = d > 0 ? st / d : Infinity;
         let pide = 0, nota = '';
         if (bloq) nota = 'bloqueado';
+        else if (o.modo === 'excluir') nota = 'no atender (ajuste)';
+        else if (o.modo === 'forzar') pide = d > 0 ? Math.max(0, Math.ceil(nec - st - 1e-9)) : 0;
         else if (o.tipos === 'todos' ? d > 0 : c === 'A') pide = Math.max(0, Math.ceil(nec - st - 1e-9));
         else if (o.tipos !== 'todos' && c === 'B') pide = d > 0 && st < nec ? 1 : 0;   // B: 1 caja solo si su stock no cubre los días elegidos
         else if (d > 0) nota = c === 'C' ? 'a pedido' : c === 'D' ? 'solo con pedido' : '';
         const exceso = !bloq && st > 0 && (d === 0 ? st >= 1 : st - nec * 2 >= 1) ? Math.floor(d === 0 ? st : st - nec) : 0;
-        red.push({ p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide, nota, bloq, exceso, urgente: d > 0 && st < seg && !bloq });
+        red.push({ p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide, nota, bloq, exceso, o, aj, urgente: d > 0 && st < seg && !bloq && o.modo !== 'excluir' });
       }
       if (!red.length) continue;
       // reparto de lo que hay en droguería: primero las sucursales con menos días de cobertura
@@ -72,7 +113,7 @@
 
   /* ---------- lista ---------- */
   const VER = { enviar: r => r.pide > 0, urgente: r => r.urgente, comprar: r => r.comprar > 0, exceso: r => r.exceso > 0, '': r => r.d > 0 || r.st > 0 };
-  const colorCob = (r, o) => r.d <= 0 ? '#9e9e9e' : r.cob < o.Sg ? '#d9302c' : r.cob < o.C + o.Sg ? '#f0ad4e' : r.cob <= (o.C + o.Sg) * 2 ? '#43a047' : '#1e6bb8';
+  const colorCob = (r, o = r.o) => r.d <= 0 ? '#9e9e9e' : r.cob < o.Sg ? '#d9302c' : r.cob < o.C + o.Sg ? '#f0ad4e' : r.cob <= (o.C + o.Sg) * 2 ? '#43a047' : '#1e6bb8';
   const cobTxt = r => r.d <= 0 ? 'sin venta' : r.cob > 999 ? '> 999 d' : nf0.format(Math.floor(r.cob)) + ' d';
   const corto2 = f => nomSuc(f);
   /* ---------- lista para el equipo: faltantes de droguería (0 en droguería y alguna sucursal lo pide) ---------- */
@@ -102,7 +143,8 @@
     let bytes = 0, n = 0; while (n < items.length && (bytes += JSON.stringify(items[n]).length + 1) < 900000) n++;
     return items.slice(0, n);
   }
-  async function publicar(o, aviso) {
+  async function publicar(aviso) {
+    const o = CFG.def;
     if (!FB || S.ejemplo) { if (aviso) alert('Con datos de ejemplo la lista del equipo no se publica.'); return { ok: false, error: 'datos de ejemplo' }; }
     const items = listaFaltantes();
     $('suPub').textContent = 'Publicando la lista del equipo…';
@@ -112,7 +154,7 @@
       await FB.setDoc(FB.doc(FB.db, 'faltantes', 'actual'), window.parent.JSON.parse(JSON.stringify(datos)));
       $('suPub').textContent = `Lista del equipo (0 en droguería): ${nf0.format(items.length)} productos · para ${o.C} + ${o.Sg} días · publicada a las ${new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}`;
       S.suAuto = true;
-      const at = await publicarAtencion(o);
+      const at = await publicarAtencion();
       if (!at.ok) $('suPub').textContent += ' · no se pudo publicar lo de cada sucursal: ' + at.error;
       return { ok: true, n: items.length };
     } catch (e) {
@@ -122,34 +164,36 @@
     }
   }
   // Lo que se le va a atender a cada sucursal (atencion/{SUCURSAL}): lo lee el químico de esa sucursal si tiene la vista.
-  async function publicarAtencion(o) {
+  async function publicarAtencion() {
     const r3 = v => Math.round(v * 1000) / 1000, hoy = new Date().toISOString();
     try {
       for (const f of S.P.farmacias) {
         const items = cache.filas.filter(r => r.f === f && (r.pide > 0 || r.urgente)).sort((a, b) => (b.urgente - a.urgente) || a.cob - b.cob || b.pide - a.pide).slice(0, 2500)
           .map(r => ({ c: r.p.c, n: r.p.n, l: labDe(r.p.c) || '', cat: r.cat, fr: r.p.fr || 1, d: r3(r.d), st: r3(r.st), nec: r3(r.nec), cob: isFinite(r.cob) ? Math.floor(r.cob) : null,
-            pide: r.pide, drog: r.drog || 0, falta: r.falta || 0, urg: !!r.urgente }));
-        const datos = { suc: f, nombre: nomSuc(f), items, corte: S.P.corte, publicado: hoy, C: o.C, Sg: o.Sg, fte: o.fte, tipos: o.tipos };
+            pide: r.pide, drog: r.drog || 0, falta: r.falta || 0, urg: !!r.urgente, ...(r.aj ? { aj: ajTxt(r.aj) } : {}) }));
+        const o = cfgSuc(f), datos = { suc: f, nombre: nomSuc(f), items, corte: S.P.corte, publicado: hoy, C: o.C, Sg: o.Sg, fte: o.fte, tipos: o.tipos, propio: !!CFG.suc[f] };
         await FB.setDoc(FB.doc(FB.db, 'atencion', f), window.parent.JSON.parse(JSON.stringify(datos)));
       }
       return { ok: true };
     } catch (e) { return { ok: false, error: e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules) en Firebase.' : e.message }; }
   }
-  $('suPubBtn').addEventListener('click', () => publicar(opciones(), true));
+  $('suPubBtn').addEventListener('click', () => publicar(true));
   // La página principal (Faltantes de droguería) la llama para generar la lista sin abrir este módulo:
   // espera a que estén cargados los datos, calcula con los parámetros por defecto y publica.
   window.publicarFaltantes = async () => {
     for (let i = 0; i < 240 && !(S.P && S.db && !S.ejemplo); i++) await new Promise(r => setTimeout(r, 500));
     if (!S.P || S.ejemplo) return { ok: false, error: 'los datos de la proyección no terminaron de cargar' };
-    const o = opciones(); calcular(o); return publicar(o, false);
+    await cargarCfg(); for (let i = 0; i < 40 && !cfgListo; i++) await new Promise(r => setTimeout(r, 250));
+    calcular(); return publicar(false);
   };
 
   window.pintarSuc = function () {
     llenarLabs(); llenarClas();
-    const o = opciones(), { filas } = calcular(o);
+    cargarCfg(); pintarControles();
+    const o = cfgSuc(S.suFarm), { filas } = calcular();
     escucharEstados();
-    // la primera vez que se abre en la sesión se publica la lista del equipo con los parámetros por defecto
-    if (!S.suAuto && !S.suPublicando && FB && S.db && !S.ejemplo) { S.suPublicando = true; publicar(o).finally(() => S.suPublicando = false); }
+    // la primera vez que se abre en la sesión (ya con los criterios cargados) se publica lo de las sucursales
+    if (cfgListo && !S.suAuto && !S.suPublicando && FB && S.db && !S.ejemplo) { S.suPublicando = true; publicar().finally(() => S.suPublicando = false); }
     // sucursales
     const farms = S.P.farmacias;
     if ($('suFarm').options.length !== farms.length + 1) $('suFarm').innerHTML = `<option value="">Todas las sucursales</option>` + farms.map(f => `<option value="${esc(f)}">${esc(corto2(f))}</option>`).join('');
@@ -167,20 +211,20 @@
     $('suChips').innerHTML = [...porF.entries()].sort((a, b) => b[1].u - a[1].u || b[1].v - a[1].v).map(([f, x]) =>
       `<button type="button" class="su-chip" data-farm="${esc(f)}" aria-pressed="${S.suFarm === f}"><b>${esc(corto2(f))}</b><span>${nf0.format(x.n)} prod. · ${nf0.format(x.cj)} cj · ${soles2(x.v)}</span>${x.u ? `<i>${x.u} urgentes</i>` : ''}</button>`).join('')
       || '<span class="z">Ninguna sucursal necesita envíos con estos parámetros.</span>';
-    const lista = filtroTexto(base.filter(VER[S.suVer]).map(r => Object.assign(r, { c: r.p.c, n: r.p.n })), val('suq'))
+    const lista = filtroTexto(base.filter(r => S.suVer !== 'ajuste' ? VER[S.suVer](r) : !!r.aj).map(r => Object.assign(r, { c: r.p.c, n: r.p.n })), val('suq'))
       .sort((a, b) => S.suVer === 'exceso' ? b.exceso * (b.p.k || 0) - a.exceso * (a.p.k || 0) : (b.urgente - a.urgente) || a.cob - b.cob || b.pide - a.pide);
     const vis = lista.slice(0, S.suMostrar), todas = !S.suFarm;
     $('suTitulo').textContent = todas ? 'Todas las sucursales' : corto2(S.suFarm);
-    $('suEyebrow').textContent = `Atender para ${o.C} días + ${o.Sg} de seguridad · venta diaria: ${o.fte === 'motor' ? 'motor estadístico de cada sucursal' : `ventas de los últimos ${o.fte} días`} · ${o.tipos === 'todos' ? 'todos los productos con venta' : 'tipo A completo, tipo B 1 unidad si no le alcanza'}`;
-    $('suH2').textContent = { enviar: 'Enviar', urgente: 'Urgentes: menos stock que los días de seguridad', comprar: 'No alcanza lo de droguería', exceso: 'Exceso en la sucursal', '': 'Todos' }[S.suVer];
+    $('suEyebrow').textContent = (todas ? 'Cada sucursal con su criterio · general: ' : '') + `atender para ${o.C} días + ${o.Sg} de seguridad · venta diaria: ${o.fte === 'motor' ? 'motor estadístico' : `ventas de los últimos ${o.fte} días`} · ${o.tipos === 'todos' ? 'todos los productos con venta' : 'tipo A completo, tipo B 1 unidad si no le alcanza'}`;
+    $('suH2').textContent = { enviar: 'Enviar', urgente: 'Urgentes: menos stock que los días de seguridad', comprar: 'No alcanza lo de droguería', exceso: 'Exceso en la sucursal', ajuste: 'Productos con ajuste propio', '': 'Todos' }[S.suVer];
     let h = `<thead><tr><th class="c0">Código</th><th class="c1">Producto</th>${todas ? '<th style="text-align:left">Sucursal</th>' : ''}<th>Tipo</th><th title="Días que alcanza el stock de la sucursal">Cobertura</th>
       <th>Venta diaria</th><th>Stock sucursal</th><th title="Venta diaria × (días + seguridad)">Necesita</th><th class="sep">Enviar</th><th title="Lo que se puede mandar desde droguería">De droguería</th><th style="text-align:left">Lo que falta</th><th>Valor</th></tr></thead><tbody>`;
     for (const r of vis) {
       const p = r.p, sel = S.suCur === p.c + '|' + r.f ? ' sel' : '';
       const falta = r.falta > 0 ? [...(r.desde || []).map(([f, q]) => `${nf0.format(q)} de ${esc(corto2(f))}`), r.comprar ? `<span class="neg">${nf0.format(r.comprar)} comprar</span>` : ''].filter(Boolean).join(' · ') + tagEstado(p.c) : '';
-      h += `<tr class="click${sel}" data-cod="${esc(p.c)}" data-f="${esc(r.f)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}">${esc(p.n)}${etiquetas(p)}<small class="sub">${esc(labDe(p.c))}${r.nota ? ' · ' + esc(r.nota) : ''}</small></td>
+      h += `<tr class="click${sel}" data-cod="${esc(p.c)}" data-f="${esc(r.f)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}">${esc(p.n)}${etiquetas(p)}<small class="sub">${esc(labDe(p.c))}${r.nota ? ' · ' + esc(r.nota) : ''}${r.aj ? ` · <span class="su-aj" title="${esc(ajTxt(r.aj))}">✎ ${esc(ajTxt(r.aj))}</span>` : ''}</small></td>
         ${todas ? `<td>${esc(corto2(r.f))}</td>` : ''}<td style="text-align:center">${catBadge(r.cat)}</td>
-        <td class="su-cob" style="background:${colorCob(r, o)}">${cobTxt(r)}</td><td class="n">${fmtE(p, r.d)}</td><td class="n">${fmtS(p, r.st)}</td><td class="n">${fmtE(p, r.nec)}</td>
+        <td class="su-cob" style="background:${colorCob(r)}">${cobTxt(r)}</td><td class="n">${fmtE(p, r.d)}</td><td class="n">${fmtS(p, r.st)}</td><td class="n">${fmtE(p, r.nec)}</td>
         <td class="n sep tot ent">${r.pide ? nf0.format(r.pide) : r.exceso ? `<span class="tag">sobra ${nf0.format(r.exceso)}</span>` : '·'}</td><td class="n">${r.pide ? nf0.format(r.drog || 0) : ''}</td><td>${falta}</td>
         <td class="n">${r.pide ? soles2(r.pide * (p.k || 0)) : r.exceso ? soles2(r.exceso * (p.k || 0)) : ''}</td></tr>`;
     }
@@ -200,6 +244,7 @@
     box.hidden = !red; if (!red) return;
     const r = red.red.find(x => x.f === f) || red.red[0];
     $('suDTit').textContent = p.n;
+    pintarAjuste(p, r);
     $('suDSub').innerHTML = `Código <code>${esc(p.c)}</code> · ${esc(labDe(p.c) || 'sin laboratorio')} · <b>${esc(corto2(r.f))}</b> · venta diaria según ${esc(r.metodo)}${S.suEstados.get(p.c) ? ' · ' + tagEstado(p.c) : ''}`;
     const hv = S.P.hfm && p.hf?.[r.f] ? p.hf[r.f] : [], hm = (S.P.hfm || []).slice(-hv.length), n = Math.min(24, hv.length);
     const fut = motor.get(p.c + '|' + r.f)?.f || [];
@@ -211,8 +256,36 @@
     $('suRed').innerHTML = `<thead><tr><th class="c1 solo">Sucursal</th><th>Tipo</th><th>Venta diaria</th><th>Stock</th><th>Cobertura</th><th>Necesita</th><th>Enviar</th><th>De droguería</th><th>Sobra</th></tr></thead><tbody>
       <tr class="tot"><td class="c1 solo"><b>Droguería FS</b></td><td></td><td></td><td class="n"><b>${fmtS(p, red.drog)}</b></td><td></td><td></td><td></td><td></td><td></td></tr>` +
       filas.map(x => `<tr${x.f === r.f ? ' class="sel"' : ''}><td class="c1 solo">${esc(corto2(x.f))}</td><td style="text-align:center">${catBadge(x.cat)}</td><td class="n">${fmtE(p, x.d)}</td><td class="n">${fmtS(p, x.st)}</td>
-        <td class="su-cob" style="background:${colorCob(x, o)}">${cobTxt(x)}</td><td class="n">${fmtE(p, x.nec)}</td><td class="n big">${x.pide ? nf0.format(x.pide) : '·'}</td><td class="n">${x.pide ? nf0.format(x.drog || 0) : ''}</td><td class="n">${x.exceso ? nf0.format(x.exceso) : ''}</td></tr>`).join('') + '</tbody>';
+        <td class="su-cob" style="background:${colorCob(x)}">${cobTxt(x)}</td><td class="n">${fmtE(p, x.nec)}</td><td class="n big">${x.pide ? nf0.format(x.pide) : '·'}</td><td class="n">${x.pide ? nf0.format(x.drog || 0) : ''}</td><td class="n">${x.exceso ? nf0.format(x.exceso) : ''}</td></tr>`).join('') + '</tbody>';
   }
+
+  // ajuste de un producto: fuente de la venta diaria, días y si se atiende, en esa sucursal o en todas
+  function pintarAjuste(p, r) {
+    const a = CFG.prod[r.f]?.[p.c] || CFG.prod['*']?.[p.c] || {}, donde = CFG.prod[r.f]?.[p.c] ? r.f : CFG.prod['*']?.[p.c] ? '*' : r.f, base = cfgSuc(r.f);
+    const op = (v, t, sel) => `<option value="${v}" ${sel === v ? 'selected' : ''}>${t}</option>`;
+    $('suAj').innerHTML = `<div class="est-grid">
+      <label>Aplica a</label><div><select id="ajDonde">${op(r.f, 'Solo en ' + esc(nomSuc(r.f)), donde)}${op('*', 'Todas las sucursales', donde)}</select></div>
+      <label>Venta diaria según</label><div><select id="ajFte">${op('', `Igual que la sucursal (${esc(fteTxt(base.fte))})`, a.fte || '')}${['15', '30', '60', '90'].map(n => op(n, `Ventas de los últimos ${n} días`, a.fte)).join('')}${op('motor', 'Motor estadístico (pronóstico de la sucursal)', a.fte)}</select></div>
+      <label>Días a atender</label><div><input class="est-in" id="ajC" type="number" min="1" max="180" placeholder="${base.C}" value="${a.C ?? ''}"> + <input class="est-in" id="ajSg" type="number" min="0" max="180" placeholder="${base.Sg}" value="${a.Sg ?? ''}"> días de seguridad</div>
+      <label>Atender</label><div><select id="ajModo">${op('', 'Según su tipo (A, B…)', a.modo || '')}${op('forzar', 'Siempre que le falte', a.modo)}${op('excluir', 'No atender', a.modo)}</select></div>
+    </div>
+    <div class="est-bot" style="padding:0 12px 12px"><button type="button" class="btn sm primary" id="ajGuardar">Guardar ajuste</button>${CFG.prod[r.f]?.[p.c] || CFG.prod['*']?.[p.c] ? '<button type="button" class="btn sm" id="ajQuitar">Quitar ajuste</button>' : ''}
+      <small class="z">Ahora: venta diaria ${fmtE(p, r.d)} (${esc(r.metodo)}) · necesita ${fmtE(p, r.nec)} · enviar ${nf0.format(r.pide)}</small></div>`;
+  }
+  $('suAj').addEventListener('click', e => {
+    const [c, f] = (S.suCur || '').split('|'); if (!c) return;
+    if (e.target.closest('#ajQuitar')) { for (const k of [f, '*']) if (CFG.prod[k]) { delete CFG.prod[k][c]; if (!Object.keys(CFG.prod[k]).length) delete CFG.prod[k]; } guardarCfg(); return window.pintarSuc(); }
+    if (!e.target.closest('#ajGuardar')) return;
+    const n = id => val(id) === '' ? undefined : Math.max(0, +val(id));
+    const a = { fte: val('ajFte') || undefined, C: n('ajC'), Sg: n('ajSg'), modo: val('ajModo') || undefined };
+    Object.keys(a).forEach(k => a[k] === undefined && delete a[k]);
+    for (const k of [f, '*']) if (CFG.prod[k]) delete CFG.prod[k][c];
+    const donde = val('ajDonde');
+    if (Object.keys(a).length) (CFG.prod[donde] ??= {})[c] = a;
+    for (const k of Object.keys(CFG.prod)) if (!Object.keys(CFG.prod[k]).length) delete CFG.prod[k];
+    guardarCfg(); window.pintarSuc();
+  });
+  $('suCrit').addEventListener('click', e => { if (e.target.closest('#suGeneral') && S.suFarm) { delete CFG.suc[S.suFarm]; guardarCfg(); otra(); } });
 
   /* ---------- exportar a Excel (CSV): lista de despacho ---------- */
   $('suXls').addEventListener('click', () => {
@@ -227,9 +300,9 @@
 
   /* ---------- eventos ---------- */
   const otra = () => { S.suMostrar = PAGINA; window.pintarSuc(); };
-  $('suPres').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b) return; $('suCob').value = b.dataset.d; $('suSeg').value = b.dataset.s; marcarPres(); otra(); });
+  $('suPres').addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (!b) return; $('suCob').value = b.dataset.d; $('suSeg').value = b.dataset.s; marcarPres(); leerControles(); otra(); });
   const marcarPres = () => document.querySelectorAll('#suPres [data-d]').forEach(b => b.setAttribute('aria-pressed', b.dataset.d === val('suCob') && b.dataset.s === val('suSeg')));
-  ['suCob', 'suSeg', 'suFte', 'suTip'].forEach(id => $(id).addEventListener('change', () => { marcarPres(); otra(); }));
+  ['suCob', 'suSeg', 'suFte', 'suTip'].forEach(id => $(id).addEventListener('change', () => { marcarPres(); leerControles(); otra(); }));
   $('suFarm').addEventListener('change', e => { S.suFarm = e.target.value; otra(); });
   $('suVer').addEventListener('change', e => { S.suVer = e.target.value; otra(); });
   $('suq').addEventListener('input', otra);

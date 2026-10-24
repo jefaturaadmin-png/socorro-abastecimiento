@@ -15,7 +15,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610241300";
+const VERSION_PROY = "202610241500";
 const VERSION_COMP = "202610212000";
 
 /* ===================== utilidades ===================== */
@@ -1115,9 +1115,10 @@ function pintarAten() {
   if (!A.publicado) { $("atFiltro").innerHTML = '<span class="muted">Aún no hay información publicada para tu sucursal.</span>'; $("atTabla").innerHTML = ""; $("atTit").textContent = "Productos"; return; }
   const hasta = new Date(A.publicado); hasta.setDate(hasta.getDate() + (A.C || 0));
   const fte = A.fte === "motor" ? "pronóstico estadístico de tu sucursal" : `ventas de los últimos ${A.fte} días`;
-  $("atFiltro").innerHTML = `<b>Criterio usado por Abastecimiento:</b> atender para <b>${A.C} días</b> de venta + <b>${A.Sg} días</b> de seguridad
+  $("atFiltro").innerHTML = `<b>Criterio usado por Abastecimiento${A.propio ? " para tu sucursal" : ""}:</b> atender para <b>${A.C} días</b> de venta + <b>${A.Sg} días</b> de seguridad
     · cubre hasta el <b>${hasta.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" })}</b>
     · venta diaria según ${esc(fte)} · ${A.tipos === "todos" ? "todo lo que se vende en la sucursal" : "productos de venta frecuente (tipo A lo necesario; tipo B 1 unidad si no le alcanza)"}
+    ${(A.items || []).some(i => i.aj) ? "<br>Algunos productos tienen un criterio propio (se indica en la columna Nota)." : ""}
     <br><small class="muted">Datos al ${fmtF(A.corte)} · publicado el ${fFecha(A.publicado)}</small>`;
   const q = norm(S.atQ).trim();
   const lista = (A.items || []).filter(i => (S.atVer !== "urg" || i.urg) && (S.atVer !== "env" || i.pide > 0)
@@ -1130,7 +1131,7 @@ function pintarAten() {
       <td class="der"><span class="at-cob" style="background:${colCob(i)}">${i.d <= 0 ? "sin venta" : i.cob == null ? "–" : nf(i.cob) + " días"}</span></td>
       <td class="der">${fCaja(i.d, i.fr)}</td><td class="der">${fCaja(i.st, i.fr)}</td><td class="der">${fCaja(i.nec, i.fr)}</td>
       <td class="der"><b>${i.pide ? nf(i.pide) : "–"}</b></td>
-      <td>${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}</td></tr>`).join("")
+      <td>${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td></tr>`).join("")
       : `<tr class="vacia"><td colspan="8">Nada que mostrar.</td></tr>`) + "</tbody>";
 }
 $("atVer").addEventListener("change", e => { S.atVer = e.target.value; pintarAten(); });
