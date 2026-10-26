@@ -41,6 +41,9 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .nav button.suc { color: #1e6bb8 }
 .nav button.suc:hover { background: #e3eefa; color: #17589a }
 .nav button.suc[aria-current="page"] { color: #fff; background: #1e6bb8 }
+.nav button.kar { color: #8a5a00 }
+.nav button.kar:hover { background: #fdf1d8; color: #6b4600 }
+.nav button.kar[aria-current="page"] { color: #fff; background: #b07400 }
 .nav .badge { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 6px; border-radius: 99px; background: var(--brand); color: #fff; font-size: 11.5px; font-weight: 700 }
 .quien { display: flex; align-items: center; gap: 10px }
 .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--soft); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted) }
@@ -444,3 +447,8 @@ th.at-ojo, td.at-ojo { text-align: center; width: 90px }
 .at-mes tbody th { text-align: left; font-weight: 500; color: #445; position: sticky; left: 0; background: #fff }
 .at-mes td.n { text-align: right; font-variant-numeric: tabular-nums } .at-mes tr.b th, .at-mes tr.b td { font-weight: 700 }
 #atTabla td.p { min-width: 250px }
+.wrap.ancho { max-width: min(1720px, 100%); padding-inline: clamp(12px, 2vw, 28px) }
+#vAten .tabla-wrap, #vFalt .tabla-wrap { overflow-x: auto }
+.fs-tag.vencida { background: #fde2dd; color: #a33b3b; margin-left: 6px }
+.at-mes tr.mia th, .at-mes tr.mia td { background: #fff4e5 }
+.at-mes thead th:first-child { text-align: left }

@@ -15,7 +15,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610242200";
+const VERSION_PROY = "202610261200";
 const VERSION_COMP = "202610212000";
 
 /* ===================== utilidades ===================== */
@@ -235,6 +235,12 @@ function vigilarPerfil() {
       || JSON.stringify(d.vistas || []) !== JSON.stringify(S.perfil.vistas || [])) location.reload();
   }));
 }
+// Después de subir un kardex, los demás módulos abiertos (proyección, estadística, sucursales, mapa) se recargan con los datos nuevos.
+window.recargarModulos = origen => {
+  for (const id of ["proyFrame", "estFrame", "sucFrame", "mapaFrame", "karFrame"]) {
+    const fr = $(id); if (fr?.src && fr.contentWindow !== origen) try { fr.contentWindow.location.reload(); } catch {}
+  }
+};
 function avisar(e) { const a = $("avisoGlobal"); a.hidden = false; a.textContent = e?.code ? textoError(e) : e.message; }
 
 function pintarNav() {
@@ -242,6 +248,7 @@ function pintarNav() {
   const items = esAdmin()
     ? [["vAdmin", "Bloqueos" + (pend ? `<span class="badge">${pend}</span>` : "")],
        ["vUsuarios", "Usuarios" + (solicitudesSucursal().length ? `<span class="badge">${solicitudesSucursal().length}</span>` : "")],
+       ["vKar", "Kardex", "kar"],
        ["vProy", "Proyección de compras"],
        ["vComp", "Comparativo", "comp"],
        ["vMapa", "Mapa de calor", "mapa"],
@@ -255,10 +262,11 @@ function pintarNav() {
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
+  if (vista === "vKar" && !$("karFrame").src) $("karFrame").src = "proyeccion.html?solo=kar&v=" + VERSION_PROY;
   if (vista === "vSuc" && !$("sucFrame").src) $("sucFrame").src = "proyeccion.html?solo=suc&v=" + VERSION_PROY;
   if (vista === "vEst" && !$("estFrame").src) $("estFrame").src = "proyeccion.html?solo=est&v=" + VERSION_PROY;
   if (vista === "vMapa" && !$("mapaFrame").src) $("mapaFrame").src = "proyeccion.html?solo=mapa&v=" + VERSION_PROY;
@@ -933,7 +941,11 @@ const ESTADOS_F = [
   { id: "alternativa", letra: "E", txt: "Existe otro medicamento" }];
 const PLAZOS = [["1s", "1 semana", 7], ["2s", "2 semanas", 14], ["1m", "1 mes", 30], ["2m", "2 meses", 60], ["3m", "3 meses", 90], ["otra", "Otra fecha", 0]];
 S.falt = null; S.fEst = new Map(); S.fFil = { est: "sin", lab: "", suc: "", q: "" }; S.fAbierto = null; S.fAlt = []; S.fMostrar = 100;
-const faltSinResp = () => (S.falt?.items || []).filter(i => !S.fEst.has(i.c)).length;
+// Una respuesta con fecha (agotado hasta / llega el) vence si pasó la fecha y el producto sigue faltando:
+// vuelve a "Sin responder" mostrando lo que se había respondido.
+const vencida = e => { const h = hoyISO(); return !!e && ((e.estado === "agotado" && e.hasta && e.hasta < h) || (e.estado === "transito" && e.llega && e.llega < h)); };
+const estVig = c => { const e = S.fEst.get(c); return e && !vencida(e) ? e : null; };
+const faltSinResp = () => (S.falt?.items || []).filter(i => !estVig(i.c)).length;
 function escucharFalt() {
   if (S.faltSubs) return; S.faltSubs = true;
   S.subs.push(onSnapshot(doc(db, "faltantes", "actual"), sn => { S.falt = sn.exists() ? sn.data() : { items: [] }; pintarNav(); if (S.vista === "vFalt") pintarFalt(); },
@@ -977,7 +989,7 @@ function pintarFalt() {
     : "Aún no hay lista publicada. Abastecimiento la publica desde Atención a sucursales.";
   // conteos por estado
   const cuenta = { sin: 0, todos: items.length }; for (const x of ESTADOS_F) cuenta[x.id] = 0;
-  for (const i of items) { const e = S.fEst.get(i.c); cuenta[e ? e.estado : "sin"]++; }
+  for (const i of items) { const e = estVig(i.c); cuenta[e ? e.estado : "sin"]++; }
   const opc = [["sin", "Sin responder"], ...ESTADOS_F.map(x => [x.id, `${x.letra}. ${x.txt}`]), ["todos", "Todos"]];
   $("fsChips").innerHTML = opc.map(([id, t]) => `<button type="button" class="fs-chip ${id}" data-est="${id}" aria-pressed="${f.est === id}"><b>${nf(cuenta[id] || 0)}</b><span>${esc(t)}</span></button>`).join("");
   $("fsEst").innerHTML = opc.map(([id, t]) => `<option value="${id}" ${f.est === id ? "selected" : ""}>${esc(t)} (${nf(cuenta[id] || 0)})</option>`).join("");
@@ -987,7 +999,7 @@ function pintarFalt() {
   $("fsSuc").innerHTML = `<option value="">Todas</option>` + sucs.map(x => `<option value="${esc(x)}" ${x === f.suc ? "selected" : ""}>${esc(corto(x))}</option>`).join("");
   const q = norm(f.q).trim();
   const lista = items.filter(i => {
-    const e = S.fEst.get(i.c);
+    const e = estVig(i.c);
     if (f.est === "sin" ? e : f.est !== "todos" && e?.estado !== f.est) return false;
     if (f.lab && i.l !== f.lab) return false;
     if (f.suc && !i.s.some(x => x.f === f.suc)) return false;
@@ -996,16 +1008,18 @@ function pintarFalt() {
   S.fLista = lista;
   const vis = lista.slice(0, S.fMostrar);
   $("fsTit").textContent = `${opc.find(x => x[0] === f.est)?.[1] || ""}: ${nf(lista.length)} productos`;
-  $("fsTabla").innerHTML = `<thead><tr><th>Producto</th><th>Le falta a</th><th class="der">Total</th><th>Estado</th><th class="der">Acción</th></tr></thead><tbody>` +
+  $("fsTabla").innerHTML = `<thead><tr><th>Producto</th><th class="at-ojo">Información</th><th>Le falta a</th><th class="der">Total</th><th>Estado</th><th class="der">Acción</th></tr></thead><tbody>` +
     (vis.length ? vis.map(i => {
-      const e = S.fEst.get(i.c), ab = S.fAbierto === i.c;
+      const e = estVig(i.c), ev = !e ? S.fEst.get(i.c) : null, ab = S.fAbierto === i.c;
       return `<tr class="${ab ? "abierta" : ""}"><td class="p"><b>${esc(i.c)} - ${esc(i.n)}</b><code>${esc(i.l || "")}</code></td>
+        <td class="at-ojo">${i.hv ? `<button type="button" class="at-ibtn" data-finfo="${esc(i.c)}" title="Ver la información de este producto" aria-label="Información de ${esc(i.n)}">${OJO}</button>` : ""}</td>
         <td><div class="fs-sucs"><span class="fs-n">${i.s.length} suc.</span>${i.s.map(x => `<span class="fs-suc">${esc(corto(x.f))} <b>${nf(x.q)}</b></span>`).join("")}</div></td>
         <td class="der"><b>${nf(i.t)}</b></td>
-        <td>${e ? `<span class="tag fs-tag ${esc(e.estado)}">${esc(textoEstado(e))}</span><small class="fs-quien">${esc(e.porNombre || "")} · ${fmtF(e.fecha)}${e.comentario ? " · " + esc(e.comentario) : ""}</small>` : '<span class="muted">Sin responder</span>'}</td>
+        <td>${e ? `<span class="tag fs-tag ${esc(e.estado)}">${esc(textoEstado(e))}</span><small class="fs-quien">${esc(e.porNombre || "")} · ${fmtF(e.fecha)}${e.comentario ? " · " + esc(e.comentario) : ""}</small>`
+          : ev ? `<span class="muted">Sin responder</span><span class="tag fs-tag vencida">Venció: ${esc(textoEstado(ev))}</span><small class="fs-quien">Respondió ${esc(ev.porNombre || "")} · ${fmtF(ev.fecha)}${ev.comentario ? " · " + esc(ev.comentario) : ""} · sigue faltando: vuelve a responder</small>` : '<span class="muted">Sin responder</span>'}</td>
         <td class="der"><button class="btn sm${e ? "" : " primario"}" type="button" data-resp="${esc(i.c)}">${ab ? "Cerrar" : e ? "Cambiar" : "Responder"}</button></td></tr>`
-        + (ab ? `<tr class="editando"><td colspan="5">${formResp(i, e)}</td></tr>` : "");
-    }).join("") : `<tr class="vacia"><td colspan="5">${items.length ? "Nada con estos filtros." : "Sin productos."}</td></tr>`) + "</tbody>";
+        + (ab ? `<tr class="editando"><td colspan="6">${formResp(i, e || ev)}</td></tr>` : "");
+    }).join("") : `<tr class="vacia"><td colspan="6">${items.length ? "Nada con estos filtros." : "Sin productos."}</td></tr>`) + "</tbody>";
   $("fsMas").innerHTML = lista.length > vis.length ? `<button class="btn" type="button" id="fsMasBtn">Ver ${Math.min(100, lista.length - vis.length)} más (de ${nf(lista.length)})</button>` : "";
 }
 const nf = v => Number(v || 0).toLocaleString("es-PE");
@@ -1083,7 +1097,7 @@ $("fsTabla").addEventListener("click", async ev => {
 });
 $("fsXls").addEventListener("click", () => {
   const filas = [["Código", "Producto", "Laboratorio", "N° sucursales", "Total cajas", "Le falta a", "Estado", "Detalle", "Comentario", "Respondió", "Fecha"],
-    ...(S.fLista || []).map(i => { const e = S.fEst.get(i.c);
+    ...(S.fLista || []).map(i => { const e = estVig(i.c);
       return [i.c, i.n, i.l, i.s.length, i.t, i.s.map(x => `${corto(x.f)} ${x.q}`).join(" / "), e ? ESTADOS_F.find(x => x.id === e.estado)?.txt : "Sin responder",
         e ? textoEstado(e) : "", e?.comentario || "", e?.porNombre || "", e ? fmtF(e.fecha) : ""]; })];
   const t = filas.map(f => f.map(v => { const x = String(v ?? ""); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(";")).join("\r\n");
@@ -1173,16 +1187,56 @@ function planLocal(i, A) {
   return filas;
 }
 S.atTab = "atr";
-function abrirInfo(c) { S.atInfoC = c; S.atTab = "atr"; pintarInfo(); $("atInfo").showModal(); }
+// src: "aten" (lo de una sucursal) o "falt" (faltantes de droguería, toda la empresa)
+function abrirInfo(c, src = "aten") { S.atInfoC = c; S.infoSrc = src; S.atTab = "atr"; pintarInfo(); $("atInfo").showModal(); }
+// el producto en toda la red (red/meta y red/p0, p1…), se lee una vez
+async function cargarRed() {
+  if (S.red || S.redCargando) return; S.redCargando = true;
+  try {
+    const m = await getDoc(doc(db, "red", "meta")), n = m.exists() ? m.data().n || 0 : 0, red = new Map();
+    for (let k = 0; k < n; k++) { const d = await getDoc(doc(db, "red", "p" + k)); if (d.exists()) for (const [c, v] of Object.entries(d.data().p || {})) red.set(c, v); }
+    S.red = red; S.redErr = n ? "" : "Aún no hay información de la red publicada.";
+  } catch (e) { S.redErr = textoError(e); S.red = new Map(); }
+  S.redCargando = false; if ($("atInfo").open) pintarInfo();
+}
 function pintarInfo() {
-  const A = S.aten, i = (A?.items || []).find(x => x.c === S.atInfoC); if (!i) return;
+  const falt = S.infoSrc === "falt", A = falt ? S.falt : S.aten, i = (A?.items || []).find(x => x.c === S.atInfoC); if (!i) return;
+  const donde = falt ? "toda la empresa" : "tu local";
   const fila = (k, v) => `<tr><th>${k}</th><td>${v}</td></tr>`, hv = i.hv || [], meses = A.meses || [], fm = A.fm || [];
   const conV = hv.slice(-12).filter(v => v > 0).length, nec = i.nec, seg = i.d * A.Sg, enC = Math.max(0, i.st - i.d * A.C);
   const estado = nec > 0 ? Math.max(0, Math.min(1, Math.min(i.st, enC) / nec)) : 1, colE = estado >= 1 ? "#1a7f37" : estado >= .5 ? "#e0a030" : "#d9302c";
   const tope = Math.max(nec, i.st, 1) * 1.15, yy = v => 100 - Math.max(0, Math.min(v, tope)) / tope * 100;
-  const tabs = [["atr", "Atributos"], ["pron", "Pronóstico"], ["plan", "Plan"]];
+  const tabs = falt ? [["atr", "Atributos"], ["pron", "Pronóstico"], ["red", "En la red"]] : [["atr", "Atributos"], ["pron", "Pronóstico"], ["plan", "Plan"], ["red", "En la red"]];
   let cuerpo = "";
-  if (S.atTab === "atr") {
+  if (S.atTab === "atr" && falt) {
+    const e = S.fEst.get(i.c);
+    cuerpo = `<div class="at-info-3">
+      <section class="at-box"><h3>Producto</h3><table class="at-kv">
+        ${fila("Nombre", esc(i.n))}${fila("Código", esc(i.c))}${fila("Laboratorio", esc(i.l) || "–")}${fila("Línea", esc(i.li) || "–")}${fila("Genérico", esc(i.ge) || "–")}${fila("Familia", esc(i.fa) || "–")}
+        ${fila("Tipo en la empresa", `<span class="at-cat ${esc(i.cat)}">${esc(i.cat)}</span> ${NOM_TIPO[i.cat] || ""}`)}${fila("Patrón de venta", esc(PATRON_T[i.pat] || "–"))}
+        ${fila("ADI (cada cuántos meses vende)", i.adi ?? "–")}${fila("CV² (variación de la cantidad)", i.cv2 ?? "–")}${fila("Meses con venta (últimos 12)", conV)}</table></section>
+      <section class="at-box"><h3>Situación</h3><table class="at-kv">
+        ${fila("Stock en droguería", "<b>0</b>")}${fila("Stock en las sucursales", fCaja(i.sts || 0, i.fr))}${fila(`Le falta a`, `${i.s.length} sucursales · ${nf(i.t)} cajas`)}
+        ${fila("Sucursales", i.s.map(x => `${esc(corto(x.f))} ${nf(x.q)}`).join(" · "))}
+        ${fila("Respuesta", e ? `${esc(textoEstado(e))}${vencida(e) ? " <b class='neg'>(venció)</b>" : ""}<br><small class="muted">${esc(e.porNombre || "")} · ${fmtF(e.fecha)}${e.comentario ? " · " + esc(e.comentario) : ""}</small>` : "Sin responder")}</table></section>
+      <section class="at-box"><h3>Abastecimiento</h3><table class="at-kv">
+        ${fila("Tipo", "Compra")}${fila("Proveedor", esc(i.l) || "–")}${fila("Costo por caja", i.k ? "S/ " + i.k.toLocaleString("es-PE", { maximumFractionDigits: 2 }) : "–")}
+        ${fila("Valor de lo que falta", i.k ? "S/ " + nf(Math.round(i.t * i.k)) : "–")}${fila("Unidad", i.fr > 1 ? `caja de ${i.fr} fracciones` : "caja")}</table></section></div>`;
+  } else if (S.atTab === "red") {
+    if (!S.red) { cargarRed(); cuerpo = '<p class="at-nota">Cargando la información de la red…</p>'; }
+    else {
+      const x = S.red.get(i.c), mia = falt ? "" : (A.nombre || "");
+      const crit = falt ? `Para ${A.C} días + ${A.Sg} de seguridad (criterio general de Abastecimiento).`
+        : `Tu sucursal: ${A.C} días + ${A.Sg} de seguridad · venta diaria según ${A.fte === "motor" ? "pronóstico estadístico" : `ventas de los últimos ${A.fte} días`} · ${A.tipos === "todos" ? "todo lo que se vende" : "tipo A lo necesario, tipo B 1 unidad si no le alcanza"}${i.aj ? `<br><b>Este producto tiene criterio propio:</b> ${esc(i.aj)}` : ""}`;
+      const cob = r => r.d <= 0 ? '<span class="at-cob" style="background:#9e9e9e">sin venta</span>' : `<span class="at-cob" style="background:${r.s / r.d < (falt ? A.Sg : A.Sg) ? "#d9302c" : r.s / r.d < A.C + A.Sg ? "#e0a030" : r.s / r.d <= (A.C + A.Sg) * 2 ? "#43a047" : "#1e6bb8"}">${r.s / r.d > 999 ? "> 999" : nf(Math.floor(r.s / r.d))} días</span>`;
+      cuerpo = `<section class="at-box"><h3>Criterio que se aplica</h3><p class="at-nota" style="color:inherit">${crit}</p></section>` + (!x ? `<p class="at-nota">${esc(S.redErr || "Este producto no tiene información de la red.")}</p>` :
+        `<section class="at-box"><h3>El producto en toda la red</h3><div class="at-scroll" style="border:0;border-radius:0"><table class="at-mes"><thead><tr><th>Sucursal</th><th>Tipo</th><th>Venta diaria</th><th>Stock</th><th>Cobertura</th><th>Necesita</th><th>Enviar</th><th>De droguería</th><th>Sobra</th></tr></thead><tbody>
+          <tr class="b"><th>Droguería FS</th><td></td><td></td><td class="n">${fCaja(x.dg, i.fr)}</td><td></td><td></td><td></td><td></td><td></td></tr>
+          ${[...x.r].sort((a, b) => (a.f === mia ? -1 : b.f === mia ? 1 : (a.d > 0 ? a.s / a.d : 1e9) - (b.d > 0 ? b.s / b.d : 1e9))).map(r => `<tr${r.f === mia ? ' class="mia"' : ""}><th>${esc(r.f)}</th><td><span class="at-cat ${esc(r.t)}">${esc(r.t)}</span></td>
+            <td class="n">${fCaja(r.d, i.fr)}</td><td class="n">${fCaja(r.s, i.fr)}</td><td class="n">${cob(r)}</td><td class="n">${fCaja(r.n, i.fr)}</td><td class="n"><b>${r.e ? nf(r.e) : "·"}</b></td><td class="n">${r.e ? nf(r.g) : ""}</td><td class="n">${r.x ? nf(r.x) : ""}</td></tr>`).join("")}
+          </tbody></table></div></section>`);
+    }
+  } else if (S.atTab === "atr") {
     cuerpo = `<div class="at-info-3">
       <section class="at-box"><h3>Producto</h3><table class="at-kv">
         ${fila("Nombre", esc(i.n))}${fila("Código", esc(i.c))}${fila("Laboratorio", esc(i.l) || "–")}${fila("Línea", esc(i.li) || "–")}${fila("Genérico", esc(i.ge) || "–")}${fila("Familia", esc(i.fa) || "–")}
@@ -1203,14 +1257,14 @@ function pintarInfo() {
     const lab = [...meses, ...fm], real = [...hv, ...fm.map((m, k) => k === 0 && i.av != null ? i.av : null)];
     const hace = k => fm.map(m => { const [y, mo] = m.split("-"); const j = meses.indexOf(`${+y - k}-${mo}`); return j >= 0 ? hv[j] : null; });
     const celdas = a => a.map(v => `<td class="n">${v == null ? '<span class="muted">·</span>' : fCaja(v, i.fr)}</td>`).join("");
-    cuerpo = `<section class="at-box"><h3>Venta en tu local y pronóstico</h3>${svgGraf(lab, [
+    cuerpo = `<section class="at-box"><h3>Venta en ${donde} y pronóstico</h3>${svgGraf(lab, [
         { nombre: "Venta real", tipo: "linea", color: "#7cb342", data: real },
         { nombre: "Pronóstico", tipo: "linea", color: "#e53935", data: [...meses.map(() => null), ...(i.pr || [])] }], i.fr)}</section>
       <div class="at-scroll"><table class="at-mes"><thead><tr><th></th>${fm.map(m => `<th>${etM(m)}</th>`).join("")}</tr></thead><tbody>
         <tr><th>Venta hace 2 años</th>${celdas(hace(2))}</tr><tr><th>Venta hace 1 año</th>${celdas(hace(1))}</tr>
         <tr><th>Venta real${A.avDia ? ` <small class="muted">(al ${A.avDia})</small>` : ""}</th>${celdas(fm.map((m, k) => k === 0 && i.av != null ? i.av : null))}</tr>
         <tr class="b"><th>Pronóstico</th>${celdas(i.pr || [])}</tr></tbody></table></div>
-      <p class="at-nota">Método estadístico usado: <b>${esc(i.met || "–")}</b>. El pronóstico es de tu local, con su venta de cada mes.</p>`;
+      <p class="at-nota">Método estadístico usado: <b>${esc(i.met || "–")}</b>. El pronóstico es de ${donde}, con su venta de cada mes.</p>`;
   } else {
     const f = planLocal(i, A), rw = (t, k, b) => `<tr${b ? ' class="b"' : ""}><th>${t}</th>${f.map(x => `<td class="n">${fCaja(x[k], i.fr)}</td>`).join("")}</tr>`;
     cuerpo = `<section class="at-box"><h3>Plan de tu local (12 meses)</h3>${svgGraf(f.map(x => x.m), [
@@ -1223,12 +1277,13 @@ function pintarInfo() {
         ${rw(`Necesita (${A.C} + ${A.Sg} días)`, "obj")}${rw("Stock de seguridad", "seg")}${rw("Stock inicial", "ini")}${rw("Demanda", "dem", 1)}${rw("Envío propuesto", "env", 1)}${rw("Stock final", "fin")}</tbody></table></div>
       <p class="at-nota">Con el pronóstico de cada mes: cuando tu stock baja de la seguridad (${A.Sg} días) se propone un envío para cubrir ${A.C} días + ${A.Sg} de seguridad. Es una estimación; lo que se envía de verdad lo decide Abastecimiento.</p>`;
   }
-  $("atInfoC").innerHTML = `<div class="at-info-cab"><div><h2>${esc(i.n)}</h2><div class="muted">Código ${esc(i.c)} · ${esc(i.l)} · ${esc(nombreFarm(A.suc))}</div></div>
+  $("atInfoC").innerHTML = `<div class="at-info-cab"><div><h2>${esc(i.n)}</h2><div class="muted">Código ${esc(i.c)} · ${esc(i.l)} · ${falt ? "toda la empresa" : esc(nombreFarm(A.suc))}</div></div>
       <button type="button" class="btn sm" data-cerrar-info aria-label="Cerrar">✕</button></div>
     <div class="at-tabs" role="tablist">${tabs.map(([k, t]) => `<button type="button" role="tab" data-at-tab="${k}" aria-selected="${S.atTab === k}">${t}</button>`).join("")}</div>${cuerpo}`;
 }
 $("atInfo").addEventListener("click", e => { const t = e.target.closest("[data-at-tab]"); if (t) { S.atTab = t.dataset.atTab; pintarInfo(); } });
 $("atTabla").addEventListener("click", e => { const b = e.target.closest("[data-info]"); if (b) abrirInfo(b.dataset.info); });
+$("fsTabla").addEventListener("click", e => { const b = e.target.closest("[data-finfo]"); if (b) abrirInfo(b.dataset.finfo, "falt"); });
 $("atInfo").addEventListener("click", e => { if (e.target.closest("[data-cerrar-info]") || e.target === $("atInfo")) $("atInfo").close(); });
 $("atQ").addEventListener("input", e => { S.atQ = e.target.value; pintarAten(); });
 $("atSuc").addEventListener("change", e => { S.atSuc = e.target.value; escucharAten(); pintarAten(); });

@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610242200">
+<link rel="stylesheet" href="styles.css?v=202610261200">
 </head>
 <body>
 
@@ -252,14 +252,14 @@
 
   <!-- ============ FALTANTES DE DROGUERÍA (vista para colaboradores) ============ -->
   <section id="vFalt" hidden>
-    <div class="wrap cabeza">
+    <div class="wrap ancho cabeza">
       <div>
         <h1>Faltantes de droguería</h1>
         <p class="muted" id="fsSub">Productos que están en 0 en droguería y que piden las sucursales. Primero los que faltan en más sucursales y en más cantidad. Indica qué pasa con cada uno.</p>
       </div>
       <div class="fs-gen" id="fsGen" hidden><button class="btn primario" type="button" id="fsGenBtn">Actualizar lista ahora</button><small class="muted" id="fsGenMsg"></small></div>
     </div>
-    <div class="wrap cuerpo">
+    <div class="wrap ancho cuerpo">
       <div class="fs-chips" id="fsChips"></div>
       <section class="card lista">
         <div class="lh">
@@ -280,14 +280,14 @@
 
   <!-- ============ LO QUE ME VAN A ATENDER (vista por sucursal) ============ -->
   <section id="vAten" hidden>
-    <div class="wrap cabeza">
+    <div class="wrap ancho cabeza">
       <div>
         <h1>Lo que me van a atender</h1>
         <p class="muted" id="atSub">Productos que Abastecimiento tiene previsto enviar a tu sucursal.</p>
       </div>
       <label class="filtro" id="atSucF" hidden>Sucursal <select id="atSuc"></select></label>
     </div>
-    <div class="wrap cuerpo">
+    <div class="wrap ancho cuerpo">
       <div class="aviso prueba">🧪 Módulo de prueba · solo informativo. Los datos pueden cambiar; ante cualquier duda consulta con Abastecimiento.</div>
       <div class="at-filtro" id="atFiltro"></div>
       <section class="card lista">
@@ -364,6 +364,9 @@
   <section id="vEst" hidden>
     <iframe id="estFrame" class="proy-frame" title="Estadística Proyx"></iframe>
   </section>
+  <section id="vKar" hidden>
+    <iframe id="karFrame" class="proy-frame" title="Kardex"></iframe>
+  </section>
   <section id="vSuc" hidden>
     <iframe id="sucFrame" class="proy-frame" title="Atención a sucursales"></iframe>
   </section>
@@ -395,6 +398,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610242200"></script>
+<script type="module" src="app.js?v=202610261200"></script>
 </body>
 </html>

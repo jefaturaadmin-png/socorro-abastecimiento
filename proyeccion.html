@@ -245,6 +245,7 @@ main.sin-sesion > section { display: none !important }
 .su-pub { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; padding: 0 16px 10px; font-size: 13px }
 .tag.su-est { margin-left: 6px; background: #ece6fa; color: #47308a; white-space: normal }
 .tag.su-est.descontinuado { background: #eee; color: #444 } .tag.su-est.agotado { background: #fde2dd; color: #a33b3b }
+.tag.su-est.vencida { background: #fde2dd; color: #a33b3b }
 .tag.su-est.transito { background: #dff0ec; color: #1f6b5f } .tag.su-est.pendiente { background: #fcf0d9; color: #7a4a00 }
 .su-crit { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; font-size: 13.5px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center }
 .su-aj { color: #5b3fa8; font-weight: 600 }
@@ -292,7 +293,7 @@ main.sin-sesion > section { display: none !important }
 .bi-flecha { position: absolute; transform: translateY(-50%); font-size: 12px; font-family: var(--f-mono); white-space: nowrap }
 .bi-flecha.der { left: 63% } .bi-flecha.izq { right: 63% }
 .bi-flecha small { font-family: var(--f-body, inherit); color: var(--muted) }
-body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-mapa #btnPron { display: none }
+body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { display: none }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important } }
 </style>
 
@@ -1074,7 +1075,12 @@ if (SOLO === 'mapa') {
   S.tab = S.vista = 'fre'; document.body.classList.add('solo-mapa');
   document.querySelector('.bar .brand').innerHTML = '<i></i>Estadística Proyx';
 }
+else if (SOLO === 'kar') {
+  S.tab = S.vista = 'kar'; document.body.classList.add('solo-kar');
+  document.querySelector('.bar .brand').innerHTML = '<i></i>Kardex';
+}
 if (SOLO !== 'mapa') document.querySelector('[data-tab="mapa"]').remove();
+if (SOLO !== 'kar') document.querySelector('[data-tab="kar"]').remove();   // el kardex es un módulo aparte del menú principal
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; S.vista = S.tab; document.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-selected', x === b)); render(); });
 document.querySelectorAll('[data-u]').forEach(b => b.onclick = () => { S.unidad = b.dataset.u; document.querySelectorAll('[data-u]').forEach(x => x.setAttribute('aria-pressed', x === b)); render(); });
 document.querySelectorAll('[data-volver]').forEach(b => b.onclick = () => { S.vista = S.origen; render(); });
@@ -1934,10 +1940,10 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 // En la página de Abastecimiento arranca después de comprobar que ingresó el administrador.
 window.iniciarKardex = iniciar;
 </script>
-<script src="mapa.js?v=202610242200"></script>
-<script src="frepple.js?v=202610242200"></script>
-<script src="sucursales.js?v=202610242200"></script>
-<script src="estadistica.js?v=202610242200"></script>
-<script type="module" src="proyeccion.js?v=202610242200"></script>
+<script src="mapa.js?v=202610261200"></script>
+<script src="frepple.js?v=202610261200"></script>
+<script src="sucursales.js?v=202610261200"></script>
+<script src="estadistica.js?v=202610261200"></script>
+<script type="module" src="proyeccion.js?v=202610261200"></script>
 
 </body></html>

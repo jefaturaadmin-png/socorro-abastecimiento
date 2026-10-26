@@ -229,6 +229,13 @@ window.subirKardex = async function (files) {
       : diarias ? `Kardex ya cargado: se completaron las ventas por día (${diarias.toLocaleString("es-PE")} movimientos)`
       : `Este kardex ya estaba cargado (${repetidas.toLocaleString("es-PE")} movimientos repetidos)${corte ? ` · stock al ${corte}` : ""}`);
     msg([aviso, alDia ? `Stock actualizado al ${corte} con el kardex.` : "", ignoradas ? `${ignoradas.toLocaleString("es-PE")} filas no se pudieron leer y se omitieron (${malas.join("; ")}).` : ""].filter(Boolean).join(" "));
+    // con el kardex nuevo se actualiza todo: las listas de faltantes y de cada sucursal, y los demás módulos abiertos
+    if ((nuevas || diarias || stockCambio) && window.publicarFaltantes && !S.ejemplo) {
+      const antes = $("msg").textContent; msg((antes ? antes + " " : "") + "Actualizando las listas de las sucursales y de faltantes…");
+      try { const r = await window.publicarFaltantes(); msg((antes ? antes + " " : "") + (r?.ok ? "Listas de las sucursales y de faltantes actualizadas." : "No se pudieron actualizar las listas: " + (r?.error || ""))); }
+      catch (e) { console.warn(e); }
+      try { window.parent?.recargarModulos?.(window); } catch {}
+    }
   } catch (e) {
     console.error(e);
     msg(e.code === "permission-denied"

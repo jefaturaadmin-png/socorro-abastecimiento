@@ -160,7 +160,9 @@
     transito: `En tránsito${e.llega ? ' · llega el ' + fDia(e.llega) : ''}`,
     alternativa: `Hay otro: ${(e.alternativas || []).map(a => a.n).join(' / ')}`
   }[e.estado] || e.estado;
-  const tagEstado = c => { const e = S.suEstados.get(c); return e ? `<span class="tag su-est ${esc(e.estado)}" title="${esc((e.porNombre || '') + (e.comentario ? ': ' + e.comentario : ''))}">${esc(estadoTxt(e))}</span>` : ''; };
+  // una respuesta con fecha vencida (agotado hasta / llega el) ya no vale: el producto sigue faltando
+  const vencida = e => { const h = new Date().toISOString().slice(0, 10); return (e.estado === 'agotado' && e.hasta && e.hasta < h) || (e.estado === 'transito' && e.llega && e.llega < h); };
+  const tagEstado = c => { const e = S.suEstados.get(c); return e ? `<span class="tag su-est ${vencida(e) ? 'vencida' : esc(e.estado)}" title="${esc((e.porNombre || '') + (e.comentario ? ': ' + e.comentario : ''))}">${vencida(e) ? 'Venció: ' : ''}${esc(estadoTxt(e))}</span>` : ''; };
   function escucharEstados() {
     if (!FB || S.ejemplo || escucharEstados.ok) return; escucharEstados.ok = true;
     FB.onSnapshot(FB.collection(FB.db, 'faltantes_estado'), sn => { S.suEstados = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === 'suc') window.pintarSuc(); }, () => {});
@@ -170,7 +172,11 @@
     for (const [c, x] of cache.porProd) {
       if (x.drog > 0) continue;
       const s = x.red.filter(r => r.pide > 0); if (!s.length) continue;
-      items.push({ c, n: s[0].p.n, l: labDe(c) || '', t: s.reduce((a, r) => a + r.pide, 0), s: s.sort((a, b) => b.pide - a.pide).map(r => ({ f: r.f, q: r.pide })) });   // Firestore no acepta listas dentro de listas
+      // con la información del producto en toda la empresa para el ojito (venta de 24 meses, pronóstico, patrón)
+      const p = s[0].p, r3 = v => Math.round(v * 1000) / 1000, cl = clas(p), fp = window.FREPPLE.pronosticar(p.h || [], 12);
+      items.push({ c, n: p.n, l: labDe(c) || '', t: s.reduce((a, r) => a + r.pide, 0), s: s.sort((a, b) => b.pide - a.pide).map(r => ({ f: r.f, q: r.pide })),   // Firestore no acepta listas dentro de listas
+        hv: (p.h || []).slice(-24).map(v => r3(v || 0)), pr: fp.f.map(r3), met: fp.metodo, pat: fp.patron || '', adi: fp.adi != null ? r3(fp.adi) : null, cv2: fp.cv2 != null ? r3(fp.cv2) : null,
+        cat: p.cat, fr: p.fr || 1, k: r3(p.k || 0), li: cl.t || '', ge: cl.g || '', fa: cl.f || '', sts: r3(x.red.reduce((a, r) => a + r.st, 0)) });
     }
     items.sort((a, b) => b.s.length - a.s.length || b.t - a.t);
     // un documento de Firestore admite hasta 1 MB: se publican los más importantes hasta ~900 KB
@@ -184,11 +190,14 @@
     $('suPub').textContent = 'Publicando la lista del equipo…';
     try {
       // Firebase solo acepta objetos creados en la ventana principal: se copian allá antes de guardar
-      const datos = { items, corte: S.P.corte, publicado: new Date().toISOString(), C: o.C, Sg: o.Sg, fte: o.fte, tipos: o.tipos };
+      const datos = { items, corte: S.P.corte, publicado: new Date().toISOString(), C: o.C, Sg: o.Sg, fte: o.fte, tipos: o.tipos,
+        meses: S.P.meses.slice(-24), fm: Array.from({ length: 12 }, (_, i) => sumaMes(S.P.fm[0], i)) };
       await FB.setDoc(FB.doc(FB.db, 'faltantes', 'actual'), window.parent.JSON.parse(JSON.stringify(datos)));
       $('suPub').textContent = `Lista del equipo (0 en droguería): ${nf0.format(items.length)} productos · para ${o.C} + ${o.Sg} días · publicada a las ${new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}`;
       S.suAuto = true;
       const at = await publicarAtencion();
+      const rd = await publicarRed(items);
+      if (!rd.ok) $('suPub').textContent += ' · no se pudo publicar la información de la red: ' + rd.error;
       if (!at.ok) $('suPub').textContent += ' · no se pudo publicar lo de cada sucursal: ' + at.error;
       return { ok: true, n: items.length };
     } catch (e) {
@@ -218,6 +227,25 @@
           meses: (S.P.hfm || []).slice(-24), fm: Array.from({ length: 12 }, (_, i) => sumaMes(S.P.fm[0], i)), avDia: S.P.dias ? +S.P.dias.hasta.slice(8, 10) : null };
         await FB.setDoc(FB.doc(FB.db, 'atencion', f), window.parent.JSON.parse(JSON.stringify(datos)));
       }
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules) en Firebase.' : e.message }; }
+  }
+  // El producto en toda la red (red/p0, p1…): stock, venta y envío de cada sucursal y el stock de droguería, para el
+  // ojito de "Lo que me van a atender" y de Faltantes. Solo los productos que están en alguna de esas listas.
+  async function publicarRed(faltantes) {
+    const r3 = v => Math.round(v * 1000) / 1000, cods = new Set(faltantes.map(i => i.c));
+    for (const r of cache.filas) if (r.pide > 0 || r.urgente) cods.add(r.p.c);
+    const trozos = [{}]; let tam = 0;
+    for (const c of cods) {
+      const x = cache.porProd.get(c); if (!x) continue;
+      const v = { dg: r3(x.drog || 0), r: x.red.map(r => ({ f: nomSuc(r.f), t: r.cat, d: r3(r.d), s: r3(r.st), n: r3(r.nec), e: r.pide || 0, g: r.drog || 0, x: r.exceso || 0 })) };
+      const t = JSON.stringify(v).length + c.length + 4;
+      if (tam + t > 850000) { trozos.push({}); tam = 0; }
+      trozos[trozos.length - 1][c] = v; tam += t;
+    }
+    try {
+      for (let i = 0; i < trozos.length; i++) await FB.setDoc(FB.doc(FB.db, 'red', 'p' + i), window.parent.JSON.parse(JSON.stringify({ p: trozos[i] })));
+      await FB.setDoc(FB.doc(FB.db, 'red', 'meta'), window.parent.JSON.parse(JSON.stringify({ n: trozos.length, publicado: new Date().toISOString(), corte: S.P.corte })));
       return { ok: true };
     } catch (e) { return { ok: false, error: e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules) en Firebase.' : e.message }; }
   }

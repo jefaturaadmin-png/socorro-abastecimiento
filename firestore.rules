@@ -116,6 +116,12 @@ service cloud.firestore {
       allow write: if esAdmin();
     }
 
+    // ---------- el producto en toda la red (para el ojito de información; lo publica el administrador) ----------
+    match /red/{id} {
+      allow read: if tieneVista('atencion') || tieneVista('faltantes');
+      allow write: if esAdmin();
+    }
+
     // ---------- historial: solo se agrega, nunca se cambia ni se borra ----------
     match /historial/{id} {
       allow read: if esAdmin()
