@@ -456,7 +456,7 @@ th.at-ojo, td.at-ojo { text-align: center; width: 90px }
 .at-mes thead th:first-child { text-align: left }
 
 /* ---------- inicio (menú principal) ---------- */
-.ini-hero { margin: 26px 0 40px; border-radius: 18px; padding: 28px 32px; color: #fff; display: flex; flex-wrap: wrap; gap: 18px 40px; align-items: center;
+.ini-hero { margin: auto 0 18px; border-radius: 16px; padding: 18px 28px; color: #fff; display: flex; flex-wrap: wrap; gap: 18px 40px; align-items: center;
   background: linear-gradient(120deg, var(--brand-ink), var(--brand) 55%, #2c5cb8); box-shadow: var(--sombra) }
 .ini-marca { display: flex; flex-direction: column; line-height: 1.05 }
 .ini-marca b { font-size: 34px; font-weight: 800; letter-spacing: -.02em }
@@ -534,3 +534,7 @@ th.at-ojo, td.at-ojo { text-align: center; width: 90px }
 .u-dlg h2 { display: flex; align-items: center; gap: 8px }
 .u-acc { display: flex; flex-wrap: wrap; gap: 8px }
 .u-dlg .ini-form { border-top: 1px solid var(--line); padding-top: 12px }
+/* inicio: la frase del día queda abajo de la pantalla, sin tapar la ayuda de WhatsApp */
+#vInicio > .wrap { display: flex; flex-direction: column; min-height: calc(100vh - 72px) }
+#vInicio .ini-mods { margin-bottom: 26px }
+@media (min-width: 760px) { #vInicio .ini-hero { margin-right: 230px } }
