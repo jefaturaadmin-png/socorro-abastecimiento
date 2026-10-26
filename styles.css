@@ -554,3 +554,10 @@ main { padding-bottom: 80px }
 .at-ropts label.no_requiere { background: var(--bad-soft); color: var(--bad) } .at-ropts label.no_se_mueve { background: var(--warn-soft); color: #7A4A00 }
 .at-ropts label.otro_medicamento { background: #ece6fa; color: #47308a } .at-ropts label.otros { background: #E9EDF3; color: var(--fg-2) }
 .tag.at-drog { white-space: normal; margin-top: 2px }
+/* ventana para responder */
+.resp-dlg { width: min(760px, 94vw) }
+.resp-dlg > div { position: relative; max-height: 86vh; overflow: auto }
+.resp-x { position: absolute; top: 12px; right: 12px }
+.resp-c h2 { margin: 0 32px 2px 0; font-size: 18px }
+.resp-c > p { margin: 0 0 12px }
+.resp-dlg .fs-form, .resp-dlg .at-rf { padding: 0; background: none; border: 0 }

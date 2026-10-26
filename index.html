@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610270300">
+<link rel="stylesheet" href="styles.css?v=202610270700">
 </head>
 <body>
 
@@ -351,6 +351,9 @@
   </section>
 
   <dialog id="atInfo" class="at-info"><div id="atInfoC"></div></dialog>
+  <!-- ventanas para responder: faltantes de droguería y lo que me van a atender -->
+  <dialog id="fsDlg" class="at-info resp-dlg"><div><button type="button" class="ab-x resp-x" data-cerrar-dlg aria-label="Cerrar">✕</button><div class="resp-c"></div></div></dialog>
+  <dialog id="atDlg" class="at-info resp-dlg"><div><button type="button" class="ab-x resp-x" data-cerrar-dlg aria-label="Cerrar">✕</button><div class="resp-c"></div></div></dialog>
   <!-- mi usuario: se abre al hacer clic en el nombre (arriba a la derecha) -->
   <dialog id="uDlg" class="at-info u-dlg"><div>
     <div class="at-info-cab"><h2><svg width="18" height="18"><use href="#i-usuario"/></svg> Mi usuario</h2><button type="button" class="ab-x" data-cerrar-u aria-label="Cerrar">✕</button></div>
@@ -459,6 +462,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610270500"></script>
+<script type="module" src="app.js?v=202610270700"></script>
 </body>
 </html>

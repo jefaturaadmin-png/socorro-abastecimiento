@@ -1168,9 +1168,10 @@ function pintarFalt() {
         <td class="der"><b>${nf(i.t)}</b></td>
         <td>${e ? `<span class="tag fs-tag ${esc(e.estado)}">${esc(textoEstado(e))}</span><small class="fs-quien">${esc(e.porNombre || "")} · ${fmtF(e.fecha)}${e.comentario ? " · " + esc(e.comentario) : ""}</small>`
           : ev ? `<span class="muted">Sin responder</span><span class="tag fs-tag vencida">Venció: ${esc(textoEstado(ev))}</span><small class="fs-quien">Respondió ${esc(ev.porNombre || "")} · ${fmtF(ev.fecha)}${ev.comentario ? " · " + esc(ev.comentario) : ""} · sigue faltando: vuelve a responder</small>` : '<span class="muted">Sin responder</span>'}</td>
-        <td class="der"><button class="btn sm${e ? "" : " primario"}" type="button" data-resp="${esc(i.c)}">${ab ? "Cerrar" : e ? "Cambiar" : "Responder"}</button></td></tr>`
-        + (ab ? `<tr class="editando"><td colspan="6">${formResp(i, e || ev)}</td></tr>` : "");
+        <td class="der"><button class="btn sm${e ? "" : " primario"}" type="button" data-resp="${esc(i.c)}">${e ? "Cambiar" : "Responder"}</button></td></tr>`;
     }).join("") : `<tr class="vacia"><td colspan="6">${items.length ? "Nada con estos filtros." : "Sin productos."}</td></tr>`) + "</tbody>";
+  ventanaResp("fsDlg", S.fAbierto && (() => { const i = (S.falt?.items || []).find(x => x.c === S.fAbierto); if (!i) return "";
+    const e = estVig(i.c) || S.fEst.get(i.c); return `<h2>${esc(i.c)} - ${esc(i.n)}</h2><p class="muted">${esc(i.l || "")} · le falta a ${i.s.length} sucursales (${nf(i.t)} cajas)</p>` + formResp(i, e); })());
   $("fsMas").innerHTML = lista.length > vis.length ? `<button class="btn" type="button" id="fsMasBtn">Ver ${Math.min(100, lista.length - vis.length)} más (de ${nf(lista.length)})</button>` : "";
 }
 const nf = v => Number(v || 0).toLocaleString("es-PE");
@@ -1184,11 +1185,14 @@ function cargarGenericos() {
       const a = c.p[nomN(p.n)], ge = a && c.g[a[1]]; if (!ge) continue;
       g.de.set(p.c, ge); if (!g.por.has(ge)) g.por.set(ge, []); g.por.get(ge).push(p);
     }
+    g.nom = n => { const x = c.p[nomN(n)]; return (x && c.g[x[1]]) || ""; };   // por el nombre, si el código no está en el catálogo
     GEN = g;
   }).catch(() => { GEN = { de: new Map(), por: new Map() }; }).then(() => { if (S.fAbierto) pintarFalt(); });
   return cargarGenericos.p;
 }
-const genDe = i => i?.ge || GEN?.de.get(i?.c) || "";
+const genDe = i => i?.ge || GEN?.de.get(i?.c) || GEN?.nom(i?.n) || "";
+// sin genérico conocido: los de nombre parecido (las dos primeras palabras del nombre)
+const parecidos = i => { const w = norm(i?.n).replace(/[^A-Z0-9 ]+/g, " ").split(/\s+/).filter(x => x.length > 2).slice(0, 2); return w.length ? S.catalogo.filter(p => p.c !== i.c && w.every(x => p.k.includes(x))).slice(0, 30) : []; };
 function formResp(i, e) {
   const st = S.fForm || {};
   const est = st.estado ?? e?.estado ?? "";
@@ -1206,13 +1210,13 @@ function formResp(i, e) {
   </div>`;
 }
 function formAlt(i, alts) {
-  const ge = genDe(i), mismos = ge && GEN ? (GEN.por.get(ge) || []).filter(p => p.c !== i.c && !alts.some(a => a.c === p.c)) : [];
+  const ge = genDe(i), mismos = (ge && GEN ? (GEN.por.get(ge) || []) : GEN ? parecidos(i) : []).filter(p => p.c !== i.c && !alts.some(a => a.c === p.c));
   return `<div class="campo buscador"><span class="lbl">Medicamentos que lo reemplazan (hasta ${MAX_ALT}) · elegidos ${alts.length} de ${MAX_ALT}</span>
     <div class="fs-alts">${alts.map((a, k) => `<span class="fs-alt">${esc(a.c)} - ${esc(a.n)} <button type="button" class="enlace" data-quitar-alt="${k}">Quitar</button></span>`).join("")}</div>
-    ${alts.length < MAX_ALT ? `<div class="fs-mismo"><b>Del mismo genérico${ge ? `: ${esc(ge)}` : ""}</b>
-        ${!GEN ? '<small class="muted">Cargando…</small>' : !ge ? '<small class="muted">No se conoce el genérico de este producto: búscalo abajo.</small>'
+    ${alts.length < MAX_ALT ? `<div class="fs-mismo"><b>${ge ? `Del mismo genérico: ${esc(ge)}` : "De nombre parecido (no se conoce su genérico)"}</b>
+        ${!GEN ? '<small class="muted">Cargando…</small>'
           : mismos.length ? `<div class="fs-mismo-lista">${mismos.map(p => `<button type="button" data-alt="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)}${p.ln || p.l ? ` <small>${esc(p.ln || p.l)}</small>` : ""}</button>`).join("")}</div>`
-          : '<small class="muted">No hay otros productos con este genérico en el listado: búscalo abajo.</small>'}</div>
+          : '<small class="muted">No hay otros parecidos en el listado: búscalo abajo.</small>'}</div>
       <label for="fsBus">¿No está? Búscalo en el listado general</label>
       <input id="fsBus" type="search" autocomplete="off" placeholder="Código o nombre del otro medicamento"><div class="resultados" id="fsRes" hidden></div>` : ""}</div>`;
 }
@@ -1232,10 +1236,10 @@ $("fsLab").addEventListener("change", ev => { S.fFil.lab = ev.target.value; pint
 $("fsSuc").addEventListener("change", ev => { S.fFil.suc = ev.target.value; pintarFalt(); });
 $("fsQ").addEventListener("input", ev => { S.fFil.q = ev.target.value; pintarFalt(); });
 $("fsMas").addEventListener("click", ev => { if (ev.target.closest("#fsMasBtn")) { S.fMostrar += 100; pintarFalt(); } });
-$("fsTabla").addEventListener("change", ev => {
+["fsTabla", "fsDlg"].forEach(t => $(t).addEventListener("change", ev => {
   if (ev.target.name === "fsEstado" || ev.target.name === "fsPlazo") { leerForm(); pintarFalt(); }
-});
-$("fsTabla").addEventListener("input", ev => {
+}));
+["fsTabla", "fsDlg"].forEach(t => $(t).addEventListener("input", ev => {
   if (ev.target.id !== "fsBus") return;
   // primero los del mismo genérico; si no, cualquiera del listado general
   const ge = genDe((S.falt?.items || []).find(i => i.c === S.fAbierto) || { c: S.fAbierto }), q = norm(ev.target.value).trim().split(/\s+/);
@@ -1243,8 +1247,8 @@ $("fsTabla").addEventListener("input", ev => {
   const r = [...new Set([...deGen, ...buscarCat(ev.target.value)])].filter(p => p.c !== S.fAbierto && !S.fAlt.some(a => a.c === p.c)).slice(0, 10), box = $("fsRes");
   box.hidden = !r.length;
   box.innerHTML = r.map(p => `<button type="button" data-alt="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)}${p.ln ? ` <small>${esc(p.ln)}</small>` : ""}${ge && GEN?.de.get(p.c) === ge ? ' <span class="tag t-ok">mismo genérico</span>' : ""}</button>`).join("");
-});
-$("fsTabla").addEventListener("click", async ev => {
+}));
+["fsTabla", "fsDlg"].forEach(t => $(t).addEventListener("click", async ev => {
   const r = ev.target.closest("[data-resp]"); if (r) return abrirResp(r.dataset.resp);
   const a = ev.target.closest("[data-alt]");
   if (a) { const p = S.catIdx.get(a.dataset.alt); if (p && S.fAlt.length < MAX_ALT) S.fAlt.push({ c: p.c, n: p.n }); leerForm(); pintarFalt(); $("fsBus")?.focus(); return; }
@@ -1272,7 +1276,7 @@ $("fsTabla").addEventListener("click", async ev => {
   if (estado === "alternativa") { if (!S.fAlt.length) return msg("fsMsg", `Elige el medicamento que lo reemplaza (hasta ${MAX_ALT}).`, true); d.alternativas = S.fAlt.slice(0, MAX_ALT); }
   try { await setDoc(doc(db, "faltantes_estado", c), d); S.fAbierto = null; S.fForm = null; toast("Respuesta guardada"); pintarFalt(); }
   catch (err) { msg("fsMsg", textoError(err), true); }
-});
+}));
 $("fsXls").addEventListener("click", () => {
   const filas = [["Código", "Producto", "Laboratorio", "N° sucursales", "Total cajas", "Le falta a", "Estado", "Detalle", "Comentario", "Respondió", "Fecha"],
     ...(S.fLista || []).map(i => { const e = estVig(i.c);
@@ -1319,26 +1323,43 @@ function celdaResp(i) {
   const ver = r ? `<span class="tag ${RESP_AT.find(x => x.id === r.estado)?.clase || ""} at-rtag">${esc(textoResp(r))}</span><small class="muted at-rpor">${esc(r.porNombre || "")} · ${fmtF(r.fecha)}</small>` : "";
   return ver + (puede ? `<button type="button" class="btn sm at-rbtn${r ? "" : " primario"}" data-resp="${esc(i.c)}">${r ? "Cambiar" : "Responder"}</button>` : r ? "" : '<span class="muted">–</span>');
 }
+// Ventana al centro para responder (faltantes y lo que me van a atender): se arma de nuevo en cada cambio
+function ventanaResp(id, html) {
+  const d = $(id);
+  if (!html) { if (d.open) { d.dataset.cerrando = "1"; d.close(); } return; }
+  const foco = document.activeElement?.closest?.("#" + id) ? document.activeElement : null, sel = foco && (foco.id || foco.getAttribute("data-rbus") !== null && "[data-rbus]" || foco.getAttribute("data-rmot") !== null && "[data-rmot]");
+  const val = foco?.value, pos = foco?.selectionStart;
+  d.querySelector(".resp-c").innerHTML = html;
+  if (!d.open) d.showModal();
+  if (sel) { const x = d.querySelector(foco.id ? "#" + foco.id : sel); if (x) { x.focus(); if (val != null && x.value === val && pos != null) try { x.setSelectionRange(pos, pos); } catch {} } }
+}
+["atDlg", "fsDlg"].forEach(id => {
+  $(id).addEventListener("close", () => {
+    if ($(id).dataset.cerrando) { delete $(id).dataset.cerrando; return; }
+    if (id === "atDlg") { S.atEdit = null; S.atForm = null; pintarAten(); } else { S.fAbierto = null; S.fForm = null; pintarFalt(); }
+  });
+  $(id).addEventListener("click", e => { if (e.target.closest("[data-cerrar-dlg]") || e.target === $(id)) $(id).close(); });
+});
 function formRespAt(i) {
   const r = S.atResp?.get(i.c) || {}, e = S.atForm?.estado ?? r.estado ?? "", o = RESP_AT.find(x => x.id === e);
-  return `<tr class="at-rform"><td colspan="10"><div class="at-rf" data-rf="${esc(i.c)}">
-    <b>Tu respuesta sobre ${esc(i.c)} - ${esc(i.n)}:</b>
+  return `<div class="at-rf" data-rf="${esc(i.c)}">
+    <b>¿Qué pasa con este producto en tu sucursal?</b>
     <div class="pills at-ropts">${RESP_AT.map(x => `<label class="${x.id}"><input type="radio" name="atR" value="${x.id}" ${x.id === e ? "checked" : ""}>${esc(x.txt)}</label>`).join("")}</div>
     ${o?.campo === "alt" ? altAt(i, r) + `<input class="at-rin" data-rmot placeholder="Comentario (opcional)" value="${esc(S.atForm?.mot ?? r.comentario ?? "")}">` : ""}
     ${o?.campo === "motivo" ? `<input class="at-rin" data-rmot placeholder="${esc(o.ph)}" value="${esc(S.atForm?.mot ?? r.comentario ?? "")}">` : ""}
     <div class="at-racc"><button type="button" class="btn primario sm" data-rguardar>Guardar</button><button type="button" class="btn sm" data-rcancelar>Cancelar</button>
       ${r.estado ? `<button type="button" class="btn sm peligro" data-rquitar>Quitar mi respuesta</button>` : ""}<span class="msg error" id="atRMsg" hidden></span></div>
-  </div></td></tr>`;
+  </div>`;
 }
 // el medicamento que usa en su cambio: primero los del mismo genérico; si no está, del listado general
 function altAt(i, r) {
   const sel = S.atForm?.altSel !== undefined ? S.atForm.altSel : r.altCod ? { c: r.altCod, n: (r.alternativa || "").replace(/^[^-]*- /, "") } : null;
   if (sel) return `<div class="fs-alts"><span class="fs-alt">En su cambio usa: <b>${esc(sel.c)} - ${esc(sel.n)}</b> <button type="button" class="enlace" data-ralt-quitar>Cambiar</button></span></div>`;
-  const ge = genDe(i), mismos = ge && GEN ? (GEN.por.get(ge) || []).filter(p => p.c !== i.c) : [];
-  return `<div class="fs-mismo"><b>¿Qué medicamento usas en su cambio? · Del mismo genérico${ge ? `: ${esc(ge)}` : ""}</b>
-      ${!GEN ? '<small class="muted">Cargando…</small>' : !ge ? '<small class="muted">No se conoce el genérico de este producto: búscalo abajo.</small>'
+  const ge = genDe(i), mismos = (ge && GEN ? (GEN.por.get(ge) || []) : GEN ? parecidos(i) : []).filter(p => p.c !== i.c);
+  return `<div class="fs-mismo"><b>¿Qué medicamento usas en su cambio? · ${ge ? `Del mismo genérico: ${esc(ge)}` : "De nombre parecido (no se conoce su genérico)"}</b>
+      ${!GEN ? '<small class="muted">Cargando…</small>'
         : mismos.length ? `<div class="fs-mismo-lista">${mismos.map(p => `<button type="button" data-ralt-c="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)}${p.ln || p.l ? ` <small>${esc(p.ln || p.l)}</small>` : ""}</button>`).join("")}</div>`
-        : '<small class="muted">No hay otros productos con este genérico: búscalo abajo.</small>'}</div>
+        : '<small class="muted">No hay otros parecidos: búscalo abajo.</small>'}</div>
     <label class="lbl">¿No está? Búscalo en el listado general</label>
     <div class="buscador"><input class="at-rin" data-rbus type="search" autocomplete="off" placeholder="Código o nombre del medicamento"><div class="resultados" id="atRes" hidden></div></div>`;
 }
@@ -1390,8 +1411,10 @@ function pintarAten() {
       <td class="der">${fCaja(i.d, i.fr)}</td><td class="der">${fCaja(i.st, i.fr)}</td><td class="der">${fCaja(i.nec, i.fr)}</td>
       <td class="der"><b>${i.pide ? nf(i.pide) : "–"}</b></td>
       <td class="at-nota">${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${(i.de || []).map(x => `<span class="tag t-ok">${nf(x.q)} de ${esc(x.f)}</span>`).join(" ")}${i.cmp ? `<span class="tag t-rech">${nf(i.cmp)} por comprar</span>` : ""}${i.cmb ? `<span class="tag t-ok">En cambio de ${esc(i.cmb)}</span>` : ""}${tagDrog(i.c)}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td>
-      <td class="at-resp">${celdaResp(i)}</td></tr>${S.atEdit === i.c ? formRespAt(i) : ""}`).join("")
+      <td class="at-resp">${celdaResp(i)}</td></tr>`).join("")
       : `<tr class="vacia"><td colspan="10">Nada que mostrar.</td></tr>`) + "</tbody>";
+  const iEd = S.atEdit && (A.items || []).find(x => x.c === S.atEdit);
+  ventanaResp("atDlg", iEd ? `<h2>${esc(iEd.c)} - ${esc(iEd.n)}</h2><p class="muted">${esc(iEd.l || "")} · se te enviará ${nf(iEd.pide || 0)}</p>` + formRespAt(iEd) : "");
   pintarLados();
 }
 $("atVer").addEventListener("change", e => { S.atVer = e.target.value; pintarAten(); });
@@ -1527,9 +1550,9 @@ function pintarInfo() {
     <div class="at-tabs" role="tablist">${tabs.map(([k, t]) => `<button type="button" role="tab" data-at-tab="${k}" aria-selected="${S.atTab === k}">${t}</button>`).join("")}</div>${cuerpo}`;
 }
 $("atInfo").addEventListener("click", e => { const t = e.target.closest("[data-at-tab]"); if (t) { S.atTab = t.dataset.atTab; pintarInfo(); } });
-$("atTabla").addEventListener("click", e => {
+["atTabla", "atDlg"].forEach(t => $(t).addEventListener("click", e => {
   const b = e.target.closest("[data-info]"); if (b) return abrirInfo(b.dataset.info);
-  const r = e.target.closest("[data-resp]"); if (r) { S.atEdit = S.atEdit === r.dataset.resp ? null : r.dataset.resp; S.atForm = null; cargarGenericos().then(() => S.atEdit && pintarAten()); pintarAten(); document.querySelector(".at-rf input")?.focus(); return; }
+  const r = e.target.closest("[data-resp]"); if (r) { S.atEdit = r.dataset.resp; S.atForm = null; cargarGenericos().then(() => S.atEdit && pintarAten()); pintarAten(); return; }
   const box = e.target.closest("[data-rf]"); if (!box) return;
   const ac = e.target.closest("[data-ralt-c]");
   if (ac) { const p = S.catIdx.get(ac.dataset.raltC); leerAtForm(box); S.atForm.altSel = p ? { c: p.c, n: p.n } : null; return pintarAten(); }
@@ -1538,21 +1561,21 @@ $("atTabla").addEventListener("click", e => {
   else if (e.target.closest("[data-rguardar]")) guardarResp(box.dataset.rf);
   else if (e.target.closest("[data-rquitar]")) deleteDoc(doc(db, "atencion_resp", `${miFarm()}__${box.dataset.rf}`))
     .then(() => { S.atEdit = null; S.atForm = null; toast("Respuesta quitada"); pintarAten(); }).catch(x => { $("atRMsg").hidden = false; $("atRMsg").textContent = textoError(x); });
-});
-$("atTabla").addEventListener("change", e => {
+}));
+["atTabla", "atDlg"].forEach(t => $(t).addEventListener("change", e => {
   if (e.target.name !== "atR") return;
   const box = e.target.closest("[data-rf]");
   leerAtForm(box); if (S.atForm.estado === "otro_medicamento") cargarGenericos().then(() => S.atEdit && pintarAten());
   pintarAten();
-});
-$("atTabla").addEventListener("input", e => {
+}));
+["atTabla", "atDlg"].forEach(t => $(t).addEventListener("input", e => {
   if (!e.target.matches("[data-rbus]")) return;
   const i = (S.aten?.items || []).find(x => x.c === S.atEdit), ge = genDe(i), q = norm(e.target.value).trim().split(/\s+/);
   const deGen = ge && GEN ? (GEN.por.get(ge) || []).filter(p => q.every(w => p.k.includes(w))) : [];
   const r = [...new Set([...deGen, ...buscarCat(e.target.value)])].filter(p => p.c !== S.atEdit).slice(0, 10), box = $("atRes");
   box.hidden = !r.length;
   box.innerHTML = r.map(p => `<button type="button" data-ralt-c="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)}${p.ln ? ` <small>${esc(p.ln)}</small>` : ""}${ge && GEN?.de.get(p.c) === ge ? ' <span class="tag t-ok">mismo genérico</span>' : ""}</button>`).join("");
-});
+}));
 $("atXls").addEventListener("click", () => {
   const A = S.aten, suc = esAdmin() ? (S.atSuc || FARMACIAS[0]) : miFarm();
   if (!A?.items?.length) return toast("Aún no hay lista publicada para descargar.");
