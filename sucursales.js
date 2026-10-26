@@ -91,7 +91,7 @@
   /* ---------- cálculo de toda la red (todas las sucursales, para repartir lo de droguería) ---------- */
   let cache = null, cacheClave = '';
   function calcular() {
-    const clave = cfgVer + '|' + JSON.stringify(CFG);
+    const clave = cfgVer + '|' + respVer + '|' + JSON.stringify(CFG);
     if (cache && cacheDe === S.P && cacheClave === clave) return cache;
     cacheDe = S.P; cacheClave = clave;
     const filas = [], porProd = new Map();
@@ -111,17 +111,37 @@
   // fila de un producto en una sucursal con su criterio (también para los que no tienen venta ni stock)
   function filaBase(p, f) {
         const st = +(window.STOCK_TODOS?.[p.c]?.[f]?.[0] ?? p.st?.[f] ?? 0) || 0, c = p.catF?.[f] || 'E';
-        const o = cfgDe(f, p.c), aj = ajProd(f, p.c), dv = diaria(p, f, o), d = dv.d;
+        const o = cfgDe(f, p.c), aj = ajProd(f, p.c), dv = diaria(p, f, o);
+        // "Se tiene otro medicamento en su cambio": el que usa en su lugar se atiende con la venta del original
+        const usa = enCambio(p, f), cambio = usa ? null : cambioDe(p, f), dOrig = cambio ? diaria(cambio.orig, f, cfgDe(f, cambio.orig.c)).d : 0;
+        const d = Math.max(dv.d, dOrig);
         const bloq = bloqueado(p.c, f), nec = d * (o.C + o.Sg), seg = d * o.Sg, cob = d > 0 ? st / d : Infinity;
         let pide = 0, nota = '';
+        if (usa) return { p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide: 0, nota: 'usa en su cambio ' + usa, bloq, exceso: 0, o, aj, urgente: false, usa };
         if (bloq) nota = 'bloqueado';
+        else if (cambio) { pide = d > 0 ? Math.max(0, Math.ceil(nec - st - 1e-9)) : 0; nota = 'en cambio de ' + cambio.orig.c; }
         else if (o.modo === 'excluir') nota = 'no atender (ajuste)';
         else if (o.modo === 'forzar') pide = d > 0 ? Math.max(0, Math.ceil(nec - st - 1e-9)) : 0;
         else if (o.tipos === 'todos' ? d > 0 : c === 'A') pide = Math.max(0, Math.ceil(nec - st - 1e-9));
         else if (o.tipos !== 'todos' && c === 'B') pide = d > 0 && st < nec ? 1 : 0;   // B: 1 caja solo si su stock no cubre los días elegidos
         else if (d > 0) nota = c === 'C' ? 'a pedido' : c === 'D' ? 'solo con pedido' : '';
         const exceso = !bloq && st > 0 && (d === 0 ? st >= 1 : st - nec * 2 >= 1) ? Math.floor(d === 0 ? st : st - nec) : 0;
-        return { p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide, nota, bloq, exceso, o, aj, urgente: d > 0 && st < seg && !bloq && o.modo !== 'excluir' };
+        return { p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide, nota, bloq, exceso, o, aj, urgente: d > 0 && st < seg && !bloq && o.modo !== 'excluir',
+          ...(cambio ? { cambio: cambio.orig.c + ' - ' + cambio.orig.n } : {}) };
+  }
+  // respuestas de las sucursales (atencion_resp): el producto que dejan de usar y el que usan en su cambio
+  let respVer = 0, cambios = new Map(), prodIdx = null;
+  function leerRespuestas(docs) {
+    S.suResp = new Map(docs.map(d => [d.id, d.data()])); cambios = new Map(); respVer++;
+    for (const r of S.suResp.values()) if (r.estado === 'otro_medicamento' && r.altCod) cambios.set(r.suc + '__' + r.altCod, r);
+  }
+  const prodDe = c => { if (prodIdx?.de !== S.P) prodIdx = { de: S.P, m: new Map(S.P.p.map(p => [p.c, p])) }; return prodIdx.m.get(c); };
+  const enCambio = (p, f) => { const r = S.suResp?.get(f + '__' + p.c); return r?.estado === 'otro_medicamento' && r.altCod ? r.alternativa || r.altCod : ''; };
+  const cambioDe = (p, f) => { const r = cambios.get(f + '__' + p.c), orig = r && prodDe(r.codpro); return orig ? { orig, r } : null; };
+  // antes de publicar se leen las respuestas aunque no se haya abierto esta vista
+  async function cargarRespuestas() {
+    if (S.suResp || !FB || S.ejemplo) return;
+    try { leerRespuestas((await FB.getDocs(FB.collection(FB.db, 'atencion_resp'))).docs); } catch {}
   }
   function repartir(p, red) {
       // reparto de lo que hay en droguería: primero las sucursales con menos días de cobertura
@@ -167,7 +187,7 @@
     if (!FB || S.ejemplo || escucharEstados.ok) return; escucharEstados.ok = true;
     FB.onSnapshot(FB.collection(FB.db, 'faltantes_estado'), sn => { S.suEstados = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === 'suc') window.pintarSuc(); }, () => {});
     // lo que responde cada sucursal en "Lo que me van a atender" (atencion_resp/{SUCURSAL}__{codpro})
-    FB.onSnapshot(FB.collection(FB.db, 'atencion_resp'), sn => { S.suResp = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === 'suc') window.pintarSuc(); }, () => {});
+    FB.onSnapshot(FB.collection(FB.db, 'atencion_resp'), sn => { leerRespuestas(sn.docs); if (S.vista === 'suc') window.pintarSuc(); }, () => {});
   }
   const RESP_TXT = { no_requiere: 'No se requiere en esta sucursal', no_se_mueve: 'No se mueve', otro_medicamento: 'Tiene otro en su cambio', otros: 'Otros' };
   const tagResp = (f, c) => { const r = S.suResp?.get(f + '__' + c); if (!r) return '';
@@ -192,6 +212,7 @@
   async function publicar(aviso) {
     const o = CFG.def;
     if (!FB || S.ejemplo) { if (aviso) alert('Con datos de ejemplo la lista del equipo no se publica.'); return { ok: false, error: 'datos de ejemplo' }; }
+    await cargarRespuestas(); calcular();
     const items = listaFaltantes();
     $('suPub').textContent = 'Publicando la lista del equipo…';
     try {
@@ -222,7 +243,7 @@
             // información del producto en esta sucursal para el botón ⓘ: su venta de 12 meses, pronóstico y patrón
             const m = motorEn(r.p, f), hv = (m.hv || []).slice(-24).map(v => r3(v || 0)), x = clas(r.p), av = avance(r.p, f);
             return { c: r.p.c, n: r.p.n, l: labDe(r.p.c) || '', cat: r.cat, fr: r.p.fr || 1, d: r3(r.d), st: r3(r.st), nec: r3(r.nec), cob: isFinite(r.cob) ? Math.floor(r.cob) : null,
-              pide: r.pide, drog: r.drog || 0, falta: r.falta || 0, urg: !!r.urgente, ...(r.aj ? { aj: ajTxt(r.aj) } : {}),
+              pide: r.pide, drog: r.drog || 0, falta: r.falta || 0, urg: !!r.urgente, ...(r.aj ? { aj: ajTxt(r.aj) } : {}), ...(r.cambio ? { cmb: r.cambio } : {}),
               ...(r.desde?.length ? { de: r.desde.map(([g, q]) => ({ f: nomSuc(g), q })) } : {}), ...(r.comprar ? { cmp: r.comprar } : {}),
               hv, pr: m.f12.map(r3), ...(av ? { av: r3(av.v) } : {}), met: m.metodo, pat: m.fp?.patron || '', adi: m.fp?.adi != null ? r3(m.fp.adi) : null, cv2: m.fp?.cv2 != null ? r3(m.fp.cv2) : null,
               li: x.t || '', ge: x.g || '', fa: x.f || '', k: r3(r.p.k || 0), vd: r.metodo };

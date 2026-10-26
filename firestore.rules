@@ -107,7 +107,8 @@ service cloud.firestore {
       allow write: if publica();
     }
     match /faltantes_estado/{cod} {
-      allow read: if tieneVista('faltantes');
+      // también la ven las sucursales en "Lo que me van a atender" y Atención a sucursales
+      allow read: if tieneVista('faltantes') || tieneVista('atencion') || publica();
       allow create, update: if tieneVista('faltantes')
         && request.resource.data.porUid == request.auth.uid
         && request.resource.data.estado in ['descontinuado', 'agotado', 'transito', 'pendiente', 'alternativa'];
