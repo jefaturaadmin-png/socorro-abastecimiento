@@ -246,6 +246,7 @@ main.sin-sesion > section { display: none !important }
 .tag.su-est { margin-left: 6px; background: #ece6fa; color: #47308a; white-space: normal }
 .tag.su-est.descontinuado { background: #eee; color: #444 } .tag.su-est.agotado { background: #fde2dd; color: #a33b3b }
 .tag.su-est.vencida { background: #fde2dd; color: #a33b3b }
+#fpFarm tr.cero td { color: var(--muted) }
 .tag.su-resp { background: #fff4e0; color: #8a5a00; white-space: normal } .tag.su-resp.no_requiere { background: #fde2dd; color: #a33b3b } .tag.su-resp.otro_medicamento { background: #ddf0ec; color: #1e6b5f }
 .tag.su-est.transito { background: #dff0ec; color: #1f6b5f } .tag.su-est.pendiente { background: #fcf0d9; color: #7a4a00 }
 .su-crit { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; font-size: 13.5px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center }
@@ -1474,8 +1475,9 @@ function pintarFichaP() {
   const obj = S.mesObj;
   $('fpPres').innerHTML = [[7, 7], [15, 15], [30, 30]].map(([d, sg]) => `<button type="button" data-d="${d}" data-s="${sg}" aria-pressed="${S.cob === d && S.seg === sg}">${d} + ${sg}</button>`).join('');
   let hf = `<thead><tr><th class="c1 solo">Farmacia</th><th>Participación</th><th>Stock actual</th><th class="pj">Pronóstico ${et(obj)}</th><th class="tot">Entrega</th></tr></thead><tbody>`;
-  const filas = o.farmacias.map(f => ({ f, s: p.s?.[f] || 0, x: plan(p, f, obj) })).filter(r => r.s || r.x.stock).sort((a, b) => b.s - a.s);
-  for (const r of filas) hf += `<tr class="click" tabindex="0" data-farm="${esc(r.f)}" ${r.f === S.fpFarm ? 'style="outline:2px solid var(--accent);outline-offset:-2px"' : ''}><td class="c1 solo">${esc(r.f)}</td><td class="n">${pct(r.s)}</td><td class="n">${fmtS(p, conv(r.x.stock))}</td><td class="n pj">${nE(r.x.pron)}</td><td class="n tot ent">${r.x.entrega ? fmtS(p, conv(r.x.entrega)) : '·'}</td></tr>`;
+  // todas las farmacias: las que no vendieron en la base ni tienen stock van al final, en gris
+  const filas = o.farmacias.map(f => ({ f, s: p.s?.[f] || 0, x: plan(p, f, obj) })).sort((a, b) => b.s - a.s || b.x.stock - a.x.stock || a.f.localeCompare(b.f));
+  for (const r of filas) hf += `<tr class="click${r.s || r.x.stock ? '' : ' cero'}" tabindex="0" data-farm="${esc(r.f)}" ${r.f === S.fpFarm ? 'style="outline:2px solid var(--accent);outline-offset:-2px"' : ''}><td class="c1 solo">${esc(r.f)}${r.s || r.x.stock ? '' : ' <small class="muted">· sin venta ni stock</small>'}</td><td class="n">${pct(r.s)}</td><td class="n">${fmtS(p, conv(r.x.stock))}</td><td class="n pj">${nE(r.x.pron)}</td><td class="n tot ent">${r.x.entrega ? fmtS(p, conv(r.x.entrega)) : '·'}</td></tr>`;
   const te = sum(filas.map(r => r.x.entrega));
   hf += `</tbody><tfoot><tr><td class="c1 solo">Total farmacias · stock droguería ${fmtS(p, conv(p.sd || 0))}</td><td></td><td class="n">${fmtS(p, conv(sum(filas.map(r => r.x.stock))))}</td><td class="n">${nE(sum(filas.map(r => r.x.pron)))}</td><td class="n tot">${fmtS(p, conv(te))}</td></tr></tfoot>`;
   $('fpFarm').innerHTML = hf;
