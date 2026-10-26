@@ -16,7 +16,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610270500";
+const VERSION_PROY = "202610271100";
 const VERSION_COMP = "202610270100";
 
 /* ===================== utilidades ===================== */
@@ -1111,7 +1111,8 @@ function textoEstado(e) {
   const t = ESTADOS_F.find(x => x.id === e.estado)?.txt || e.estado;
   return e.estado === "agotado" && e.hasta ? `${t} hasta el ${fDia(e.hasta)}`
     : e.estado === "transito" && e.llega ? `${t} · llega el ${fDia(e.llega)}`
-    : e.estado === "alternativa" ? `${t}: ${(e.alternativas || []).map(a => `${a.c} ${a.n}`).join(" / ")}` : t;
+    : e.estado === "alternativa" ? `${t}: ${(e.alternativas || []).map(a => `${a.c} ${a.n}`).join(" / ")}`
+    : e.estado === "descontinuado" && e.alternativas?.length ? `${t} · lo reemplaza: ${e.alternativas.map(a => `${a.c} ${a.n}`).join(" / ")}` : t;
 }
 // Solo el administrador: genera y publica la lista con los datos de la proyección (abre en segundo plano el
 // módulo Atención a sucursales, que es el que la calcula).
@@ -1212,15 +1213,15 @@ function formResp(i, e) {
     ${est === "agotado" ? `<div class="campo"><span class="lbl">¿Hasta cuándo?</span><div class="pills verde fs-plazos">${PLAZOS.map(([id, t]) => `<label><input type="radio" name="fsPlazo" value="${id}" ${plazo === id ? "checked" : ""}>${t}</label>`).join("")}</div>
       ${plazo === "otra" ? `<input type="date" id="fsHasta" value="${esc(st.hasta ?? e?.hasta ?? "")}" min="${hoyISO()}">` : `<small class="ayuda">Hasta el ${fDia(sumarDias(PLAZOS.find(p => p[0] === plazo)?.[2] || 30))}</small>`}</div>` : ""}
     ${est === "transito" ? `<div class="campo"><label for="fsLlega">Fecha estimada de llegada (opcional)</label><input type="date" id="fsLlega" value="${esc(st.llega ?? e?.llega ?? "")}"></div>` : ""}
-    ${est === "alternativa" ? formAlt(i, alts) : ""}
+    ${est === "alternativa" ? formAlt(i, alts) : est === "descontinuado" ? formAlt(i, alts, true) : ""}
     <div class="campo"><label for="fsCom">Comentario (opcional)</label><input id="fsCom" maxlength="200" value="${esc(st.comentario ?? e?.comentario ?? "")}" placeholder="Ej. proveedor confirma reposición"></div>
     <div class="msg" id="fsMsg" hidden></div>
     <div class="botones-fila"><button class="btn sm primario" type="button" data-guardar-f>Guardar</button>${e ? '<button class="btn sm" type="button" data-borrar-f>Quitar respuesta</button>' : ""}<button class="btn sm" type="button" data-cerrar-f>Cancelar</button></div>
   </div>`;
 }
-function formAlt(i, alts) {
+function formAlt(i, alts, opcional) {
   const ge = genDe(i), mismos = (ge && GEN ? (GEN.por.get(ge) || []) : GEN ? parecidos(i) : []).filter(p => p.c !== i.c && !alts.some(a => a.c === p.c));
-  return `<div class="campo buscador"><span class="lbl">Medicamentos que lo reemplazan (hasta ${MAX_ALT}) · elegidos ${alts.length} de ${MAX_ALT}</span>
+  return `<div class="campo buscador"><span class="lbl">${opcional ? "¿Lo reemplaza otro medicamento? (opcional; si no hay, déjalo vacío)" : "Medicamentos que lo reemplazan"} (hasta ${MAX_ALT}) · elegidos ${alts.length} de ${MAX_ALT}</span>
     <div class="fs-alts">${alts.map((a, k) => `<span class="fs-alt">${esc(a.c)} - ${esc(a.n)} <button type="button" class="enlace" data-quitar-alt="${k}">Quitar</button></span>`).join("")}</div>
     ${alts.length < MAX_ALT ? `<div class="fs-mismo"><b>${ge ? `Del mismo genérico: ${esc(ge)}` : "De nombre parecido (no se conoce su genérico)"}</b>
         ${!GEN ? '<small class="muted">Cargando…</small>'
@@ -1279,6 +1280,7 @@ $("fsMas").addEventListener("click", ev => { if (ev.target.closest("#fsMasBtn"))
     if (!d.hasta) return msg("fsMsg", "Elige la fecha hasta la que estará agotado.", true);
   }
   if (estado === "transito") d.llega = f.llega ?? prev.llega ?? "";
+  if (estado === "descontinuado" && S.fAlt.length) d.alternativas = S.fAlt.slice(0, MAX_ALT);
   if (estado === "alternativa") { if (!S.fAlt.length) return msg("fsMsg", `Elige el medicamento que lo reemplaza (hasta ${MAX_ALT}).`, true); d.alternativas = S.fAlt.slice(0, MAX_ALT); }
   try { await setDoc(doc(db, "faltantes_estado", c), d); S.fAbierto = null; S.fForm = null; toast("Respuesta guardada"); pintarFalt(); }
   catch (err) { msg("fsMsg", textoError(err), true); }
@@ -1314,7 +1316,12 @@ function escucharAten() {
     S.subs.push(onSnapshot(collection(db, "faltantes_estado"), sn => { S.fEst = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === "vAten" && !S.atEdit) pintarAten(); },
       () => { S.fEstAten = false; })); }
 }
-const tagDrog = c => { const e = estVig(c); return e ? `<span class="tag fs-tag ${esc(e.estado)} at-drog" title="${esc((e.porNombre || "") + (e.comentario ? ": " + e.comentario : ""))}">Droguería: ${esc(textoEstado(e))}${e.comentario ? " · " + esc(e.comentario) : ""}</span>` : ""; };
+const tagDrog = i => { const e = estVig(i.c); if (!e) return "";
+  // el stock que tiene la sucursal del medicamento que indicó droguería
+  const alts = (i.alt || []).map(a => a.st > 0
+    ? `<span class="tag t-ok at-drog">✓ Tienes ${fCaja(a.st)} de ${esc(a.c)} ${esc(a.n)}${a.cob != null ? ` · te cubre ${nf(a.cob)} días` : ""}</span>`
+    : `<span class="tag t-pend at-drog">✗ No tienes ${esc(a.c)} ${esc(a.n)}</span>`).join("");
+  return `<span class="tag fs-tag ${esc(e.estado)} at-drog" title="${esc((e.porNombre || "") + (e.comentario ? ": " + e.comentario : ""))}">Droguería: ${esc(textoEstado(e))}${e.comentario ? " · " + esc(e.comentario) : ""}</span>${alts}`; };
 // Lo que el químico puede responder sobre cada producto que le van a enviar
 const RESP_AT = [
   { id: "no_requiere", txt: "No se requiere en esta sucursal", clase: "t-rech" },
@@ -1409,16 +1416,16 @@ function pintarAten() {
     && (!q || q.split(/\s+/).every(w => norm(i.c + " " + i.n + " " + i.l).includes(w))));
   $("atTit").textContent = `${nf(lista.length)} productos · ${nf(lista.filter(i => i.urg).length)} urgentes`;
   const colCob = i => i.d <= 0 ? "#9e9e9e" : i.cob == null ? "#1e6bb8" : i.cob < A.Sg ? "#d9302c" : i.cob < A.C + A.Sg ? "#e0a030" : "#43a047";
-  $("atTabla").innerHTML = `<thead><tr><th>Producto</th><th class="at-ojo">Información</th><th>Tipo</th><th class="der">Cobertura</th><th class="der">Venta diaria</th><th class="der">Tu stock</th><th class="der">Necesita (${A.C} + ${A.Sg} d)</th><th class="der">Se te enviará</th><th>Nota</th><th>Respuesta de la sucursal</th></tr></thead><tbody>` +
+  $("atTabla").innerHTML = `<thead><tr><th>Producto</th><th class="at-ojo">Información</th><th>Tipo</th><th class="der">Cobertura</th><th class="der">Venta diaria</th><th class="der">Tu stock</th><th class="der">Se te enviará</th><th>Nota</th><th>Respuesta de la sucursal</th></tr></thead><tbody>` +
     (lista.length ? lista.map(i => `<tr><td class="p"><b>${esc(i.c)} - ${esc(i.n)}</b><code>${esc(i.l)}</code></td>
       <td class="at-ojo">${i.hv ? `<button type="button" class="at-ibtn" data-info="${esc(i.c)}" title="Ver la información de este producto en tu local" aria-label="Información de ${esc(i.n)}">${OJO}</button>` : ""}</td>
       <td><span class="at-cat ${esc(i.cat)}">${esc(i.cat)}</span></td>
       <td class="der"><span class="at-cob" style="background:${colCob(i)}">${i.d <= 0 ? "sin venta" : i.cob == null ? "–" : nf(i.cob) + " días"}</span></td>
-      <td class="der">${fCaja(i.d, i.fr)}</td><td class="der">${fCaja(i.st, i.fr)}</td><td class="der">${fCaja(i.nec, i.fr)}</td>
+      <td class="der">${fCaja(i.d, i.fr)}</td><td class="der">${fCaja(i.st, i.fr)}</td>
       <td class="der"><b>${i.pide ? nf(i.pide) : "–"}</b></td>
-      <td class="at-nota">${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${(i.de || []).map(x => `<span class="tag t-ok">${nf(x.q)} de ${esc(x.f)}</span>`).join(" ")}${i.cmp ? `<span class="tag t-rech">${nf(i.cmp)} por comprar</span>` : ""}${i.cmb ? `<span class="tag t-ok">En cambio de ${esc(i.cmb)}</span>` : ""}${tagDrog(i.c)}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td>
+      <td class="at-nota">${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${(i.de || []).map(x => `<span class="tag t-ok">${nf(x.q)} de ${esc(x.f)}</span>`).join(" ")}${i.cmp ? `<span class="tag t-rech">${nf(i.cmp)} por comprar</span>` : ""}${i.cmb ? `<span class="tag t-ok">En cambio de ${esc(i.cmb)}</span>` : ""}${tagDrog(i)}${i.rmp ? `<span class="tag t-rech at-drog">No se te envía: droguería lo reemplaza por ${esc(i.rmp)}</span>` : ""}${i.enl ? `<span class="tag t-ok at-drog">Se te envía en lugar de ${esc(i.enl)} (droguería)</span>` : ""}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td>
       <td class="at-resp">${celdaResp(i)}</td></tr>`).join("")
-      : `<tr class="vacia"><td colspan="10">Nada que mostrar.</td></tr>`) + "</tbody>";
+      : `<tr class="vacia"><td colspan="9">Nada que mostrar.</td></tr>`) + "</tbody>";
   const iEd = S.atEdit && (A.items || []).find(x => x.c === S.atEdit);
   ventanaResp("atDlg", iEd ? `<h2>${esc(iEd.c)} - ${esc(iEd.n)}</h2><p class="muted">${esc(iEd.l || "")} · se te enviará ${nf(iEd.pide || 0)}</p>` + formRespAt(iEd) : "");
   pintarLados();
@@ -1585,8 +1592,9 @@ $("atXls").addEventListener("click", () => {
   if (!A?.items?.length) return toast("Aún no hay lista publicada para descargar.");
   const datos = A.items.map(i => { const r = S.atResp?.get(i.c);
     return { "Código": i.c, Producto: i.n, Laboratorio: i.l || "", Tipo: i.cat || "", "Cobertura (días)": i.d <= 0 ? "sin venta" : i.cob ?? "",
-      "Venta diaria": +Number(i.d || 0).toFixed(2), "Tu stock": i.st, [`Necesita (${A.C} + ${A.Sg} d)`]: +Number(i.nec || 0).toFixed(2), "Se te enviará": i.pide || 0,
-      Urgente: i.urg ? "Sí" : "", Nota: [i.pide && i.falta ? `${i.falta} sin stock en droguería` : "", ...(i.de || []).map(x => `${x.q} de ${x.f}`), i.cmp ? `${i.cmp} por comprar` : "", i.aj ? "Criterio propio: " + i.aj : "", i.cmb ? "En cambio de " + i.cmb : ""].filter(Boolean).join(" · "),
+      "Venta diaria": +Number(i.d || 0).toFixed(2), "Tu stock": i.st, "Se te enviará": i.pide || 0,
+      Urgente: i.urg ? "Sí" : "", Nota: [i.pide && i.falta ? `${i.falta} sin stock en droguería` : "", ...(i.de || []).map(x => `${x.q} de ${x.f}`), i.cmp ? `${i.cmp} por comprar` : "", i.aj ? "Criterio propio: " + i.aj : "", i.cmb ? "En cambio de " + i.cmb : "", i.rmp ? "Droguería lo reemplaza por " + i.rmp : "", i.enl ? "En lugar de " + i.enl : "",
+        ...(i.alt || []).map(a => `${a.c} ${a.n}: tienes ${a.st}${a.cob != null ? ` (${a.cob} días)` : ""}`)].filter(Boolean).join(" · "),
       "Respuesta de droguería": estVig(i.c) ? textoEstado(estVig(i.c)) + (estVig(i.c).comentario ? " · " + estVig(i.c).comentario : "") : "",
       Respuesta: r ? RESP_AT.find(x => x.id === r.estado)?.txt || r.estado : "", "Medicamento en su cambio": r?.alternativa || "", Comentario: r?.comentario || "",
       "Respondió": r?.porNombre || "", Fecha: r ? aFecha(r.fecha) || "" : "" }; });
