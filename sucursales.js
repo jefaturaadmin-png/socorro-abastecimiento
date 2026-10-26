@@ -137,9 +137,12 @@
         // el original sin stock en droguería y con reemplazo: no se pide (se atiende el reemplazo)
         const rd = reempDe.get(p.c); let reemp = '', pideOrig = 0;
         if (rd && pide > 0 && !cambio && !(+(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) > 0)) { pideOrig = pide; pide = 0; reemp = rd.c + ' - ' + rd.n; nota = 'droguería lo reemplaza por ' + rd.c; }
+        // descontinuado (sin reemplazo) y sin stock en droguería: tampoco se pide
+        const de = S.suEstados.get(p.c);
+        if (!reemp && pide > 0 && !cambio && de?.estado === 'descontinuado' && !vencida(de) && !(+(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) > 0)) { pideOrig = pide; pide = 0; nota = 'descontinuado (droguería)'; }
         const exceso = !bloq && st > 0 && (d === 0 ? st >= 1 : st - nec * 2 >= 1) ? Math.floor(d === 0 ? st : st - nec) : 0;
         return { p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide, nota, bloq, exceso, o, aj, urgente: d > 0 && st < seg && !bloq && o.modo !== 'excluir',
-          ...(cambio ? { cambio: cambio.orig.c + ' - ' + cambio.orig.n } : {}), ...(reemp ? { reemp, pideOrig } : {}), ...(enLugar.length && extra ? { enLugar: enLugar.join(', ') } : {}) };
+          ...(cambio ? { cambio: cambio.orig.c + ' - ' + cambio.orig.n } : {}), ...(reemp ? { reemp } : {}), ...(pideOrig ? { pideOrig } : {}), ...(enLugar.length && extra ? { enLugar: enLugar.join(', ') } : {}) };
   }
   // respuestas de las sucursales (atencion_resp): el producto que dejan de usar y el que usan en su cambio
   let respVer = 0, cambios = new Map(), prodIdx = null;

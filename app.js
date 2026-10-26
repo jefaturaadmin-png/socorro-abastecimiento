@@ -16,7 +16,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610271300";
+const VERSION_PROY = "202610271500";
 const VERSION_COMP = "202610270100";
 
 /* ===================== utilidades ===================== */
@@ -1331,19 +1331,29 @@ const textoResp = r => { const o = RESP_AT.find(x => x.id === r.estado); return 
 // stock y venta diaria de la sucursal (red/stk_SUCURSAL, se publica con la lista) para el medicamento de cambio
 async function cargarStkSuc(suc, ver) {
   const k = suc + "|" + (ver || ""); if (S.atStkK === k) return; S.atStkK = k;
-  try { const d = await getDoc(doc(db, "red", "stk_" + suc)); S.atStk = d.exists() ? d.data().p || {} : {}; } catch { S.atStk = {}; }
+  try { const d = await getDoc(doc(db, "red", "stk_" + suc)); S.atStkOk = d.exists(); S.atStk = d.exists() ? d.data().p || {} : {}; } catch { S.atStkOk = false; S.atStk = {}; }
   if (S.vista === "vAten") pintarAten();
 }
 // cuánto tiene la sucursal del medicamento c (que usa en lugar de i) y, si no le alcanza, cuánto se le enviaría
 function stockCambio(i, c) {
   const A = S.aten || {}, dias = (A.C || 0) + (A.Sg || 0);
   if (!S.atStk) return { cls: "", txt: "Revisando tu stock…" };
+  if (!S.atStkOk) return { cls: "", txt: "Tu stock de este medicamento se verá cuando Abastecimiento vuelva a publicar la lista" };
+  // el de cambio pasa a cubrir también la venta del original: su venta diaria es la mayor de las dos
   const [st = 0, dA = 0] = S.atStk[c] || [], d = Math.max(dA, i?.d || 0), cob = d > 0 ? Math.floor(st / d) : null;
-  if (st > 0 && (d <= 0 || st >= d * dias)) return { cls: "t-ok", txt: `✓ Tienes ${fCaja(st)}${cob != null ? ` · te cubre ${nf(cob)} días` : ""}` };
+  if (st > 0 && (d <= 0 || st >= d * dias)) return { cls: "t-ok", txt: `✓ Tienes ${fCaja(st)}${cob != null ? ` · te cubre ${nf(cob)} días` : ""} · no necesitas que te envíen` };
   const env = d > 0 ? Math.max(1, Math.ceil(d * dias - st - 1e-9)) : 0;
   return { cls: "t-pend", txt: `${st > 0 ? `Tienes ${fCaja(st)} (te cubre ${nf(cob)} días)` : "✗ No tienes"}${env ? ` · se te enviarán ${nf(env)} para ${A.C} + ${A.Sg} días` : ""}` };
 }
 const tagStock = (i, c, pre = "") => { const x = stockCambio(i, c); return `<span class="tag ${x.cls} at-drog">${pre}${esc(x.txt)}</span>`; };
+// el producto ya no se le envía: la sucursal usa otro en su cambio, o droguería lo dio por descontinuado o reemplazado
+function noEnvia(i) {
+  const r = S.atResp?.get(i.c), e = estVig(i.c);
+  if (r?.estado === "otro_medicamento" && r.altCod) return `usas en su cambio ${r.alternativa || r.altCod}`;
+  if (i.rmp) return `droguería lo reemplaza por ${i.rmp}`;
+  if (e?.estado === "descontinuado") return e.alternativas?.length ? `descontinuado; lo reemplaza ${e.alternativas[0].c} ${e.alternativas[0].n}` : "descontinuado (droguería)";
+  return "";
+}
 function celdaResp(i) {
   // el cierre del ingreso de información es para los bloqueos: responder aquí siempre se puede
   const r = S.atResp?.get(i.c), puede = puedeResponderAt();
@@ -1436,8 +1446,9 @@ function pintarAten() {
       <td><span class="at-cat ${esc(i.cat)}">${esc(i.cat)}</span></td>
       <td class="der"><span class="at-cob" style="background:${colCob(i)}">${i.d <= 0 ? "sin venta" : i.cob == null ? "–" : nf(i.cob) + " días"}</span></td>
       <td class="der">${fCaja(i.d, i.fr)}</td><td class="der">${fCaja(i.st, i.fr)}</td>
-      <td class="der"><b>${i.pide ? nf(i.pide) : "–"}</b></td>
-      <td class="at-nota">${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${(i.de || []).map(x => `<span class="tag t-ok">${nf(x.q)} de ${esc(x.f)}</span>`).join(" ")}${i.cmp ? `<span class="tag t-rech">${nf(i.cmp)} por comprar</span>` : ""}${i.cmb ? `<span class="tag t-ok">En cambio de ${esc(i.cmb)}</span>` : ""}${tagDrog(i)}${i.rmp ? `<span class="tag t-rech at-drog">No se te envía: droguería lo reemplaza por ${esc(i.rmp)}</span>` : ""}${i.enl ? `<span class="tag t-ok at-drog">Se te envía en lugar de ${esc(i.enl)} (droguería)</span>` : ""}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td>
+      <td class="der">${noEnvia(i) ? '<span class="muted">No</span>' : `<b>${i.pide ? nf(i.pide) : "–"}</b>`}</td>
+      <td class="at-nota">${noEnvia(i) ? `<span class="tag t-rech at-drog">No se te envía: ${esc(noEnvia(i))}</span>`
+        : `${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${(i.de || []).map(x => `<span class="tag t-ok">${nf(x.q)} de ${esc(x.f)}</span>`).join(" ")}${i.cmp ? `<span class="tag t-rech">${nf(i.cmp)} por comprar</span>` : ""}`}${i.cmb ? `<span class="tag t-ok">En cambio de ${esc(i.cmb)}</span>` : ""}${tagDrog(i)}${i.enl ? `<span class="tag t-ok at-drog">Se te envía en lugar de ${esc(i.enl)} (droguería)</span>` : ""}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td>
       <td class="at-resp">${celdaResp(i)}</td></tr>`).join("")
       : `<tr class="vacia"><td colspan="9">Nada que mostrar.</td></tr>`) + "</tbody>";
   const iEd = S.atEdit && (A.items || []).find(x => x.c === S.atEdit);
