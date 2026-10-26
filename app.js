@@ -286,6 +286,7 @@ function render() {
   else if (S.vista === "vFalt") { escucharFalt(); pintarFalt(); }
   else if (S.vista === "vAten") { escucharAten(); pintarAten(); }   // escucharFalt vuelve a conectar si se había cortado
   pintarSel("bq"); pintarSel("ab"); pintarLados();
+  $("ayuda").classList.toggle("mini", S.vista !== "vInicio");   // fuera del inicio solo el ícono, para no tapar botones
 }
 
 /* ===================== inicio (menú principal) ===================== */
@@ -1145,6 +1146,21 @@ function pintarFalt() {
   $("fsMas").innerHTML = lista.length > vis.length ? `<button class="btn" type="button" id="fsMasBtn">Ver ${Math.min(100, lista.length - vis.length)} más (de ${nf(lista.length)})</button>` : "";
 }
 const nf = v => Number(v || 0).toLocaleString("es-PE");
+// Genérico de cada producto del catálogo (clasificacion.json, por nombre): para ofrecer primero los del mismo genérico.
+const MAX_ALT = 4;
+let GEN = null;
+function cargarGenericos() {
+  cargarGenericos.p ??= fetch("clasificacion.json").then(r => r.json()).then(c => {
+    const nomN = x => String(x || "").trim().toUpperCase().replace(/\s+/g, " "), g = { de: new Map(), por: new Map() };
+    for (const p of S.catalogo) {
+      const a = c.p[nomN(p.n)], ge = a && c.g[a[1]]; if (!ge) continue;
+      g.de.set(p.c, ge); if (!g.por.has(ge)) g.por.set(ge, []); g.por.get(ge).push(p);
+    }
+    GEN = g;
+  }).catch(() => { GEN = { de: new Map(), por: new Map() }; }).then(() => { if (S.fAbierto) pintarFalt(); });
+  return cargarGenericos.p;
+}
+const genDe = i => i?.ge || GEN?.de.get(i?.c) || "";
 function formResp(i, e) {
   const st = S.fForm || {};
   const est = st.estado ?? e?.estado ?? "";
@@ -1155,13 +1171,22 @@ function formResp(i, e) {
     ${est === "agotado" ? `<div class="campo"><span class="lbl">¿Hasta cuándo?</span><div class="pills verde fs-plazos">${PLAZOS.map(([id, t]) => `<label><input type="radio" name="fsPlazo" value="${id}" ${plazo === id ? "checked" : ""}>${t}</label>`).join("")}</div>
       ${plazo === "otra" ? `<input type="date" id="fsHasta" value="${esc(st.hasta ?? e?.hasta ?? "")}" min="${hoyISO()}">` : `<small class="ayuda">Hasta el ${fDia(sumarDias(PLAZOS.find(p => p[0] === plazo)?.[2] || 30))}</small>`}</div>` : ""}
     ${est === "transito" ? `<div class="campo"><label for="fsLlega">Fecha estimada de llegada (opcional)</label><input type="date" id="fsLlega" value="${esc(st.llega ?? e?.llega ?? "")}"></div>` : ""}
-    ${est === "alternativa" ? `<div class="campo buscador"><label for="fsBus">Medicamento que lo reemplaza (hasta 2)</label>
-      <div class="fs-alts">${alts.map((a, k) => `<span class="fs-alt">${esc(a.c)} - ${esc(a.n)} <button type="button" class="enlace" data-quitar-alt="${k}">Quitar</button></span>`).join("")}</div>
-      ${alts.length < 2 ? `<input id="fsBus" type="search" autocomplete="off" placeholder="Código o nombre del otro medicamento"><div class="resultados" id="fsRes" hidden></div>` : ""}</div>` : ""}
+    ${est === "alternativa" ? formAlt(i, alts) : ""}
     <div class="campo"><label for="fsCom">Comentario (opcional)</label><input id="fsCom" maxlength="200" value="${esc(st.comentario ?? e?.comentario ?? "")}" placeholder="Ej. proveedor confirma reposición"></div>
     <div class="msg" id="fsMsg" hidden></div>
     <div class="botones-fila"><button class="btn sm primario" type="button" data-guardar-f>Guardar</button>${e ? '<button class="btn sm" type="button" data-borrar-f>Quitar respuesta</button>' : ""}<button class="btn sm" type="button" data-cerrar-f>Cancelar</button></div>
   </div>`;
+}
+function formAlt(i, alts) {
+  const ge = genDe(i), mismos = ge && GEN ? (GEN.por.get(ge) || []).filter(p => p.c !== i.c && !alts.some(a => a.c === p.c)) : [];
+  return `<div class="campo buscador"><span class="lbl">Medicamentos que lo reemplazan (hasta ${MAX_ALT}) · elegidos ${alts.length} de ${MAX_ALT}</span>
+    <div class="fs-alts">${alts.map((a, k) => `<span class="fs-alt">${esc(a.c)} - ${esc(a.n)} <button type="button" class="enlace" data-quitar-alt="${k}">Quitar</button></span>`).join("")}</div>
+    ${alts.length < MAX_ALT ? `<div class="fs-mismo"><b>Del mismo genérico${ge ? `: ${esc(ge)}` : ""}</b>
+        ${!GEN ? '<small class="muted">Cargando…</small>' : !ge ? '<small class="muted">No se conoce el genérico de este producto: búscalo abajo.</small>'
+          : mismos.length ? `<div class="fs-mismo-lista">${mismos.map(p => `<button type="button" data-alt="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)}${p.ln || p.l ? ` <small>${esc(p.ln || p.l)}</small>` : ""}</button>`).join("")}</div>`
+          : '<small class="muted">No hay otros productos con este genérico en el listado: búscalo abajo.</small>'}</div>
+      <label for="fsBus">¿No está? Búscalo en el listado general</label>
+      <input id="fsBus" type="search" autocomplete="off" placeholder="Código o nombre del otro medicamento"><div class="resultados" id="fsRes" hidden></div>` : ""}</div>`;
 }
 function leerForm() {
   const g = n => document.querySelector(`input[name="${n}"]:checked`)?.value;
@@ -1170,8 +1195,8 @@ function leerForm() {
 }
 function abrirResp(c) {
   if (S.fAbierto === c) { S.fAbierto = null; S.fForm = null; return pintarFalt(); }
-  const e = S.fEst.get(c); S.fAbierto = c; S.fForm = null; S.fAlt = (e?.alternativas || []).slice(0, 2);
-  pintarFalt();
+  const e = S.fEst.get(c); S.fAbierto = c; S.fForm = null; S.fAlt = (e?.alternativas || []).slice(0, MAX_ALT);
+  cargarGenericos(); pintarFalt();
 }
 $("fsChips").addEventListener("click", ev => { const b = ev.target.closest("[data-est]"); if (b) { S.fFil.est = b.dataset.est; S.fMostrar = 100; pintarFalt(); } });
 $("fsEst").addEventListener("change", ev => { S.fFil.est = ev.target.value; S.fMostrar = 100; pintarFalt(); });
@@ -1184,14 +1209,17 @@ $("fsTabla").addEventListener("change", ev => {
 });
 $("fsTabla").addEventListener("input", ev => {
   if (ev.target.id !== "fsBus") return;
-  const r = buscarCat(ev.target.value).filter(p => p.c !== S.fAbierto && !S.fAlt.some(a => a.c === p.c)).slice(0, 8), box = $("fsRes");
+  // primero los del mismo genérico; si no, cualquiera del listado general
+  const ge = genDe((S.falt?.items || []).find(i => i.c === S.fAbierto) || { c: S.fAbierto }), q = norm(ev.target.value).trim().split(/\s+/);
+  const deGen = ge && GEN ? (GEN.por.get(ge) || []).filter(p => q.every(w => p.k.includes(w))) : [];
+  const r = [...new Set([...deGen, ...buscarCat(ev.target.value)])].filter(p => p.c !== S.fAbierto && !S.fAlt.some(a => a.c === p.c)).slice(0, 10), box = $("fsRes");
   box.hidden = !r.length;
-  box.innerHTML = r.map(p => `<button type="button" data-alt="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)}${p.ln ? ` <small>${esc(p.ln)}</small>` : ""}</button>`).join("");
+  box.innerHTML = r.map(p => `<button type="button" data-alt="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)}${p.ln ? ` <small>${esc(p.ln)}</small>` : ""}${ge && GEN?.de.get(p.c) === ge ? ' <span class="tag t-ok">mismo genérico</span>' : ""}</button>`).join("");
 });
 $("fsTabla").addEventListener("click", async ev => {
   const r = ev.target.closest("[data-resp]"); if (r) return abrirResp(r.dataset.resp);
   const a = ev.target.closest("[data-alt]");
-  if (a) { const p = S.catIdx.get(a.dataset.alt); if (p && S.fAlt.length < 2) S.fAlt.push({ c: p.c, n: p.n }); leerForm(); pintarFalt(); $("fsBus")?.focus(); return; }
+  if (a) { const p = S.catIdx.get(a.dataset.alt); if (p && S.fAlt.length < MAX_ALT) S.fAlt.push({ c: p.c, n: p.n }); leerForm(); pintarFalt(); $("fsBus")?.focus(); return; }
   const q = ev.target.closest("[data-quitar-alt]"); if (q) { S.fAlt.splice(+q.dataset.quitarAlt, 1); leerForm(); return pintarFalt(); }
   if (ev.target.closest("[data-cerrar-f]")) { S.fAbierto = null; S.fForm = null; return pintarFalt(); }
   const c = S.fAbierto; if (!c) return;
@@ -1213,7 +1241,7 @@ $("fsTabla").addEventListener("click", async ev => {
     if (!d.hasta) return msg("fsMsg", "Elige la fecha hasta la que estará agotado.", true);
   }
   if (estado === "transito") d.llega = f.llega ?? prev.llega ?? "";
-  if (estado === "alternativa") { if (!S.fAlt.length) return msg("fsMsg", "Busca y elige el medicamento que lo reemplaza (hasta 2).", true); d.alternativas = S.fAlt.slice(0, 2); }
+  if (estado === "alternativa") { if (!S.fAlt.length) return msg("fsMsg", `Elige el medicamento que lo reemplaza (hasta ${MAX_ALT}).`, true); d.alternativas = S.fAlt.slice(0, MAX_ALT); }
   try { await setDoc(doc(db, "faltantes_estado", c), d); S.fAbierto = null; S.fForm = null; toast("Respuesta guardada"); pintarFalt(); }
   catch (err) { msg("fsMsg", textoError(err), true); }
 });

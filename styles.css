@@ -538,3 +538,12 @@ th.at-ojo, td.at-ojo { text-align: center; width: 90px }
 #vInicio > .wrap { display: flex; flex-direction: column; min-height: calc(100vh - 72px) }
 #vInicio .ini-mods { margin-bottom: 26px }
 @media (min-width: 760px) { #vInicio .ini-hero { margin-right: 230px } }
+.fs-mismo { display: grid; gap: 6px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 4px }
+.fs-mismo-lista { display: grid; gap: 2px; max-height: 220px; overflow: auto }
+.fs-mismo-lista button { font: inherit; font-size: 13px; text-align: left; background: none; border: 0; border-radius: 6px; padding: 6px 8px; cursor: pointer; color: var(--fg) }
+.fs-mismo-lista button:hover { background: var(--brand-soft) }
+.fs-mismo-lista small { color: var(--muted) }
+/* fuera del inicio la ayuda es solo un ícono pequeño y la página deja espacio abajo para no tapar botones */
+.ayuda.mini .ayuda-burbuja { display: none }
+.ayuda.mini .ayuda-avatar { width: 50px; height: 50px; border-width: 2px }
+main { padding-bottom: 80px }
