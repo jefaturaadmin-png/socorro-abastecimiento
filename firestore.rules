@@ -85,7 +85,7 @@ service cloud.firestore {
       allow delete: if false;   // nada se borra
     }
 
-    // ---------- proyección de compras: solo el administrador ----------
+    // ---------- proyección de compras: el administrador o quien tenga un módulo que la use ----------
     match /proy_config/{id} { allow read, write: if verProy(); }
     match /proy_meses/{id} { allow read, write: if verProy(); }
     match /proy_elecciones/{id} { allow read, write: if verProy(); }
@@ -94,7 +94,7 @@ service cloud.firestore {
       match /partes/{parte} { allow read, write: if verProy(); }
     }
 
-    // ---------- comparativo de precios: solo el administrador ----------
+    // ---------- comparativo de precios: el administrador o quien tenga el módulo Comparativo ----------
     match /comp_config/{id} { allow read, write: if tieneVista('comparativo'); }
     match /comp_blobs/{id} {
       allow read, write: if tieneVista('comparativo');
