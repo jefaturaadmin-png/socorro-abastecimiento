@@ -1281,9 +1281,10 @@ const RESP_AT = [
 const puedeResponderAt = () => !esAdmin() && (S.perfil?.vistas || []).includes("atencion") && !!miFarm();
 const textoResp = r => { const o = RESP_AT.find(x => x.id === r.estado); return (o?.txt || r.estado) + (r.alternativa ? ": " + r.alternativa : "") + (r.comentario ? (r.alternativa ? " · " : ": ") + r.comentario : ""); };
 function celdaResp(i) {
-  const r = S.atResp?.get(i.c), puede = puedeResponderAt() && !cerradoParaMi();
+  // el cierre del ingreso de información es para los bloqueos: responder aquí siempre se puede
+  const r = S.atResp?.get(i.c), puede = puedeResponderAt();
   const ver = r ? `<span class="tag ${RESP_AT.find(x => x.id === r.estado)?.clase || ""} at-rtag">${esc(textoResp(r))}</span><small class="muted at-rpor">${esc(r.porNombre || "")} · ${fmtF(r.fecha)}</small>` : "";
-  return ver + (puede ? `<button type="button" class="btn sm at-rbtn" data-resp="${esc(i.c)}">${r ? "Cambiar" : "Responder"}</button>` : r ? "" : '<span class="muted">–</span>');
+  return ver + (puede ? `<button type="button" class="btn sm at-rbtn${r ? "" : " primario"}" data-resp="${esc(i.c)}">${r ? "Cambiar" : "Responder"}</button>` : r ? "" : '<span class="muted">–</span>');
 }
 function formRespAt(i) {
   const r = S.atResp?.get(i.c) || {}, e = S.atForm?.estado ?? r.estado ?? "", o = RESP_AT.find(x => x.id === e);
