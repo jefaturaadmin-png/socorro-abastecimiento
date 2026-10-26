@@ -166,7 +166,13 @@
   function escucharEstados() {
     if (!FB || S.ejemplo || escucharEstados.ok) return; escucharEstados.ok = true;
     FB.onSnapshot(FB.collection(FB.db, 'faltantes_estado'), sn => { S.suEstados = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === 'suc') window.pintarSuc(); }, () => {});
+    // lo que responde cada sucursal en "Lo que me van a atender" (atencion_resp/{SUCURSAL}__{codpro})
+    FB.onSnapshot(FB.collection(FB.db, 'atencion_resp'), sn => { S.suResp = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === 'suc') window.pintarSuc(); }, () => {});
   }
+  const RESP_TXT = { no_requiere: 'No se requiere en esta sucursal', no_se_mueve: 'No se mueve', otro_medicamento: 'Tiene otro en su cambio', otros: 'Otros' };
+  const tagResp = (f, c) => { const r = S.suResp?.get(f + '__' + c); if (!r) return '';
+    const t = (RESP_TXT[r.estado] || r.estado) + (r.alternativa ? ': ' + r.alternativa : '') + (r.comentario ? (r.alternativa ? ' · ' : ': ') + r.comentario : '');
+    return ` · <span class="tag su-resp ${esc(r.estado)}" title="${esc('Respondió ' + (r.porNombre || '') + ': ' + t)}">💬 ${esc(t)}</span>`; };
   function listaFaltantes() {
     const items = [];
     for (const [c, x] of cache.porProd) {
@@ -301,7 +307,7 @@
     for (const r of vis) {
       const p = r.p, sel = S.suCur === p.c + '|' + r.f ? ' sel' : '';
       const falta = r.falta > 0 ? [...(r.desde || []).map(([f, q]) => `${nf0.format(q)} de ${esc(corto2(f))}`), r.comprar ? `<span class="neg">${nf0.format(r.comprar)} comprar</span>` : ''].filter(Boolean).join(' · ') + tagEstado(p.c) : '';
-      h += `<tr class="click${sel}" data-cod="${esc(p.c)}" data-f="${esc(r.f)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}">${esc(p.n)}${etiquetas(p)}<small class="sub">${esc(labDe(p.c))}${r.nota ? ' · ' + esc(r.nota) : ''}${r.aj ? ` · <span class="su-aj" title="${esc(ajTxt(r.aj))}">✎ ${esc(ajTxt(r.aj))}</span>` : ''}</small></td>
+      h += `<tr class="click${sel}" data-cod="${esc(p.c)}" data-f="${esc(r.f)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}">${esc(p.n)}${etiquetas(p)}<small class="sub">${esc(labDe(p.c))}${r.nota ? ' · ' + esc(r.nota) : ''}${r.aj ? ` · <span class="su-aj" title="${esc(ajTxt(r.aj))}">✎ ${esc(ajTxt(r.aj))}</span>` : ''}${tagResp(r.f, p.c)}</small></td>
         ${todas ? `<td>${esc(corto2(r.f))}</td>` : ''}<td style="text-align:center">${catBadge(r.cat)}</td>
         <td class="su-cob" style="background:${colorCob(r)}">${cobTxt(r)}</td><td class="n">${fmtE(p, r.d)}</td><td class="n">${fmtS(p, r.st)}</td><td class="n">${fmtE(p, r.nec)}</td>
         <td class="n sep tot ent">${r.pide ? nf0.format(r.pide) : r.exceso ? `<span class="tag">sobra ${nf0.format(r.exceso)}</span>` : '·'}</td><td class="n">${r.pide ? nf0.format(r.drog || 0) : ''}</td><td>${falta}</td>

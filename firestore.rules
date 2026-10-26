@@ -19,6 +19,10 @@ service cloud.firestore {
     function miFarmacia() { return perfil().farmacia; }
     // Vistas que el administrador le da a un usuario (p. ej. "faltantes"); el administrador las tiene todas.
     function tieneVista(v) { return conPerfil() && (rol() == 'admin' || v in perfil().get('vistas', [])); }
+    // Módulos que usan los datos de la proyección (kardex, pronósticos, mapa…): el administrador o quien tenga alguno.
+    function verProy() { return tieneVista('proyeccion') || tieneVista('kardex') || tieneVista('estadistica') || tieneVista('sucursales') || tieneVista('mapa'); }
+    // Quién puede publicar las listas para las sucursales (desde Atención a sucursales o al subir el kardex).
+    function publica() { return tieneVista('sucursales') || tieneVista('kardex'); }
     // Cierre del ingreso de información que programa el administrador en el usuario:
     // cierre = { desde: fecha y hora, hasta: fecha y hora o null }. Vigente entre esas horas.
     function cerrado() {
@@ -82,25 +86,25 @@ service cloud.firestore {
     }
 
     // ---------- proyección de compras: solo el administrador ----------
-    match /proy_config/{id} { allow read, write: if esAdmin(); }
-    match /proy_meses/{id} { allow read, write: if esAdmin(); }
-    match /proy_elecciones/{id} { allow read, write: if esAdmin(); }
+    match /proy_config/{id} { allow read, write: if verProy(); }
+    match /proy_meses/{id} { allow read, write: if verProy(); }
+    match /proy_elecciones/{id} { allow read, write: if verProy(); }
     match /proy_blobs/{id} {
-      allow read, write: if esAdmin();
-      match /partes/{parte} { allow read, write: if esAdmin(); }
+      allow read, write: if verProy();
+      match /partes/{parte} { allow read, write: if verProy(); }
     }
 
     // ---------- comparativo de precios: solo el administrador ----------
-    match /comp_config/{id} { allow read, write: if esAdmin(); }
+    match /comp_config/{id} { allow read, write: if tieneVista('comparativo'); }
     match /comp_blobs/{id} {
-      allow read, write: if esAdmin();
-      match /partes/{parte} { allow read, write: if esAdmin(); }
+      allow read, write: if tieneVista('comparativo');
+      match /partes/{parte} { allow read, write: if tieneVista('comparativo'); }
     }
 
     // ---------- faltantes de droguería: la lista la publica el administrador; responden los usuarios con la vista ----------
     match /faltantes/{id} {
-      allow read: if tieneVista('faltantes');
-      allow write: if esAdmin();
+      allow read: if tieneVista('faltantes') || publica();
+      allow write: if publica();
     }
     match /faltantes_estado/{cod} {
       allow read: if tieneVista('faltantes');
@@ -112,14 +116,24 @@ service cloud.firestore {
 
     // ---------- lo que se le va a atender a cada sucursal (solo lectura; lo publica el administrador) ----------
     match /atencion/{suc} {
-      allow read: if tieneVista('atencion') && (rol() == 'admin' || perfil().get('farmacia', '') == suc);
-      allow write: if esAdmin();
+      allow read: if (tieneVista('atencion') && (rol() == 'admin' || perfil().get('farmacia', '') == suc)) || publica();
+      allow write: if publica();
+    }
+    // respuesta del químico a lo que se le va a atender: id "<SUCURSAL>__<codpro>"
+    match /atencion_resp/{id} {
+      allow read: if publica() || (tieneVista('atencion') && resource.data.suc == perfil().get('farmacia', ''));
+      allow create, update: if tieneVista('atencion')
+        && request.resource.data.suc == perfil().get('farmacia', '')
+        && id == request.resource.data.suc + '__' + request.resource.data.codpro
+        && request.resource.data.porUid == request.auth.uid
+        && request.resource.data.estado in ['no_requiere', 'no_se_mueve', 'otro_medicamento', 'otros'];
+      allow delete: if tieneVista('atencion') && resource.data.suc == perfil().get('farmacia', '');
     }
 
     // ---------- el producto en toda la red (para el ojito de información; lo publica el administrador) ----------
     match /red/{id} {
-      allow read: if tieneVista('atencion') || tieneVista('faltantes');
-      allow write: if esAdmin();
+      allow read: if tieneVista('atencion') || tieneVista('faltantes') || publica();
+      allow write: if publica();
     }
 
     // ---------- historial: solo se agrega, nunca se cambia ni se borra ----------

@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
 import {
-  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updatePassword
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, updatePassword,
+  EmailAuthProvider, reauthenticateWithCredential
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
 import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, where,
@@ -15,8 +16,8 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610261200";
-const VERSION_COMP = "202610212000";
+const VERSION_PROY = "202610261800";
+const VERSION_COMP = "202610261800";
 
 /* ===================== utilidades ===================== */
 const $ = id => document.getElementById(id);
@@ -59,8 +60,16 @@ const S = {
 const esAdmin = () => S.perfil?.rol === "admin";
 // Vistas que el administrador puede darle a cualquier usuario (se guardan en usuarios/{uid}.vistas). Para agregar otra
 // más adelante basta con sumarla aquí y crear su sección en index.html.
-const VISTAS = [{ id: "faltantes", nombre: "Faltantes de droguería", vista: "vFalt" },
-  { id: "atencion", nombre: "Lo que me van a atender", vista: "vAten", ayuda: "solo químicos: ve su sucursal" }];
+// c: color del botón en el menú; ic: ícono; desc: lo que se ve en la pantalla de inicio.
+const VISTAS = [
+  { id: "kardex", nombre: "Kardex", vista: "vKar", c: "kar", ic: "i-bajar", desc: "Subir el kardex del día y publicar las listas", ayuda: "también publica las listas" },
+  { id: "proyeccion", nombre: "Proyección de compras", vista: "vProy", ic: "i-grafico", desc: "Pronóstico, reposición y alertas" },
+  { id: "comparativo", nombre: "Comparativo", vista: "vComp", c: "comp", ic: "i-lista", desc: "Comparar precios y proveedores" },
+  { id: "mapa", nombre: "Mapa de calor", vista: "vMapa", c: "mapa", ic: "i-grafico", desc: "Ventas por sucursal y mes" },
+  { id: "estadistica", nombre: "Estadística Proyx", vista: "vEst", c: "est", ic: "i-grafico", desc: "Pronóstico estadístico por producto" },
+  { id: "sucursales", nombre: "Atención a sucursales", vista: "vSuc", c: "suc", ic: "i-tienda", desc: "Qué enviar a cada sucursal", ayuda: "también publica las listas" },
+  { id: "faltantes", nombre: "Faltantes de droguería", vista: "vFalt", ic: "i-buscar", desc: "Productos en 0 en droguería que piden las sucursales" },
+  { id: "atencion", nombre: "Lo que me van a atender", vista: "vAten", ic: "i-ojo", desc: "Lo que Abastecimiento enviará a tu sucursal", ayuda: "solo químicos: ve su sucursal" }];
 const misVistas = () => esAdmin() ? VISTAS : VISTAS.filter(v => (S.perfil?.vistas || []).includes(v.id));
 const NOMBRE_ROL = { admin: "Administrador", quimico: "Químico", colaborador: "Colaborador" };
 const miFarm = () => S.perfil?.farmacia;
@@ -107,7 +116,7 @@ $("salir").addEventListener("click", () => signOut(auth));
 
 onAuthStateChanged(auth, async user => {
   S.subs.forEach(u => u()); S.subs = []; S.bloqueos = new Map(); S.perfil = null; $("avisoGlobal").hidden = true;
-  if (!user) { mostrar("vLogin"); $("top").hidden = true; return; }
+  if (!user) { mostrar("vLogin"); $("top").hidden = true; $("ayuda").hidden = $("ladoIzq").hidden = $("ladoDer").hidden = true; document.body.classList.remove("lado-i", "lado-d"); return; }
   try {
     const snap = await getDoc(doc(db, "usuarios", user.uid));
     if (!snap.exists() || [false, "false"].includes(snap.data().activo)) {
@@ -200,12 +209,12 @@ function iniciar() {
       if (S.vista === "vUsuarios" && !S.editando) pintarUsuarios();   // no borrar lo que se está editando
     }, e => avisar(e)));
     escucharFalt();
-    ir("vAdmin");
+    ir("vInicio");
   } else if (S.perfil.rol === "colaborador") {
     // Colaborador: solo ve las vistas que le dio el administrador.
     vigilarPerfil();
-    const v = misVistas()[0];
-    if (v) ir(v.vista); else { mostrar("vFalt"); avisar({ message: "Tu usuario aún no tiene vistas asignadas. Pide a Abastecimiento que te las habilite." }); }
+    ir("vInicio");
+    if (!misVistas().length) avisar({ message: "Tu usuario aún no tiene módulos asignados. Pide a Abastecimiento que te los habilite." });
   } else {
     $("qFarm").textContent = nombreFarm(miFarm());
     const mapas = { propia: new Map(), todas: new Map() };
@@ -224,8 +233,9 @@ function iniciar() {
       if (d.farmacia !== S.perfil.farmacia || String(d.rol || "").trim().toLowerCase() !== S.perfil.rol || [false, "false"].includes(d.activo) || d.cambiarClave === true
         || JSON.stringify(d.vistas || []) !== JSON.stringify(S.perfil.vistas || [])) location.reload();
     }));
-    ir("vQuimico");
+    ir("vInicio");
   }
+  montarAyuda();
 }
 // Si el administrador le cambia el rol, las vistas o lo deshabilita, se recarga con los datos nuevos.
 function vigilarPerfil() {
@@ -245,24 +255,17 @@ function avisar(e) { const a = $("avisoGlobal"); a.hidden = false; a.textContent
 
 function pintarNav() {
   const pend = [...S.bloqueos.values()].filter(d => d.estado === "bloqueado" && d.solicitud?.estado === "pendiente").length;
-  const items = esAdmin()
-    ? [["vAdmin", "Bloqueos" + (pend ? `<span class="badge">${pend}</span>` : "")],
-       ["vUsuarios", "Usuarios" + (solicitudesSucursal().length ? `<span class="badge">${solicitudesSucursal().length}</span>` : "")],
-       ["vKar", "Kardex", "kar"],
-       ["vProy", "Proyección de compras"],
-       ["vComp", "Comparativo", "comp"],
-       ["vMapa", "Mapa de calor", "mapa"],
-       ["vEst", "Estadística Proyx", "est"],
-       ["vSuc", "Atención a sucursales", "suc"],
-       ...VISTAS.map(v => [v.vista, v.nombre + (v.id === "faltantes" && faltSinResp() ? `<span class="badge">${faltSinResp()}</span>` : "")])]
-    : [...(S.perfil?.rol === "quimico" ? [["vQuimico", "Bloqueos"]] : []), ...misVistas().map(v => [v.vista, v.nombre])];
-  if (!esAdmin() && items.length < 2) items.length = 0;   // con una sola vista no hace falta menú
+  const items = [["vInicio", "🏠 Menú principal", "ini"],
+    ...(esAdmin() ? [["vAdmin", "Bloqueos" + (pend ? `<span class="badge">${pend}</span>` : "")],
+       ["vUsuarios", "Usuarios" + (solicitudesSucursal().length ? `<span class="badge">${solicitudesSucursal().length}</span>` : "")]]
+      : S.perfil?.rol === "quimico" ? [["vQuimico", "Bloqueos"]] : []),
+    ...misVistas().map(v => [v.vista, v.nombre + (esAdmin() && v.id === "faltantes" && faltSinResp() ? `<span class="badge">${faltSinResp()}</span>` : ""), v.c])];
   const actual = S.vista === "vFicha" ? S.origen : S.vista;
   $("nav").innerHTML = items.map(([v, t, c]) => `<button type="button" data-ir="${v}" ${c ? `class="${c}"` : ""} ${v === actual ? 'aria-current="page"' : ""}>${t}</button>`).join("");
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
@@ -275,14 +278,125 @@ function ir(vista) {
 function render() {
   if (!S.perfil) return;
   pintarNav();
-  if (S.vista === "vQuimico") pintarQuimico();
+  if (S.vista === "vInicio") pintarInicio();
+  else if (S.vista === "vQuimico") pintarQuimico();
   else if (S.vista === "vAdmin") pintarAdmin();
   else if (S.vista === "vUsuarios") pintarUsuarios();
   else if (S.vista === "vFicha") pintarFicha();
   else if (S.vista === "vFalt") { escucharFalt(); pintarFalt(); }
   else if (S.vista === "vAten") { escucharAten(); pintarAten(); }   // escucharFalt vuelve a conectar si se había cortado
-  pintarSel("bq"); pintarSel("ab");
+  pintarSel("bq"); pintarSel("ab"); pintarLados();
 }
+
+/* ===================== inicio (menú principal) ===================== */
+const FRASES = [
+  "Hoy es un gran día para crear nuevas oportunidades",
+  "Cada producto bien atendido es un paciente que se va contento",
+  "Los pequeños detalles hacen la gran diferencia",
+  "Trabajar en equipo hace que todo salga mejor",
+  "La constancia de hoy es el resultado de mañana",
+  "Un buen abastecimiento es el corazón de cada farmacia",
+  "Hoy es un buen día para dar lo mejor de ti",
+  "Ordenar hoy es ganar tiempo mañana",
+  "Tu esfuerzo cuida la salud de muchas familias",
+  "Con buena actitud todo problema tiene solución",
+  "Cada día es una nueva oportunidad para mejorar",
+  "Lo que se mide se puede mejorar",
+  "La atención con cariño se nota y se agradece",
+  "Juntos llegamos más lejos",
+  "Un paso a la vez, pero siempre hacia adelante",
+  "La calidad empieza por hacer bien lo sencillo",
+  "Hoy siembras, mañana cosechas",
+  "Que nunca falte lo que nuestros pacientes necesitan",
+  "Las metas grandes se logran con trabajo diario",
+  "Tu trabajo importa más de lo que imaginas",
+  "Sonríe: el buen ánimo también se contagia",
+  "Hacerlo bien a la primera ahorra el doble",
+  "La organización es la mejor medicina para el estrés",
+  "Cada sucursal cuenta, cada persona suma",
+  "Hoy es un gran día para aprender algo nuevo",
+  "El compromiso convierte una promesa en realidad",
+  "Servir bien es nuestra mejor carta de presentación",
+  "Lo importante no es correr, es no detenerse",
+  "Con datos claros se toman mejores decisiones",
+  "Gracias por ser parte de este gran equipo",
+  "La disciplina de hoy es la tranquilidad de mañana"
+];
+const fechaHoy = () => new Date().toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" });
+function pintarInicio() {
+  const p = S.perfil, hoy = new Date(), dia = Math.floor((hoy - new Date(hoy.getFullYear(), 0, 0)) / 864e5);
+  $("iniFrase").textContent = `“${FRASES[dia % FRASES.length]}, Farmacia Socorro.”`;
+  const larga = hoy.toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  $("iniFirma").textContent = larga[0].toUpperCase() + larga.slice(1) + " · " + fechaHoy();
+  $("iniHola").textContent = `Hola, ${(p.nombre || p.usuario || "").split(" ")[0]} 👋 ¿Qué haremos hoy?`;
+  const mods = [
+    ...(esAdmin() ? [{ vista: "vAdmin", nombre: "Bloqueos", ic: "i-candado", desc: "Productos bloqueados y reactivaciones" },
+      { vista: "vUsuarios", nombre: "Usuarios", ic: "i-usuario", desc: "Crear usuarios y darles módulos" }]
+      : p.rol === "quimico" ? [{ vista: "vQuimico", nombre: "Bloqueos", ic: "i-candado", desc: "Bloquear productos en tu farmacia" }] : []),
+    ...misVistas()];
+  $("iniMods").innerHTML = mods.length ? mods.map(m => `<button type="button" class="ini-mod ${esc(m.c || "")}" data-ir="${m.vista}">
+      <span class="im-ic"><svg width="26" height="26"><use href="#${m.ic || "i-lista"}"/></svg></span><b>${esc(m.nombre)}</b><small>${esc(m.desc || "")}</small></button>`).join("")
+    : `<p class="muted">Aún no tienes módulos asignados. Pide a Abastecimiento que te los habilite.</p>`;
+  const fila = (k, v) => `<tr><th>${k}</th><td>${v}</td></tr>`;
+  $("iniDatos").innerHTML = fila("Nombre", esc(p.nombre || "–")) + fila("Usuario", esc(p.usuario || auth.currentUser?.email || "–"))
+    + fila("Rol", esc(NOMBRE_ROL[p.rol] || p.rol)) + (p.farmacia ? fila("Sucursal", esc(nombreFarm(p.farmacia))) : "")
+    + fila("Módulos", esAdmin() ? "Todos" : (misVistas().map(v => esc(v.nombre)).join("<br>") || "Ninguno"));
+  if (document.activeElement !== $("iniNom")) $("iniNom").value = p.nombre || "";
+}
+$("iniMods").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
+$("iniNomF").addEventListener("submit", async e => {
+  e.preventDefault();
+  const nombre = $("iniNom").value.trim().replace(/\s+/g, " ");
+  if (nombre.length < 3) return msg("iniNomMsg", "Escribe tu nombre completo.", true);
+  try {
+    await updateDoc(doc(db, "usuarios", S.perfil.uid), { nombre, cambiarClave: false });
+    S.perfil.nombre = nombre; $("uNombre").textContent = nombre; msg("iniNomMsg", "✓ Nombre guardado."); pintarInicio();
+  } catch (x) { msg("iniNomMsg", textoError(x), true); }
+});
+$("iniClaveF").addEventListener("submit", async e => {
+  e.preventDefault();
+  const actual = $("iniActual").value, nueva = $("iniNueva").value;
+  if (nueva.length < 6) return msg("iniClaveMsg", "La contraseña nueva debe tener al menos 6 caracteres.", true);
+  if (nueva !== $("iniRepite").value) return msg("iniClaveMsg", "Las dos contraseñas nuevas no coinciden.", true);
+  if (nueva === actual) return msg("iniClaveMsg", "La contraseña nueva debe ser distinta a la actual.", true);
+  const b = e.target.querySelector("button"); b.disabled = true;
+  try {
+    const u = auth.currentUser;
+    await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, actual));
+    await updatePassword(u, nueva);
+    e.target.reset(); msg("iniClaveMsg", "✓ Contraseña cambiada. Úsala desde ahora para ingresar.");
+  } catch (x) {
+    msg("iniClaveMsg", ["auth/wrong-password", "auth/invalid-credential", "auth/invalid-login-credentials"].includes(x?.code) ? "La contraseña actual no es correcta."
+      : x?.code === "auth/too-many-requests" ? "Demasiados intentos. Espera unos minutos." : x?.code === "auth/weak-password" ? "La contraseña nueva es muy débil." : textoError(x), true);
+  } finally { b.disabled = false; }
+});
+
+// Avisos a la izquierda e información a la derecha (en pantallas anchas; en las angostas se ven dentro de la página).
+function pintarLados() {
+  if (!S.perfil) return;
+  const av = [], inf = [], e = !esAdmin() && estadoCierre(S.perfil.cierre);
+  if (e) av.push(`<div class="aviso cierre-aviso${e.vigente ? "" : " prox"}">${esc(avisoCierre(e))}</div>`);
+  if (S.vista === "vAten") {
+    av.push(`<div class="aviso prueba">🧪 Módulo de prueba · solo informativo. Los datos pueden cambiar; ante cualquier duda consulta con Abastecimiento.</div>`);
+    if ($("atFiltro").innerHTML.trim()) inf.push(`<div class="at-filtro">${$("atFiltro").innerHTML}</div>`);
+  }
+  $("avisosLado").innerHTML = av.join(""); $("infoLado").innerHTML = inf.join("");
+  $("ladoIzq").hidden = !av.length; $("ladoDer").hidden = !inf.length;
+  document.body.classList.toggle("lado-i", !!av.length); document.body.classList.toggle("lado-d", !!inf.length);
+}
+
+// ¿En qué podemos ayudarte hoy? → WhatsApp de Abastecimiento
+const WHATSAPP = "51903203799";
+function montarAyuda() {
+  const p = S.perfil;
+  $("ayudaWa").href = `https://wa.me/${WHATSAPP}?text=` + encodeURIComponent(`Hola, soy ${p.nombre || p.usuario}${p.farmacia ? " de " + nombreFarm(p.farmacia) : ""}. Necesito ayuda con Socorro Abastecimiento.`);
+  $("ayuda").hidden = false;
+}
+const ayudaPanel = abrir => { $("ayudaPanel").hidden = !abrir; $("ayudaBurbuja").hidden = abrir || S.ayudaCerrada; };
+$("ayudaBtn").addEventListener("click", () => ayudaPanel($("ayudaPanel").hidden));
+$("ayudaAbrir").addEventListener("click", () => ayudaPanel(true));
+$("ayudaPX").addEventListener("click", () => ayudaPanel(false));
+$("ayudaX").addEventListener("click", () => { S.ayudaCerrada = true; $("ayudaBurbuja").hidden = true; });
 
 /* ===================== formulario de bloqueo (químico y admin) ===================== */
 function montarMotivos(contId, nombre) {
@@ -468,14 +582,14 @@ const cerradoParaMi = () => !esAdmin() && !!estadoCierre(S.perfil?.cierre)?.vige
 const textoCierre = e => e.vigente
   ? `Ingreso de información cerrado ${e.hasta ? "hasta el " + fmtDH(e.hasta) : "hasta nuevo aviso"}`
   : `El ingreso de información se cerrará el ${fmtDH(e.desde)}${e.hasta ? " y se abrirá el " + fmtDH(e.hasta) : ""}`;
+function avisoCierre(e) {
+  const t = textoCierre(e), punto = t.endsWith(".") ? " " : ". ";
+  return t + (e.vigente ? punto + "Mientras tanto no puedes bloquear productos ni enviar solicitudes." : punto.trim()) + (e.motivo ? " Motivo: " + e.motivo : "");
+}
 function pintarCierreQuimico() {
   const e = estadoCierre(S.perfil?.cierre), a = $("qCierre");
   a.hidden = !e;
-  if (e) {
-    a.className = "aviso cierre-aviso" + (e.vigente ? "" : " prox");
-    const t = textoCierre(e), punto = t.endsWith(".") ? " " : ". ";
-    a.textContent = t + (e.vigente ? punto + "Mientras tanto no puedes bloquear productos ni enviar solicitudes." : punto.trim()) + (e.motivo ? " Motivo: " + e.motivo : "");
-  }
+  if (e) { a.className = "aviso cierre-aviso inline-lado" + (e.vigente ? "" : " prox"); a.textContent = avisoCierre(e); }
   $("csAbrir").disabled = !!e?.vigente;
 }
 const quimicos = () => S.usuarios.filter(u => String(u.rol || "").trim().toLowerCase() !== "admin" && ![false, "false"].includes(u.activo));
@@ -1115,7 +1229,52 @@ function escucharAten() {
   S.atUnsub?.(); S.atSubSuc = suc; S.aten = null;
   S.atUnsub = onSnapshot(doc(db, "atencion", suc), sn => { S.aten = sn.exists() ? sn.data() : { items: [] }; if (S.vista === "vAten") pintarAten(); },
     e => { S.atSubSuc = null; avisar(e); });
-  S.subs.push(() => S.atUnsub?.());
+  // respuestas del químico por producto (atencion_resp/{SUCURSAL}__{codpro})
+  S.atResp = new Map(); S.atRespUnsub?.();
+  S.atRespUnsub = onSnapshot(query(collection(db, "atencion_resp"), where("suc", "==", suc)), sn => {
+    S.atResp = new Map(sn.docs.map(d => [d.data().codpro, d.data()])); if (S.vista === "vAten") pintarAten();
+  }, e => avisar(e));
+  S.subs.push(() => S.atUnsub?.(), () => S.atRespUnsub?.());
+}
+// Lo que el químico puede responder sobre cada producto que le van a enviar
+const RESP_AT = [
+  { id: "no_requiere", txt: "No se requiere en esta sucursal", clase: "t-rech" },
+  { id: "no_se_mueve", txt: "No se mueve", clase: "t-pend", campo: "motivo", ph: "¿Por qué motivo? (obligatorio)" },
+  { id: "otro_medicamento", txt: "Se tiene otro medicamento en su cambio", clase: "t-ok", campo: "alt", ph: "Busca el medicamento por código o nombre" },
+  { id: "otros", txt: "Otros", clase: "m-otro", campo: "motivo", ph: "Escribe tu comentario (obligatorio)" }];
+const puedeResponderAt = () => !esAdmin() && (S.perfil?.vistas || []).includes("atencion") && !!miFarm();
+const textoResp = r => { const o = RESP_AT.find(x => x.id === r.estado); return (o?.txt || r.estado) + (r.alternativa ? ": " + r.alternativa : "") + (r.comentario ? (r.alternativa ? " · " : ": ") + r.comentario : ""); };
+function celdaResp(i) {
+  const r = S.atResp?.get(i.c), puede = puedeResponderAt() && !cerradoParaMi();
+  const ver = r ? `<span class="tag ${RESP_AT.find(x => x.id === r.estado)?.clase || ""} at-rtag">${esc(textoResp(r))}</span><small class="muted at-rpor">${esc(r.porNombre || "")} · ${fmtF(r.fecha)}</small>` : "";
+  return ver + (puede ? `<button type="button" class="btn sm at-rbtn" data-resp="${esc(i.c)}">${r ? "Cambiar" : "Responder"}</button>` : r ? "" : '<span class="muted">–</span>');
+}
+function formRespAt(i) {
+  const r = S.atResp?.get(i.c) || {}, e = S.atForm?.estado ?? r.estado ?? "", o = RESP_AT.find(x => x.id === e);
+  return `<tr class="at-rform"><td colspan="10"><div class="at-rf" data-rf="${esc(i.c)}">
+    <b>Tu respuesta sobre ${esc(i.c)} - ${esc(i.n)}:</b>
+    <div class="at-ropts">${RESP_AT.map(x => `<label><input type="radio" name="atR" value="${x.id}" ${x.id === e ? "checked" : ""}> ${esc(x.txt)}</label>`).join("")}</div>
+    ${o?.campo === "alt" ? `<input class="at-rin" data-ralt list="atDl" placeholder="${esc(o.ph)}" value="${esc(S.atForm?.alt ?? r.alternativa ?? "")}"><datalist id="atDl"></datalist>
+      <input class="at-rin" data-rmot placeholder="Comentario (opcional)" value="${esc(S.atForm?.mot ?? r.comentario ?? "")}">` : ""}
+    ${o?.campo === "motivo" ? `<input class="at-rin" data-rmot placeholder="${esc(o.ph)}" value="${esc(S.atForm?.mot ?? r.comentario ?? "")}">` : ""}
+    <div class="at-racc"><button type="button" class="btn primario sm" data-rguardar>Guardar</button><button type="button" class="btn sm" data-rcancelar>Cancelar</button>
+      ${r.estado ? `<button type="button" class="btn sm peligro" data-rquitar>Quitar mi respuesta</button>` : ""}<span class="msg error" id="atRMsg" hidden></span></div>
+  </div></td></tr>`;
+}
+async function guardarResp(cod) {
+  const i = (S.aten?.items || []).find(x => x.c === cod), box = document.querySelector(`[data-rf="${CSS.escape(cod)}"]`); if (!i || !box) return;
+  const estado = box.querySelector("[name=atR]:checked")?.value, o = RESP_AT.find(x => x.id === estado);
+  const alt = box.querySelector("[data-ralt]")?.value.trim() || "", mot = box.querySelector("[data-rmot]")?.value.trim() || "";
+  const err = t => { const m = $("atRMsg"); m.hidden = !t; m.textContent = t; };
+  if (!o) return err("Elige una opción.");
+  if (o.campo === "alt" && !alt) return err("Escribe el nombre del medicamento que tienes en su cambio.");
+  if (o.campo === "motivo" && !mot) return err(o.id === "otros" ? "Escribe tu comentario." : "Escribe el motivo.");
+  const suc = miFarm();
+  try {
+    await setDoc(doc(db, "atencion_resp", `${suc}__${cod}`), { suc, codpro: cod, producto: i.n, laboratorio: i.l || "", estado,
+      comentario: mot.slice(0, 300), alternativa: o.campo === "alt" ? alt.slice(0, 150) : "", porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario, fecha: serverTimestamp() });
+    S.atEdit = null; S.atForm = null; toast("Respuesta guardada"); pintarAten();
+  } catch (x) { err(textoError(x)); }
 }
 const fCaja = (v, fr) => { if (!(fr > 1)) return Number(v || 0).toLocaleString("es-PE", { maximumFractionDigits: 1 }); const u = Math.round((v || 0) * fr), e = Math.trunc(u / fr), f = Math.abs(u % fr); return f ? `${nf(e)} / ${f} f` : nf(e); };
 const fFecha = iso => iso ? new Date(iso).toLocaleString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
@@ -1136,18 +1295,21 @@ function pintarAten() {
     <br><small class="muted">Datos al ${fmtF(A.corte)} · publicado el ${fFecha(A.publicado)}</small>`;
   const q = norm(S.atQ).trim();
   const lista = (A.items || []).filter(i => (S.atVer !== "urg" || i.urg) && (S.atVer !== "env" || i.pide > 0)
+    && (S.atVer !== "sinr" || !S.atResp?.has(i.c)) && (S.atVer !== "resp" || S.atResp?.has(i.c))
     && (!q || q.split(/\s+/).every(w => norm(i.c + " " + i.n + " " + i.l).includes(w))));
   $("atTit").textContent = `${nf(lista.length)} productos · ${nf(lista.filter(i => i.urg).length)} urgentes`;
   const colCob = i => i.d <= 0 ? "#9e9e9e" : i.cob == null ? "#1e6bb8" : i.cob < A.Sg ? "#d9302c" : i.cob < A.C + A.Sg ? "#e0a030" : "#43a047";
-  $("atTabla").innerHTML = `<thead><tr><th>Producto</th><th class="at-ojo">Información</th><th>Tipo</th><th class="der">Cobertura</th><th class="der">Venta diaria</th><th class="der">Tu stock</th><th class="der">Necesita (${A.C} + ${A.Sg} d)</th><th class="der">Se te enviará</th><th>Nota</th></tr></thead><tbody>` +
+  $("atTabla").innerHTML = `<thead><tr><th>Producto</th><th class="at-ojo">Información</th><th>Tipo</th><th class="der">Cobertura</th><th class="der">Venta diaria</th><th class="der">Tu stock</th><th class="der">Necesita (${A.C} + ${A.Sg} d)</th><th class="der">Se te enviará</th><th>Nota</th><th>Respuesta de la sucursal</th></tr></thead><tbody>` +
     (lista.length ? lista.map(i => `<tr><td class="p"><b>${esc(i.c)} - ${esc(i.n)}</b><code>${esc(i.l)}</code></td>
       <td class="at-ojo">${i.hv ? `<button type="button" class="at-ibtn" data-info="${esc(i.c)}" title="Ver la información de este producto en tu local" aria-label="Información de ${esc(i.n)}">${OJO}</button>` : ""}</td>
       <td><span class="at-cat ${esc(i.cat)}">${esc(i.cat)}</span></td>
       <td class="der"><span class="at-cob" style="background:${colCob(i)}">${i.d <= 0 ? "sin venta" : i.cob == null ? "–" : nf(i.cob) + " días"}</span></td>
       <td class="der">${fCaja(i.d, i.fr)}</td><td class="der">${fCaja(i.st, i.fr)}</td><td class="der">${fCaja(i.nec, i.fr)}</td>
       <td class="der"><b>${i.pide ? nf(i.pide) : "–"}</b></td>
-      <td>${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${(i.de || []).map(x => `<span class="tag t-ok">${nf(x.q)} de ${esc(x.f)}</span>`).join(" ")}${i.cmp ? `<span class="tag t-rech">${nf(i.cmp)} por comprar</span>` : ""}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td></tr>`).join("")
-      : `<tr class="vacia"><td colspan="9">Nada que mostrar.</td></tr>`) + "</tbody>";
+      <td class="at-nota">${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${(i.de || []).map(x => `<span class="tag t-ok">${nf(x.q)} de ${esc(x.f)}</span>`).join(" ")}${i.cmp ? `<span class="tag t-rech">${nf(i.cmp)} por comprar</span>` : ""}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td>
+      <td class="at-resp">${celdaResp(i)}</td></tr>${S.atEdit === i.c ? formRespAt(i) : ""}`).join("")
+      : `<tr class="vacia"><td colspan="10">Nada que mostrar.</td></tr>`) + "</tbody>";
+  pintarLados();
 }
 $("atVer").addEventListener("change", e => { S.atVer = e.target.value; pintarAten(); });
 // 👁 Información del producto en el local: Atributos, Pronóstico y Plan (como Estadística Proyx, pero de su sucursal)
@@ -1282,7 +1444,36 @@ function pintarInfo() {
     <div class="at-tabs" role="tablist">${tabs.map(([k, t]) => `<button type="button" role="tab" data-at-tab="${k}" aria-selected="${S.atTab === k}">${t}</button>`).join("")}</div>${cuerpo}`;
 }
 $("atInfo").addEventListener("click", e => { const t = e.target.closest("[data-at-tab]"); if (t) { S.atTab = t.dataset.atTab; pintarInfo(); } });
-$("atTabla").addEventListener("click", e => { const b = e.target.closest("[data-info]"); if (b) abrirInfo(b.dataset.info); });
+$("atTabla").addEventListener("click", e => {
+  const b = e.target.closest("[data-info]"); if (b) return abrirInfo(b.dataset.info);
+  const r = e.target.closest("[data-resp]"); if (r) { S.atEdit = r.dataset.resp; S.atForm = null; pintarAten(); document.querySelector(".at-rf input")?.focus(); return; }
+  const box = e.target.closest("[data-rf]"); if (!box) return;
+  if (e.target.closest("[data-rcancelar]")) { S.atEdit = null; S.atForm = null; pintarAten(); }
+  else if (e.target.closest("[data-rguardar]")) guardarResp(box.dataset.rf);
+  else if (e.target.closest("[data-rquitar]")) deleteDoc(doc(db, "atencion_resp", `${miFarm()}__${box.dataset.rf}`))
+    .then(() => { S.atEdit = null; S.atForm = null; toast("Respuesta quitada"); pintarAten(); }).catch(x => { $("atRMsg").hidden = false; $("atRMsg").textContent = textoError(x); });
+});
+$("atTabla").addEventListener("change", e => {
+  if (e.target.name !== "atR") return;
+  const box = e.target.closest("[data-rf]");
+  S.atForm = { estado: e.target.value, alt: box.querySelector("[data-ralt]")?.value, mot: box.querySelector("[data-rmot]")?.value };
+  pintarAten(); document.querySelector(".at-rf .at-rin")?.focus();
+});
+$("atTabla").addEventListener("input", e => {
+  if (!e.target.matches("[data-ralt]")) return;
+  $("atDl").innerHTML = buscarCat(e.target.value).map(p => `<option value="${esc(p.c + " - " + p.n)}">${esc(p.l)}</option>`).join("");
+});
+$("atXls").addEventListener("click", () => {
+  const A = S.aten, suc = esAdmin() ? (S.atSuc || FARMACIAS[0]) : miFarm();
+  if (!A?.items?.length) return toast("Aún no hay lista publicada para descargar.");
+  const datos = A.items.map(i => { const r = S.atResp?.get(i.c);
+    return { "Código": i.c, Producto: i.n, Laboratorio: i.l || "", Tipo: i.cat || "", "Cobertura (días)": i.d <= 0 ? "sin venta" : i.cob ?? "",
+      "Venta diaria": +Number(i.d || 0).toFixed(2), "Tu stock": i.st, [`Necesita (${A.C} + ${A.Sg} d)`]: +Number(i.nec || 0).toFixed(2), "Se te enviará": i.pide || 0,
+      Urgente: i.urg ? "Sí" : "", Nota: [i.pide && i.falta ? `${i.falta} sin stock en droguería` : "", ...(i.de || []).map(x => `${x.q} de ${x.f}`), i.cmp ? `${i.cmp} por comprar` : "", i.aj ? "Criterio propio: " + i.aj : ""].filter(Boolean).join(" · "),
+      Respuesta: r ? RESP_AT.find(x => x.id === r.estado)?.txt || r.estado : "", "Medicamento en su cambio": r?.alternativa || "", Comentario: r?.comentario || "",
+      "Respondió": r?.porNombre || "", Fecha: r ? aFecha(r.fecha) || "" : "" }; });
+  excelDe(datos, "Atención", "atencion_" + corto(suc).replace(/\W+/g, "_").toLowerCase());
+});
 $("fsTabla").addEventListener("click", e => { const b = e.target.closest("[data-finfo]"); if (b) abrirInfo(b.dataset.finfo, "falt"); });
 $("atInfo").addEventListener("click", e => { if (e.target.closest("[data-cerrar-info]") || e.target === $("atInfo")) $("atInfo").close(); });
 $("atQ").addEventListener("input", e => { S.atQ = e.target.value; pintarAten(); });
@@ -1307,11 +1498,16 @@ async function descargarExcel(filas, nombre, conFarmacia) {
     "En la lista": d.fueraCatalogo ? "No" : "Sí",
     ...(conFarmacia ? { Revisar: d.revisar || "" } : {})
   }));
+  excelDe(datos, "Bloqueados", nombre);
+}
+async function excelDe(datos, hojaNom, nombre) {
+  try { XLSX ??= await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm"); }
+  catch { return toast("No se pudo preparar el Excel. Revisa tu internet e inténtalo de nuevo."); }
   const hoja = XLSX.utils.json_to_sheet(datos, { cellDates: true, dateNF: "dd/mm/yyyy" });
   const cols = Object.keys(datos[0] || { Producto: "" });
   hoja["!cols"] = cols.map(c => ({ wch: Math.min(48, Math.max(c.length, ...datos.map(d => String(d[c] instanceof Date ? "00/00/0000" : d[c]).length)) + 2) }));
   const libro = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(libro, hoja, "Bloqueados");
+  XLSX.utils.book_append_sheet(libro, hoja, hojaNom);
   XLSX.writeFile(libro, `${nombre}_${hoyISO()}.xlsx`);
 }
 const bloqueadosAhora = () => [...S.bloqueos.values()].filter(d => d.estado === "bloqueado");

@@ -75,7 +75,9 @@ onAuthStateChanged(auth, async u => {
   if (!u) return bloquear("Ingresa como administrador en la página de Abastecimiento para ver la proyección.");
   try {
     const p = (await getDoc(doc(db, "usuarios", u.uid))).data() || {};
-    if (String(p.rol || "").trim().toLowerCase() !== "admin") return bloquear("Esta sección es solo para el administrador.");
+    // el administrador, o quien tenga asignado este módulo
+    const modulo = { mapa: "mapa", est: "estadistica", suc: "sucursales", kar: "kardex" }[new URLSearchParams(location.search).get("solo")] || "proyeccion";
+    if (String(p.rol || "").trim().toLowerCase() !== "admin" && !(p.vistas || []).includes(modulo)) return bloquear("No tienes acceso a este módulo. Pide a Abastecimiento que te lo habilite.");
   } catch { return bloquear("No se pudo comprobar tu usuario. Recarga la página."); }
   desbloquear();
   if (arrancado) return; arrancado = true;

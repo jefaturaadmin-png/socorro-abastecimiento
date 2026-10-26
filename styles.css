@@ -10,7 +10,7 @@
 * { box-sizing: border-box }
 body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--f); font-size: 14.5px; line-height: 1.5 }
 [hidden] { display: none !important }
-.wrap { max-width: 1240px; margin: 0 auto; padding-inline: 24px }
+.wrap { max-width: 1560px; margin: 0 auto; padding-inline: 24px }
 :focus-visible { outline: 3px solid var(--brand); outline-offset: 2px }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
 svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none }
@@ -41,6 +41,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .nav button.suc { color: #1e6bb8 }
 .nav button.suc:hover { background: #e3eefa; color: #17589a }
 .nav button.suc[aria-current="page"] { color: #fff; background: #1e6bb8 }
+.nav button.ini { color: var(--brand); border: 1px solid var(--line) }
+.nav button.ini[aria-current="page"] { color: #fff; background: var(--brand); border-color: var(--brand) }
 .nav button.kar { color: #8a5a00 }
 .nav button.kar:hover { background: #fdf1d8; color: #6b4600 }
 .nav button.kar[aria-current="page"] { color: #fff; background: #b07400 }
@@ -452,3 +454,75 @@ th.at-ojo, td.at-ojo { text-align: center; width: 90px }
 .fs-tag.vencida { background: #fde2dd; color: #a33b3b; margin-left: 6px }
 .at-mes tr.mia th, .at-mes tr.mia td { background: #fff4e5 }
 .at-mes thead th:first-child { text-align: left }
+
+/* ---------- inicio (menú principal) ---------- */
+.ini-hero { margin-top: 22px; border-radius: 18px; padding: 28px 32px; color: #fff; display: flex; flex-wrap: wrap; gap: 18px 40px; align-items: center;
+  background: linear-gradient(120deg, var(--brand-ink), var(--brand) 55%, #2c5cb8); box-shadow: var(--sombra) }
+.ini-marca { display: flex; flex-direction: column; line-height: 1.05 }
+.ini-marca b { font-size: 34px; font-weight: 800; letter-spacing: -.02em }
+.ini-marca span { font-size: 22px; font-weight: 600; color: #cfdcf7 }
+.ini-frase { flex: 1 1 360px; border-left: 3px solid #F28C1E; padding-left: 18px }
+.ini-frase p { margin: 0 0 4px; font-size: 19px; font-weight: 600; font-style: italic }
+.ini-frase small { color: #cfdcf7 }
+.ini-h { font-size: 18px; margin: 26px 0 12px }
+.ini-mods { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px }
+.ini-mod { --c: var(--brand); --cs: var(--brand-soft); font: inherit; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+  display: grid; gap: 4px; cursor: pointer; box-shadow: var(--sombra); transition: transform .12s, border-color .12s; min-height: 132px; align-content: start }
+.ini-mod:hover { transform: translateY(-2px); border-color: var(--c) }
+.ini-mod b { font-size: 15px; color: var(--fg) }
+.ini-mod small { color: var(--muted); font-size: 12.5px; line-height: 1.35 }
+.im-ic { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; background: var(--cs); color: var(--c); margin-bottom: 6px }
+.im-ic svg { width: 26px; height: 26px }
+.ini-mod.kar { --c: #b07400; --cs: #fdf1d8 } .ini-mod.comp { --c: #0f7b6c; --cs: #e3f3f0 } .ini-mod.mapa { --c: #b4321c; --cs: #fbe3de }
+.ini-mod.est { --c: #5b3fa8; --cs: #ece6fa } .ini-mod.suc { --c: #1e6bb8; --cs: #e3eefa }
+.ini-usuario { margin: 24px 0 40px }
+.ini-u-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; padding: 18px }
+.ini-form { display: grid; gap: 10px; align-content: start }
+.ini-form h3 { margin: 0; font-size: 14.5px }
+.ini-form .btn { justify-self: start }
+
+/* ---------- avisos e información a los costados ---------- */
+.lado { display: none }
+@media (min-width: 1760px) {
+  .lado:not([hidden]) { display: grid; gap: 12px; align-content: start; position: fixed; top: 84px; width: 250px; max-height: calc(100vh - 110px); overflow: auto; z-index: 5 }
+  .lado.izq { left: 16px } .lado.der { right: 16px }
+  .lado h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted) }
+  .lado .aviso, .lado .at-filtro { margin: 0; font-size: 13px }
+  body.lado-i main { padding-left: 270px } body.lado-d main { padding-right: 270px }
+  .inline-lado { display: none !important }
+}
+
+/* ---------- ayuda por WhatsApp ---------- */
+.ayuda { position: fixed; right: 18px; bottom: 18px; z-index: 40; display: flex; flex-direction: column; align-items: flex-end; gap: 10px }
+.ayuda svg { width: auto; height: auto; stroke: none; fill: initial }
+.ayuda-avatar { width: 70px; height: 70px; border-radius: 50%; border: 3px solid #fff; padding: 0; cursor: pointer; overflow: hidden; background: #FDEBD6; box-shadow: 0 8px 24px rgba(20,28,45,.25) }
+.ayuda-avatar svg { width: 100%; height: 100%; display: block }
+.ayuda-burbuja { display: flex; align-items: center; background: #fff; border-radius: 14px; box-shadow: 0 8px 24px rgba(20,28,45,.18); padding: 4px 4px 4px 0 }
+.ab-txt { font: inherit; font-weight: 700; font-size: 13.5px; color: var(--fg); background: none; border: 0; padding: 10px 6px 10px 14px; cursor: pointer }
+.ab-x { font: inherit; background: none; border: 0; color: var(--muted); cursor: pointer; width: 28px; height: 28px; border-radius: 50% }
+.ab-x:hover { background: var(--soft) }
+.ayuda-panel { width: 290px; background: #fff; border-radius: 14px; box-shadow: 0 12px 32px rgba(20,28,45,.22); padding: 14px; display: grid; gap: 10px }
+.ap-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13.5px }
+.ap-canal { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--fg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-weight: 600 }
+.ap-canal:hover { border-color: #25D366; background: #effbf3 }
+.ap-canal span { display: grid } .ap-canal small { color: var(--muted); font-weight: 500 }
+.ap-canal svg { width: 30px; height: 30px }
+@media (max-width: 600px) { .ayuda-avatar { width: 56px; height: 56px } .ayuda-burbuja { display: none } }
+
+/* ---------- respuesta del químico en lo que le van a atender ---------- */
+#atTabla th { white-space: normal; padding: 10px 10px; vertical-align: bottom }
+#atTabla td { padding: 10px 10px }
+#atTabla td.p { min-width: 200px }
+#atTabla th.at-ojo, #atTabla td.at-ojo { width: 64px }
+#atTabla td.at-nota { min-width: 160px; max-width: 260px }
+#atTabla td.at-nota .tag, #atTabla td.at-resp .tag { white-space: normal; margin: 2px 2px 2px 0 }
+#atTabla td.at-resp { min-width: 170px; max-width: 260px }
+.at-rpor { display: block; font-size: 11px; margin: 2px 0 4px }
+.at-rform td { background: var(--brand-soft) }
+.at-rf { display: grid; gap: 10px; padding: 6px 2px }
+.at-ropts { display: flex; flex-wrap: wrap; gap: 8px 18px }
+.at-ropts label { display: flex; gap: 6px; align-items: center; cursor: pointer; font-weight: 600 }
+.at-ropts input { width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; flex: none; accent-color: var(--brand) }
+.at-rin { max-width: 520px }
+.at-racc { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.btn.peligro { background: var(--bad-soft); color: var(--bad); box-shadow: none; border-color: transparent }

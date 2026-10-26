@@ -481,7 +481,7 @@ onAuthStateChanged(auth, async u => {
   if (!u) return bloquear("Ingresa como administrador en la página de Abastecimiento para ver el comparativo.");
   try {
     const p = (await getDoc(doc(db, "usuarios", u.uid))).data() || {};
-    if (String(p.rol || "").trim().toLowerCase() !== "admin") return bloquear("Esta sección es solo para el administrador.");
+    if (String(p.rol || "").trim().toLowerCase() !== "admin" && !(p.vistas || []).includes("comparativo")) return bloquear("No tienes acceso a este módulo. Pide a Abastecimiento que te lo habilite.");
   } catch { return bloquear("No se pudo comprobar tu usuario. Recarga la página."); }
   if (arrancado) return; arrancado = true;
   $("vLista").hidden = false;
