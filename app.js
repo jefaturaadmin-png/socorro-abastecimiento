@@ -337,12 +337,20 @@ function pintarInicio() {
   $("iniMods").innerHTML = mods.length ? mods.map(m => `<button type="button" class="ini-mod ${esc(m.c || "")}" data-ir="${m.vista}">
       <span class="im-ic"><svg width="26" height="26"><use href="#${m.ic || "i-lista"}"/></svg></span><b>${esc(m.nombre)}</b><small>${esc(m.desc || "")}</small></button>`).join("")
     : `<p class="muted">Aún no tienes módulos asignados. Pide a Abastecimiento que te los habilite.</p>`;
-  const fila = (k, v) => `<tr><th>${k}</th><td>${v}</td></tr>`;
+}
+function pintarUsuarioDlg() {
+  const p = S.perfil, fila = (k, v) => `<tr><th>${k}</th><td>${v}</td></tr>`;
   $("iniDatos").innerHTML = fila("Nombre", esc(p.nombre || "–")) + fila("Usuario", esc(p.usuario || auth.currentUser?.email || "–"))
     + fila("Rol", esc(NOMBRE_ROL[p.rol] || p.rol)) + (p.farmacia ? fila("Sucursal", esc(nombreFarm(p.farmacia))) : "")
     + fila("Módulos", esAdmin() ? "Todos" : (misVistas().map(v => esc(v.nombre)).join("<br>") || "Ninguno"));
-  if (document.activeElement !== $("iniNom")) $("iniNom").value = p.nombre || "";
 }
+$("uAbrir").addEventListener("click", () => {
+  pintarUsuarioDlg(); $("iniNomF").hidden = $("iniClaveF").hidden = true; $("iniNomF").reset(); $("iniClaveF").reset();
+  msg("iniNomMsg", ""); msg("iniClaveMsg", ""); $("uDlg").showModal();
+});
+$("uDatosBtn").addEventListener("click", () => { const f = $("iniNomF"); f.hidden = !f.hidden; $("iniClaveF").hidden = true; $("iniNom").value = S.perfil.nombre || ""; if (!f.hidden) $("iniNom").focus(); });
+$("uClaveBtn").addEventListener("click", () => { const f = $("iniClaveF"); f.hidden = !f.hidden; $("iniNomF").hidden = true; if (!f.hidden) $("iniActual").focus(); });
+$("uDlg").addEventListener("click", e => { if (e.target.closest("[data-cerrar-u]") || e.target === $("uDlg")) $("uDlg").close(); });
 $("iniMods").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 $("iniNomF").addEventListener("submit", async e => {
   e.preventDefault();
@@ -350,7 +358,7 @@ $("iniNomF").addEventListener("submit", async e => {
   if (nombre.length < 3) return msg("iniNomMsg", "Escribe tu nombre completo.", true);
   try {
     await updateDoc(doc(db, "usuarios", S.perfil.uid), { nombre, cambiarClave: false });
-    S.perfil.nombre = nombre; $("uNombre").textContent = nombre; msg("iniNomMsg", "✓ Nombre guardado."); pintarInicio();
+    S.perfil.nombre = nombre; $("uNombre").textContent = nombre; msg("iniNomMsg", "✓ Nombre guardado."); pintarUsuarioDlg(); if (S.vista === "vInicio") pintarInicio();
   } catch (x) { msg("iniNomMsg", textoError(x), true); }
 });
 $("iniClaveF").addEventListener("submit", async e => {

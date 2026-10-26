@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610261800">
+<link rel="stylesheet" href="styles.css?v=202610262000">
 </head>
 <body>
 
@@ -37,8 +37,8 @@
     <div class="marca"><b>Socorro</b><span>Abastecimiento</span></div>
     <nav class="nav" id="nav" aria-label="Secciones"></nav>
     <div class="quien">
-      <span class="avatar" aria-hidden="true"><svg width="18" height="18"><use href="#i-usuario"/></svg></span>
-      <div><b id="uNombre"></b><small id="uRol"></small></div>
+      <button type="button" class="quien-btn" id="uAbrir" title="Mi usuario"><span class="avatar" aria-hidden="true"><svg width="18" height="18"><use href="#i-usuario"/></svg></span>
+      <span><b id="uNombre"></b><small id="uRol"></small></span></button>
       <button class="btn" id="salir" type="button">Salir</button>
     </div>
   </div>
@@ -80,26 +80,12 @@
   <!-- ============ INICIO (menú principal) ============ -->
   <section id="vInicio" hidden>
     <div class="wrap">
+      <h2 class="ini-h" id="iniHola"></h2>
+      <div class="ini-mods" id="iniMods"></div>
       <div class="ini-hero">
         <div class="ini-marca"><b>Socorro</b><span>Abastecimiento</span></div>
         <div class="ini-frase"><p id="iniFrase"></p><small id="iniFirma"></small></div>
       </div>
-      <h2 class="ini-h" id="iniHola"></h2>
-      <div class="ini-mods" id="iniMods"></div>
-      <section class="card ini-usuario">
-        <div class="lh"><h2><svg width="18" height="18"><use href="#i-usuario"/></svg>Mi usuario</h2></div>
-        <div class="ini-u-grid">
-          <table class="at-kv" id="iniDatos"></table>
-          <form class="ini-form" id="iniNomF"><h3>Cambiar mis datos</h3>
-            <label class="campo"><span class="lbl">Nombre</span><input id="iniNom" maxlength="60" required minlength="3"></label>
-            <div class="msg" id="iniNomMsg" hidden></div><button class="btn primario sm" type="submit">Guardar nombre</button></form>
-          <form class="ini-form" id="iniClaveF"><h3>Cambiar contraseña</h3>
-            <label class="campo"><span class="lbl">Contraseña actual</span><input id="iniActual" type="password" required autocomplete="current-password"></label>
-            <label class="campo"><span class="lbl">Contraseña nueva</span><input id="iniNueva" type="password" required minlength="6" autocomplete="new-password"></label>
-            <label class="campo"><span class="lbl">Repite la nueva</span><input id="iniRepite" type="password" required minlength="6" autocomplete="new-password"></label>
-            <div class="msg" id="iniClaveMsg" hidden></div><button class="btn primario sm" type="submit">Cambiar contraseña</button></form>
-        </div>
-      </section>
     </div>
   </section>
 
@@ -361,6 +347,20 @@
   </section>
 
   <dialog id="atInfo" class="at-info"><div id="atInfoC"></div></dialog>
+  <!-- mi usuario: se abre al hacer clic en el nombre (arriba a la derecha) -->
+  <dialog id="uDlg" class="at-info u-dlg"><div>
+    <div class="at-info-cab"><h2><svg width="18" height="18"><use href="#i-usuario"/></svg> Mi usuario</h2><button type="button" class="ab-x" data-cerrar-u aria-label="Cerrar">✕</button></div>
+    <table class="at-kv" id="iniDatos"></table>
+    <div class="u-acc"><button type="button" class="btn sm" id="uDatosBtn">✎ Cambiar mis datos</button><button type="button" class="btn sm" id="uClaveBtn">🔒 Cambiar contraseña</button></div>
+    <form class="ini-form" id="iniNomF" hidden><h3>Cambiar mis datos</h3>
+      <label class="campo"><span class="lbl">Nombre</span><input id="iniNom" maxlength="60" required minlength="3"></label>
+      <div class="msg" id="iniNomMsg" hidden></div><button class="btn primario sm" type="submit">Guardar nombre</button></form>
+    <form class="ini-form" id="iniClaveF" hidden><h3>Cambiar contraseña</h3>
+      <label class="campo"><span class="lbl">Contraseña actual</span><input id="iniActual" type="password" required autocomplete="current-password"></label>
+      <label class="campo"><span class="lbl">Contraseña nueva</span><input id="iniNueva" type="password" required minlength="6" autocomplete="new-password"></label>
+      <label class="campo"><span class="lbl">Repite la nueva</span><input id="iniRepite" type="password" required minlength="6" autocomplete="new-password"></label>
+      <div class="msg" id="iniClaveMsg" hidden></div><button class="btn primario sm" type="submit">Cambiar contraseña</button></form>
+  </div></dialog>
 
   <!-- ============ ADMIN: USUARIOS ============ -->
   <section id="vUsuarios" hidden>
@@ -455,6 +455,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610261800"></script>
+<script type="module" src="app.js?v=202610262000"></script>
 </body>
 </html>

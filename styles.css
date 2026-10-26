@@ -456,7 +456,7 @@ th.at-ojo, td.at-ojo { text-align: center; width: 90px }
 .at-mes thead th:first-child { text-align: left }
 
 /* ---------- inicio (menú principal) ---------- */
-.ini-hero { margin-top: 22px; border-radius: 18px; padding: 28px 32px; color: #fff; display: flex; flex-wrap: wrap; gap: 18px 40px; align-items: center;
+.ini-hero { margin: 26px 0 40px; border-radius: 18px; padding: 28px 32px; color: #fff; display: flex; flex-wrap: wrap; gap: 18px 40px; align-items: center;
   background: linear-gradient(120deg, var(--brand-ink), var(--brand) 55%, #2c5cb8); box-shadow: var(--sombra) }
 .ini-marca { display: flex; flex-direction: column; line-height: 1.05 }
 .ini-marca b { font-size: 34px; font-weight: 800; letter-spacing: -.02em }
@@ -526,3 +526,11 @@ th.at-ojo, td.at-ojo { text-align: center; width: 90px }
 .at-rin { max-width: 520px }
 .at-racc { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
 .btn.peligro { background: var(--bad-soft); color: var(--bad); box-shadow: none; border-color: transparent }
+
+.quien-btn { font: inherit; display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 4px 8px; border-radius: 10px; cursor: pointer; text-align: left; color: inherit }
+.quien-btn:hover { background: var(--soft) }
+.quien-btn:hover .avatar { border-color: var(--brand); color: var(--brand) }
+.u-dlg { width: min(520px, 94vw) }
+.u-dlg h2 { display: flex; align-items: center; gap: 8px }
+.u-acc { display: flex; flex-wrap: wrap; gap: 8px }
+.u-dlg .ini-form { border-top: 1px solid var(--line); padding-top: 12px }
