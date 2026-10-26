@@ -16,7 +16,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610271100";
+const VERSION_PROY = "202610271300";
 const VERSION_COMP = "202610270100";
 
 /* ===================== utilidades ===================== */
@@ -1303,7 +1303,7 @@ function escucharAten() {
   const suc = esAdmin() ? (S.atSuc || FARMACIAS[0]) : miFarm();
   if (S.atSubSuc === suc) return;
   S.atUnsub?.(); S.atSubSuc = suc; S.aten = null;
-  S.atUnsub = onSnapshot(doc(db, "atencion", suc), sn => { S.aten = sn.exists() ? sn.data() : { items: [] }; if (S.vista === "vAten") pintarAten(); },
+  S.atUnsub = onSnapshot(doc(db, "atencion", suc), sn => { S.aten = sn.exists() ? sn.data() : { items: [] }; cargarStkSuc(suc, S.aten.publicado); if (S.vista === "vAten") pintarAten(); },
     e => { S.atSubSuc = null; avisar(e); });
   // respuestas del químico por producto (atencion_resp/{SUCURSAL}__{codpro})
   S.atResp = new Map(); S.atRespUnsub?.();
@@ -1318,9 +1318,7 @@ function escucharAten() {
 }
 const tagDrog = i => { const e = estVig(i.c); if (!e) return "";
   // el stock que tiene la sucursal del medicamento que indicó droguería
-  const alts = (i.alt || []).map(a => a.st > 0
-    ? `<span class="tag t-ok at-drog">✓ Tienes ${fCaja(a.st)} de ${esc(a.c)} ${esc(a.n)}${a.cob != null ? ` · te cubre ${nf(a.cob)} días` : ""}</span>`
-    : `<span class="tag t-pend at-drog">✗ No tienes ${esc(a.c)} ${esc(a.n)}</span>`).join("");
+  const alts = (e.alternativas || []).map(a => tagStock(i, a.c, `${a.c} ${a.n}: `)).join("");
   return `<span class="tag fs-tag ${esc(e.estado)} at-drog" title="${esc((e.porNombre || "") + (e.comentario ? ": " + e.comentario : ""))}">Droguería: ${esc(textoEstado(e))}${e.comentario ? " · " + esc(e.comentario) : ""}</span>${alts}`; };
 // Lo que el químico puede responder sobre cada producto que le van a enviar
 const RESP_AT = [
@@ -1330,10 +1328,26 @@ const RESP_AT = [
   { id: "otros", txt: "Otros", clase: "m-otro", campo: "motivo", ph: "Escribe tu comentario (obligatorio)" }];
 const puedeResponderAt = () => !esAdmin() && (S.perfil?.vistas || []).includes("atencion") && !!miFarm();
 const textoResp = r => { const o = RESP_AT.find(x => x.id === r.estado); return (o?.txt || r.estado) + (r.alternativa ? ": " + r.alternativa : "") + (r.comentario ? (r.alternativa ? " · " : ": ") + r.comentario : ""); };
+// stock y venta diaria de la sucursal (red/stk_SUCURSAL, se publica con la lista) para el medicamento de cambio
+async function cargarStkSuc(suc, ver) {
+  const k = suc + "|" + (ver || ""); if (S.atStkK === k) return; S.atStkK = k;
+  try { const d = await getDoc(doc(db, "red", "stk_" + suc)); S.atStk = d.exists() ? d.data().p || {} : {}; } catch { S.atStk = {}; }
+  if (S.vista === "vAten") pintarAten();
+}
+// cuánto tiene la sucursal del medicamento c (que usa en lugar de i) y, si no le alcanza, cuánto se le enviaría
+function stockCambio(i, c) {
+  const A = S.aten || {}, dias = (A.C || 0) + (A.Sg || 0);
+  if (!S.atStk) return { cls: "", txt: "Revisando tu stock…" };
+  const [st = 0, dA = 0] = S.atStk[c] || [], d = Math.max(dA, i?.d || 0), cob = d > 0 ? Math.floor(st / d) : null;
+  if (st > 0 && (d <= 0 || st >= d * dias)) return { cls: "t-ok", txt: `✓ Tienes ${fCaja(st)}${cob != null ? ` · te cubre ${nf(cob)} días` : ""}` };
+  const env = d > 0 ? Math.max(1, Math.ceil(d * dias - st - 1e-9)) : 0;
+  return { cls: "t-pend", txt: `${st > 0 ? `Tienes ${fCaja(st)} (te cubre ${nf(cob)} días)` : "✗ No tienes"}${env ? ` · se te enviarán ${nf(env)} para ${A.C} + ${A.Sg} días` : ""}` };
+}
+const tagStock = (i, c, pre = "") => { const x = stockCambio(i, c); return `<span class="tag ${x.cls} at-drog">${pre}${esc(x.txt)}</span>`; };
 function celdaResp(i) {
   // el cierre del ingreso de información es para los bloqueos: responder aquí siempre se puede
   const r = S.atResp?.get(i.c), puede = puedeResponderAt();
-  const ver = r ? `<span class="tag ${RESP_AT.find(x => x.id === r.estado)?.clase || ""} at-rtag">${esc(textoResp(r))}</span><small class="muted at-rpor">${esc(r.porNombre || "")} · ${fmtF(r.fecha)}</small>` : "";
+  const ver = r ? `<span class="tag ${RESP_AT.find(x => x.id === r.estado)?.clase || ""} at-rtag">${esc(textoResp(r))}</span>${r.estado === "otro_medicamento" && r.altCod ? tagStock(i, r.altCod) : ""}<small class="muted at-rpor">${esc(r.porNombre || "")} · ${fmtF(r.fecha)}</small>` : "";
   return ver + (puede ? `<button type="button" class="btn sm at-rbtn${r ? "" : " primario"}" data-resp="${esc(i.c)}">${r ? "Cambiar" : "Responder"}</button>` : r ? "" : '<span class="muted">–</span>');
 }
 // Ventana al centro para responder (faltantes y lo que me van a atender): se arma de nuevo en cada cambio
@@ -1367,7 +1381,7 @@ function formRespAt(i) {
 // el medicamento que usa en su cambio: primero los del mismo genérico; si no está, del listado general
 function altAt(i, r) {
   const sel = S.atForm?.altSel !== undefined ? S.atForm.altSel : r.altCod ? { c: r.altCod, n: (r.alternativa || "").replace(/^[^-]*- /, "") } : null;
-  if (sel) return `<div class="fs-alts"><span class="fs-alt">En su cambio usa: <b>${esc(sel.c)} - ${esc(sel.n)}</b> <button type="button" class="enlace" data-ralt-quitar>Cambiar</button></span></div>`;
+  if (sel) return `<div class="fs-alts"><span class="fs-alt">En su cambio usa: <b>${esc(sel.c)} - ${esc(sel.n)}</b> <button type="button" class="enlace" data-ralt-quitar>Cambiar</button></span>${tagStock(i, sel.c)}</div>`;
   const ge = genDe(i), mismos = (ge && GEN ? (GEN.por.get(ge) || []) : GEN ? parecidos(i) : []).filter(p => p.c !== i.c);
   return `<div class="fs-mismo"><b>¿Qué medicamento usas en su cambio? · ${ge ? `Del mismo genérico: ${esc(ge)}` : "De nombre parecido (no se conoce su genérico)"}</b>
       ${!GEN ? '<small class="muted">Cargando…</small>'

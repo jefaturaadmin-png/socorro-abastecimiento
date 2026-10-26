@@ -286,6 +286,9 @@
         const o = cfgSuc(f), datos = { suc: f, nombre: nomSuc(f), items, corte: S.P.corte, publicado: hoy, C: o.C, Sg: o.Sg, fte: o.fte, tipos: o.tipos, propio: !!CFG.suc[f],
           meses: (S.P.hfm || []).slice(-24), fm: Array.from({ length: 12 }, (_, i) => sumaMes(S.P.fm[0], i)), avDia: S.P.dias ? +S.P.dias.hasta.slice(8, 10) : null };
         await FB.setDoc(FB.doc(FB.db, 'atencion', f), window.parent.JSON.parse(JSON.stringify(datos)));
+        // stock y venta diaria de todo lo de esta sucursal (red/stk_SUCURSAL): para ver al responder cuánto tiene del medicamento de cambio
+        const stk = {}; for (const r of cache.filas) if (r.f === f && (r.st > 0 || r.d > 0)) stk[r.p.c] = [r3(r.st), r3(r.d)];
+        await FB.setDoc(FB.doc(FB.db, 'red', 'stk_' + f), window.parent.JSON.parse(JSON.stringify({ p: stk, publicado: hoy })));
       }
       return { ok: true };
     } catch (e) { return { ok: false, error: e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules) en Firebase.' : e.message }; }
