@@ -456,14 +456,6 @@ th.at-ojo, td.at-ojo { text-align: center; width: 90px }
 .at-mes thead th:first-child { text-align: left }
 
 /* ---------- inicio (menú principal) ---------- */
-.ini-hero { margin: auto 0 18px; border-radius: 16px; padding: 18px 28px; color: #fff; display: flex; flex-wrap: wrap; gap: 18px 40px; align-items: center;
-  background: linear-gradient(120deg, var(--brand-ink), var(--brand) 55%, #2c5cb8); box-shadow: var(--sombra) }
-.ini-marca { display: flex; flex-direction: column; line-height: 1.05 }
-.ini-marca b { font-size: 34px; font-weight: 800; letter-spacing: -.02em }
-.ini-marca span { font-size: 22px; font-weight: 600; color: #cfdcf7 }
-.ini-frase { flex: 1 1 360px; border-left: 3px solid #F28C1E; padding-left: 18px }
-.ini-frase p { margin: 0 0 4px; font-size: 19px; font-weight: 600; font-style: italic }
-.ini-frase small { color: #cfdcf7 }
 .ini-h { font-size: 18px; margin: 26px 0 12px }
 .ini-mods { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px }
 .ini-mod { --c: var(--brand); --cs: var(--brand-soft); font: inherit; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px;
@@ -537,7 +529,19 @@ th.at-ojo, td.at-ojo { text-align: center; width: 90px }
 /* inicio: la frase del día queda abajo de la pantalla, sin tapar la ayuda de WhatsApp */
 #vInicio > .wrap { display: flex; flex-direction: column; min-height: calc(100vh - 72px) }
 #vInicio .ini-mods { margin-bottom: 26px }
-@media (min-width: 760px) { #vInicio .ini-hero { margin-right: 230px } }
+/* la frase del día va al fondo, sobre el gris, como parte de la página */
+.ini-frase { margin: auto 0 22px; padding-top: 30px; text-align: center }
+.ini-frase p { margin: 0 0 4px; font-size: 20px; font-weight: 600; font-style: italic; color: var(--fg-2) }
+.ini-frase small { color: var(--muted) }
+.ini-avisos { display: grid; gap: 8px; margin-top: 18px }
+.aviso.general { background: #e8eefb; border: 1px solid #c9d6f2; color: var(--brand-deep); white-space: pre-line }
+.aviso.general small { display: block; margin-top: 4px; color: var(--muted); font-weight: 500 }
+.ini-admav { margin-bottom: 10px }
+.ini-avf { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 0 18px 12px }
+.ini-avf textarea { padding: 8px 12px; min-height: 0 }
+#avLista { display: grid; gap: 6px; padding: 0 18px 16px }
+.av-item { display: flex; gap: 10px; align-items: center; justify-content: space-between; background: var(--soft); border-radius: 8px; padding: 8px 12px; font-size: 13.5px }
+.av-item small { color: var(--muted) }
 .fs-mismo { display: grid; gap: 6px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 4px }
 .fs-mismo-lista { display: grid; gap: 2px; max-height: 220px; overflow: auto }
 .fs-mismo-lista button { font: inherit; font-size: 13px; text-align: left; background: none; border: 0; border-radius: 6px; padding: 6px 8px; cursor: pointer; color: var(--fg) }

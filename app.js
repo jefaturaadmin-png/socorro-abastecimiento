@@ -235,7 +235,7 @@ function iniciar() {
     }));
     ir("vInicio");
   }
-  montarAyuda();
+  montarAyuda(); escucharAvisos();
 }
 // Si el administrador le cambia el rol, las vistas o lo deshabilita, se recarga con los datos nuevos.
 function vigilarPerfil() {
@@ -329,6 +329,7 @@ function pintarInicio() {
   $("iniFrase").textContent = `“${FRASES[dia % FRASES.length]}, Farmacia Socorro.”`;
   const larga = hoy.toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   $("iniFirma").textContent = larga[0].toUpperCase() + larga.slice(1) + " · " + fechaHoy();
+  pintarAvisosInicio();
   $("iniHola").textContent = `Hola, ${(p.nombre || p.usuario || "").split(" ")[0]} 👋 ¿Qué haremos hoy?`;
   const mods = [
     ...(esAdmin() ? [{ vista: "vAdmin", nombre: "Bloqueos", ic: "i-candado", desc: "Productos bloqueados y reactivaciones" },
@@ -383,8 +384,10 @@ $("iniClaveF").addEventListener("submit", async e => {
 // Avisos a la izquierda e información a la derecha (en pantallas anchas; en las angostas se ven dentro de la página).
 function pintarLados() {
   if (!S.perfil) return;
+  // cada aviso en su módulo: generales en el menú principal, el cierre en Bloqueos, "de prueba" en lo que me van a atender
   const av = [], inf = [], e = !esAdmin() && estadoCierre(S.perfil.cierre);
-  if (e) av.push(`<div class="aviso cierre-aviso${e.vigente ? "" : " prox"}">${esc(avisoCierre(e))}</div>`);
+  if (S.vista === "vInicio") av.push(...htmlAvisos());
+  if (S.vista === "vQuimico" && e) av.push(`<div class="aviso cierre-aviso${e.vigente ? "" : " prox"}">${esc(avisoCierre(e))}</div>`);
   if (S.vista === "vAten") {
     av.push(`<div class="aviso prueba">🧪 Módulo de prueba · solo informativo. Los datos pueden cambiar; ante cualquier duda consulta con Abastecimiento.</div>`);
     if ($("atFiltro").innerHTML.trim()) inf.push(`<div class="at-filtro">${$("atFiltro").innerHTML}</div>`);
@@ -393,6 +396,31 @@ function pintarLados() {
   $("ladoIzq").hidden = !av.length; $("ladoDer").hidden = !inf.length;
   document.body.classList.toggle("lado-i", !!av.length); document.body.classList.toggle("lado-d", !!inf.length);
 }
+
+// Avisos generales: los publica el administrador (colección avisos) y los ven todos en el menú principal
+S.avisos = [];
+const htmlAvisos = () => S.avisos.map(a => `<div class="aviso general">📢 ${esc(a.texto)}<small>${esc(a.porNombre || "Abastecimiento")} · ${fmtF(a.fecha)}</small></div>`);
+function escucharAvisos() {
+  S.subs.push(onSnapshot(collection(db, "avisos"), sn => {
+    S.avisos = sn.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (aFecha(b.fecha) || 0) - (aFecha(a.fecha) || 0));
+    if (S.vista === "vInicio") render();
+  }, () => {}));
+}
+function pintarAvisosInicio() {
+  const h = htmlAvisos(); $("iniAvisos").innerHTML = h.join(""); $("iniAvisos").hidden = !h.length;
+  $("iniAdmAv").hidden = !esAdmin(); if (!esAdmin()) return;
+  $("avLista").innerHTML = S.avisos.length ? S.avisos.map(a => `<div class="av-item"><span>${esc(a.texto)} <small>· ${fmtF(a.fecha)}</small></span><button type="button" class="btn sm peligro" data-quitar-av="${esc(a.id)}">Quitar</button></div>`).join("")
+    : '<small class="muted">No hay avisos publicados.</small>';
+}
+$("avForm").addEventListener("submit", async e => {
+  e.preventDefault(); const texto = $("avTxt").value.trim(); if (!texto) return;
+  try { await setDoc(doc(collection(db, "avisos")), { texto, porNombre: S.perfil.nombre || S.perfil.usuario, porUid: S.perfil.uid, fecha: serverTimestamp() }); $("avTxt").value = ""; toast("Aviso publicado para todos"); }
+  catch (x) { toast(textoError(x)); }
+});
+$("avLista").addEventListener("click", async e => {
+  const b = e.target.closest("[data-quitar-av]"); if (!b || !confirm("¿Quitar este aviso para todos?")) return;
+  try { await deleteDoc(doc(db, "avisos", b.dataset.quitarAv)); toast("Aviso quitado"); } catch (x) { toast(textoError(x)); }
+});
 
 // ¿En qué podemos ayudarte hoy? → WhatsApp de Abastecimiento
 const WHATSAPP = "51903203799";

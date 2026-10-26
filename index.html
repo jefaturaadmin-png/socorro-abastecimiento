@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610270100">
+<link rel="stylesheet" href="styles.css?v=202610270300">
 </head>
 <body>
 
@@ -80,12 +80,16 @@
   <!-- ============ INICIO (menú principal) ============ -->
   <section id="vInicio" hidden>
     <div class="wrap">
+      <div class="ini-avisos inline-lado" id="iniAvisos" hidden></div>
       <h2 class="ini-h" id="iniHola"></h2>
       <div class="ini-mods" id="iniMods"></div>
-      <div class="ini-hero">
-        <div class="ini-marca"><b>Socorro</b><span>Abastecimiento</span></div>
-        <div class="ini-frase"><p id="iniFrase"></p><small id="iniFirma"></small></div>
-      </div>
+      <section class="card ini-admav" id="iniAdmAv" hidden>
+        <div class="lh"><h2>📢 Avisos generales <small class="muted" style="font-weight:500;font-size:12.5px">· los ven todos los usuarios en su Menú principal</small></h2></div>
+        <form id="avForm" class="ini-avf"><textarea id="avTxt" rows="2" maxlength="400" required placeholder="Escribe el aviso para todos (ej. El sábado no hay despacho por inventario)"></textarea>
+          <button class="btn primario sm" type="submit">Publicar aviso</button></form>
+        <div id="avLista"></div>
+      </section>
+      <div class="ini-frase"><p id="iniFrase"></p><small id="iniFirma"></small></div>
     </div>
   </section>
 
@@ -455,6 +459,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610270100"></script>
+<script type="module" src="app.js?v=202610270300"></script>
 </body>
 </html>

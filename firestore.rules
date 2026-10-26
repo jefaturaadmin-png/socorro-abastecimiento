@@ -137,6 +137,12 @@ service cloud.firestore {
       allow write: if publica();
     }
 
+    // ---------- avisos generales: los publica el administrador y los ven todos en su menú principal ----------
+    match /avisos/{id} {
+      allow read: if conPerfil();
+      allow write: if esAdmin();
+    }
+
     // ---------- historial: solo se agrega, nunca se cambia ni se borra ----------
     match /historial/{id} {
       allow read: if esAdmin()
