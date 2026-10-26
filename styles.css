@@ -561,3 +561,5 @@ main { padding-bottom: 80px }
 .resp-c h2 { margin: 0 32px 2px 0; font-size: 18px }
 .resp-c > p { margin: 0 0 12px }
 .resp-dlg .fs-form, .resp-dlg .at-rf { padding: 0; background: none; border: 0 }
+/* en la ventana los resultados de la búsqueda se ven dentro, debajo del buscador */
+.resp-dlg .resultados { position: static; box-shadow: none; max-height: 260px; margin-top: 6px }

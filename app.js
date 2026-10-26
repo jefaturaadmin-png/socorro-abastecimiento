@@ -1191,6 +1191,15 @@ function cargarGenericos() {
   return cargarGenericos.p;
 }
 const genDe = i => i?.ge || GEN?.de.get(i?.c) || GEN?.nom(i?.n) || "";
+// buscador del listado general (todos los medicamentos): primero los del mismo genérico
+function resBusqueda(i, texto, fuera, attr) {
+  if (!texto.trim()) return "";
+  const ge = genDe(i), q = norm(texto).trim().split(/\s+/);
+  const deGen = ge && GEN ? (GEN.por.get(ge) || []).filter(p => q.every(w => p.k.includes(w))) : [];
+  const r = [...new Set([...buscarCat(texto), ...deGen])].filter(p => p.c !== i.c && !fuera(p)).slice(0, 15);
+  return r.length ? r.map(p => `<button type="button" ${attr}="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)}${p.ln ? ` <small>${esc(p.ln)}</small>` : ""}${ge && GEN?.de.get(p.c) === ge ? ' <span class="tag t-ok">mismo genérico</span>' : ""}</button>`).join("")
+    : '<small class="muted" style="padding:8px;display:block">No se encontró ningún medicamento con ese código o nombre.</small>';
+}
 // sin genérico conocido: los de nombre parecido (las dos primeras palabras del nombre)
 const parecidos = i => { const w = norm(i?.n).replace(/[^A-Z0-9 ]+/g, " ").split(/\s+/).filter(x => x.length > 2).slice(0, 2); return w.length ? S.catalogo.filter(p => p.c !== i.c && w.every(x => p.k.includes(x))).slice(0, 30) : []; };
 function formResp(i, e) {
@@ -1218,7 +1227,7 @@ function formAlt(i, alts) {
           : mismos.length ? `<div class="fs-mismo-lista">${mismos.map(p => `<button type="button" data-alt="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)}${p.ln || p.l ? ` <small>${esc(p.ln || p.l)}</small>` : ""}</button>`).join("")}</div>`
           : '<small class="muted">No hay otros parecidos en el listado: búscalo abajo.</small>'}</div>
       <label for="fsBus">¿No está? Búscalo en el listado general</label>
-      <input id="fsBus" type="search" autocomplete="off" placeholder="Código o nombre del otro medicamento"><div class="resultados" id="fsRes" hidden></div>` : ""}</div>`;
+      <input id="fsBus" type="search" autocomplete="off" placeholder="Código o nombre del otro medicamento" value="${esc(S.fBus || "")}"><div class="resultados" id="fsRes" ${S.fBus ? "" : "hidden"}>${resBusqueda(i, S.fBus || "", p => alts.some(a => a.c === p.c), "data-alt")}</div>` : ""}</div>`;
 }
 function leerForm() {
   const g = n => document.querySelector(`input[name="${n}"]:checked`)?.value;
@@ -1227,7 +1236,7 @@ function leerForm() {
 }
 function abrirResp(c) {
   if (S.fAbierto === c) { S.fAbierto = null; S.fForm = null; return pintarFalt(); }
-  const e = S.fEst.get(c); S.fAbierto = c; S.fForm = null; S.fAlt = (e?.alternativas || []).slice(0, MAX_ALT);
+  const e = S.fEst.get(c); S.fAbierto = c; S.fForm = null; S.fBus = ""; S.fAlt = (e?.alternativas || []).slice(0, MAX_ALT);
   cargarGenericos(); pintarFalt();
 }
 $("fsChips").addEventListener("click", ev => { const b = ev.target.closest("[data-est]"); if (b) { S.fFil.est = b.dataset.est; S.fMostrar = 100; pintarFalt(); } });
@@ -1241,17 +1250,14 @@ $("fsMas").addEventListener("click", ev => { if (ev.target.closest("#fsMasBtn"))
 }));
 ["fsTabla", "fsDlg"].forEach(t => $(t).addEventListener("input", ev => {
   if (ev.target.id !== "fsBus") return;
-  // primero los del mismo genérico; si no, cualquiera del listado general
-  const ge = genDe((S.falt?.items || []).find(i => i.c === S.fAbierto) || { c: S.fAbierto }), q = norm(ev.target.value).trim().split(/\s+/);
-  const deGen = ge && GEN ? (GEN.por.get(ge) || []).filter(p => q.every(w => p.k.includes(w))) : [];
-  const r = [...new Set([...deGen, ...buscarCat(ev.target.value)])].filter(p => p.c !== S.fAbierto && !S.fAlt.some(a => a.c === p.c)).slice(0, 10), box = $("fsRes");
-  box.hidden = !r.length;
-  box.innerHTML = r.map(p => `<button type="button" data-alt="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)}${p.ln ? ` <small>${esc(p.ln)}</small>` : ""}${ge && GEN?.de.get(p.c) === ge ? ' <span class="tag t-ok">mismo genérico</span>' : ""}</button>`).join("");
+  S.fBus = ev.target.value;
+  const i = (S.falt?.items || []).find(x => x.c === S.fAbierto) || { c: S.fAbierto }, box = $("fsRes");
+  box.innerHTML = resBusqueda(i, S.fBus, p => S.fAlt.some(a => a.c === p.c), "data-alt"); box.hidden = !S.fBus.trim();
 }));
 ["fsTabla", "fsDlg"].forEach(t => $(t).addEventListener("click", async ev => {
   const r = ev.target.closest("[data-resp]"); if (r) return abrirResp(r.dataset.resp);
   const a = ev.target.closest("[data-alt]");
-  if (a) { const p = S.catIdx.get(a.dataset.alt); if (p && S.fAlt.length < MAX_ALT) S.fAlt.push({ c: p.c, n: p.n }); leerForm(); pintarFalt(); $("fsBus")?.focus(); return; }
+  if (a) { const p = S.catIdx.get(a.dataset.alt); if (p && S.fAlt.length < MAX_ALT) S.fAlt.push({ c: p.c, n: p.n }); S.fBus = ""; leerForm(); pintarFalt(); $("fsBus")?.focus(); return; }
   const q = ev.target.closest("[data-quitar-alt]"); if (q) { S.fAlt.splice(+q.dataset.quitarAlt, 1); leerForm(); return pintarFalt(); }
   if (ev.target.closest("[data-cerrar-f]")) { S.fAbierto = null; S.fForm = null; return pintarFalt(); }
   const c = S.fAbierto; if (!c) return;
@@ -1361,7 +1367,7 @@ function altAt(i, r) {
         : mismos.length ? `<div class="fs-mismo-lista">${mismos.map(p => `<button type="button" data-ralt-c="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)}${p.ln || p.l ? ` <small>${esc(p.ln || p.l)}</small>` : ""}</button>`).join("")}</div>`
         : '<small class="muted">No hay otros parecidos: búscalo abajo.</small>'}</div>
     <label class="lbl">¿No está? Búscalo en el listado general</label>
-    <div class="buscador"><input class="at-rin" data-rbus type="search" autocomplete="off" placeholder="Código o nombre del medicamento"><div class="resultados" id="atRes" hidden></div></div>`;
+    <div class="buscador"><input class="at-rin" data-rbus type="search" autocomplete="off" placeholder="Código o nombre del medicamento" value="${esc(S.atBus || "")}"><div class="resultados" id="atRes" ${S.atBus ? "" : "hidden"}>${resBusqueda(i, S.atBus || "", () => false, "data-ralt-c")}</div></div>`;
 }
 const leerAtForm = box => { S.atForm = { ...S.atForm, estado: box.querySelector("[name=atR]:checked")?.value, mot: box.querySelector("[data-rmot]")?.value ?? S.atForm?.mot }; };
 async function guardarResp(cod) {
@@ -1552,10 +1558,10 @@ function pintarInfo() {
 $("atInfo").addEventListener("click", e => { const t = e.target.closest("[data-at-tab]"); if (t) { S.atTab = t.dataset.atTab; pintarInfo(); } });
 ["atTabla", "atDlg"].forEach(t => $(t).addEventListener("click", e => {
   const b = e.target.closest("[data-info]"); if (b) return abrirInfo(b.dataset.info);
-  const r = e.target.closest("[data-resp]"); if (r) { S.atEdit = r.dataset.resp; S.atForm = null; cargarGenericos().then(() => S.atEdit && pintarAten()); pintarAten(); return; }
+  const r = e.target.closest("[data-resp]"); if (r) { S.atEdit = r.dataset.resp; S.atForm = null; S.atBus = ""; cargarGenericos().then(() => S.atEdit && pintarAten()); pintarAten(); return; }
   const box = e.target.closest("[data-rf]"); if (!box) return;
   const ac = e.target.closest("[data-ralt-c]");
-  if (ac) { const p = S.catIdx.get(ac.dataset.raltC); leerAtForm(box); S.atForm.altSel = p ? { c: p.c, n: p.n } : null; return pintarAten(); }
+  if (ac) { const p = S.catIdx.get(ac.dataset.raltC); leerAtForm(box); S.atForm.altSel = p ? { c: p.c, n: p.n } : null; S.atBus = ""; return pintarAten(); }
   if (e.target.closest("[data-ralt-quitar]")) { leerAtForm(box); S.atForm.altSel = null; return pintarAten(); }
   if (e.target.closest("[data-rcancelar]")) { S.atEdit = null; S.atForm = null; pintarAten(); }
   else if (e.target.closest("[data-rguardar]")) guardarResp(box.dataset.rf);
@@ -1570,11 +1576,9 @@ $("atInfo").addEventListener("click", e => { const t = e.target.closest("[data-a
 }));
 ["atTabla", "atDlg"].forEach(t => $(t).addEventListener("input", e => {
   if (!e.target.matches("[data-rbus]")) return;
-  const i = (S.aten?.items || []).find(x => x.c === S.atEdit), ge = genDe(i), q = norm(e.target.value).trim().split(/\s+/);
-  const deGen = ge && GEN ? (GEN.por.get(ge) || []).filter(p => q.every(w => p.k.includes(w))) : [];
-  const r = [...new Set([...deGen, ...buscarCat(e.target.value)])].filter(p => p.c !== S.atEdit).slice(0, 10), box = $("atRes");
-  box.hidden = !r.length;
-  box.innerHTML = r.map(p => `<button type="button" data-ralt-c="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)}${p.ln ? ` <small>${esc(p.ln)}</small>` : ""}${ge && GEN?.de.get(p.c) === ge ? ' <span class="tag t-ok">mismo genérico</span>' : ""}</button>`).join("");
+  S.atBus = e.target.value;
+  const i = (S.aten?.items || []).find(x => x.c === S.atEdit) || { c: S.atEdit }, box = $("atRes");
+  box.innerHTML = resBusqueda(i, S.atBus, () => false, "data-ralt-c"); box.hidden = !S.atBus.trim();
 }));
 $("atXls").addEventListener("click", () => {
   const A = S.aten, suc = esAdmin() ? (S.atSuc || FARMACIAS[0]) : miFarm();
