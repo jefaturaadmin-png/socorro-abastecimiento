@@ -1338,9 +1338,12 @@ async function cargarStkSuc(suc, ver) {
 function stockCambio(i, c) {
   const A = S.aten || {}, dias = (A.C || 0) + (A.Sg || 0);
   if (!S.atStk) return { cls: "", txt: "Revisando tu stock…" };
-  if (!S.atStkOk) return { cls: "", txt: "Tu stock de este medicamento se verá cuando Abastecimiento vuelva a publicar la lista" };
+  // si aún no se publicó el stock de la sucursal, se usa el de la red (solo trae los productos de las listas)
+  const rx = !S.atStkOk && S.red?.get(c)?.r?.find(x => x.f === A.nombre);
+  if (!S.atStkOk && !rx) { if (!S.red && !S.redCargando) cargarRed().then(() => S.vista === "vAten" && pintarAten());
+    return { cls: "", txt: S.red ? "Aún no está publicado tu stock de este medicamento: se verá cuando Abastecimiento actualice la lista (al subir el kardex)" : "Revisando tu stock…" }; }
   // el de cambio pasa a cubrir también la venta del original: su venta diaria es la mayor de las dos
-  const [st = 0, dA = 0] = S.atStk[c] || [], d = Math.max(dA, i?.d || 0), cob = d > 0 ? Math.floor(st / d) : null;
+  const [st = 0, dA = 0] = rx ? [rx.s || 0, rx.d || 0] : S.atStk[c] || [], d = Math.max(dA, i?.d || 0), cob = d > 0 ? Math.floor(st / d) : null;
   if (st > 0 && (d <= 0 || st >= d * dias)) return { cls: "t-ok", txt: `✓ Tienes ${fCaja(st)}${cob != null ? ` · te cubre ${nf(cob)} días` : ""} · no necesitas que te envíen` };
   const env = d > 0 ? Math.max(1, Math.ceil(d * dias - st - 1e-9)) : 0;
   return { cls: "t-pend", txt: `${st > 0 ? `Tienes ${fCaja(st)} (te cubre ${nf(cob)} días)` : "✗ No tienes"}${env ? ` · se te enviarán ${nf(env)} para ${A.C} + ${A.Sg} días` : ""}` };
