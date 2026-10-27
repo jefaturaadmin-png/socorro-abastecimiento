@@ -16,7 +16,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610271900";
+const VERSION_PROY = "202610272100";
 const VERSION_COMP = "202610270100";
 
 /* ===================== utilidades ===================== */
@@ -1336,7 +1336,7 @@ async function cargarStkSuc(suc, ver) {
   if (S.vista === "vAten") pintarAten();
 }
 // cuánto tiene la sucursal del medicamento c (que usa en lugar de i) y, si no le alcanza, cuánto se le enviaría
-function stockCambio(i, c) {
+function stockCambio(i, c, n = 1) {
   const A = S.aten || {}, dias = (A.C || 0) + (A.Sg || 0);
   if (!S.atStk) return { cls: "", txt: "Revisando tu stock…" };
   // si aún no se publicó el stock de la sucursal, se usa el de la red (solo trae los productos de las listas)
@@ -1344,12 +1344,12 @@ function stockCambio(i, c) {
   if (!S.atStkOk && !rx) { if (!S.red && !S.redCargando) cargarRed().then(() => S.vista === "vAten" && pintarAten());
     return { cls: "", txt: S.red ? "Aún no está publicado tu stock de este medicamento: se verá cuando Abastecimiento actualice la lista (al subir el kardex)" : "Revisando tu stock…" }; }
   // el de cambio pasa a cubrir también la venta del original: su venta diaria es la mayor de las dos
-  const [st = 0, dA = 0] = rx ? [rx.s || 0, rx.d || 0] : S.atStk[c] || [], d = Math.max(dA, i?.d || 0), cob = d > 0 ? Math.floor(st / d) : null;
+  const [st = 0, dA = 0] = rx ? [rx.s || 0, rx.d || 0] : S.atStk[c] || [], d = Math.max(dA, (i?.d || 0) / n), cob = d > 0 ? Math.floor(st / d) : null;
   if (st > 0 && (d <= 0 || st >= d * dias)) return { cls: "t-ok", txt: `✓ Tienes ${fCaja(st)}${cob != null ? ` · te cubre ${nf(cob)} días` : ""} · no necesitas que te envíen` };
   const env = d > 0 ? Math.max(1, Math.ceil(d * dias - st - 1e-9)) : 0;
   return { cls: "t-pend", txt: `${st > 0 ? `Tienes ${fCaja(st)} (te cubre ${nf(cob)} días)` : "✗ No tienes"}${env ? ` · se te enviarán ${nf(env)} para ${A.C} + ${A.Sg} días` : ""}` };
 }
-const tagStock = (i, c, pre = "") => { const x = stockCambio(i, c); return `<span class="tag ${x.cls} at-drog">${pre}${esc(x.txt)}</span>`; };
+const tagStock = (i, c, pre = "", n = 1) => { const x = stockCambio(i, c, n); return `<span class="tag ${x.cls} at-drog">${pre}${esc(x.txt)}</span>`; };
 // el producto ya no se le envía: la sucursal usa otro en su cambio, o droguería lo dio por descontinuado o reemplazado
 function noEnvia(i) {
   const r = S.atResp?.get(i.c), e = estVig(i.c);
@@ -1361,7 +1361,7 @@ function noEnvia(i) {
 function celdaResp(i) {
   // el cierre del ingreso de información es para los bloqueos: responder aquí siempre se puede
   const r = S.atResp?.get(i.c), puede = puedeResponderAt();
-  const ver = r ? `<span class="tag ${RESP_AT.find(x => x.id === r.estado)?.clase || ""} at-rtag">${esc(textoResp(r))}</span>${r.estado === "otro_medicamento" && r.altCod ? tagStock(i, r.altCod) : ""}<small class="muted at-rpor">${esc(r.porNombre || "")} · ${fmtF(r.fecha)}</small>` : "";
+  const ver = r ? `<span class="tag ${RESP_AT.find(x => x.id === r.estado)?.clase || ""} at-rtag">${esc(textoResp(r))}</span>${r.estado === "otro_medicamento" ? altsResp(r).map((a, k, l) => tagStock(i, a.c, l.length > 1 ? a.c + ": " : "", l.length)).join("") : ""}<small class="muted at-rpor">${esc(r.porNombre || "")} · ${fmtF(r.fecha)}</small>` : "";
   return ver + (puede ? `<button type="button" class="btn sm at-rbtn${r ? "" : " primario"}" data-resp="${esc(i.c)}">${r ? "Cambiar" : "Responder"}</button>` : r ? "" : '<span class="muted">–</span>');
 }
 // Ventana al centro para responder (faltantes y lo que me van a atender): se arma de nuevo en cada cambio
@@ -1386,30 +1386,35 @@ function formRespAt(i) {
   return `<div class="at-rf" data-rf="${esc(i.c)}">
     <b>¿Qué pasa con este producto en tu sucursal?</b>
     <div class="pills at-ropts">${RESP_AT.map(x => `<label class="${x.id}"><input type="radio" name="atR" value="${x.id}" ${x.id === e ? "checked" : ""}>${esc(x.txt)}</label>`).join("")}</div>
-    ${o?.campo === "alt" ? altAt(i, r) + `<input class="at-rin" data-rmot placeholder="Comentario (opcional)" value="${esc(S.atForm?.mot ?? r.comentario ?? "")}">` : ""}
+    ${o?.campo === "alt" ? altAt(i, r) : ""}
     ${o?.campo === "motivo" ? `<input class="at-rin" data-rmot placeholder="${esc(o.ph)}" value="${esc(S.atForm?.mot ?? r.comentario ?? "")}">` : ""}
     <div class="at-racc"><button type="button" class="btn primario sm" data-rguardar>Guardar</button><button type="button" class="btn sm" data-rcancelar>Cancelar</button>
       ${r.estado ? `<button type="button" class="btn sm peligro" data-rquitar>Quitar mi respuesta</button>` : ""}<span class="msg error" id="atRMsg" hidden></span></div>
   </div>`;
 }
 // el medicamento que usa en su cambio: primero los del mismo genérico; si no está, del listado general
+// medicamentos que la sucursal usa en su cambio (antes era uno solo: altCod)
+const altsResp = r => r?.alts?.length ? r.alts : r?.altCod ? [{ c: r.altCod, n: (r.alternativa || "").replace(/^[^-]*- /, "") }] : [];
+const altsForm = r => S.atForm?.alts ?? altsResp(r);
+// orden: buscador arriba, lo elegido (con su stock), el comentario y abajo los sugeridos del mismo genérico
 function altAt(i, r) {
-  const sel = S.atForm?.altSel !== undefined ? S.atForm.altSel : r.altCod ? { c: r.altCod, n: (r.alternativa || "").replace(/^[^-]*- /, "") } : null;
-  if (sel) return `<div class="fs-alts"><span class="fs-alt">En su cambio usa: <b>${esc(sel.c)} - ${esc(sel.n)}</b> <button type="button" class="enlace" data-ralt-quitar>Cambiar</button></span>${tagStock(i, sel.c)}</div>`;
-  const ge = genDe(i), mismos = (ge && GEN ? (GEN.por.get(ge) || []) : GEN ? parecidos(i) : []).filter(p => p.c !== i.c);
-  return `<div class="fs-mismo"><b>¿Qué medicamento usas en su cambio? · ${ge ? `Del mismo genérico: ${esc(ge)}` : "De nombre parecido (no se conoce su genérico)"}</b>
+  const sel = altsForm(r), lleno = sel.length >= MAX_ALT;
+  const ge = genDe(i), mismos = (ge && GEN ? (GEN.por.get(ge) || []) : GEN ? parecidos(i) : []).filter(p => p.c !== i.c && !sel.some(a => a.c === p.c));
+  return `<div class="campo"><b>¿Qué medicamento(s) usas en su cambio? <small class="muted">(puedes elegir hasta ${MAX_ALT})</small></b></div>
+    ${lleno ? "" : `<div class="buscador"><input class="at-rin" data-rbus type="search" autocomplete="off" placeholder="Busca por código o nombre (todos los medicamentos)" value="${esc(S.atBus || "")}"><div class="resultados" id="atRes" ${S.atBus ? "" : "hidden"}>${resBusqueda(i, S.atBus || "", p => sel.some(a => a.c === p.c), "data-ralt-c")}</div></div>`}
+    ${sel.length ? `<div class="at-sel">${sel.map((a, k) => `<div class="at-sel-f"><span class="fs-alt"><b>${esc(a.c)} - ${esc(a.n)}</b> <button type="button" class="enlace" data-ralt-quitar="${k}">Quitar</button></span>${tagStock(i, a.c, "", sel.length)}</div>`).join("")}</div>` : ""}
+    <input class="at-rin" data-rmot placeholder="Comentario (opcional)" value="${esc(S.atForm?.mot ?? r.comentario ?? "")}">
+    ${lleno ? "" : `<div class="fs-mismo"><small class="muted">Sugeridos${ge ? "" : " (de nombre parecido)"}:</small>
       ${!GEN ? '<small class="muted">Cargando…</small>'
         : mismos.length ? `<div class="fs-mismo-lista">${mismos.map(p => `<button type="button" data-ralt-c="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)}${p.ln || p.l ? ` <small>${esc(p.ln || p.l)}</small>` : ""}</button>`).join("")}</div>`
-        : '<small class="muted">No hay otros parecidos: búscalo abajo.</small>'}</div>
-    <label class="lbl">¿No está? Búscalo en el listado general</label>
-    <div class="buscador"><input class="at-rin" data-rbus type="search" autocomplete="off" placeholder="Código o nombre del medicamento" value="${esc(S.atBus || "")}"><div class="resultados" id="atRes" ${S.atBus ? "" : "hidden"}>${resBusqueda(i, S.atBus || "", () => false, "data-ralt-c")}</div></div>`;
+        : '<small class="muted">No hay sugeridos: búscalo arriba.</small>'}</div>`}`;
 }
 const leerAtForm = box => { S.atForm = { ...S.atForm, estado: box.querySelector("[name=atR]:checked")?.value, mot: box.querySelector("[data-rmot]")?.value ?? S.atForm?.mot }; };
 async function guardarResp(cod) {
   const i = (S.aten?.items || []).find(x => x.c === cod), box = document.querySelector(`[data-rf="${CSS.escape(cod)}"]`); if (!i || !box) return;
   const estado = box.querySelector("[name=atR]:checked")?.value, o = RESP_AT.find(x => x.id === estado);
-  const r0 = S.atResp?.get(cod) || {}, sel = S.atForm?.altSel !== undefined ? S.atForm.altSel : r0.altCod ? { c: r0.altCod, n: (r0.alternativa || "").replace(/^[^-]*- /, "") } : null;
-  const alt = sel ? `${sel.c} - ${sel.n}` : "", mot = box.querySelector("[data-rmot]")?.value.trim() || "";
+  const sel = altsForm(S.atResp?.get(cod));
+  const alt = sel.map(a => `${a.c} - ${a.n}`).join(" / "), mot = box.querySelector("[data-rmot]")?.value.trim() || "";
   const err = t => { const m = $("atRMsg"); m.hidden = !t; m.textContent = t; };
   if (!o) return err("Elige una opción.");
   if (o.campo === "alt" && !alt) return err("Elige el medicamento que usas en su cambio.");
@@ -1417,7 +1422,7 @@ async function guardarResp(cod) {
   const suc = miFarm();
   try {
     await setDoc(doc(db, "atencion_resp", `${suc}__${cod}`), { suc, codpro: cod, producto: i.n, laboratorio: i.l || "", estado,
-      comentario: mot.slice(0, 300), alternativa: o.campo === "alt" ? alt.slice(0, 150) : "", altCod: o.campo === "alt" ? sel.c : "", porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario, fecha: serverTimestamp() });
+      comentario: mot.slice(0, 300), alternativa: o.campo === "alt" ? alt.slice(0, 400) : "", altCod: o.campo === "alt" ? sel[0].c : "", alts: o.campo === "alt" ? sel.slice(0, MAX_ALT) : [], porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario, fecha: serverTimestamp() });
     S.atEdit = null; S.atForm = null; toast("Respuesta guardada"); pintarAten();
   } catch (x) { err(textoError(x)); }
 }
@@ -1597,8 +1602,10 @@ $("atInfo").addEventListener("click", e => { const t = e.target.closest("[data-a
   const r = e.target.closest("[data-resp]"); if (r) { S.atEdit = r.dataset.resp; S.atForm = null; S.atBus = ""; cargarGenericos().then(() => S.atEdit && pintarAten()); pintarAten(); return; }
   const box = e.target.closest("[data-rf]"); if (!box) return;
   const ac = e.target.closest("[data-ralt-c]");
-  if (ac) { const p = S.catIdx.get(ac.dataset.raltC); leerAtForm(box); S.atForm.altSel = p ? { c: p.c, n: p.n } : null; S.atBus = ""; return pintarAten(); }
-  if (e.target.closest("[data-ralt-quitar]")) { leerAtForm(box); S.atForm.altSel = null; return pintarAten(); }
+  if (ac) { const p = S.catIdx.get(ac.dataset.raltC); leerAtForm(box); const sel = [...altsForm(S.atResp?.get(S.atEdit))];
+    if (p && sel.length < MAX_ALT && !sel.some(a => a.c === p.c)) sel.push({ c: p.c, n: p.n }); S.atForm.alts = sel; S.atBus = ""; return pintarAten(); }
+  const qa = e.target.closest("[data-ralt-quitar]");
+  if (qa) { leerAtForm(box); const sel = [...altsForm(S.atResp?.get(S.atEdit))]; sel.splice(+qa.dataset.raltQuitar, 1); S.atForm.alts = sel; return pintarAten(); }
   if (e.target.closest("[data-rcancelar]")) { S.atEdit = null; S.atForm = null; pintarAten(); }
   else if (e.target.closest("[data-rguardar]")) guardarResp(box.dataset.rf);
   else if (e.target.closest("[data-rquitar]")) deleteDoc(doc(db, "atencion_resp", `${miFarm()}__${box.dataset.rf}`))

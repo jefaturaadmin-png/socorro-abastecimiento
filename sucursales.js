@@ -113,7 +113,7 @@
         const st = +(window.STOCK_TODOS?.[p.c]?.[f]?.[0] ?? p.st?.[f] ?? 0) || 0, c = p.catF?.[f] || 'E';
         const o = cfgDe(f, p.c), aj = ajProd(f, p.c), dv = diaria(p, f, o);
         // "Se tiene otro medicamento en su cambio": el que usa en su lugar se atiende con la venta del original
-        const usa = enCambio(p, f), cambio = usa ? null : cambioDe(p, f), dOrig = cambio ? diaria(cambio.orig, f, cfgDe(f, cambio.orig.c)).d : 0;
+        const usa = enCambio(p, f), cambio = usa ? null : cambioDe(p, f), dOrig = cambio ? diaria(cambio.orig, f, cfgDe(f, cambio.orig.c)).d * cambio.parte : 0;
         // lo que droguería dice que reemplaza a otro (Faltantes: "existe otro medicamento" o "descontinuado" con reemplazo):
         // a la sucursal a la que le falta el original se le atiende este, con la venta del original
         let extra = 0; const enLugar = [];
@@ -148,11 +148,15 @@
   let respVer = 0, cambios = new Map(), prodIdx = null;
   function leerRespuestas(docs) {
     S.suResp = new Map(docs.map(d => [d.id, d.data()])); cambios = new Map(); respVer++;
-    for (const r of S.suResp.values()) if (r.estado === 'otro_medicamento' && r.altCod) cambios.set(r.suc + '__' + r.altCod, r);
+    // si usa varios en su cambio, la venta del original se reparte entre ellos
+    for (const r of S.suResp.values()) if (r.estado === 'otro_medicamento') {
+      const al = r.alts?.length ? r.alts.map(a => a.c) : r.altCod ? [r.altCod] : [];
+      for (const c of al) cambios.set(r.suc + '__' + c, { r, parte: 1 / al.length });
+    }
   }
   const prodDe = c => { if (prodIdx?.de !== S.P) prodIdx = { de: S.P, m: new Map(S.P.p.map(p => [p.c, p])) }; return prodIdx.m.get(c); };
-  const enCambio = (p, f) => { const r = S.suResp?.get(f + '__' + p.c); return r?.estado === 'otro_medicamento' && r.altCod ? r.alternativa || r.altCod : ''; };
-  const cambioDe = (p, f) => { const r = cambios.get(f + '__' + p.c), orig = r && prodDe(r.codpro); return orig ? { orig, r } : null; };
+  const enCambio = (p, f) => { const r = S.suResp?.get(f + '__' + p.c); return r?.estado === 'otro_medicamento' && (r.altCod || r.alts?.length) ? r.alternativa || r.altCod : ''; };
+  const cambioDe = (p, f) => { const x = cambios.get(f + '__' + p.c), orig = x && prodDe(x.r.codpro); return orig ? { orig, r: x.r, parte: x.parte } : null; };
   // respuestas de droguería en Faltantes: el primer medicamento que indicó reemplaza al original
   let reempDrog = new Map(), reempDe = new Map();
   function leerEstados(docs) {
