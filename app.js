@@ -22,7 +22,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610281700";
+const VERSION_PROY = "202610281900";
 const VERSION_COMP = "202610281500";
 
 /* ===================== utilidades ===================== */
@@ -761,20 +761,10 @@ $("qTabla").addEventListener("click", e => { const b = e.target.closest("[data-f
 ["aMot", "aEst", "aQ", "aLab"].forEach(id => $(id).addEventListener("input", () => { S.af.motivo = $("aMot").value; S.af.estado = $("aEst").value; S.af.q = $("aQ").value; S.af.lab = $("aLab").value; pintarAdmin(); }));
 $("aChips").addEventListener("click", e => { const b = e.target.closest("[data-farm]"); if (b) { S.af.farm = b.dataset.farm; pintarAdmin(); } });
 
-// tipo (A–E) del producto en esa sucursal (o en toda la empresa si el bloqueo es para todas): red/tipos
-async function cargarTipos() {
-  if (S.tipos || S.tiposCargando) return; S.tiposCargando = true;
-  try { const d = await getDoc(doc(db, "red", "tipos")); S.tipos = d.exists() ? { f: d.data().f || [], p: d.data().p || {} } : { f: [], p: {} }; } catch { S.tipos = { f: [], p: {} }; }
-  S.tiposCargando = false; if (S.vista === "vAdmin") pintarAdmin();
-}
-function tipoDe(cod, farm) {
-  const t = S.tipos?.p[cod]; if (!t) return "";
-  const i = farm === "TODAS" ? -1 : S.tipos.f.indexOf(farm);
-  return t[i + 1] || "";
-}
-const celdaTipo = (cod, farm) => { const t = tipoDe(cod, farm); return t ? `<span class="at-cat ${t}" title="${esc(NOM_TIPO[t] || "")}${farm === "TODAS" ? " (toda la empresa)" : " en " + esc(corto(farm))}">${t}</span>` : '<span class="muted">–</span>'; };
+// línea del producto (Fármacos, Cosméticos, Pañales…), de clasificacion.json por el nombre del producto
+const lineaDe = d => GEN?.lin(d.producto) || GEN?.lin(S.catIdx.get(String(d.codpro))?.n) || "";
 function pintarAdmin() {
-  cargarTipos();
+  if (!GEN) cargarGenericos().then(() => S.vista === "vAdmin" && pintarAdmin());
   pintarCierreAdmin();
   const todos = [...S.bloqueos.values()], act = todos.filter(d => d.estado === "bloqueado");
   const pend = act.filter(d => d.solicitud?.estado === "pendiente");
@@ -816,12 +806,12 @@ function pintarAdmin() {
     .filter(d => !q || q.split(/\s+/).every(w => norm(d.codpro + " " + d.producto + " " + (d.laboratorio || "")).includes(w)))
     .sort((a, b) => (aFecha(b.desde) || 0) - (aFecha(a.desde) || 0));
   $("aTit").textContent = (S.af.farm ? corto(S.af.farm) : "Todas las farmacias") + ` · ${lista.length}`;
-  $("aTabla").innerHTML = `<thead><tr><th>Producto</th><th title="Tipo del producto en esa sucursal: A venta mensual, B cada 2 meses, C cada 4 meses, D al año, E sin venta">Tipo</th><th>Farmacia</th><th>Motivo</th><th>Por</th><th>Desde</th><th>Revisar</th></tr></thead><tbody>` +
+  $("aTabla").innerHTML = `<thead><tr><th>Producto</th><th>Línea</th><th>Farmacia</th><th>Motivo</th><th>Por</th><th>Desde</th><th>Revisar</th></tr></thead><tbody>` +
     (lista.length ? lista.map(d => {
       const vencida = d.estado === "bloqueado" && d.revisar && d.revisar <= hoy;
       return `<tr class="clic ${vencida ? "revisar" : ""}" data-ficha="${esc(d.id)}" tabindex="0">
         <td class="p"><b>${esc(d.producto)}</b><code>${esc(codVis(d.codpro))}${d.fueraCatalogo ? " · fuera de la lista" : ""}${d.laboratorio ? " · " + esc(d.laboratorio) : ""}</code></td>
-        <td>${celdaTipo(d.codpro, d.farmacia)}</td>
+        <td>${lineaDe(d) ? `<span class="tag">${esc(lineaDe(d))}</span>` : '<span class="muted">–</span>'}</td>
         <td>${esc(corto(d.farmacia))}</td>
         <td>${d.estado === "activo" ? `<span class="tag t-ok">Reactivado</span>` : tagMotivo(d.motivo)} ${d.estado === "bloqueado" ? etiquetaSolicitud(d) : ""}</td>
         <td>${esc(d.porNombre)}</td>
@@ -1223,9 +1213,10 @@ function cargarGenericos() {
       const a = c.p[nomN(p.n)], ge = a && c.g[a[1]]; if (!ge) continue;
       g.de.set(p.c, ge); if (!g.por.has(ge)) g.por.set(ge, []); g.por.get(ge).push(p);
     }
-    g.nom = n => { const x = c.p[nomN(n)]; return (x && c.g[x[1]]) || ""; };   // por el nombre, si el código no está en el catálogo
+    g.nom = n => { const x = c.p[nomN(n)]; return (x && c.g[x[1]]) || ""; };
+    g.lin = n => { const x = n && c.p[nomN(n)]; return (x && c.t[x[0]]) || ""; };   // por el nombre, si el código no está en el catálogo
     GEN = g;
-  }).catch(() => { GEN = { de: new Map(), por: new Map() }; }).then(() => { if (S.fAbierto) pintarFalt(); });
+  }).catch(() => { GEN = { de: new Map(), por: new Map(), nom: () => "", lin: () => "" }; }).then(() => { if (S.fAbierto) pintarFalt(); });
   return cargarGenericos.p;
 }
 const genDe = i => i?.ge || GEN?.de.get(i?.c) || GEN?.nom(i?.n) || "";

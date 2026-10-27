@@ -300,9 +300,6 @@
       // stock de droguería de todos los productos (red/stk_DROGUERIA FS): para el tablero de urgencias del administrador
       const sd = {}; for (const p of S.P.p) { const v = +(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) || 0; if (v > 0) sd[p.c] = [r3(v)]; }
       await FB.setDoc(FB.doc(FB.db, 'red', 'stk_DROGUERIA FS'), window.parent.JSON.parse(JSON.stringify({ p: sd, publicado: hoy })));
-      // tipo (A–E) de cada producto: el de toda la empresa y el de cada sucursal (red/tipos), para Bloqueos del administrador
-      const tp = {}; for (const p of S.P.p) tp[p.c] = (p.cat || 'E') + S.P.farmacias.map(f => p.catF?.[f] || 'E').join('');
-      await FB.setDoc(FB.doc(FB.db, 'red', 'tipos'), window.parent.JSON.parse(JSON.stringify({ f: S.P.farmacias, p: tp, publicado: hoy })));
       // catálogo vivo (todos los productos del kardex: código, nombre, laboratorio) para los buscadores de la página
       const cat = {}; for (const p of S.P.p) cat[p.c] = [p.n, labDe(p.c) || ''];
       if (JSON.stringify(cat).length > 950000) for (const c in cat) cat[c] = [cat[c][0]];
