@@ -70,7 +70,7 @@ const VISTAS = [
   { id: "sucursales", nombre: "Atención a sucursales", vista: "vSuc", c: "suc", ic: "i-tienda", desc: "Qué enviar a cada sucursal", ayuda: "también publica las listas" },
   { id: "faltantes", nombre: "Faltantes de droguería", vista: "vFalt", ic: "i-buscar", desc: "Productos en 0 en droguería que piden las sucursales" },
   { id: "atencion", nombre: "Lo que me van a atender", vista: "vAten", ic: "i-ojo", desc: "Lo que Abastecimiento enviará a tu sucursal", ayuda: "solo químicos: ve su sucursal" },
-  { id: "pedidos", nombre: "Pedidos de urgencia", vista: "vPed", ic: "i-lista", desc: "Lo que cada sucursal pidió de urgencia (hoja de Drive)", ayuda: "químicos: ven los de su sucursal" }];
+  { id: "pedidos", nombre: "Productos agotados o de extrema urgencia", vista: "vPed", ic: "i-lista", desc: "Lo que cada sucursal pidió de urgencia (desde el formulario)", ayuda: "químicos: ven los de su sucursal" }];
 const misVistas = () => esAdmin() ? VISTAS : VISTAS.filter(v => (S.perfil?.vistas || []).includes(v.id));
 const NOMBRE_ROL = { admin: "Administrador", quimico: "Químico", colaborador: "Colaborador" };
 const miFarm = () => S.perfil?.farmacia;
@@ -1747,8 +1747,8 @@ function pintarPedidos() {
   const P = S.ped, admin = esAdmin() || !miFarm();
   $("pdDrive").hidden = !esAdmin(); $("pdDrive").href = `https://docs.google.com/spreadsheets/d/${HOJA_PEDIDOS}/edit`;
   $("pdSucF").hidden = !admin;
-  $("pdSub").textContent = admin ? "Lo que cada sucursal pidió de urgencia. Se actualiza solo desde la hoja de Google Drive."
-    : `Lo que ${nombreFarm(miFarm())} pidió de urgencia. Se actualiza solo desde la hoja de Google Drive.`;
+  $("pdSub").textContent = admin ? "Lo que cada sucursal pidió de urgencia. Se actualiza desde el formulario."
+    : `Lo que ${nombreFarm(miFarm())} pidió de urgencia. Se actualiza desde el formulario.`;
   msg("pdMsg", S.pdErr || "", true);
   if (!P) { $("pdTabla").innerHTML = `<tbody><tr class="vacia"><td>${S.pdErr ? "" : "Leyendo la hoja de pedidos…"}</td></tr></tbody>`; return; }
   $("pdHora").textContent = "Actualizado " + new Date(P.t).toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
@@ -1779,5 +1779,5 @@ $("pdXls").addEventListener("click", () => {
   const admin = esAdmin() || !miFarm(), cols = P.cab.map((h, i) => i).filter(i => P.cab[i]);
   const datos = pedidosVisibles().map(d => Object.fromEntries([...(admin && P.cS >= 0 ? [["Sucursal (reconocida)", d.suc ? corto(d.suc) : ""]] : []), ...cols.map(i => [P.cab[i], d.x[i] || ""])]));
   if (!datos.length) return toast("No hay pedidos para descargar.");
-  excelDe(datos, "Pedidos", "pedidos_urgencia_" + (admin ? (S.pdSuc ? corto(S.pdSuc) : "todas") : corto(miFarm())).replace(/\W+/g, "_").toLowerCase());
+  excelDe(datos, "Urgencias", "agotados_urgencia_" + (admin ? (S.pdSuc ? corto(S.pdSuc) : "todas") : corto(miFarm())).replace(/\W+/g, "_").toLowerCase());
 });
