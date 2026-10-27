@@ -300,6 +300,10 @@
       // stock de droguería de todos los productos (red/stk_DROGUERIA FS): para el tablero de urgencias del administrador
       const sd = {}; for (const p of S.P.p) { const v = +(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) || 0; if (v > 0) sd[p.c] = [r3(v)]; }
       await FB.setDoc(FB.doc(FB.db, 'red', 'stk_DROGUERIA FS'), window.parent.JSON.parse(JSON.stringify({ p: sd, publicado: hoy })));
+      // catálogo vivo (todos los productos del kardex: código, nombre, laboratorio) para los buscadores de la página
+      const cat = {}; for (const p of S.P.p) cat[p.c] = [p.n, labDe(p.c) || ''];
+      if (JSON.stringify(cat).length > 950000) for (const c in cat) cat[c] = [cat[c][0]];
+      await FB.setDoc(FB.doc(FB.db, 'red', 'catalogo'), window.parent.JSON.parse(JSON.stringify({ p: cat, publicado: hoy })));
       return { ok: true };
     } catch (e) { return { ok: false, error: e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules) en Firebase.' : e.message }; }
   }

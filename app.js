@@ -16,7 +16,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610280500";
+const VERSION_PROY = "202610281200";
 const VERSION_COMP = "202610270100";
 
 /* ===================== utilidades ===================== */
@@ -88,6 +88,18 @@ async function cargarCatalogo() {
     a.textContent = "No se encontró el catálogo de productos (catalogo.json). Súbelo al repositorio junto con la página.";
   }
 }
+// Productos que están en el kardex pero no en catalogo.json (se publica en red/catalogo junto con las listas)
+async function cargarCatVivo() {
+  try {
+    const d = await getDoc(doc(db, "red", "catalogo")); if (!d.exists()) return;
+    let n = 0;
+    for (const [c, [nom, lab = ""]] of Object.entries(d.data().p || {})) {
+      if (S.catIdx.has(c)) continue;
+      const p = { c, n: String(nom), l: "", ln: String(lab), k: norm([c, nom, lab].join(" ")) }; S.catalogo.push(p); S.catIdx.set(c, p); n++;
+    }
+    if (n && S.vista === "vPed") pintarPedidos();
+  } catch {}   // sin permiso (usuario sin estos módulos) o sin internet: se queda con catalogo.json
+}
 function buscarCat(texto) {
   const q = norm(texto).trim(); if (!q) return [];
   const exacto = S.catIdx.get(texto.trim());
@@ -142,7 +154,7 @@ onAuthStateChanged(auth, async user => {
   await entrar();
 });
 async function entrar() {
-  await cargarCatalogo();
+  await cargarCatalogo(); cargarCatVivo();
   iniciar();
   revisarPerfil();
 }
@@ -1900,13 +1912,17 @@ $("pdNuevo").addEventListener("click", abrirNuevoUrg);
 $("pdNuevoA").addEventListener("click", abrirNuevoUrg);
 $("urgBus").addEventListener("input", e => {
   S.urgBus = e.target.value; const box = $("urgRes");
-  box.innerHTML = resBusqueda({ c: "" }, S.urgBus, p => S.urgNuevo.some(a => a.c === p.c), "data-urg-add"); box.hidden = !S.urgBus.trim();
+  const t = S.urgBus.trim(), libre = /^\d{3,6}$/.test(t) && !prodCat(t) && !S.urgNuevo.some(a => a.c === t);
+  box.innerHTML = resBusqueda({ c: "" }, S.urgBus, p => S.urgNuevo.some(a => a.c === p.c), "data-urg-add")
+    + (libre ? `<button type="button" data-urg-cod="${esc(t)}"><b>${esc(t)}</b> Agregar este código tal cual (no está en el catálogo)</button>` : ""); box.hidden = !t;
 });
 $("urgDlg").addEventListener("change", e => { if (e.target.id === "urgSuc") S.urgSucSel = e.target.value; });
 $("urgDlg").addEventListener("click", async e => {
   if (e.target.closest("[data-cerrar-dlg]") || e.target === $("urgDlg")) return $("urgDlg").close();
   const a = e.target.closest("[data-urg-add]");
   if (a) { const p = S.catIdx.get(a.dataset.urgAdd); if (p) S.urgNuevo.push({ c: p.c, n: p.n }); $("urgBus").value = S.urgBus = ""; $("urgRes").hidden = true; pintarNuevoUrg(); $("urgBus").focus(); return; }
+  const lc = e.target.closest("[data-urg-cod]");
+  if (lc) { S.urgNuevo.push({ c: lc.dataset.urgCod, n: "(código sin nombre en el catálogo)" }); $("urgBus").value = S.urgBus = ""; $("urgRes").hidden = true; pintarNuevoUrg(); $("urgBus").focus(); return; }
   const q = e.target.closest("[data-urg-quitar]"); if (q) { S.urgNuevo.splice(+q.dataset.urgQuitar, 1); return pintarNuevoUrg(); }
   if (!e.target.closest("#urgEnviar")) return;
   const suc = !esAdmin() && miFarm() ? miFarm() : S.urgSucSel;
