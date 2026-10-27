@@ -1672,6 +1672,7 @@ $("atSuc").addEventListener("change", e => { S.atSuc = e.target.value; escucharA
 /* ===================== exportar a Excel ===================== */
 let XLSX = null;
 async function descargarExcel(filas, nombre, conFarmacia) {
+  await cargarGenericos();   // para la columna Línea
   try { XLSX ??= await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm"); }
   catch { return toast("No se pudo preparar el Excel. Revisa tu internet e inténtalo de nuevo."); }
   const estado = d => d.solicitud?.estado === "pendiente" ? "Reactivación pedida" : d.solicitud?.estado === "rechazada" ? "Reactivación rechazada" : "Bloqueado";
@@ -1679,6 +1680,7 @@ async function descargarExcel(filas, nombre, conFarmacia) {
     ...(conFarmacia ? { Farmacia: corto(d.farmacia), "Almacén (kardex)": d.farmacia } : {}),
     "Código": String(d.codpro).startsWith(SIN_COD) ? "" : d.codpro,
     Producto: d.producto,
+    "Línea": lineaDe(d),
     Laboratorio: d.laboratorio || "",
     Motivo: d.motivo,
     Comentario: d.comentario || "",
