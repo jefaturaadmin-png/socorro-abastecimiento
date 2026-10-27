@@ -487,3 +487,72 @@ onAuthStateChanged(auth, async u => {
   $("vLista").hidden = false;
   cargar().catch(e => { console.error(e); msg("No se pudo cargar el comparativo. " + (e.code === "permission-denied" ? "Revisa que las reglas de firestore.rules estén publicadas." : e.message || ""), true); });
 });
+
+/* ---------- buscar en la competencia (cualquier producto, aunque no lo vendamos) ---------- */
+// Busca en las 3 cadenas los productos cuyo nombre tiene todas las palabras escritas y junta en una fila
+// el mismo producto de cada cadena (mismo nombre y mismos números: mg, ml, unidades).
+function parecido(a, b) {
+  // si los dos traen números (mg, ml, g, unidades) tienen que ser los mismos: 850 g no es 400 g
+  if (a.nums.length && b.nums.length && (a.nums.length !== b.nums.length || a.nums.some(n => !b.nums.includes(n)))) return 0;
+  const pal = a.pal.filter(w => b.pal.includes(w)).length / (new Set([...a.pal, ...b.pal]).size || 1);
+  return pal * 0.65 + (a.nums.length && b.nums.length ? 0.2 : 0.05) + (a.pal[0] && a.pal[0] === b.pal[0] ? 0.15 : 0);
+}
+function nuestroDe(k, id) {   // nuestro producto emparejado con ese de la competencia (confirmado o sugerido)
+  S.inv ??= {};
+  if (!S.inv[k]) { S.inv[k] = new Map(); for (const p of S.cat) { const pa = pareja(p.c, k); if (pa.id) S.inv[k].set(pa.id, p); } }
+  return S.inv[k].get(id);
+}
+function buscarComp(texto) {
+  const pals = sinTildes(texto).split(/\s+/).filter(Boolean);
+  if (!pals.length) return [];
+  const items = [];
+  for (const t of TIENDAS) {
+    let n = 0;
+    for (const [id, p] of Object.entries(S.comp[t.k]?.p || {})) {
+      const txt = sinTildes(p[0] + " " + (p[1] || "") + " " + (p[2] || ""));
+      if (!pals.every(w => txt.includes(w))) continue;
+      items.push({ k: t.k, id, p, pr: efectivo(p), r: rasgos(p[0] + " " + (p[2] || "")) });
+      if (++n >= 150) break;
+    }
+  }
+  // primero se juntan las parejas más parecidas (de cadenas distintas); cada fila tiene a lo más uno de cada cadena
+  const pares = [];
+  for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+    if (items[i].k === items[j].k) continue;
+    const sc = parecido(items[i].r, items[j].r); if (sc >= 0.6) pares.push([sc, items[i], items[j]]);
+  }
+  pares.sort((a, b) => b[0] - a[0]);
+  const grupoDe = new Map();
+  for (const [, a, b] of pares) {
+    const ga = grupoDe.get(a), gb = grupoDe.get(b);
+    if (ga && gb) continue;
+    if (!ga && !gb) { const g = { [a.k]: a, [b.k]: b }; grupoDe.set(a, g); grupoDe.set(b, g); continue; }
+    const g = ga || gb, nuevo = ga ? b : a;
+    if (g[nuevo.k] || Object.values(g).some(x => parecido(x.r, nuevo.r) < 0.6)) continue;
+    g[nuevo.k] = nuevo; grupoDe.set(nuevo, g);
+  }
+  for (const it of items) if (!grupoDe.has(it)) grupoDe.set(it, { [it.k]: it });
+  const grupos = [];
+  for (const g of new Set(grupoDe.values())) {
+    const xs = TIENDAS.map(t => g[t.k]).filter(Boolean), min = Math.min(...xs.map(x => x.pr));
+    let nuestro = null; for (const x of xs) { nuestro = nuestroDe(x.k, x.id); if (nuestro) break; }
+    grupos.push({ g, n: xs.length, min, nuestro, precioN: nuestro ? S.lista?.p?.[nuestro.c] ?? null : null });
+  }
+  return grupos.sort((a, b) => b.n - a.n || a.min - b.min);
+}
+function pintarBusquedaComp() {
+  const q = $("qComp").value.trim(), box = $("bcRes");
+  if (q.length < 3) { box.hidden = true; $("bcCuenta").textContent = ""; return; }
+  const gs = buscarComp(q), vis = gs.slice(0, 80);
+  $("bcCuenta").textContent = `${gs.length} productos · ${gs.filter(g => g.n === TIENDAS.length).length} en las ${TIENDAS.length} cadenas`;
+  box.hidden = false;
+  const celda = (x, min) => !x ? `<td class="t vacio">–</td>` : `<td class="t${Math.abs(x.pr - min) < 0.005 ? " min" : ""}"><div class="pr">${x.p[5] && x.p[5] < x.p[4] ? `<s>${sol(x.p[4])}</s> ` : ""}${sol(x.pr)}</div>
+    <div class="nm">${x.p[7] ? `<a href="${esc(x.p[7])}" target="_blank" rel="noopener">${esc(x.p[0])} ↗</a>` : esc(x.p[0])}</div>${x.p[2] ? `<div class="nm">${esc(x.p[2])}</div>` : ""}</td>`;
+  $("tComp").innerHTML = `<thead><tr><th class="l">Producto</th><th>Nuestro precio</th>${TIENDAS.map(t => `<th class="t">${t.nombre}</th>`).join("")}<th>Más barato</th></tr></thead><tbody>` +
+    (vis.map(g => { const x0 = TIENDAS.map(t => g.g[t.k]).find(Boolean), barato = TIENDAS.filter(t => g.g[t.k] && Math.abs(g.g[t.k].pr - g.min) < 0.005).map(t => t.nombre);
+      return `<tr><td class="l"><b>${esc(x0.p[0])}</b><span class="bc-n" title="En cuántas cadenas está">${g.n}/${TIENDAS.length}</span>${g.nuestro ? `<div class="nm">Nuestro: ${esc(g.nuestro.c)} · ${esc(g.nuestro.n)}</div>` : ""}</td>
+        <td class="n">${g.precioN != null ? sol(g.precioN) + (g.precioN > g.min + 0.005 ? `<div class="nm caro">+${Math.round((g.precioN / g.min - 1) * 100)} % vs más barato</div>` : "") : "–"}</td>
+        ${TIENDAS.map(t => celda(g.g[t.k], g.min)).join("")}<td class="l">${esc(barato.join(" / "))}<div class="nm">${sol(g.min)}</div></td></tr>`; }).join("")
+      || `<tr><td colspan="${TIENDAS.length + 3}" class="vacio-tabla">No se encontró «${esc(q)}» en ninguna de las 3 cadenas.</td></tr>`) + "</tbody>";
+}
+let tBC; $("qComp").addEventListener("input", () => { clearTimeout(tBC); tBC = setTimeout(pintarBusquedaComp, 250); });

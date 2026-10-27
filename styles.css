@@ -476,7 +476,7 @@ th.at-ojo, td.at-ojo { text-align: center; width: 90px }
 /* ---------- avisos e información a los costados ---------- */
 .lado { display: none }
 @media (min-width: 1760px) {
-  .lado:not([hidden]) { display: grid; gap: 12px; align-content: start; position: fixed; top: 84px; width: 250px; max-height: calc(100vh - 110px); overflow: auto; z-index: 5 }
+  .lado:not([hidden]) { display: grid; gap: 12px; align-content: start; position: fixed; top: calc(var(--alto-top, 72px) + 14px); width: 250px; max-height: calc(100vh - var(--alto-top, 72px) - 30px); overflow: auto; z-index: 5 }
   .lado.izq { left: 16px } .lado.der { right: 16px }
   .lado h3 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted) }
   .lado .aviso, .lado .at-filtro { margin: 0; font-size: 13px }
@@ -593,3 +593,7 @@ main { padding-bottom: 80px }
 .pd-f { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12.5px }
 .pd-vacio { margin: 4px; font-size: 13px }
 .pd-svg { stroke: none; stroke-width: 0 } .pd-svg polyline { stroke-width: 3 } .pd-svg line { stroke-width: 1 }
+/* vista previa */
+.prev-bar { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; padding: 8px 16px; background: #5b3fa8; color: #fff; font-weight: 600; font-size: 13.5px }
+.prev-bar .btn { background: #fff; color: #5b3fa8; border: 0 }
+body.en-previa .top { top: 42px; box-shadow: inset 0 3px 0 #5b3fa8 }

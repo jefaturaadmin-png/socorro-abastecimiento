@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610281000">
+<link rel="stylesheet" href="styles.css?v=202610281500">
 </head>
 <body>
 
@@ -32,6 +32,7 @@
   <symbol id="i-mas" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
 </svg>
 
+<div class="prev-bar" id="prevBar" hidden><span id="prevTxt"></span><button class="btn sm" id="prevSalir" type="button">✕ Salir de la vista previa</button></div>
 <header class="top" id="top" hidden>
   <div class="wrap top-in">
     <div class="marca"><b>Socorro</b><span>Abastecimiento</span></div>
@@ -39,6 +40,7 @@
     <div class="quien">
       <button type="button" class="quien-btn" id="uAbrir" title="Mi usuario"><span class="avatar" aria-hidden="true"><svg width="18" height="18"><use href="#i-usuario"/></svg></span>
       <span><b id="uNombre"></b><small id="uRol"></small></span></button>
+      <button class="btn sm" id="prevBtn" type="button" title="Ver la página como la ve una sucursal" hidden>👁 Vista previa</button>
       <button class="btn" id="salir" type="button">Salir</button>
     </div>
   </div>
@@ -404,6 +406,11 @@
   </section>
 
   <dialog id="atInfo" class="at-info"><div id="atInfoC"></div></dialog>
+  <!-- vista previa: elegir la sucursal -->
+  <dialog id="prevDlg" class="at-info resp-dlg" style="width:min(440px,94vw)"><div><button type="button" class="ab-x resp-x" data-cerrar-dlg aria-label="Cerrar">✕</button>
+    <div class="resp-c"><h2>👁 Vista previa</h2><p class="muted">Mira la página tal como la ve un químico de la sucursal que elijas. No se guarda ningún cambio.</p>
+      <label class="campo"><span class="lbl">Sucursal</span><select id="prevSuc"></select></label>
+      <div class="botones-fila"><button class="btn primario" type="button" id="prevOk">Ver como esta sucursal</button></div></div></div></dialog>
   <!-- nuevo pedido de urgencia: se envía al mismo formulario de Google -->
   <dialog id="urgDlg" class="at-info resp-dlg"><div><button type="button" class="ab-x resp-x" data-cerrar-dlg aria-label="Cerrar">✕</button>
     <div class="resp-c"><h2>➕ Nuevo pedido de urgencia</h2><p class="muted">Se registra en el mismo formulario y en la misma hoja de Drive que revisa Abastecimiento.</p>
@@ -524,6 +531,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610281200"></script>
+<script type="module" src="app.js?v=202610281500"></script>
 </body>
 </html>

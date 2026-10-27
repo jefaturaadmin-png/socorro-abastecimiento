@@ -4,8 +4,8 @@ import {
   EmailAuthProvider, reauthenticateWithCredential
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
 import {
-  getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, where,
-  serverTimestamp, writeBatch, deleteField
+  getFirestore, collection, doc, getDoc, getDocs, setDoc as fsSet, updateDoc as fsUpdate, deleteDoc as fsDelete, onSnapshot, query, where,
+  serverTimestamp, writeBatch as fsBatch, deleteField
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION, FORM_URGENCIA } from "./config.js?v=202610280700";
 
@@ -13,11 +13,17 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 // La proyección de compras (proyeccion.html, dentro de un marco) usa esta misma conexión y sesión.
-window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
+window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc: fsSet, deleteDoc: fsDelete, collection, getDocs, onSnapshot };
+// En la vista previa ("ver como la sucursal X") no se guarda nada: todas las escrituras se rechazan.
+const PREVIA = { message: "Vista previa: aquí no se guarda nada. Sal de la vista previa para hacer cambios." };
+const setDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsSet(...a);
+const updateDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsUpdate(...a);
+const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
+const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
 const VERSION_PROY = "202610281200";
-const VERSION_COMP = "202610270100";
+const VERSION_COMP = "202610281500";
 
 /* ===================== utilidades ===================== */
 const $ = id => document.getElementById(id);
@@ -57,7 +63,9 @@ const S = {
   subs: [], vista: null, origen: null, sel: {}, ficha: null,
   af: { farm: "", motivo: "", estado: "bloqueado", q: "" }
 };
-const esAdmin = () => S.perfil?.rol === "admin";
+// S.prev: el administrador está viendo la página como una sucursal (vista previa)
+const esAdmin = () => S.perfil?.rol === "admin" && !S.prev;
+const esQuimicoV = () => !!S.prev || S.perfil?.rol === "quimico";
 // Vistas que el administrador puede darle a cualquier usuario (se guardan en usuarios/{uid}.vistas). Para agregar otra
 // más adelante basta con sumarla aquí y crear su sección en index.html.
 // c: color del botón en el menú; ic: ícono; desc: lo que se ve en la pantalla de inicio.
@@ -71,9 +79,9 @@ const VISTAS = [
   { id: "faltantes", nombre: "Faltantes de droguería", vista: "vFalt", ic: "i-buscar", desc: "Productos en 0 en droguería que piden las sucursales" },
   { id: "atencion", nombre: "Lo que me van a atender", vista: "vAten", ic: "i-ojo", desc: "Lo que Abastecimiento enviará a tu sucursal", ayuda: "solo químicos: ve su sucursal" },
   { id: "pedidos", nombre: "Productos agotados o de extrema urgencia", vista: "vPed", ic: "i-lista", desc: "Lo que cada sucursal pidió de urgencia (desde el formulario)", ayuda: "químicos: ven los de su sucursal" }];
-const misVistas = () => esAdmin() ? VISTAS : VISTAS.filter(v => (S.perfil?.vistas || []).includes(v.id));
+const misVistas = () => esAdmin() || S.prev ? VISTAS.filter(v => !S.prev || ["faltantes", "atencion", "pedidos"].includes(v.id)) : VISTAS.filter(v => (S.perfil?.vistas || []).includes(v.id));
 const NOMBRE_ROL = { admin: "Administrador", quimico: "Químico", colaborador: "Colaborador" };
-const miFarm = () => S.perfil?.farmacia;
+const miFarm = () => S.prev || S.perfil?.farmacia;
 
 /* ===================== catálogo ===================== */
 async function cargarCatalogo() {
@@ -249,6 +257,7 @@ function iniciar() {
     ir("vInicio");
   }
   montarAyuda(); escucharAvisos();
+  $("prevBtn").hidden = S.perfil.rol !== "admin";
 }
 // Si el administrador le cambia el rol, las vistas o lo deshabilita, se recarga con los datos nuevos.
 function vigilarPerfil() {
@@ -271,7 +280,7 @@ function pintarNav() {
   const items = [["vInicio", "🏠 Menú principal", "ini"],
     ...(esAdmin() ? [["vAdmin", "Bloqueos" + (pend ? `<span class="badge">${pend}</span>` : "")],
        ["vUsuarios", "Usuarios" + (solicitudesSucursal().length ? `<span class="badge">${solicitudesSucursal().length}</span>` : "")]]
-      : S.perfil?.rol === "quimico" ? [["vQuimico", "Bloqueos"]] : []),
+      : esQuimicoV() ? [["vQuimico", "Bloqueos"]] : []),
     ...misVistas().map(v => [v.vista, v.nombre + (esAdmin() && v.id === "faltantes" && faltSinResp() ? `<span class="badge">${faltSinResp()}</span>` : ""), v.c])];
   const actual = S.vista === "vFicha" ? S.origen : S.vista;
   $("nav").innerHTML = items.map(([v, t, c]) => `<button type="button" data-ir="${v}" ${c ? `class="${c}"` : ""} ${v === actual ? 'aria-current="page"' : ""}>${t}</button>`).join("");
@@ -348,7 +357,7 @@ function pintarInicio() {
   const mods = [
     ...(esAdmin() ? [{ vista: "vAdmin", nombre: "Bloqueos", ic: "i-candado", desc: "Productos bloqueados y reactivaciones" },
       { vista: "vUsuarios", nombre: "Usuarios", ic: "i-usuario", desc: "Crear usuarios y darles módulos" }]
-      : p.rol === "quimico" ? [{ vista: "vQuimico", nombre: "Bloqueos", ic: "i-candado", desc: "Bloquear productos en tu farmacia" }] : []),
+      : esQuimicoV() ? [{ vista: "vQuimico", nombre: "Bloqueos", ic: "i-candado", desc: "Bloquear productos en tu farmacia" }] : []),
     ...misVistas()];
   $("iniMods").innerHTML = mods.length ? mods.map(m => `<button type="button" class="ini-mod ${esc(m.c || "")}" data-ir="${m.vista}">
       <span class="im-ic"><svg width="26" height="26"><use href="#${m.ic || "i-lista"}"/></svg></span><b>${esc(m.nombre)}</b><small>${esc(m.desc || "")}</small></button>`).join("")
@@ -1341,7 +1350,7 @@ const RESP_AT = [
   { id: "no_se_mueve", txt: "No se mueve", clase: "t-pend", campo: "motivo", ph: "¿Por qué motivo? (obligatorio)" },
   { id: "otro_medicamento", txt: "Se tiene otro medicamento en su cambio", clase: "t-ok", campo: "alt", ph: "Busca el medicamento por código o nombre" },
   { id: "otros", txt: "Otros", clase: "m-otro", campo: "motivo", ph: "Escribe tu comentario (obligatorio)" }];
-const puedeResponderAt = () => !esAdmin() && (S.perfil?.vistas || []).includes("atencion") && !!miFarm();
+const puedeResponderAt = () => !!S.prev || !esAdmin() && (S.perfil?.vistas || []).includes("atencion") && !!miFarm();
 const textoResp = r => { const o = RESP_AT.find(x => x.id === r.estado); return (o?.txt || r.estado) + (r.alternativa ? ": " + r.alternativa : "") + (r.comentario ? (r.alternativa ? " · " : ": ") + r.comentario : ""); };
 // stock y venta diaria de la sucursal (red/stk_SUCURSAL, se publica con la lista) para el medicamento de cambio
 async function cargarStkSuc(suc, ver) {
@@ -1925,6 +1934,7 @@ $("urgDlg").addEventListener("click", async e => {
   if (lc) { S.urgNuevo.push({ c: lc.dataset.urgCod, n: "(código sin nombre en el catálogo)" }); $("urgBus").value = S.urgBus = ""; $("urgRes").hidden = true; pintarNuevoUrg(); $("urgBus").focus(); return; }
   const q = e.target.closest("[data-urg-quitar]"); if (q) { S.urgNuevo.splice(+q.dataset.urgQuitar, 1); return pintarNuevoUrg(); }
   if (!e.target.closest("#urgEnviar")) return;
+  if (S.prev) return msg("urgMsg", PREVIA.message, true);
   const suc = !esAdmin() && miFarm() ? miFarm() : S.urgSucSel;
   if (!suc) return msg("urgMsg", "Elige la sucursal.", true);
   if (!S.urgNuevo.length) return msg("urgMsg", "Agrega al menos un producto.", true);
@@ -1939,3 +1949,28 @@ $("urgDlg").addEventListener("click", async e => {
   } catch (x) { msg("urgMsg", "No se pudo enviar. Revisa tu internet e inténtalo de nuevo.", true); }
   finally { b.disabled = false; }
 });
+
+/* ===================== vista previa: el administrador ve la página como la ve una sucursal ===================== */
+function ponerPrevia(f) {
+  S.prev = f || null;
+  document.body.classList.toggle("en-previa", !!S.prev);
+  $("prevBar").hidden = !S.prev; $("prevBtn").hidden = !!S.prev || S.perfil?.rol !== "admin";
+  if (S.prev) $("prevTxt").textContent = `Vista previa: así ve la página un químico de ${nombreFarm(S.prev)}. No se guarda ningún cambio.`;
+  $("uNombre").textContent = S.prev ? "Vista previa" : (S.perfil.nombre || S.perfil.usuario);
+  $("uRol").textContent = S.prev ? nombreFarm(S.prev) : "Abastecimiento";
+  S.atSubSuc = null; S.atStkK = null;   // vuelve a leer lo de la sucursal elegida
+  ir(S.vista && S.vista !== "vAdmin" && S.vista !== "vUsuarios" && misVistas().some(v => v.vista === S.vista) || S.vista === "vInicio" || S.vista === "vQuimico" ? S.vista : "vInicio");
+}
+$("prevBtn").addEventListener("click", () => {
+  $("prevSuc").innerHTML = FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => `<option value="${esc(f)}">${esc(corto(f))}</option>`).join("");
+  $("prevDlg").showModal();
+});
+$("prevDlg").addEventListener("click", e => {
+  if (e.target.closest("[data-cerrar-dlg]") || e.target === $("prevDlg")) return $("prevDlg").close();
+  if (e.target.closest("#prevOk")) { $("prevDlg").close(); ponerPrevia($("prevSuc").value); }
+});
+$("prevSalir").addEventListener("click", () => ponerPrevia(null));
+
+// los avisos de los costados empiezan debajo de la cabecera (que puede ocupar 2 o 3 líneas con muchos módulos)
+new ResizeObserver(() => document.documentElement.style.setProperty("--alto-top", ($("top").hidden ? 0 : $("top").getBoundingClientRect().bottom) + "px")).observe($("top"));
+addEventListener("scroll", () => document.documentElement.style.setProperty("--alto-top", ($("top").hidden ? 0 : Math.max(0, $("top").getBoundingClientRect().bottom)) + "px"), { passive: true });
