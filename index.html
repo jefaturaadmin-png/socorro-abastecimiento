@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610272300">
+<link rel="stylesheet" href="styles.css?v=202610280500">
 </head>
 <body>
 
@@ -334,8 +334,23 @@
       <div class="pd-acc"><small class="muted" id="pdHora"></small><button class="btn sm" type="button" id="pdAct">↻ Actualizar</button><a class="btn sm" id="pdDrive" target="_blank" rel="noopener" hidden>Abrir la hoja</a></div>
     </div>
     <div class="wrap ancho cuerpo">
-      <div class="pd-res" id="pdRes" hidden></div>
-      <section class="card lista">
+      <div class="msg" id="pdMsg" hidden></div>
+      <!-- administrador: tablero -->
+      <div id="pdA" hidden>
+        <div class="pd-kpis" id="pdKpi"></div>
+        <div class="pd-g2">
+          <section class="card pd-card"><h3>Pedidos por sucursal (últimos 7 días)</h3><div id="pdBarras"></div></section>
+          <section class="card pd-card"><h3 id="pdLinH">Pedidos por día</h3><div id="pdLinea"></div></section>
+        </div>
+        <section class="card pd-card"><h3>Top 5 productos más pedidos (últimos 7 días)</h3><div class="tabla-wrap"><table class="tabla" id="pdTop"></table></div></section>
+        <div class="pd-res" id="pdRes" hidden></div>
+      </div>
+      <!-- usuarios: tarjetas por estado -->
+      <div id="pdB" hidden>
+        <div class="pd-barra"><div class="pd-per" id="pdPer"></div><label class="filtro">Buscar <input id="pdQ2" type="search" placeholder="Producto, código…"></label><button class="btn" id="pdXls2" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button></div>
+        <div class="pd-cols" id="pdCols"></div>
+      </div>
+      <section class="card lista" id="pdLista">
         <div class="lh">
           <h2 id="pdTit">Pedidos</h2>
           <div class="filtros">
@@ -345,7 +360,6 @@
             <button class="btn" id="pdXls" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button>
           </div>
         </div>
-        <div class="msg" id="pdMsg" hidden></div>
         <div class="tabla-wrap"><table class="tabla" id="pdTabla"></table></div>
         <div class="mas" id="pdMas"></div>
       </section>
@@ -490,6 +504,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610280300"></script>
+<script type="module" src="app.js?v=202610280500"></script>
 </body>
 </html>

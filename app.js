@@ -16,7 +16,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610272100";
+const VERSION_PROY = "202610280500";
 const VERSION_COMP = "202610270100";
 
 /* ===================== utilidades ===================== */
@@ -1683,10 +1683,11 @@ $("aCsv").addEventListener("click", () => {
 $("qXls").addEventListener("click", () => descargarExcel(bloqueadosAhora().filter(d => d.farmacia === miFarm()),
   "bloqueos_" + corto(miFarm()).replace(/\W+/g, "_").toLowerCase(), false));
 
-/* ===================== pedidos de urgencia (hoja de Google Drive) ===================== */
+/* ===================== productos agotados o de extrema urgencia (hoja del formulario en Google Drive) ===================== */
 // La hoja (compartida con "cualquiera con el enlace") se lee directo desde el navegador y se vuelve a leer cada 2 minutos.
+// El administrador ve un tablero (cifras, gráficos, top 5) y marca cada pedido; las sucursales ven tarjetas por estado.
 const HOJA_PEDIDOS = "18-biRg4ySB4By1Q0mYLJT2On3XrYZV7BhdwUyiWlfvI";
-S.ped = null; S.pdSuc = ""; S.pdQ = ""; S.pdDesde = ""; S.pdMostrar = 200;
+S.ped = null; S.pdSuc = ""; S.pdQ = ""; S.pdDesde = ""; S.pdMostrar = 200; S.pdPer = "semana"; S.urgEst = new Map();
 function leerCSV(t) {
   const filas = []; let f = [], c = "", q = false;
   for (let i = 0; i < t.length; i++) {
@@ -1718,7 +1719,12 @@ const fechaDe = v => { // "27/10/2026 14:05:10" o "2026-10-27"
   if (m) return new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0));
   const d = new Date(v); return isNaN(d) ? null : d;
 };
+// id estable de cada fila (para guardar lo que marca droguería): se calcula con el contenido de la fila
+const idFila = x => { let h = 5381; for (const ch of x.join("\u0001")) h = ((h * 33) ^ ch.charCodeAt(0)) >>> 0; return "u" + h.toString(36) + "_" + x.length; };
+// el código que escribieron, en el catálogo (también si le faltan los ceros de adelante)
+const prodCat = c => { c = String(c || "").trim(); return c ? S.catIdx.get(c) || (/^\d+$/.test(c) ? S.catIdx.get(c.padStart(5, "0")) : null) : null; };
 async function cargarPedidos(forzar) {
+  escucharUrg(); cargarDrogStk();
   if (S.pdCargando || (!forzar && S.ped && Date.now() - S.ped.t < 120000)) return;
   S.pdCargando = true;
   try {
@@ -1726,9 +1732,16 @@ async function cargarPedidos(forzar) {
     if (!r.ok) throw new Error("HTTP " + r.status);
     const filas = leerCSV(await r.text());
     const cab = (filas.shift() || []).map(x => x.trim());
-    const col = re => cab.findIndex(h => re.test(norm(h)));
+    const col = (re, sin = []) => cab.findIndex((h, i) => re.test(norm(h)) && !sin.includes(i));
     const cS = col(/SUCURSAL|ALMACEN|FARMACIA|LOCAL|BOTICA/), cF = col(/MARCA TEMPORAL|FECHA|TIMESTAMP/);
-    const datos = filas.map((x, k) => ({ k, x, suc: cS >= 0 ? sucDe(x[cS]) : "", f: cF >= 0 ? fechaDe(x[cF]) : null }));
+    const cC = col(/COD/), cP = col(/PRODUCTO|MEDICAMENTO|DESCRIPCION|INSUMO/, [cC]), cQ = col(/CANTIDAD|CANT\b|UNIDADES/);
+    const cM = col(/MOTIVO|OBSERV|COMENTARIO|DETALLE|URGENCIA/), cU = col(/RESPONSABLE|SOLICITA|QUIMICO|APELLIDO|CORREO|USUARIO|NOMBRE/, [cP, cC, cS]);
+    const datos = filas.map((x, k) => {
+      const pc = cC >= 0 ? prodCat(x[cC]) : null;
+      return { k, x, id: idFila(x), suc: cS >= 0 ? sucDe(x[cS]) : "", f: cF >= 0 ? fechaDe(x[cF]) : null,
+        cod: pc?.c || (cC >= 0 ? x[cC].trim() : ""), nom: pc?.n || (cP >= 0 ? x[cP].trim() : ""), lab: pc?.ln || "",
+        q: cQ >= 0 ? parseFloat(String(x[cQ]).replace(",", ".")) || 0 : 1, mot: cM >= 0 ? x[cM].trim() : "", quien: cU >= 0 ? x[cU].trim() : "" };
+    });
     S.ped = { t: Date.now(), cab, cS, cF, datos }; S.pdErr = "";
   } catch (e) {
     S.pdErr = "No se pudo leer la hoja de pedidos. Revisa tu internet, y que la hoja esté compartida como «Cualquier persona con el enlace puede ver». (" + (e.message || e) + ")";
@@ -1736,48 +1749,131 @@ async function cargarPedidos(forzar) {
   S.pdCargando = false; if (S.vista === "vPed") pintarPedidos();
 }
 setInterval(() => { if (S.vista === "vPed" && !document.hidden) cargarPedidos(true); }, 120000);
+// lo que marca droguería en cada pedido (urgencia_estado/{id}): viendo | atendido, con una nota
+function escucharUrg() {
+  if (S.urgSub) return; S.urgSub = true;
+  const un = onSnapshot(collection(db, "urgencia_estado"), sn => { S.urgEst = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === "vPed") pintarPedidos(); },
+    () => { S.urgSub = false; });
+  S.subs.push(() => { un(); S.urgSub = false; });
+}
+// stock de droguería (red/stk_DROGUERIA FS, se publica con las listas) para el top 5 del administrador
+async function cargarDrogStk() {
+  if (!esAdmin() || S.drogStk || S.drogStkCargando) return; S.drogStkCargando = true;
+  try { const d = await getDoc(doc(db, "red", "stk_DROGUERIA FS")); S.drogStk = d.exists() ? d.data().p || {} : {}; } catch { S.drogStk = {}; }
+  S.drogStkCargando = false; if (S.vista === "vPed") pintarPedidos();
+}
+const puedeMarcarUrg = () => esAdmin() || ["sucursales", "kardex"].some(v => (S.perfil?.vistas || []).includes(v));
+const ESTADO_U = { "": ["🔴 Pedido recién", "rojo"], viendo: ["🟠 Droguería lo está viendo", "amb"], atendido: ["🟢 Atendido", "verde"] };
+const estU = d => S.urgEst.get(d.id) || {};
+const inicioDia = (n = 0) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - n); return d; };
+const hace = f => { if (!f) return ""; const m = Math.round((Date.now() - f) / 60000); return m < 1 ? "recién" : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : f.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit" }); };
+const nomProd = d => d.nom || (d.cod ? "Código " + d.cod : "(sin producto)");
 function pedidosVisibles() {
   const P = S.ped; if (!P) return [];
-  const suc = esAdmin() || !miFarm() ? S.pdSuc : miFarm(), q = norm(S.pdQ).trim().split(/\s+/).filter(Boolean);
-  const desde = S.pdDesde ? new Date(S.pdDesde + "T00:00:00") : null;
-  return P.datos.filter(d => (!suc || d.suc === suc) && (!desde || !d.f || d.f >= desde) && (!q.length || q.every(w => norm(d.x.join(" ")).includes(w))))
+  const admin = esAdmin() || !miFarm(), suc = admin ? S.pdSuc : miFarm(), q = norm(S.pdQ).trim().split(/\s+/).filter(Boolean);
+  const desde = admin ? (S.pdDesde ? new Date(S.pdDesde + "T00:00:00") : null) : { hoy: inicioDia(0), semana: inicioDia(6), mes: inicioDia(29) }[S.pdPer] || null;
+  return P.datos.filter(d => (!suc || d.suc === suc) && (!desde || !d.f || d.f >= desde) && (!q.length || q.every(w => norm(d.x.join(" ") + " " + d.nom).includes(w))))
     .sort((a, b) => (b.f || 0) - (a.f || 0) || b.k - a.k);
 }
 function pintarPedidos() {
   const P = S.ped, admin = esAdmin() || !miFarm();
   $("pdDrive").hidden = !esAdmin(); $("pdDrive").href = `https://docs.google.com/spreadsheets/d/${HOJA_PEDIDOS}/edit`;
-  $("pdSucF").hidden = !admin;
+  $("pdSucF").hidden = !admin; $("pdA").hidden = !admin || !P; $("pdLista").hidden = !admin; $("pdB").hidden = admin || !P;
   $("pdSub").textContent = admin ? "Lo que cada sucursal pidió de urgencia. Se actualiza desde el formulario."
     : `Lo que ${nombreFarm(miFarm())} pidió de urgencia. Se actualiza desde el formulario.`;
   msg("pdMsg", S.pdErr || "", true);
-  if (!P) { $("pdTabla").innerHTML = `<tbody><tr class="vacia"><td>${S.pdErr ? "" : "Leyendo la hoja de pedidos…"}</td></tr></tbody>`; return; }
+  if (!P) { $("pdTabla").innerHTML = `<tbody><tr class="vacia"><td>${S.pdErr ? "" : "Leyendo la hoja de pedidos…"}</td></tr></tbody>`; if (!admin) $("pdLista").hidden = false; return; }
   $("pdHora").textContent = "Actualizado " + new Date(P.t).toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
-  if (admin && !$("pdSuc").options.length) $("pdSuc").innerHTML = `<option value="">Todas</option>` + FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => `<option value="${esc(f)}">${esc(corto(f))}</option>`).join("");
-  if (!admin && P.cS < 0) { $("pdTabla").innerHTML = `<tbody><tr class="vacia"><td>La hoja no tiene una columna de sucursal; consulta con Abastecimiento.</td></tr></tbody>`; return; }
-  // resumen por sucursal (administrador)
-  const res = $("pdRes"); res.hidden = !admin || P.cS < 0;
-  if (admin && P.cS >= 0) {
-    const n = new Map(); P.datos.forEach(d => n.set(d.suc, (n.get(d.suc) || 0) + 1));
-    res.innerHTML = [...n].sort((a, b) => b[1] - a[1]).map(([f, c]) => `<button type="button" class="pd-chip${S.pdSuc === f ? " act" : ""}" data-pdsuc="${esc(f)}">${esc(f ? corto(f) : "Sin reconocer")} <b>${nf(c)}</b></button>`).join("");
-  }
-  const lista = pedidosVisibles(), vis = lista.slice(0, S.pdMostrar);
-  const cols = P.cab.map((h, i) => i).filter(i => P.cab[i] && (admin || i !== P.cS));
-  $("pdTit").textContent = `${nf(lista.length)} pedidos`;
-  $("pdTabla").innerHTML = `<thead><tr>${admin && P.cS >= 0 ? "<th>Sucursal</th>" : ""}${cols.map(i => `<th>${esc(P.cab[i])}</th>`).join("")}</tr></thead><tbody>` +
-    (vis.length ? vis.map(d => `<tr>${admin && P.cS >= 0 ? `<td><b>${esc(d.suc ? corto(d.suc) : "¿" + (d.x[P.cS] || "") + "?")}</b></td>` : ""}${cols.map(i => `<td>${esc(d.x[i] || "")}</td>`).join("")}</tr>`).join("")
-      : `<tr class="vacia"><td colspan="${cols.length + 1}">No hay pedidos con estos filtros.</td></tr>`) + "</tbody>";
+  if (!admin && P.cS < 0) { msg("pdMsg", "La hoja no tiene una columna de sucursal; consulta con Abastecimiento.", true); $("pdB").hidden = true; return; }
+  if (admin) pintarTableroUrg(P); else pintarTarjetasUrg();
+}
+// ---------- usuarios: tarjetas por estado ----------
+function pintarTarjetasUrg() {
+  $("pdPer").innerHTML = [["hoy", "Hoy"], ["semana", "Esta semana"], ["mes", "Este mes"], ["", "Todo"]].map(([v, t]) => `<button type="button" class="pd-chip${S.pdPer === v ? " act" : ""}" data-per="${v}">${t}</button>`).join("");
+  const lista = pedidosVisibles(), grupos = { "": [], viendo: [], atendido: [] };
+  lista.forEach(d => (grupos[estU(d).estado || ""] || grupos[""]).push(d));
+  $("pdCols").innerHTML = Object.entries(ESTADO_U).map(([k, [t, cl]]) => `<div class="pd-col"><h3>${t} <span class="chip ${cl}">${grupos[k].length}</span></h3>
+    ${grupos[k].map(d => tarjetaUrg(d, k, cl)).join("") || '<p class="muted pd-vacio">Nada aquí.</p>'}</div>`).join("");
+}
+function tarjetaUrg(d, k, cl) {
+  const e = estU(d), agot = /AGOTAD/.test(norm(d.mot + " " + d.x.join(" ")));
+  return `<div class="pd-tk ${cl}"><span class="cod">${esc(d.cod)}</span><b>${esc(nomProd(d))}</b>
+    <div class="pd-f">${k ? `<span class="chip ${cl}">${esc(e.nota || ESTADO_U[k][0].slice(3))}</span>` : `<span class="chip ${agot ? "amb" : "rojo"}">${agot ? "Agotado" : "Extrema urgencia"}</span>`}<b>${d.q ? nf(d.q) + " und" : ""}</b></div>
+    <div class="pd-f muted"><span>${k ? `Respondió ${esc(e.porNombre || "droguería")}` : esc(d.mot ? "“" + d.mot + "”" : d.quien)}</span><span>${k ? fmtF(e.fecha) : hace(d.f)}</span></div></div>`;
+}
+// ---------- administrador: tablero ----------
+function pintarTableroUrg(P) {
+  const base = P.datos.filter(d => !S.pdSuc || d.suc === S.pdSuc), hoy = inicioDia(0), ayer = inicioDia(1), sem = inicioDia(6);
+  const deHoy = base.filter(d => d.f && d.f >= hoy), deAyer = base.filter(d => d.f && d.f >= ayer && d.f < hoy), deSem = base.filter(d => d.f && d.f >= sem);
+  const cuenta = (arr, key) => { const m = new Map(); arr.forEach(d => { const k = key(d); if (k) m.set(k, (m.get(k) || 0) + 1); }); return [...m].sort((a, b) => b[1] - a[1]); };
+  const sucTop = cuenta(deHoy.length ? deHoy : deSem, d => d.suc)[0];
+  const porProd = new Map(); deSem.forEach(d => { const k = d.cod || d.nom; if (!k) return; const x = porProd.get(k) || { d, q: 0, n: 0, s: new Set() }; x.q += d.q || 1; x.n++; if (d.suc) x.s.add(d.suc); porProd.set(k, x); });
+  const top = [...porProd.values()].sort((a, b) => b.s.size - a.s.size || b.q - a.q).slice(0, 5);
+  const dif = deHoy.length - deAyer.length;
+  $("pdKpi").innerHTML = `
+    <div class="card pd-kpi"><small>Pedidos hoy</small><b class="n rojo-t">${nf(deHoy.length)}</b><small>${dif > 0 ? `▲ ${dif} más que ayer` : dif < 0 ? `▼ ${-dif} menos que ayer` : "igual que ayer"}</small></div>
+    <div class="card pd-kpi"><small>Productos distintos hoy</small><b class="n">${nf(new Set(deHoy.map(d => d.cod || d.nom)).size)}</b><small>esta semana: ${nf(porProd.size)}</small></div>
+    <div class="card pd-kpi"><small>Sucursal que más pide${deHoy.length ? " hoy" : " (semana)"}</small><b class="n m">${sucTop ? esc(corto(sucTop[0])) : "–"}</b><small>${sucTop ? nf(sucTop[1]) + " pedidos" : ""}</small></div>
+    <div class="card pd-kpi"><small>Producto más pedido (semana)</small><b class="n s">${top[0] ? esc(nomProd(top[0].d)) : "–"}</b><small class="cod">${top[0] ? esc(top[0].d.cod) + " · " + top[0].s.size + " sucursales" : ""}</small></div>`;
+  // barras por sucursal (todas, últimos 7 días)
+  const barras = cuenta(P.datos.filter(d => d.f && d.f >= sem), d => d.suc), mx = Math.max(1, ...barras.map(b => b[1]));
+  $("pdBarras").innerHTML = barras.length ? `<svg viewBox="0 0 520 ${barras.length * 30 + 6}" class="pd-svg">${barras.map(([f, n], i) => {
+    const w = Math.max(4, 370 * n / mx), y = 6 + i * 30, c = ["#14306B", "#14306B", "#3d5a99", "#3d5a99", "#6b84bf", "#6b84bf"][i] || "#9fb1d9";
+    return `<g class="pd-bar" data-pdsuc="${esc(f)}"><text x="0" y="${y + 13}">${esc(corto(f))}</text><rect x="100" y="${y}" width="${w}" height="18" rx="4" fill="${S.pdSuc === f ? "#F28C1E" : c}"/><text x="${106 + w}" y="${y + 14}">${n}</text></g>`; }).join("")}</svg>`
+    : '<p class="muted">Sin pedidos en los últimos 7 días.</p>';
+  // línea por día (últimos 7 días)
+  const dias = Array.from({ length: 7 }, (_, i) => inicioDia(6 - i)), vals = dias.map((d0, i) => base.filter(d => d.f && d.f >= d0 && (i === 6 || d.f < dias[i + 1])).length);
+  const mv = Math.max(1, ...vals), X = i => 40 + i * 65, Y = v => 170 - v / mv * 140;
+  $("pdLinH").textContent = "Pedidos por día" + (S.pdSuc ? " · " + corto(S.pdSuc) : "");
+  $("pdLinea").innerHTML = `<svg viewBox="0 0 460 200" class="pd-svg"><g stroke="#eceff3"><line x1="30" x2="450" y1="30" y2="30"/><line x1="30" x2="450" y1="100" y2="100"/><line x1="30" x2="450" y1="170" y2="170"/></g>
+    <polyline points="${vals.map((v, i) => X(i) + "," + Y(v)).join(" ")}" fill="none" stroke="#F28C1E" stroke-width="3"/>
+    ${vals.map((v, i) => `<circle cx="${X(i)}" cy="${Y(v)}" r="${i === 6 ? 5 : 4}" fill="#F28C1E"><title>${v} pedidos</title></circle><text x="${X(i)}" y="${Y(v) - 10}" text-anchor="middle" class="${i === 6 ? "hoy" : ""}">${v}</text>
+      <text x="${X(i)}" y="192" text-anchor="middle" class="dia">${i === 6 ? "hoy" : dias[i].toLocaleDateString("es-PE", { weekday: "short" })}</text>`).join("")}</svg>`;
+  // top 5 con el stock de droguería
+  const stDrog = c => { const v = S.drogStk?.[c]?.[0]; return S.drogStk == null ? "" : v > 0 ? `<span class="chip ${v >= 0 ? "verde" : ""}">Hay ${nf(v)}</span>` : '<span class="chip rojo">Sin stock</span>'; };
+  $("pdTop").innerHTML = `<thead><tr><th>Producto</th><th>Sucursales que lo pidieron</th><th class="der">Cant.</th><th>En droguería</th></tr></thead><tbody>` +
+    (top.length ? top.map(x => `<tr><td class="p"><b>${esc(nomProd(x.d))}</b><code>${esc(x.d.cod)}</code></td><td>${[...x.s].map(f => `<span class="tag">${esc(corto(f))}</span>`).join(" ")} <b>${x.s.size}</b></td><td class="der"><b>${nf(x.q)}</b></td><td>${stDrog(x.d.cod)}</td></tr>`).join("")
+      : '<tr class="vacia"><td colspan="4">Sin pedidos esta semana.</td></tr>') + "</tbody>";
+  // resumen por sucursal (filtro) y lista de pedidos para marcarlos
+  const res = $("pdRes"); res.hidden = P.cS < 0;
+  if (P.cS >= 0) res.innerHTML = cuenta(P.datos, d => d.suc || "?").map(([f, c]) => `<button type="button" class="pd-chip${S.pdSuc === f ? " act" : ""}" data-pdsuc="${esc(f)}">${esc(f === "?" ? "Sin reconocer" : corto(f))} <b>${nf(c)}</b></button>`).join("");
+  if (!$("pdSuc").options.length) $("pdSuc").innerHTML = `<option value="">Todas</option>` + FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => `<option value="${esc(f)}">${esc(corto(f))}</option>`).join("");
+  $("pdSuc").value = S.pdSuc;
+  const lista = pedidosVisibles(), vis = lista.slice(0, S.pdMostrar), marca = puedeMarcarUrg();
+  $("pdTit").textContent = `Pedidos recientes · ${nf(lista.length)}`;
+  $("pdTabla").innerHTML = `<thead><tr><th>Fecha</th>${P.cS >= 0 ? "<th>Sucursal</th>" : ""}<th>Producto</th><th class="der">Cant.</th><th>Motivo</th><th>Pidió</th><th>Estado</th><th>Nota de droguería</th></tr></thead><tbody>` +
+    (vis.length ? vis.map(d => { const e = estU(d), k = e.estado || "";
+      return `<tr data-uid="${esc(d.id)}"><td class="f">${d.f ? d.f.toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}</td>${P.cS >= 0 ? `<td><b>${esc(d.suc ? corto(d.suc) : "¿" + (d.x[P.cS] || "") + "?")}</b></td>` : ""}
+        <td class="p"><b>${esc(nomProd(d))}</b><code>${esc(d.cod)}</code></td><td class="der">${d.q ? nf(d.q) : ""}</td><td>${esc(d.mot)}</td><td>${esc(d.quien)}</td>
+        <td>${marca ? `<select class="pd-est ${ESTADO_U[k][1]}" data-uest>${Object.entries(ESTADO_U).map(([v, [t]]) => `<option value="${v}" ${v === k ? "selected" : ""}>${t}</option>`).join("")}</select>` : `<span class="chip ${ESTADO_U[k][1]}">${ESTADO_U[k][0]}</span>`}</td>
+        <td>${marca ? `<input class="pd-nota" data-unota maxlength="120" placeholder="Ej. en tránsito, guía GR…" value="${esc(e.nota || "")}">` : esc(e.nota || "")}</td></tr>`; }).join("")
+      : `<tr class="vacia"><td colspan="8">No hay pedidos con estos filtros.</td></tr>`) + "</tbody>";
   $("pdMas").innerHTML = lista.length > vis.length ? `<button class="btn" type="button" id="pdMasBtn">Ver más (de ${nf(lista.length)})</button>` : "";
 }
+async function marcarUrg(tr) {
+  const d = S.ped?.datos.find(x => x.id === tr.dataset.uid); if (!d) return;
+  const estado = tr.querySelector("[data-uest]").value, nota = tr.querySelector("[data-unota]").value.trim().slice(0, 120);
+  try {
+    if (!estado && !nota) await deleteDoc(doc(db, "urgencia_estado", d.id));
+    else await setDoc(doc(db, "urgencia_estado", d.id), { estado, nota, suc: d.suc || "", cod: d.cod || "", porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario, fecha: serverTimestamp() });
+    toast("Pedido actualizado");
+  } catch (x) { toast(textoError(x)); }
+}
+$("pdTabla").addEventListener("change", e => { const tr = e.target.closest("tr[data-uid]"); if (tr && e.target.matches("[data-uest],[data-unota]")) marcarUrg(tr); });
 $("pdAct").addEventListener("click", () => cargarPedidos(true));
 $("pdSuc").addEventListener("change", e => { S.pdSuc = e.target.value; pintarPedidos(); });
-$("pdQ").addEventListener("input", e => { S.pdQ = e.target.value; pintarPedidos(); });
+["pdQ", "pdQ2"].forEach(id => $(id).addEventListener("input", e => { S.pdQ = e.target.value; pintarPedidos(); }));
 $("pdDesde").addEventListener("change", e => { S.pdDesde = e.target.value; pintarPedidos(); });
-$("pdRes").addEventListener("click", e => { const b = e.target.closest("[data-pdsuc]"); if (!b) return; S.pdSuc = S.pdSuc === b.dataset.pdsuc ? "" : b.dataset.pdsuc; $("pdSuc").value = S.pdSuc; pintarPedidos(); });
+$("pdPer").addEventListener("click", e => { const b = e.target.closest("[data-per]"); if (b) { S.pdPer = b.dataset.per; pintarPedidos(); } });
+["pdRes", "pdBarras"].forEach(id => $(id).addEventListener("click", e => { const b = e.target.closest("[data-pdsuc]"); if (!b) return; S.pdSuc = S.pdSuc === b.dataset.pdsuc ? "" : b.dataset.pdsuc; pintarPedidos(); }));
 $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) { S.pdMostrar += 200; pintarPedidos(); } });
-$("pdXls").addEventListener("click", () => {
+["pdXls", "pdXls2"].forEach(id => $(id).addEventListener("click", () => {
   const P = S.ped; if (!P) return;
-  const admin = esAdmin() || !miFarm(), cols = P.cab.map((h, i) => i).filter(i => P.cab[i]);
-  const datos = pedidosVisibles().map(d => Object.fromEntries([...(admin && P.cS >= 0 ? [["Sucursal (reconocida)", d.suc ? corto(d.suc) : ""]] : []), ...cols.map(i => [P.cab[i], d.x[i] || ""])]));
+  const cols = P.cab.map((h, i) => i).filter(i => P.cab[i]);
+  const datos = pedidosVisibles().map(d => { const e = estU(d);
+    return Object.fromEntries([["Sucursal (reconocida)", d.suc ? corto(d.suc) : ""], ["Código", d.cod], ["Producto (catálogo)", d.nom], ["Estado", ESTADO_U[e.estado || ""][0].slice(3)], ["Nota de droguería", e.nota || ""],
+      ...cols.map(i => [P.cab[i], d.x[i] || ""])]); });
   if (!datos.length) return toast("No hay pedidos para descargar.");
-  excelDe(datos, "Urgencias", "agotados_urgencia_" + (admin ? (S.pdSuc ? corto(S.pdSuc) : "todas") : corto(miFarm())).replace(/\W+/g, "_").toLowerCase());
-});
+  const suc = esAdmin() || !miFarm() ? S.pdSuc : miFarm();
+  excelDe(datos, "Urgencias", "agotados_urgencia_" + (suc ? corto(suc) : "todas").replace(/\W+/g, "_").toLowerCase());
+}));

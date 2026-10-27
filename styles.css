@@ -571,3 +571,25 @@ main { padding-bottom: 80px }
 .pd-chip b { margin-left: 4px; color: var(--brand) }
 .pd-chip.act { background: var(--brand); color: #fff; border-color: var(--brand) } .pd-chip.act b { color: #fff }
 #pdTabla td { white-space: normal; max-width: 320px }
+/* urgencias: tablero del administrador y tarjetas de las sucursales */
+.pd-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 14px }
+.pd-kpi { display: grid; gap: 2px; padding: 14px 16px } .pd-kpi small { color: var(--muted); font-size: 12.5px }
+.pd-kpi .n { font-size: 30px; font-weight: 800; line-height: 1.15 } .pd-kpi .n.m { font-size: 22px } .pd-kpi .n.s { font-size: 16px }
+.rojo-t { color: var(--bad) }
+.pd-g2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 14px; margin-bottom: 14px }
+.pd-card { padding: 14px 16px; margin-bottom: 14px } .pd-card h3 { margin: 0 0 10px; font-size: 15px }
+.pd-svg { width: 100%; height: auto; font-size: 12px; fill: var(--fg-2) } .pd-svg text.dia { fill: #667; font-size: 11px } .pd-svg text.hoy { fill: var(--bad); font-weight: 700 }
+.pd-bar { cursor: pointer } .pd-bar:hover rect { opacity: .8 }
+.chip { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 700 }
+.chip.rojo { background: var(--bad-soft); color: var(--bad) } .chip.amb { background: var(--warn-soft); color: #7A4A00 } .chip.verde { background: var(--ok-soft); color: var(--ok) }
+.pd-est { min-height: 34px; font-size: 13px; padding: 0 8px; width: auto } .pd-nota { min-height: 34px; font-size: 13px; min-width: 180px }
+.pd-barra { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 14px } .pd-per { display: flex; gap: 6px; margin-right: auto }
+.pd-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; align-items: start }
+.pd-col { background: #E9EDF3; border-radius: 14px; padding: 12px; display: grid; gap: 10px }
+.pd-col h3 { margin: 2px 4px; font-size: 14px; display: flex; justify-content: space-between; align-items: center }
+.pd-tk { background: #fff; border-radius: 12px; padding: 12px; box-shadow: 0 2px 8px rgba(23,32,51,.08); border-left: 5px solid var(--bad); display: grid; gap: 6px }
+.pd-tk.amb { border-left-color: #B7791F } .pd-tk.verde { border-left-color: var(--ok) }
+.pd-tk .cod { font-family: ui-monospace, monospace; color: var(--muted); font-size: 12px }
+.pd-f { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12.5px }
+.pd-vacio { margin: 4px; font-size: 13px }
+.pd-svg { stroke: none; stroke-width: 0 } .pd-svg polyline { stroke-width: 3 } .pd-svg line { stroke-width: 1 }

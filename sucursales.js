@@ -297,6 +297,9 @@
         const stk = {}; for (const r of cache.filas) if (r.f === f && (r.st > 0 || r.d > 0)) stk[r.p.c] = [r3(r.st), r3(r.d)];
         await FB.setDoc(FB.doc(FB.db, 'red', 'stk_' + f), window.parent.JSON.parse(JSON.stringify({ p: stk, publicado: hoy })));
       }
+      // stock de droguería de todos los productos (red/stk_DROGUERIA FS): para el tablero de urgencias del administrador
+      const sd = {}; for (const p of S.P.p) { const v = +(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) || 0; if (v > 0) sd[p.c] = [r3(v)]; }
+      await FB.setDoc(FB.doc(FB.db, 'red', 'stk_DROGUERIA FS'), window.parent.JSON.parse(JSON.stringify({ p: sd, publicado: hoy })));
       return { ok: true };
     } catch (e) { return { ok: false, error: e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules) en Firebase.' : e.message }; }
   }

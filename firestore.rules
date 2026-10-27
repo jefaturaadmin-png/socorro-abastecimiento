@@ -137,6 +137,12 @@ service cloud.firestore {
       allow write: if publica();
     }
 
+    // ---------- productos agotados o de extrema urgencia: lo que marca droguería en cada pedido del formulario ----------
+    match /urgencia_estado/{id} {
+      allow read: if tieneVista('pedidos') || publica();
+      allow write: if publica();
+    }
+
     // ---------- avisos generales: los publica el administrador y los ven todos en su menú principal ----------
     match /avisos/{id} {
       allow read: if conPerfil();
