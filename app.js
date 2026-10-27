@@ -1708,6 +1708,8 @@ const CLAVES_SUC = () => FARMACIAS.filter(f => /^ALMACEN /.test(f)).flatMap(f =>
   return [...ks].map(k => [k, f]);
 }).sort((a, b) => (b[0].includes("TAMBO") - a[0].includes("TAMBO")) || b[0].length - a[0].length);
 function sucDe(texto) {
+  // "Almacén Sucursal" (o solo "Sucursal") es Puno; "Sucursal Real" es Real y "Sucursal Puno" es Puno
+  if (/^(ALMACEN )?SUCURSAL$/.test(norm(texto).replace(/[^A-Z0-9]+/g, " ").trim())) return "ALMACEN SUCURSAL";
   const t = " " + norm(texto).replace(/[^A-Z0-9]+/g, " ").replace(/\b(SUCURSAL|ALMACEN|FARMACIA|BOTICA|SOCORRO)\b/g, " ").replace(/\s+/g, " ").trim() + " ";
   return (CLAVES_SUC().find(([k]) => t.includes(" " + k + " ")) || [])[1] || "";
 }
