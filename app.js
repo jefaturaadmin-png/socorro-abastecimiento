@@ -69,7 +69,8 @@ const VISTAS = [
   { id: "estadistica", nombre: "Estadística Proyx", vista: "vEst", c: "est", ic: "i-grafico", desc: "Pronóstico estadístico por producto" },
   { id: "sucursales", nombre: "Atención a sucursales", vista: "vSuc", c: "suc", ic: "i-tienda", desc: "Qué enviar a cada sucursal", ayuda: "también publica las listas" },
   { id: "faltantes", nombre: "Faltantes de droguería", vista: "vFalt", ic: "i-buscar", desc: "Productos en 0 en droguería que piden las sucursales" },
-  { id: "atencion", nombre: "Lo que me van a atender", vista: "vAten", ic: "i-ojo", desc: "Lo que Abastecimiento enviará a tu sucursal", ayuda: "solo químicos: ve su sucursal" }];
+  { id: "atencion", nombre: "Lo que me van a atender", vista: "vAten", ic: "i-ojo", desc: "Lo que Abastecimiento enviará a tu sucursal", ayuda: "solo químicos: ve su sucursal" },
+  { id: "pedidos", nombre: "Pedidos de urgencia", vista: "vPed", ic: "i-lista", desc: "Lo que cada sucursal pidió de urgencia (hoja de Drive)", ayuda: "químicos: ven los de su sucursal" }];
 const misVistas = () => esAdmin() ? VISTAS : VISTAS.filter(v => (S.perfil?.vistas || []).includes(v.id));
 const NOMBRE_ROL = { admin: "Administrador", quimico: "Químico", colaborador: "Colaborador" };
 const miFarm = () => S.perfil?.farmacia;
@@ -265,7 +266,7 @@ function pintarNav() {
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
@@ -284,7 +285,8 @@ function render() {
   else if (S.vista === "vUsuarios") pintarUsuarios();
   else if (S.vista === "vFicha") pintarFicha();
   else if (S.vista === "vFalt") { escucharFalt(); pintarFalt(); }
-  else if (S.vista === "vAten") { escucharAten(); pintarAten(); }   // escucharFalt vuelve a conectar si se había cortado
+  else if (S.vista === "vAten") { escucharAten(); pintarAten(); }
+  else if (S.vista === "vPed") { cargarPedidos(); pintarPedidos(); }   // escucharFalt vuelve a conectar si se había cortado
   pintarSel("bq"); pintarSel("ab"); pintarLados();
   $("ayuda").classList.toggle("mini", S.vista !== "vInicio");   // fuera del inicio solo el ícono, para no tapar botones
 }
@@ -1680,3 +1682,100 @@ $("aCsv").addEventListener("click", () => {
 // La sucursal solo exporta los productos bloqueados en su propia farmacia.
 $("qXls").addEventListener("click", () => descargarExcel(bloqueadosAhora().filter(d => d.farmacia === miFarm()),
   "bloqueos_" + corto(miFarm()).replace(/\W+/g, "_").toLowerCase(), false));
+
+/* ===================== pedidos de urgencia (hoja de Google Drive) ===================== */
+// La hoja (compartida con "cualquiera con el enlace") se lee directo desde el navegador y se vuelve a leer cada 2 minutos.
+const HOJA_PEDIDOS = "18-biRg4ySB4By1Q0mYLJT2On3XrYZV7BhdwUyiWlfvI";
+S.ped = null; S.pdSuc = ""; S.pdQ = ""; S.pdDesde = ""; S.pdMostrar = 200;
+function leerCSV(t) {
+  const filas = []; let f = [], c = "", q = false;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (q) { if (ch === '"') { if (t[i + 1] === '"') { c += '"'; i++; } else q = false; } else c += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === ",") { f.push(c); c = ""; }
+    else if (ch === "\n" || ch === "\r") { if (ch === "\r" && t[i + 1] === "\n") i++; f.push(c); filas.push(f); f = []; c = ""; }
+    else c += ch;
+  }
+  if (c || f.length) { f.push(c); filas.push(f); }
+  return filas.filter(r => r.some(x => x.trim()));
+}
+// qué sucursal es el texto que escribieron ("Huancas", "Sucursal Real", "Mcdo. Tambo"…)
+const CLAVES_SUC = () => FARMACIAS.filter(f => /^ALMACEN /.test(f)).flatMap(f => {
+  const ks = new Set([f, visible(f)].map(x => norm(x).replace(/^ALMACEN /, "").replace(/[^A-Z0-9]+/g, " ").trim()));
+  if (/TAMBO/.test(f)) ks.add("TAMBO");
+  ks.delete("SUCURSAL");   // "ALMACEN SUCURSAL" es Puno: la palabra "sucursal" sola no dice cuál es
+  return [...ks].map(k => [k, f]);
+}).sort((a, b) => (b[0].includes("TAMBO") - a[0].includes("TAMBO")) || b[0].length - a[0].length);
+function sucDe(texto) {
+  const t = " " + norm(texto).replace(/[^A-Z0-9]+/g, " ").replace(/\b(SUCURSAL|ALMACEN|FARMACIA|BOTICA|SOCORRO)\b/g, " ").replace(/\s+/g, " ").trim() + " ";
+  return (CLAVES_SUC().find(([k]) => t.includes(" " + k + " ")) || [])[1] || "";
+}
+const fechaDe = v => { // "27/10/2026 14:05:10" o "2026-10-27"
+  const m = String(v || "").match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (m) return new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0));
+  const d = new Date(v); return isNaN(d) ? null : d;
+};
+async function cargarPedidos(forzar) {
+  if (S.pdCargando || (!forzar && S.ped && Date.now() - S.ped.t < 120000)) return;
+  S.pdCargando = true;
+  try {
+    const r = await fetch(`https://docs.google.com/spreadsheets/d/${HOJA_PEDIDOS}/gviz/tq?tqx=out:csv&_=${Date.now()}`, { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const filas = leerCSV(await r.text());
+    const cab = (filas.shift() || []).map(x => x.trim());
+    const col = re => cab.findIndex(h => re.test(norm(h)));
+    const cS = col(/SUCURSAL|ALMACEN|FARMACIA|LOCAL|BOTICA/), cF = col(/MARCA TEMPORAL|FECHA|TIMESTAMP/);
+    const datos = filas.map((x, k) => ({ k, x, suc: cS >= 0 ? sucDe(x[cS]) : "", f: cF >= 0 ? fechaDe(x[cF]) : null }));
+    S.ped = { t: Date.now(), cab, cS, cF, datos }; S.pdErr = "";
+  } catch (e) {
+    S.pdErr = "No se pudo leer la hoja de pedidos. Revisa tu internet, y que la hoja esté compartida como «Cualquier persona con el enlace puede ver». (" + (e.message || e) + ")";
+  }
+  S.pdCargando = false; if (S.vista === "vPed") pintarPedidos();
+}
+setInterval(() => { if (S.vista === "vPed" && !document.hidden) cargarPedidos(true); }, 120000);
+function pedidosVisibles() {
+  const P = S.ped; if (!P) return [];
+  const suc = esAdmin() || !miFarm() ? S.pdSuc : miFarm(), q = norm(S.pdQ).trim().split(/\s+/).filter(Boolean);
+  const desde = S.pdDesde ? new Date(S.pdDesde + "T00:00:00") : null;
+  return P.datos.filter(d => (!suc || d.suc === suc) && (!desde || !d.f || d.f >= desde) && (!q.length || q.every(w => norm(d.x.join(" ")).includes(w))))
+    .sort((a, b) => (b.f || 0) - (a.f || 0) || b.k - a.k);
+}
+function pintarPedidos() {
+  const P = S.ped, admin = esAdmin() || !miFarm();
+  $("pdDrive").hidden = !esAdmin(); $("pdDrive").href = `https://docs.google.com/spreadsheets/d/${HOJA_PEDIDOS}/edit`;
+  $("pdSucF").hidden = !admin;
+  $("pdSub").textContent = admin ? "Lo que cada sucursal pidió de urgencia. Se actualiza solo desde la hoja de Google Drive."
+    : `Lo que ${nombreFarm(miFarm())} pidió de urgencia. Se actualiza solo desde la hoja de Google Drive.`;
+  msg("pdMsg", S.pdErr || "", true);
+  if (!P) { $("pdTabla").innerHTML = `<tbody><tr class="vacia"><td>${S.pdErr ? "" : "Leyendo la hoja de pedidos…"}</td></tr></tbody>`; return; }
+  $("pdHora").textContent = "Actualizado " + new Date(P.t).toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
+  if (admin && !$("pdSuc").options.length) $("pdSuc").innerHTML = `<option value="">Todas</option>` + FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => `<option value="${esc(f)}">${esc(corto(f))}</option>`).join("");
+  if (!admin && P.cS < 0) { $("pdTabla").innerHTML = `<tbody><tr class="vacia"><td>La hoja no tiene una columna de sucursal; consulta con Abastecimiento.</td></tr></tbody>`; return; }
+  // resumen por sucursal (administrador)
+  const res = $("pdRes"); res.hidden = !admin || P.cS < 0;
+  if (admin && P.cS >= 0) {
+    const n = new Map(); P.datos.forEach(d => n.set(d.suc, (n.get(d.suc) || 0) + 1));
+    res.innerHTML = [...n].sort((a, b) => b[1] - a[1]).map(([f, c]) => `<button type="button" class="pd-chip${S.pdSuc === f ? " act" : ""}" data-pdsuc="${esc(f)}">${esc(f ? corto(f) : "Sin reconocer")} <b>${nf(c)}</b></button>`).join("");
+  }
+  const lista = pedidosVisibles(), vis = lista.slice(0, S.pdMostrar);
+  const cols = P.cab.map((h, i) => i).filter(i => P.cab[i] && (admin || i !== P.cS));
+  $("pdTit").textContent = `${nf(lista.length)} pedidos`;
+  $("pdTabla").innerHTML = `<thead><tr>${admin && P.cS >= 0 ? "<th>Sucursal</th>" : ""}${cols.map(i => `<th>${esc(P.cab[i])}</th>`).join("")}</tr></thead><tbody>` +
+    (vis.length ? vis.map(d => `<tr>${admin && P.cS >= 0 ? `<td><b>${esc(d.suc ? corto(d.suc) : "¿" + (d.x[P.cS] || "") + "?")}</b></td>` : ""}${cols.map(i => `<td>${esc(d.x[i] || "")}</td>`).join("")}</tr>`).join("")
+      : `<tr class="vacia"><td colspan="${cols.length + 1}">No hay pedidos con estos filtros.</td></tr>`) + "</tbody>";
+  $("pdMas").innerHTML = lista.length > vis.length ? `<button class="btn" type="button" id="pdMasBtn">Ver más (de ${nf(lista.length)})</button>` : "";
+}
+$("pdAct").addEventListener("click", () => cargarPedidos(true));
+$("pdSuc").addEventListener("change", e => { S.pdSuc = e.target.value; pintarPedidos(); });
+$("pdQ").addEventListener("input", e => { S.pdQ = e.target.value; pintarPedidos(); });
+$("pdDesde").addEventListener("change", e => { S.pdDesde = e.target.value; pintarPedidos(); });
+$("pdRes").addEventListener("click", e => { const b = e.target.closest("[data-pdsuc]"); if (!b) return; S.pdSuc = S.pdSuc === b.dataset.pdsuc ? "" : b.dataset.pdsuc; $("pdSuc").value = S.pdSuc; pintarPedidos(); });
+$("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) { S.pdMostrar += 200; pintarPedidos(); } });
+$("pdXls").addEventListener("click", () => {
+  const P = S.ped; if (!P) return;
+  const admin = esAdmin() || !miFarm(), cols = P.cab.map((h, i) => i).filter(i => P.cab[i]);
+  const datos = pedidosVisibles().map(d => Object.fromEntries([...(admin && P.cS >= 0 ? [["Sucursal (reconocida)", d.suc ? corto(d.suc) : ""]] : []), ...cols.map(i => [P.cab[i], d.x[i] || ""])]));
+  if (!datos.length) return toast("No hay pedidos para descargar.");
+  excelDe(datos, "Pedidos", "pedidos_urgencia_" + (admin ? (S.pdSuc ? corto(S.pdSuc) : "todas") : corto(miFarm())).replace(/\W+/g, "_").toLowerCase());
+});

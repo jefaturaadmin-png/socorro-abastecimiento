@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610272100">
+<link rel="stylesheet" href="styles.css?v=202610272300">
 </head>
 <body>
 
@@ -324,6 +324,34 @@
     </div>
   </section>
 
+  <!-- ============ PEDIDOS DE URGENCIA (desde la hoja de Google Drive) ============ -->
+  <section id="vPed" hidden>
+    <div class="wrap ancho cabeza">
+      <div>
+        <h1>Pedidos de urgencia</h1>
+        <p class="muted" id="pdSub">Lo que cada sucursal pidió de urgencia. Se actualiza solo desde la hoja de Google Drive.</p>
+      </div>
+      <div class="pd-acc"><small class="muted" id="pdHora"></small><button class="btn sm" type="button" id="pdAct">↻ Actualizar</button><a class="btn sm" id="pdDrive" target="_blank" rel="noopener" hidden>Abrir la hoja</a></div>
+    </div>
+    <div class="wrap ancho cuerpo">
+      <div class="pd-res" id="pdRes" hidden></div>
+      <section class="card lista">
+        <div class="lh">
+          <h2 id="pdTit">Pedidos</h2>
+          <div class="filtros">
+            <label class="filtro" id="pdSucF" hidden>Sucursal <select id="pdSuc"></select></label>
+            <label class="filtro">Desde <input id="pdDesde" type="date"></label>
+            <label class="filtro">Buscar <input id="pdQ" type="search" placeholder="Producto, código…"></label>
+            <button class="btn" id="pdXls" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button>
+          </div>
+        </div>
+        <div class="msg" id="pdMsg" hidden></div>
+        <div class="tabla-wrap"><table class="tabla" id="pdTabla"></table></div>
+        <div class="mas" id="pdMas"></div>
+      </section>
+    </div>
+  </section>
+
   <!-- ============ LO QUE ME VAN A ATENDER (vista por sucursal) ============ -->
   <section id="vAten" hidden>
     <div class="wrap ancho cabeza">
@@ -462,6 +490,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610272100"></script>
+<script type="module" src="app.js?v=202610272300"></script>
 </body>
 </html>

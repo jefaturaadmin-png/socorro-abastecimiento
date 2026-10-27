@@ -564,3 +564,10 @@ main { padding-bottom: 80px }
 /* en la ventana los resultados de la búsqueda se ven dentro, debajo del buscador */
 .resp-dlg .resultados { position: static; box-shadow: none; max-height: 260px; margin-top: 6px }
 .at-ropts label.si_requiere { background: var(--ok-soft); color: var(--ok) }
+/* pedidos de urgencia */
+.pd-acc { display: flex; gap: 8px; align-items: center; flex-wrap: wrap }
+.pd-res { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px }
+.pd-chip { font: inherit; font-size: 13px; border: 1px solid var(--line); background: #fff; border-radius: 99px; padding: 5px 12px; cursor: pointer }
+.pd-chip b { margin-left: 4px; color: var(--brand) }
+.pd-chip.act { background: var(--brand); color: #fff; border-color: var(--brand) } .pd-chip.act b { color: #fff }
+#pdTabla td { white-space: normal; max-width: 320px }
