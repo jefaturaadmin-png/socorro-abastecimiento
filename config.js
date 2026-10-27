@@ -64,3 +64,28 @@ export const MOTIVOS_REACTIVACION = [
   "Se bloqueó por error",
   "Otro"
 ];
+
+// Formulario de Google "Productos agotados o de extrema urgencia". La página envía a este mismo formulario, así lo
+// que se pide desde la página cae en la misma hoja de Drive que llenan desde el link del formulario.
+// "sucursales": el texto EXACTO de cada opción de la pregunta Sucursal en el formulario (si no coincide, Google la rechaza).
+export const FORM_URGENCIA = {
+  url: "https://docs.google.com/forms/d/e/1FAIpQLSf5J0UyLA58p9VJtHQR1qs936zqlWqic-Fj-75MoMTr8bjUtA/formResponse",
+  campoSucursal: "entry.568217798",
+  campoProducto: "entry.459218140",
+  sucursales: {
+    "ALMACEN PRINCIPAL": "Real",
+    "ALMACEN MERCADO": "Mercado",
+    "ALMACEN TUPAC": "Tupac",
+    "ALMACEN ORTEGA": "Ortega",
+    "ALMACEN HUANCAS": "Huancas",
+    "ALMACEN HEROES": "Heroes",
+    "ALMACEN MCDO.TAMBO": "Mcdo. Tambo",
+    "ALMACEN PARRA": "Parra",
+    "ALMACEN SUMAR": "Sumar",
+    "ALMACEN SUCURSAL": "Puno",
+    "ALMACEN PIOPATA": "Piopata",
+    "ALMACEN CONCEPCION": "Concepcion",
+    "ALMACEN LIBERTAD": "Libertad",
+    "ALMACEN ANDALUZ": "Andaluz"
+  }
+};

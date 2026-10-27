@@ -7,7 +7,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, where,
   serverTimestamp, writeBatch, deleteField
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION } from "./config.js?v=202610151900";
+import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION, FORM_URGENCIA } from "./config.js?v=202610280700";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -1734,13 +1734,18 @@ async function cargarPedidos(forzar) {
     const cab = (filas.shift() || []).map(x => x.trim());
     const col = (re, sin = []) => cab.findIndex((h, i) => re.test(norm(h)) && !sin.includes(i));
     const cS = col(/SUCURSAL|ALMACEN|FARMACIA|LOCAL|BOTICA/), cF = col(/MARCA TEMPORAL|FECHA|TIMESTAMP/);
-    const cC = col(/COD/), cP = col(/PRODUCTO|MEDICAMENTO|DESCRIPCION|INSUMO/, [cC]), cQ = col(/CANTIDAD|CANT\b|UNIDADES/);
+    const cC = col(/COD/), cP = col(/PRODUCTO|MEDICAMENTO|DESCRIPCION|INSUMO/, [cC, cS, cF]), cQ = col(/CANTIDAD|CANT\b|UNIDADES/);
     const cM = col(/MOTIVO|OBSERV|COMENTARIO|DETALLE|URGENCIA/), cU = col(/RESPONSABLE|SOLICITA|QUIMICO|APELLIDO|CORREO|USUARIO|NOMBRE/, [cP, cC, cS]);
-    const datos = filas.map((x, k) => {
-      const pc = cC >= 0 ? prodCat(x[cC]) : null;
-      return { k, x, id: idFila(x), suc: cS >= 0 ? sucDe(x[cS]) : "", f: cF >= 0 ? fechaDe(x[cF]) : null,
-        cod: pc?.c || (cC >= 0 ? x[cC].trim() : ""), nom: pc?.n || (cP >= 0 ? x[cP].trim() : ""), lab: pc?.ln || "",
-        q: cQ >= 0 ? parseFloat(String(x[cQ]).replace(",", ".")) || 0 : 1, mot: cM >= 0 ? x[cM].trim() : "", quien: cU >= 0 ? x[cU].trim() : "" };
+    // una respuesta puede traer varios códigos ("21648, 00052, 52147"): cada uno es un producto aparte
+    const cProd = cC >= 0 ? cC : cP;
+    const datos = filas.flatMap((x, k) => {
+      const crudo = cProd >= 0 ? String(x[cProd] || "").trim() : "", partes = /^[\d\s,;\/-]+$/.test(crudo) ? crudo.split(/[\s,;\/-]+/).filter(Boolean) : [crudo];
+      return partes.map((pz, j) => {
+        const pc = prodCat(pz);
+        return { k: k + j / 100, x, id: idFila(x) + (partes.length > 1 ? "_" + j : ""), suc: cS >= 0 ? sucDe(x[cS]) : "", f: cF >= 0 ? fechaDe(x[cF]) : null,
+          cod: pc?.c || (/^\d+$/.test(pz) ? pz : ""), nom: pc?.n || (/^\d+$/.test(pz) ? "" : pz), lab: pc?.ln || "",
+          q: cQ >= 0 ? parseFloat(String(x[cQ]).replace(",", ".")) || 0 : 0, mot: cM >= 0 ? x[cM].trim() : "", quien: cU >= 0 ? x[cU].trim() : "" };
+      });
     });
     S.ped = { t: Date.now(), cab, cS, cF, datos }; S.pdErr = "";
   } catch (e) {
@@ -1777,7 +1782,7 @@ function pedidosVisibles() {
 }
 function pintarPedidos() {
   const P = S.ped, admin = esAdmin() || !miFarm();
-  $("pdDrive").hidden = !esAdmin(); $("pdDrive").href = `https://docs.google.com/spreadsheets/d/${HOJA_PEDIDOS}/edit`;
+  $("pdNuevoA").hidden = !esAdmin(); $("pdDrive").hidden = !esAdmin(); $("pdDrive").href = `https://docs.google.com/spreadsheets/d/${HOJA_PEDIDOS}/edit`;
   $("pdSucF").hidden = !admin; $("pdA").hidden = !admin || !P; $("pdLista").hidden = !admin; $("pdB").hidden = admin || !P;
   $("pdSub").textContent = admin ? "Lo que cada sucursal pidió de urgencia. Se actualiza desde el formulario."
     : `Lo que ${nombreFarm(miFarm())} pidió de urgencia. Se actualiza desde el formulario.`;
@@ -1877,3 +1882,43 @@ $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) {
   const suc = esAdmin() || !miFarm() ? S.pdSuc : miFarm();
   excelDe(datos, "Urgencias", "agotados_urgencia_" + (suc ? corto(suc) : "todas").replace(/\W+/g, "_").toLowerCase());
 }));
+
+// ---------- pedir desde la página: se envía al mismo formulario de Google (cae en la misma hoja de Drive) ----------
+S.urgNuevo = []; S.urgBus = "";
+const sucFormDe = f => FORM_URGENCIA.sucursales[f] || corto(f);
+function abrirNuevoUrg() { S.urgNuevo = []; S.urgBus = ""; S.urgSucSel = miFarm() || ""; pintarNuevoUrg(); $("urgDlg").showModal(); $("urgBus").focus(); }
+function pintarNuevoUrg() {
+  const fija = !!miFarm() && !esAdmin();
+  $("urgSucBox").innerHTML = fija ? `<b>${esc(nombreFarm(miFarm()))}</b> <small class="muted">(tu sucursal)</small>`
+    : `<select id="urgSuc"><option value="">Elige la sucursal…</option>${Object.keys(FORM_URGENCIA.sucursales).map(f => `<option value="${esc(f)}" ${S.urgSucSel === f ? "selected" : ""}>${esc(corto(f))}</option>`).join("")}</select>`;
+  $("urgSel").innerHTML = S.urgNuevo.length ? S.urgNuevo.map((p, k) => `<span class="fs-alt"><b>${esc(p.c)}</b> ${esc(p.n)} <button type="button" class="enlace" data-urg-quitar="${k}">Quitar</button></span>`).join("")
+    : '<small class="muted">Busca y agrega los productos que necesitas (puedes agregar varios).</small>';
+  $("urgEnviar").textContent = S.urgNuevo.length > 1 ? `Enviar pedido (${S.urgNuevo.length} productos)` : "Enviar pedido";
+}
+$("pdNuevo").addEventListener("click", abrirNuevoUrg);
+$("pdNuevoA").addEventListener("click", abrirNuevoUrg);
+$("urgBus").addEventListener("input", e => {
+  S.urgBus = e.target.value; const box = $("urgRes");
+  box.innerHTML = resBusqueda({ c: "" }, S.urgBus, p => S.urgNuevo.some(a => a.c === p.c), "data-urg-add"); box.hidden = !S.urgBus.trim();
+});
+$("urgDlg").addEventListener("change", e => { if (e.target.id === "urgSuc") S.urgSucSel = e.target.value; });
+$("urgDlg").addEventListener("click", async e => {
+  if (e.target.closest("[data-cerrar-dlg]") || e.target === $("urgDlg")) return $("urgDlg").close();
+  const a = e.target.closest("[data-urg-add]");
+  if (a) { const p = S.catIdx.get(a.dataset.urgAdd); if (p) S.urgNuevo.push({ c: p.c, n: p.n }); $("urgBus").value = S.urgBus = ""; $("urgRes").hidden = true; pintarNuevoUrg(); $("urgBus").focus(); return; }
+  const q = e.target.closest("[data-urg-quitar]"); if (q) { S.urgNuevo.splice(+q.dataset.urgQuitar, 1); return pintarNuevoUrg(); }
+  if (!e.target.closest("#urgEnviar")) return;
+  const suc = !esAdmin() && miFarm() ? miFarm() : S.urgSucSel;
+  if (!suc) return msg("urgMsg", "Elige la sucursal.", true);
+  if (!S.urgNuevo.length) return msg("urgMsg", "Agrega al menos un producto.", true);
+  const b = $("urgEnviar"); b.disabled = true; msg("urgMsg", "Enviando…");
+  try {
+    // Google no deja leer la respuesta desde otra página (no-cors): se envía y luego se confirma al releer la hoja
+    // como en el formulario: todos los códigos en una sola respuesta, separados por coma ("21648, 00052, 52147")
+    const datos = new URLSearchParams({ [FORM_URGENCIA.campoSucursal]: sucFormDe(suc), [FORM_URGENCIA.campoProducto]: S.urgNuevo.map(p => p.c).join(", ") });
+    await fetch(FORM_URGENCIA.url, { method: "POST", mode: "no-cors", body: datos });
+    const n = S.urgNuevo.length; $("urgDlg").close(); toast(`Pedido enviado al formulario (${n} producto${n === 1 ? "" : "s"}). Aparecerá en unos segundos.`);
+    S.urgNuevo = []; setTimeout(() => cargarPedidos(true), 4000); setTimeout(() => cargarPedidos(true), 15000);
+  } catch (x) { msg("urgMsg", "No se pudo enviar. Revisa tu internet e inténtalo de nuevo.", true); }
+  finally { b.disabled = false; }
+});
