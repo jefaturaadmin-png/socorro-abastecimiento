@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610280700">
+<link rel="stylesheet" href="styles.css?v=202610281000">
 </head>
 <body>
 
@@ -347,8 +347,18 @@
       </div>
       <!-- usuarios: tarjetas por estado -->
       <div id="pdB" hidden>
-        <div class="pd-barra"><button class="btn primario" type="button" id="pdNuevo">➕ Nuevo pedido de urgencia</button><div class="pd-per" id="pdPer"></div><label class="filtro">Buscar <input id="pdQ2" type="search" placeholder="Producto, código…"></label><button class="btn" id="pdXls2" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button></div>
-        <div class="pd-cols" id="pdCols"></div>
+        <section class="card lista">
+          <div class="lh">
+            <button class="btn primario" type="button" id="pdNuevo">➕ Nuevo pedido de urgencia</button>
+            <div class="filtros">
+              <label class="filtro">Desde <input id="pdDesde2" type="date"></label>
+              <label class="filtro">Hasta <input id="pdHasta2" type="date"></label>
+              <label class="filtro">Buscar <input id="pdQ2" type="search" placeholder="Producto o código"></label>
+              <button class="btn" id="pdXls2" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Excel</button>
+            </div>
+          </div>
+          <div class="tabla-wrap"><table class="tabla" id="pdTablaU"></table></div>
+        </section>
       </div>
       <section class="card lista" id="pdLista">
         <div class="lh">
@@ -356,6 +366,7 @@
           <div class="filtros">
             <label class="filtro" id="pdSucF" hidden>Sucursal <select id="pdSuc"></select></label>
             <label class="filtro">Desde <input id="pdDesde" type="date"></label>
+            <label class="filtro">Hasta <input id="pdHasta" type="date"></label>
             <label class="filtro">Buscar <input id="pdQ" type="search" placeholder="Producto, código…"></label>
             <button class="btn" id="pdXls" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button>
           </div>
@@ -513,6 +524,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610280700"></script>
+<script type="module" src="app.js?v=202610281000"></script>
 </body>
 </html>

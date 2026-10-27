@@ -1687,7 +1687,7 @@ $("qXls").addEventListener("click", () => descargarExcel(bloqueadosAhora().filte
 // La hoja (compartida con "cualquiera con el enlace") se lee directo desde el navegador y se vuelve a leer cada 2 minutos.
 // El administrador ve un tablero (cifras, gráficos, top 5) y marca cada pedido; las sucursales ven tarjetas por estado.
 const HOJA_PEDIDOS = "18-biRg4ySB4By1Q0mYLJT2On3XrYZV7BhdwUyiWlfvI";
-S.ped = null; S.pdSuc = ""; S.pdQ = ""; S.pdDesde = ""; S.pdMostrar = 200; S.pdPer = "semana"; S.urgEst = new Map();
+S.ped = null; S.pdSuc = ""; S.pdQ = ""; S.pdDesde = ""; S.pdMostrar = 200; S.pdHasta = ""; S.urgEst = new Map();
 function leerCSV(t) {
   const filas = []; let f = [], c = "", q = false;
   for (let i = 0; i < t.length; i++) {
@@ -1736,18 +1736,21 @@ async function cargarPedidos(forzar) {
     const cS = col(/SUCURSAL|ALMACEN|FARMACIA|LOCAL|BOTICA/), cF = col(/MARCA TEMPORAL|FECHA|TIMESTAMP/);
     const cC = col(/COD/), cP = col(/PRODUCTO|MEDICAMENTO|DESCRIPCION|INSUMO/, [cC, cS, cF]), cQ = col(/CANTIDAD|CANT\b|UNIDADES/);
     const cM = col(/MOTIVO|OBSERV|COMENTARIO|DETALLE|URGENCIA/), cU = col(/RESPONSABLE|SOLICITA|QUIMICO|APELLIDO|CORREO|USUARIO|NOMBRE/, [cP, cC, cS]);
-    // una respuesta puede traer varios códigos ("21648, 00052, 52147"): cada uno es un producto aparte
-    const cProd = cC >= 0 ? cC : cP;
+    // el producto: la columna de código/producto; si en esa fila está vacía, cualquier otra columna con texto
+    // (la hoja junta respuestas de versiones anteriores del formulario). Varios códigos en una respuesta = varios productos.
+    const fuera = [cS, cF, cU, cQ, cM], otras = cab.map((h, i) => i).filter(i => !fuera.includes(i) && !/CORREO|EMAIL/.test(norm(cab[i])));
+    const orden = [cC, cP, ...otras].filter((i, j, a) => i >= 0 && a.indexOf(i) === j);
     const datos = filas.flatMap((x, k) => {
-      const crudo = cProd >= 0 ? String(x[cProd] || "").trim() : "", partes = /^[\d\s,;\/-]+$/.test(crudo) ? crudo.split(/[\s,;\/-]+/).filter(Boolean) : [crudo];
-      return partes.map((pz, j) => {
-        const pc = prodCat(pz);
+      const crudo = String(x[orden.find(i => String(x[i] || "").trim())] ?? "").trim();
+      const cods = crudo.match(/\b\d{3,6}\b/g), partes = cods && cods.length && crudo.replace(/[\d\s,;\/.\-y]+/gi, "") === "" ? cods : [crudo];
+      return partes.map(p => p.trim()).filter(p => p && !/^[-–.\s]*$/.test(p)).map((pz, j) => {
+        const pc = prodCat(pz) || (cods?.length === 1 ? prodCat(cods[0]) : null);
         return { k: k + j / 100, x, id: idFila(x) + (partes.length > 1 ? "_" + j : ""), suc: cS >= 0 ? sucDe(x[cS]) : "", f: cF >= 0 ? fechaDe(x[cF]) : null,
           cod: pc?.c || (/^\d+$/.test(pz) ? pz : ""), nom: pc?.n || (/^\d+$/.test(pz) ? "" : pz), lab: pc?.ln || "",
           q: cQ >= 0 ? parseFloat(String(x[cQ]).replace(",", ".")) || 0 : 0, mot: cM >= 0 ? x[cM].trim() : "", quien: cU >= 0 ? x[cU].trim() : "" };
       });
     });
-    S.ped = { t: Date.now(), cab, cS, cF, datos }; S.pdErr = "";
+    S.ped = { t: Date.now(), cab, cS, cF, datos: datos.filter(d => d.cod || d.nom) }; S.pdErr = "";
   } catch (e) {
     S.pdErr = "No se pudo leer la hoja de pedidos. Revisa tu internet, y que la hoja esté compartida como «Cualquier persona con el enlace puede ver». (" + (e.message || e) + ")";
   }
@@ -1763,7 +1766,7 @@ function escucharUrg() {
 }
 // stock de droguería (red/stk_DROGUERIA FS, se publica con las listas) para el top 5 del administrador
 async function cargarDrogStk() {
-  if (!esAdmin() || S.drogStk || S.drogStkCargando) return; S.drogStkCargando = true;
+  if (S.drogStk || S.drogStkCargando) return; S.drogStkCargando = true;
   try { const d = await getDoc(doc(db, "red", "stk_DROGUERIA FS")); S.drogStk = d.exists() ? d.data().p || {} : {}; } catch { S.drogStk = {}; }
   S.drogStkCargando = false; if (S.vista === "vPed") pintarPedidos();
 }
@@ -1776,8 +1779,8 @@ const nomProd = d => d.nom || (d.cod ? "Código " + d.cod : "(sin producto)");
 function pedidosVisibles() {
   const P = S.ped; if (!P) return [];
   const admin = esAdmin() || !miFarm(), suc = admin ? S.pdSuc : miFarm(), q = norm(S.pdQ).trim().split(/\s+/).filter(Boolean);
-  const desde = admin ? (S.pdDesde ? new Date(S.pdDesde + "T00:00:00") : null) : { hoy: inicioDia(0), semana: inicioDia(6), mes: inicioDia(29) }[S.pdPer] || null;
-  return P.datos.filter(d => (!suc || d.suc === suc) && (!desde || !d.f || d.f >= desde) && (!q.length || q.every(w => norm(d.x.join(" ") + " " + d.nom).includes(w))))
+  const desde = S.pdDesde ? new Date(S.pdDesde + "T00:00:00") : null, hasta = S.pdHasta ? new Date(S.pdHasta + "T23:59:59") : null;
+  return P.datos.filter(d => (!suc || d.suc === suc) && (!desde || !d.f || d.f >= desde) && (!hasta || !d.f || d.f <= hasta) && (!q.length || q.every(w => norm(d.x.join(" ") + " " + d.nom).includes(w))))
     .sort((a, b) => (b.f || 0) - (a.f || 0) || b.k - a.k);
 }
 function pintarPedidos() {
@@ -1792,19 +1795,15 @@ function pintarPedidos() {
   if (!admin && P.cS < 0) { msg("pdMsg", "La hoja no tiene una columna de sucursal; consulta con Abastecimiento.", true); $("pdB").hidden = true; return; }
   if (admin) pintarTableroUrg(P); else pintarTarjetasUrg();
 }
-// ---------- usuarios: tarjetas por estado ----------
+// ---------- usuarios: tabla simple (medicamento, fecha y hora, si hay en droguería) ----------
+const hayDrog = c => { if (S.drogStk == null) return '<span class="muted">…</span>'; const v = S.drogStk[c]?.[0];
+  return v > 0 ? `<span class="chip verde">✓ Sí hay (${nf(v)})</span>` : c ? '<span class="chip rojo">✗ No hay</span>' : '<span class="muted">–</span>'; };
 function pintarTarjetasUrg() {
-  $("pdPer").innerHTML = [["hoy", "Hoy"], ["semana", "Esta semana"], ["mes", "Este mes"], ["", "Todo"]].map(([v, t]) => `<button type="button" class="pd-chip${S.pdPer === v ? " act" : ""}" data-per="${v}">${t}</button>`).join("");
-  const lista = pedidosVisibles(), grupos = { "": [], viendo: [], atendido: [] };
-  lista.forEach(d => (grupos[estU(d).estado || ""] || grupos[""]).push(d));
-  $("pdCols").innerHTML = Object.entries(ESTADO_U).map(([k, [t, cl]]) => `<div class="pd-col"><h3>${t} <span class="chip ${cl}">${grupos[k].length}</span></h3>
-    ${grupos[k].map(d => tarjetaUrg(d, k, cl)).join("") || '<p class="muted pd-vacio">Nada aquí.</p>'}</div>`).join("");
-}
-function tarjetaUrg(d, k, cl) {
-  const e = estU(d), agot = /AGOTAD/.test(norm(d.mot + " " + d.x.join(" ")));
-  return `<div class="pd-tk ${cl}"><span class="cod">${esc(d.cod)}</span><b>${esc(nomProd(d))}</b>
-    <div class="pd-f">${k ? `<span class="chip ${cl}">${esc(e.nota || ESTADO_U[k][0].slice(3))}</span>` : `<span class="chip ${agot ? "amb" : "rojo"}">${agot ? "Agotado" : "Extrema urgencia"}</span>`}<b>${d.q ? nf(d.q) + " und" : ""}</b></div>
-    <div class="pd-f muted"><span>${k ? `Respondió ${esc(e.porNombre || "droguería")}` : esc(d.mot ? "“" + d.mot + "”" : d.quien)}</span><span>${k ? fmtF(e.fecha) : hace(d.f)}</span></div></div>`;
+  const lista = pedidosVisibles();
+  $("pdTablaU").innerHTML = `<thead><tr><th>Medicamento</th><th>Fecha y hora del pedido</th><th>¿Hay en droguería?</th></tr></thead><tbody>` +
+    (lista.length ? lista.map(d => `<tr><td class="p"><b>${esc(nomProd(d))}</b>${d.cod && d.nom ? `<code>${esc(d.cod)}</code>` : ""}</td>
+      <td class="f">${d.f ? d.f.toLocaleString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : esc(d.x[S.ped.cF] || "")}</td><td>${hayDrog(d.cod)}</td></tr>`).join("")
+      : '<tr class="vacia"><td colspan="3">No hay pedidos en esas fechas.</td></tr>') + "</tbody>";
 }
 // ---------- administrador: tablero ----------
 function pintarTableroUrg(P) {
@@ -1868,13 +1867,15 @@ $("pdTabla").addEventListener("change", e => { const tr = e.target.closest("tr[d
 $("pdAct").addEventListener("click", () => cargarPedidos(true));
 $("pdSuc").addEventListener("change", e => { S.pdSuc = e.target.value; pintarPedidos(); });
 ["pdQ", "pdQ2"].forEach(id => $(id).addEventListener("input", e => { S.pdQ = e.target.value; pintarPedidos(); }));
-$("pdDesde").addEventListener("change", e => { S.pdDesde = e.target.value; pintarPedidos(); });
-$("pdPer").addEventListener("click", e => { const b = e.target.closest("[data-per]"); if (b) { S.pdPer = b.dataset.per; pintarPedidos(); } });
+["pdDesde", "pdDesde2"].forEach(id => $(id).addEventListener("change", e => { S.pdDesde = e.target.value; pintarPedidos(); }));
+["pdHasta", "pdHasta2"].forEach(id => $(id).addEventListener("change", e => { S.pdHasta = e.target.value; pintarPedidos(); }));
 ["pdRes", "pdBarras"].forEach(id => $(id).addEventListener("click", e => { const b = e.target.closest("[data-pdsuc]"); if (!b) return; S.pdSuc = S.pdSuc === b.dataset.pdsuc ? "" : b.dataset.pdsuc; pintarPedidos(); }));
 $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) { S.pdMostrar += 200; pintarPedidos(); } });
 ["pdXls", "pdXls2"].forEach(id => $(id).addEventListener("click", () => {
   const P = S.ped; if (!P) return;
   const cols = P.cab.map((h, i) => i).filter(i => P.cab[i]);
+  if (!(esAdmin() || !miFarm())) { const ds = pedidosVisibles().map(d => ({ "Código": d.cod, Medicamento: nomProd(d), "Fecha y hora": d.f || "", "¿Hay en droguería?": S.drogStk?.[d.cod]?.[0] > 0 ? "Sí (" + S.drogStk[d.cod][0] + ")" : "No" }));
+    if (!ds.length) return toast("No hay pedidos para descargar."); return excelDe(ds, "Urgencias", "agotados_urgencia_" + corto(miFarm()).replace(/\W+/g, "_").toLowerCase()); }
   const datos = pedidosVisibles().map(d => { const e = estU(d);
     return Object.fromEntries([["Sucursal (reconocida)", d.suc ? corto(d.suc) : ""], ["Código", d.cod], ["Producto (catálogo)", d.nom], ["Estado", ESTADO_U[e.estado || ""][0].slice(3)], ["Nota de droguería", e.nota || ""],
       ...cols.map(i => [P.cab[i], d.x[i] || ""])]); });

@@ -133,7 +133,7 @@ service cloud.firestore {
 
     // ---------- el producto en toda la red (para el ojito de información; lo publica el administrador) ----------
     match /red/{id} {
-      allow read: if tieneVista('atencion') || tieneVista('faltantes') || publica();
+      allow read: if tieneVista('atencion') || tieneVista('faltantes') || tieneVista('pedidos') || publica();
       allow write: if publica();
     }
 
