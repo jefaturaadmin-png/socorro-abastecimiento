@@ -216,7 +216,7 @@
     // lo que responde cada sucursal en "Lo que me van a atender" (atencion_resp/{SUCURSAL}__{codpro})
     FB.onSnapshot(FB.collection(FB.db, 'atencion_resp'), sn => { leerRespuestas(sn.docs); if (S.vista === 'suc') window.pintarSuc(); }, () => {});
   }
-  const RESP_TXT = { no_requiere: 'No se requiere en esta sucursal', no_se_mueve: 'No se mueve', otro_medicamento: 'Tiene otro en su cambio', otros: 'Otros' };
+  const RESP_TXT = { si_requiere: 'Sí se requiere', no_requiere: 'No se requiere en esta sucursal', no_se_mueve: 'No se mueve', otro_medicamento: 'Tiene otro en su cambio', otros: 'Otros' };
   const tagResp = (f, c) => { const r = S.suResp?.get(f + '__' + c); if (!r) return '';
     const t = (RESP_TXT[r.estado] || r.estado) + (r.alternativa ? ': ' + r.alternativa : '') + (r.comentario ? (r.alternativa ? ' · ' : ': ') + r.comentario : '');
     return ` · <span class="tag su-resp ${esc(r.estado)}" title="${esc('Respondió ' + (r.porNombre || '') + ': ' + t)}">💬 ${esc(t)}</span>`; };

@@ -563,3 +563,4 @@ main { padding-bottom: 80px }
 .resp-dlg .fs-form, .resp-dlg .at-rf { padding: 0; background: none; border: 0 }
 /* en la ventana los resultados de la búsqueda se ven dentro, debajo del buscador */
 .resp-dlg .resultados { position: static; box-shadow: none; max-height: 260px; margin-top: 6px }
+.at-ropts label.si_requiere { background: var(--ok-soft); color: var(--ok) }

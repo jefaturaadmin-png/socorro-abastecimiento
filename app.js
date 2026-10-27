@@ -16,7 +16,7 @@ const db = getFirestore(app);
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610271500";
+const VERSION_PROY = "202610271900";
 const VERSION_COMP = "202610270100";
 
 /* ===================== utilidades ===================== */
@@ -1322,6 +1322,7 @@ const tagDrog = i => { const e = estVig(i.c); if (!e) return "";
   return `<span class="tag fs-tag ${esc(e.estado)} at-drog" title="${esc((e.porNombre || "") + (e.comentario ? ": " + e.comentario : ""))}">Droguería: ${esc(textoEstado(e))}${e.comentario ? " · " + esc(e.comentario) : ""}</span>${alts}`; };
 // Lo que el químico puede responder sobre cada producto que le van a enviar
 const RESP_AT = [
+  { id: "si_requiere", txt: "Sí se requiere en esta sucursal", clase: "t-ok" },
   { id: "no_requiere", txt: "No se requiere en esta sucursal", clase: "t-rech" },
   { id: "no_se_mueve", txt: "No se mueve", clase: "t-pend", campo: "motivo", ph: "¿Por qué motivo? (obligatorio)" },
   { id: "otro_medicamento", txt: "Se tiene otro medicamento en su cambio", clase: "t-ok", campo: "alt", ph: "Busca el medicamento por código o nombre" },

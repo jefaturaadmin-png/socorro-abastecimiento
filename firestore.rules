@@ -127,7 +127,7 @@ service cloud.firestore {
         && request.resource.data.suc == perfil().get('farmacia', '')
         && id == request.resource.data.suc + '__' + request.resource.data.codpro
         && request.resource.data.porUid == request.auth.uid
-        && request.resource.data.estado in ['no_requiere', 'no_se_mueve', 'otro_medicamento', 'otros'];
+        && request.resource.data.estado in ['si_requiere', 'no_requiere', 'no_se_mueve', 'otro_medicamento', 'otros'];
       allow delete: if tieneVista('atencion') && resource.data.suc == perfil().get('farmacia', '');
     }
 
