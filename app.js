@@ -120,8 +120,10 @@ function buscarCat(texto) {
 $("fLogin").addEventListener("submit", async e => {
   e.preventDefault();
   const u = $("lUser").value.trim().toLowerCase();
-  const email = u.includes("@") ? u : `${u}@${DOMINIO}`;
+  let email = u.includes("@") ? u : `${u}@${DOMINIO}`;
   $("lBtn").disabled = true; $("lErr").hidden = true;
+  // si el administrador le restableció la contraseña, su usuario entra con otra cuenta (alias/{usuario})
+  if (!u.includes("@")) try { const a = await getDoc(doc(db, "alias", u)); if (a.exists() && a.data().email) email = a.data().email; } catch {}
   S.claveIngreso = $("lPass").value;
   try { await signInWithEmailAndPassword(auth, email, $("lPass").value); $("lPass").value = ""; }
   catch (err) {
@@ -966,7 +968,7 @@ const chkVistas = (sel = []) => VISTAS.map(v => `<label class="check"><input typ
 $("uVistas").innerHTML = chkVistas();
 const vistasDe = el => [...el.querySelectorAll("[data-vista]:checked")].map(x => x.dataset.vista);
 function pintarUsuarios() {
-  const lista = [...S.usuarios].sort((a, b) => (a.rol + a.farmacia + a.usuario).localeCompare(b.rol + b.farmacia + b.usuario));
+  const lista = S.usuarios.filter(u => !u.reemplazadoPor).sort((a, b) => (a.rol + a.farmacia + a.usuario).localeCompare(b.rol + b.farmacia + b.usuario));
   const opcFarm = sel => FARMACIAS.map(f => `<option value="${esc(f)}" ${f === sel ? "selected" : ""}>${esc(corto(f))}</option>`).join("");
   const fila = u => `<tr class="${u.activo === false ? "inactivo" : ""}">
       <td class="f">${esc(u.usuario)}</td><td>${u.nombre ? esc(u.nombre) : '<span class="muted">Lo escribirá al ingresar</span>'}</td>
@@ -974,7 +976,8 @@ function pintarUsuarios() {
       <td>${u.cambiarClave === true ? '<span class="tag t-pend">Aún no cambia su contraseña</span>' : '<span class="tag t-ok">Contraseña propia</span>'}${u.activo === false ? ' <span class="tag t-rech">Deshabilitado</span>' : ""}</td>
       <td class="der"><div class="botones-fila">${u.uid === S.perfil.uid ? '<span class="muted">Tú</span>' :
         `<button class="btn sm" type="button" data-editar="${esc(u.uid)}">Editar</button>
-         <button class="btn sm" type="button" data-toggle="${esc(u.uid)}">${u.activo === false ? "Habilitar" : "Deshabilitar"}</button>`}</div></td>
+         <button class="btn sm" type="button" data-toggle="${esc(u.uid)}">${u.activo === false ? "Habilitar" : "Deshabilitar"}</button>
+         <button class="btn sm" type="button" data-reset="${esc(u.uid)}" title="Si olvidó su contraseña: le das una temporal y al entrar crea la suya">🔑 Restablecer contraseña</button>`}</div></td>
     </tr>`;
   // Fila de edición debajo del usuario elegido.
   const edicion = u => `<tr class="editando"><td colspan="6">
@@ -1010,11 +1013,32 @@ $("uTabla").addEventListener("click", async e => {
     catch (err) { toast(textoError(err)); }
     return;
   }
+  const rs = e.target.closest("[data-reset]"); if (rs) return restablecerClave(S.usuarios.find(x => x.uid === rs.dataset.reset));
   const b = e.target.closest("[data-toggle]"); if (!b) return;
   const u = S.usuarios.find(x => x.uid === b.dataset.toggle);
   try { await setDoc(doc(db, "usuarios", u.uid), { activo: u.activo === false }, { merge: true }); toast(u.activo === false ? "Usuario habilitado" : "Usuario deshabilitado"); }
   catch (err) { toast(textoError(err)); }
 });
+// Olvidó su contraseña: Firebase no deja cambiar la de otra persona desde la página, así que se le crea una cuenta
+// nueva con una contraseña temporal, se le copia su perfil (rol, sucursal, módulos) y su usuario apunta a la cuenta
+// nueva (alias/{usuario}). La cuenta vieja queda deshabilitada. En su próximo ingreso crea su propia contraseña.
+async function restablecerClave(u) {
+  if (!u || !confirm(`¿Restablecer la contraseña de ${u.nombre || u.usuario}?\n\nSe le dará una contraseña temporal; al ingresar tendrá que crear la suya.`)) return;
+  const temp = "Socorro" + String(crypto.getRandomValues(new Uint32Array(1))[0] % 9000 + 1000);
+  const email = `${u.usuario}.r${Date.now().toString(36)}@${DOMINIO}`;
+  const app2 = initializeApp(firebaseConfig, "reset-" + Date.now()), auth2 = getAuth(app2);
+  try {
+    const cred = await createUserWithEmailAndPassword(auth2, email, temp);
+    const { uid: _uid, ...perfil } = u;
+    await setDoc(doc(db, "usuarios", cred.user.uid), { ...perfil, activo: true, cambiarClave: true, emailLogin: email, reemplazadoPor: deleteField(), restablecido: serverTimestamp() }, { merge: true });
+    await setDoc(doc(db, "alias", u.usuario), { email, uid: cred.user.uid, fecha: serverTimestamp() });
+    await setDoc(doc(db, "usuarios", u.uid), { activo: false, reemplazadoPor: cred.user.uid }, { merge: true });
+    await signOut(auth2).catch(() => {});
+    $("rsUsr").textContent = u.usuario; $("rsClave").textContent = temp; $("rsDlg").showModal();
+  } catch (err) { toast(err?.code === "permission-denied" ? "Falta publicar las reglas nuevas (firestore.rules) en Firebase." : textoError(err)); }
+}
+$("rsDlg").addEventListener("click", e => { if (e.target.closest("[data-cerrar-dlg]") || e.target === $("rsDlg")) $("rsDlg").close(); });
+$("rsCopiar").addEventListener("click", () => { navigator.clipboard?.writeText(`Usuario: ${$("rsUsr").textContent}\nContraseña temporal: ${$("rsClave").textContent}`); toast("Copiado"); });
 // Contraseña inicial fácil de dictar: Socorro + 4 números (la cambian en su primer ingreso).
 $("uGen").addEventListener("click", () => { $("uPass").value = "Socorro" + String(crypto.getRandomValues(new Uint32Array(1))[0] % 9000 + 1000); });
 /* ----- solicitudes de cambio de sucursal (las pide la química, las resuelve el administrador) ----- */

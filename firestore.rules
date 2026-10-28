@@ -143,6 +143,13 @@ service cloud.firestore {
       allow write: if publica();
     }
 
+    // ---------- usuario → cuenta con la que entra (cuando el administrador le restablece la contraseña) ----------
+    // se lee antes de iniciar sesión (solo dice qué cuenta usar, no contiene contraseñas)
+    match /alias/{usuario} {
+      allow read: if true;
+      allow write: if esAdmin();
+    }
+
     // ---------- avisos generales: los publica el administrador y los ven todos en su menú principal ----------
     match /avisos/{id} {
       allow read: if conPerfil();
