@@ -2163,7 +2163,9 @@ function datosCompras() {
 function pintarCompras() {
   const C = S.cp; msg("cpMsg", S.cpErr || "", true);
   if (!C) { $("cpTabla").innerHTML = '<tbody><tr class="vacia"><td>Cargando…</td></tr></tbody>'; return; }
-  if (!C.m?.length) { $("cpInfo").textContent = "Las compras aparecerán después de subir el kardex (o abrir Atención a sucursales)."; $("cpTabla").innerHTML = ""; $("cpGraf").innerHTML = ""; return; }
+  $("cpCalc").hidden = !esAdmin();
+  if (!C.m?.length) { $("cpInfo").textContent = esAdmin() ? "Aún no hay compras calculadas: pulsa «Calcular compras ahora» (usa el kardex que ya está guardado)." : "Las compras aparecerán cuando Abastecimiento las calcule."; $("cpTabla").innerHTML = ""; $("cpGraf").innerHTML = ""; return; }
+  $("cpCalc").hidden = !esAdmin();
   $("cpInfo").innerHTML = `Compras en soles (costo) según el kardex al <b>${fmtF(C.corte)}</b>: «Cargo compra» menos devoluciones al proveedor.`;
   const op = sel => C.m.map(m => `<option value="${m}" ${m === sel ? "selected" : ""}>${MES_L(m)}</option>`).join("");
   const D = datosCompras();
@@ -2203,6 +2205,21 @@ $("cpVerBox").addEventListener("click", e => { const b = e.target.closest("[data
 $("cpTabla").addEventListener("click", e => { const r = e.target.closest("[data-cplab]"); if (r) { S.cpLab = r.dataset.cplab; pintarCompras(); scrollTo({ top: 0, behavior: "smooth" }); } });
 $("cpMas").addEventListener("click", e => { if (e.target.closest("#cpMasBtn")) { S.cpMostrar = (S.cpMostrar || 100) + 100; pintarCompras(); } });
 $("cpAct").addEventListener("click", () => cargarCompras(true));
+// Recalcula con el kardex ya guardado (sin subir archivo) y publica: abre en segundo plano el módulo Kardex
+async function calcularCompras() {
+  const b = $("cpCalc"); b.disabled = true; msg("cpMsg", "Calculando las compras con el kardex guardado… puede tardar unos minutos la primera vez. No cierres la página.");
+  try {
+    if (!$("karFrame").src) $("karFrame").src = "proyeccion.html?solo=kar&v=" + VERSION_PROY;
+    let w = null;
+    for (let i = 0; i < 240 && !w; i++) { await new Promise(r => setTimeout(r, 500)); const x = $("karFrame").contentWindow; if (x?.recalcularPron && x?.publicarFaltantes) w = x; }
+    if (!w) throw new Error("no terminó de cargar el módulo Kardex");
+    await w.recalcularPron();
+    const r = await w.publicarFaltantes(); if (r && r.ok === false) throw new Error(r.error);
+    S.cp = null; await cargarCompras(true); msg("cpMsg", ""); toast("Compras calculadas");
+  } catch (e) { msg("cpMsg", "No se pudo calcular: " + (e.message || e), true); }
+  finally { b.disabled = false; }
+}
+$("cpCalc").addEventListener("click", calcularCompras);
 $("cpXls").addEventListener("click", () => {
   const D = datosCompras(); if (!D.labs.length) return toast("No hay compras para descargar.");
   const fila = (l, v, t) => ({ Laboratorio: l, ...Object.fromEntries(D.meses.flatMap((m, j) => [[MES_L(m) + " %", D.totMes[j] ? Math.round(Math.max(0, v[j]) / D.totMes[j] * 10000) / 100 : 0], [MES_L(m) + " S/", Math.round(v[j])]])), "Periodo %": D.tot ? Math.round(t / D.tot * 10000) / 100 : 0, "Periodo S/": Math.round(t) });
