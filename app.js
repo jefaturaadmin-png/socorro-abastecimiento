@@ -2165,7 +2165,7 @@ function datosCompras() {
   const C = compUnidas(), todos = C.m || [];
   // toda la historia: desde el primer mes con compras hasta el último
   const tot0 = todos.map((_, i) => Object.values(C.lab || {}).reduce((a, t) => a + Math.max(0, +String(t).split(",")[i] || 0), 0));
-  const i0 = Math.max(0, tot0.findIndex(v => v > 0)), i1 = todos.length - 1, meses = todos.slice(i0, i1 + 1);
+  const i0 = Math.max(0, tot0.findIndex(v => v > 0)), i1 = Math.max(i0, tot0.findLastIndex(v => v > 0)), meses = todos.slice(i0, i1 + 1);
   S.cpDesde = meses[0] || ""; S.cpHasta = meses[meses.length - 1] || "";
   const labs = Object.entries(C.lab || {}).map(([l, t]) => { const v = String(t).split(",").map(Number).slice(i0, i1 + 1); return { l, v, tot: v.reduce((a, x) => a + Math.max(0, x), 0) }; })
     .filter(x => x.tot > 0).sort((a, b) => b.tot - a.tot);
@@ -2178,9 +2178,8 @@ function pintarCompras() {
   $("cpCalc").hidden = $("cpRep").hidden = !esAdmin();
   if (!C.m?.length && !Object.keys(S.cpRep?.m || {}).length) { $("cpInfo").textContent = esAdmin() ? "Aún no hay compras calculadas: pulsa «Calcular compras ahora» (usa el kardex que ya está guardado)." : "Las compras aparecerán cuando Abastecimiento las calcule."; $("cpTabla").innerHTML = ""; $("cpGraf").innerHTML = ""; return; }
   $("cpCalc").hidden = $("cpDiag").hidden = !esAdmin();
-  const D = datosCompras(), mRep = D.meses.filter(m => D.rep.has(m));
-  $("cpInfo").innerHTML = `Compras en soles (costo). ` + (mRep.length ? `Meses tomados del reporte «Compras por Laboratorio» del sistema (📄): <b>${mRep.map(MES_L).join(", ")}</b>. ` : "")
-    + (C.m?.length ? `Los demás, del kardex al <b>${fmtF(C.corte)}</b> («Cargo compra»). ` : "") + "Escriba en el buscador y se filtran el gráfico y la tabla a la vez.";
+  const D = datosCompras();
+  $("cpInfo").textContent = "";
   if (!S.cpLab || !D.labs.some(x => x.l === S.cpLab)) S.cpLab = D.labs[0]?.l || "";
   if (document.activeElement !== $("cpQ")) $("cpQ").value = S.cpQ2 || "";
   document.querySelectorAll("[data-cpver]").forEach(b => b.setAttribute("aria-pressed", b.dataset.cpver === S.cpVer));
