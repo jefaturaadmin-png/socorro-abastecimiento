@@ -2170,23 +2170,26 @@ function pintarCompras() {
   const op = sel => C.m.map(m => `<option value="${m}" ${m === sel ? "selected" : ""}>${MES_L(m)}</option>`).join("");
   const D = datosCompras();
   $("cpDesde").innerHTML = op(S.cpDesde); $("cpHasta").innerHTML = op(S.cpHasta);
-  $("cpLabs").innerHTML = D.labs.map(x => `<option value="${esc(x.l)}">`).join("");
   if (!S.cpLab || !D.labs.some(x => x.l === S.cpLab)) S.cpLab = D.labs[0]?.l || "";
-  $("cpQ").value = S.cpLab;
+  if (document.activeElement !== $("cpQ")) $("cpQ").value = S.cpLab;
   document.querySelectorAll("[data-cpver]").forEach(b => b.setAttribute("aria-pressed", b.dataset.cpver === S.cpVer));
   const pct = (v, t) => t ? v / t * 100 : 0, fP = v => (Math.round(v * 10) / 10).toLocaleString("es-PE") + "%";
   // gráfico del laboratorio elegido: barras por mes con su % de las compras (eje desde 0)
   const x = D.labs.find(a => a.l === S.cpLab);
   if (x) {
     const vals = D.meses.map((_, j) => S.cpVer === "pct" ? pct(Math.max(0, x.v[j]), D.totMes[j]) : Math.max(0, x.v[j]));
-    const mx = Math.max(...vals, 0.0001) * 1.15, W = 760, H = 290, L = 60, B = 34, T = 34, w = (W - L - 10) / vals.length, y = v => T + (H - T - B) * (1 - v / mx);
+    // cada año de un color; el mes va inclinado debajo de su barra y el valor encima (solo si no es 0)
+    const n = vals.length, mx = Math.max(...vals, 0.0001) * 1.18, W = Math.max(760, n * 46), H = 320, L = 60, B = 62, T = 30;
+    const w = (W - L - 10) / n, y = v => T + (H - T - B) * (1 - v / mx), anios = [...new Set(D.meses.map(m => m.slice(0, 4)))];
+    const COL_ANIO = ["#2F5BA8", "#E07B24", "#1E8A6E", "#8a4f9e", "#B4321C"], colA = a => COL_ANIO[anios.indexOf(a) % COL_ANIO.length];
     let g = "";
     for (let k = 0; k <= 4; k++) { const v = mx * k / 4, yy = y(v); g += `<line x1="${L}" x2="${W - 6}" y1="${yy}" y2="${yy}" stroke="#eceff3"/><text x="${L - 6}" y="${yy + 4}" text-anchor="end" class="ax">${S.cpVer === "pct" ? fP(v) : solesR(v)}</text>`; }
-    vals.forEach((v, j) => { const bx = L + j * w + w * 0.2, bw = w * 0.6;
-      g += `<rect x="${bx}" y="${y(v)}" width="${bw}" height="${y(0) - y(v)}" rx="3" fill="#2F5BA8"><title>${MES_L(D.meses[j])}: ${fP(pct(Math.max(0, x.v[j]), D.totMes[j]))} · ${solesR(x.v[j])} de ${solesR(D.totMes[j])}</title></rect>
-        <text x="${bx + bw / 2}" y="${y(v) - 7}" text-anchor="middle" class="val">${S.cpVer === "pct" ? fP(v) : solesR(v)}</text>
-        <text x="${bx + bw / 2}" y="${H - 12}" text-anchor="middle" class="ax">${MES_L(D.meses[j])}</text>`; });
-    $("cpGraf").innerHTML = `<h3>${esc(x.l)} <small class="muted">· ${fP(pct(x.tot, D.tot))} de las compras del periodo (${solesR(x.tot)})</small></h3><svg viewBox="0 0 ${W} ${H}" class="cp-svg">${g}</svg>`;
+    vals.forEach((v, j) => { const bx = L + j * w + w * 0.18, bw = w * 0.64, cx = bx + bw / 2, m = D.meses[j];
+      g += `<rect x="${bx}" y="${y(v)}" width="${bw}" height="${Math.max(0, y(0) - y(v))}" rx="3" fill="${colA(m.slice(0, 4))}"><title>${MES_L(m)}: ${fP(pct(Math.max(0, x.v[j]), D.totMes[j]))} · ${solesR(x.v[j])} de ${solesR(D.totMes[j])}</title></rect>`
+        + (v > 0 ? `<text x="${cx}" y="${y(v) - 6}" text-anchor="middle" class="val"${n > 14 ? ' style="font-size:10.5px"' : ""}>${S.cpVer === "pct" ? fP(v) : solesR(v)}</text>` : "")
+        + `<text x="${cx}" y="${H - B + 16}" text-anchor="end" transform="rotate(-45 ${cx} ${H - B + 16})" class="ax">${MES_L(m)}</text>`; });
+    const ley = anios.map(a => `<span><i style="background:${colA(a)}"></i>${a}</span>`).join("");
+    $("cpGraf").innerHTML = `<h3>${esc(x.l)} <small class="muted">· ${fP(pct(x.tot, D.tot))} de las compras del periodo (${solesR(x.tot)})</small></h3><div class="ev-ley">${ley}</div><div class="cp-scroll"><svg viewBox="0 0 ${W} ${H}" class="cp-svg" style="min-width:${Math.min(W, 1400)}px">${g}</svg></div>`;
   } else $("cpGraf").innerHTML = '<p class="muted">Sin compras en ese periodo.</p>';
   // tabla: cada laboratorio con su % de cada mes; al final el total (100 %)
   const q = norm(S.cpQ2 || "").trim();
@@ -2197,7 +2200,20 @@ function pintarCompras() {
     `</tbody><tfoot><tr><td><b>Compras</b></td>${D.totMes.map(t => `<td class="der"><b>${S.cpVer === "pct" ? (t ? "100%" : "–") : solesR(t)}</b></td>`).join("")}<td class="der"><b>${S.cpVer === "pct" ? "100%" : solesR(D.tot)}</b></td></tr></tfoot>`;
   $("cpMas").innerHTML = filas.length > (S.cpMostrar || 100) ? `<button class="btn" type="button" id="cpMasBtn">Ver más (de ${filas.length})</button>` : "";
 }
-$("cpQ").addEventListener("change", e => { S.cpLab = e.target.value.trim().toUpperCase(); const D = datosCompras(); if (!D.labs.some(a => a.l === S.cpLab)) S.cpLab = D.labs.find(a => norm(a.l).includes(norm(e.target.value)))?.l || S.cpLab; pintarCompras(); });
+// buscador de laboratorio: se escribe y aparecen los que coinciden (con su % del periodo)
+function resLabs() {
+  const q = norm($("cpQ").value).trim(), box = $("cpRes"), D = datosCompras();
+  const r = D.labs.filter(a => !q || q.split(/\s+/).every(w => norm(a.l).includes(w))).slice(0, 15);
+  box.innerHTML = r.length ? r.map(a => `<button type="button" data-cpsel="${esc(a.l)}"><b>${esc(a.l)}</b> <small>${D.tot ? (Math.round(a.tot / D.tot * 1000) / 10).toLocaleString("es-PE") + "% · " : ""}${solesR(a.tot)}</small></button>`).join("")
+    : '<small class="muted" style="padding:8px;display:block">Ningún laboratorio con ese nombre.</small>';
+  box.hidden = false;
+}
+$("cpQ").addEventListener("input", resLabs);
+$("cpQ").addEventListener("focus", () => { $("cpQ").select(); resLabs(); });
+const elegirLab = l => { S.cpLab = l; $("cpRes").hidden = true; $("cpQ").value = l; $("cpQ").blur(); pintarCompras(); };
+$("cpQ").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); const b = $("cpRes").querySelector("[data-cpsel]"); if (b) elegirLab(b.dataset.cpsel); } else if (e.key === "Escape") $("cpRes").hidden = true; });
+$("cpRes").addEventListener("mousedown", e => { const b = e.target.closest("[data-cpsel]"); if (!b) return; e.preventDefault(); elegirLab(b.dataset.cpsel); });
+$("cpQ").addEventListener("blur", () => setTimeout(() => { $("cpRes").hidden = true; $("cpQ").value = S.cpLab; }, 150));
 $("cpQ2").addEventListener("input", e => { S.cpQ2 = e.target.value; pintarCompras(); });
 $("cpDesde").addEventListener("change", e => { S.cpDesde = e.target.value; pintarCompras(); });
 $("cpHasta").addEventListener("change", e => { S.cpHasta = e.target.value; pintarCompras(); });

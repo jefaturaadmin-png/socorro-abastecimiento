@@ -627,3 +627,7 @@ body.en-previa .top { top: 42px; box-shadow: inset 0 3px 0 #5b3fa8 }
 #cpGraf h3 { margin: 6px 0; font-size: 16px }
 #cpTabla tr.cp-sel td { background: var(--brand-soft) }
 #cpTabla tfoot td { border-top: 2px solid var(--line); background: var(--soft) }
+.cp-bus { position: relative; min-width: 300px } .cp-bus > span { display: block }
+.cp-bus .resultados small { color: var(--muted); margin-left: auto }
+.cp-scroll { overflow-x: auto }
+#cpGraf .ev-ley { margin: 4px 0 0 }
