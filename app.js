@@ -2178,16 +2178,23 @@ function pintarCompras() {
   const x = D.labs.find(a => a.l === S.cpLab);
   if (x) {
     const vals = D.meses.map((_, j) => S.cpVer === "pct" ? pct(Math.max(0, x.v[j]), D.totMes[j]) : Math.max(0, x.v[j]));
-    // cada año de un color; el mes va inclinado debajo de su barra y el valor encima (solo si no es 0)
-    const n = vals.length, mx = Math.max(...vals, 0.0001) * 1.18, W = Math.max(760, n * 46), H = 320, L = 60, B = 62, T = 30;
-    const w = (W - L - 10) / n, y = v => T + (H - T - B) * (1 - v / mx), anios = [...new Set(D.meses.map(m => m.slice(0, 4)))];
-    const COL_ANIO = ["#2F5BA8", "#E07B24", "#1E8A6E", "#8a4f9e", "#B4321C"], colA = a => COL_ANIO[anios.indexOf(a) % COL_ANIO.length];
+    // barras agrupadas: un grupo por mes (Ene…Dic) y dentro una barra por año, cada año de un color
+    const anios = [...new Set(D.meses.map(m => m.slice(0, 4)))].sort(), nums = [...new Set(D.meses.map(m => +m.slice(5)))].sort((a, b) => a - b);
+    const COL_ANIO = ["#1F77B4", "#FF7F0E", "#2CA02C", "#8a4f9e", "#B4321C"], colA = a => COL_ANIO[anios.indexOf(a) % COL_ANIO.length];
+    const valDe = (a, mo) => { const j = D.meses.indexOf(`${a}-${String(mo).padStart(2, "0")}`); return j < 0 ? null : vals[j]; };
+    const MES_N = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Dic"];
+    const mx = Math.max(...vals, 0.0001) * 1.18, W = Math.max(760, nums.length * (anios.length * 24 + 18)), H = 320, L = 60, B = 40, T = 30;
+    const gw = (W - L - 10) / nums.length, bw = Math.min(46, (gw * 0.8) / anios.length), y = v => T + (H - T - B) * (1 - v / mx);
     let g = "";
     for (let k = 0; k <= 4; k++) { const v = mx * k / 4, yy = y(v); g += `<line x1="${L}" x2="${W - 6}" y1="${yy}" y2="${yy}" stroke="#eceff3"/><text x="${L - 6}" y="${yy + 4}" text-anchor="end" class="ax">${S.cpVer === "pct" ? fP(v) : solesR(v)}</text>`; }
-    vals.forEach((v, j) => { const bx = L + j * w + w * 0.18, bw = w * 0.64, cx = bx + bw / 2, m = D.meses[j];
-      g += `<rect x="${bx}" y="${y(v)}" width="${bw}" height="${Math.max(0, y(0) - y(v))}" rx="3" fill="${colA(m.slice(0, 4))}"><title>${MES_L(m)}: ${fP(pct(Math.max(0, x.v[j]), D.totMes[j]))} · ${solesR(x.v[j])} de ${solesR(D.totMes[j])}</title></rect>`
-        + (v > 0 ? `<text x="${cx}" y="${y(v) - 6}" text-anchor="middle" class="val"${n > 14 ? ' style="font-size:10.5px"' : ""}>${S.cpVer === "pct" ? fP(v) : solesR(v)}</text>` : "")
-        + `<text x="${cx}" y="${H - B + 16}" text-anchor="end" transform="rotate(-45 ${cx} ${H - B + 16})" class="ax">${MES_L(m)}</text>`; });
+    nums.forEach((mo, gi) => {
+      const x0 = L + gi * gw + (gw - bw * anios.length) / 2;
+      anios.forEach((a, ai) => { const v = valDe(a, mo); if (v == null) return; const bx = x0 + ai * bw, j = D.meses.indexOf(`${a}-${String(mo).padStart(2, "0")}`);
+        g += `<rect x="${bx + 1}" y="${y(v)}" width="${bw - 2}" height="${Math.max(0, y(0) - y(v))}" fill="${colA(a)}"><title>${MES_L(D.meses[j])}: ${fP(pct(Math.max(0, x.v[j]), D.totMes[j]))} · ${solesR(x.v[j])} de ${solesR(D.totMes[j])}</title></rect>`
+          + (v > 0 ? `<text x="${bx + bw / 2}" y="${y(v) - 5}" text-anchor="middle" class="val" style="font-size:${bw < 26 ? 9.5 : 11}px">${S.cpVer === "pct" ? fP(v) : solesR(v)}</text>` : ""); });
+      g += `<text x="${L + gi * gw + gw / 2}" y="${H - B + 20}" text-anchor="middle" class="ax mes">${MES_N[mo - 1]}</text>`;
+    });
+    g += `<line x1="${L}" x2="${W - 6}" y1="${y(0)}" y2="${y(0)}" stroke="#334"/>`;
     const ley = anios.map(a => `<span><i style="background:${colA(a)}"></i>${a}</span>`).join("");
     $("cpGraf").innerHTML = `<h3>${esc(x.l)} <small class="muted">· ${fP(pct(x.tot, D.tot))} de las compras del periodo (${solesR(x.tot)})</small></h3><div class="ev-ley">${ley}</div><div class="cp-scroll"><svg viewBox="0 0 ${W} ${H}" class="cp-svg" style="min-width:${Math.min(W, 1400)}px">${g}</svg></div>`;
   } else $("cpGraf").innerHTML = '<p class="muted">Sin compras en ese periodo.</p>';
