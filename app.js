@@ -107,6 +107,8 @@ async function cargarCatVivo() {
       if (S.catIdx.has(c)) continue;
       const p = { c, n: String(nom), l: "", ln: String(lab), k: norm([c, nom, lab].join(" ")) }; S.catalogo.push(p); S.catIdx.set(c, p); n++;
     }
+    // pedidos de urgencia leídos antes de que llegara este catálogo: completa sus nombres
+    for (const x of S.ped?.datos || []) if (!x.nom && x.cod) { const pc = prodCat(x.cod); if (pc) { x.cod = pc.c; x.nom = pc.n; x.lab = pc.ln; } }
     if (n && S.vista === "vPed") pintarPedidos();
   } catch {}   // sin permiso (usuario sin estos módulos) o sin internet: se queda con catalogo.json
 }
@@ -1831,7 +1833,7 @@ const ESTADO_U = { "": ["🔴 Pedido recién", "rojo"], viendo: ["🟠 Droguerí
 const estU = d => S.urgEst.get(d.id) || {};
 const inicioDia = (n = 0) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - n); return d; };
 const hace = f => { if (!f) return ""; const m = Math.round((Date.now() - f) / 60000); return m < 1 ? "recién" : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : f.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit" }); };
-const nomProd = d => d.nom || (d.cod ? "Código " + d.cod : "(sin producto)");
+const nomProd = d => d.nom || (d.cod ? "Código " + d.cod + " (no está en el catálogo ni en el kardex)" : "(sin producto)");
 function pedidosVisibles() {
   const P = S.ped; if (!P) return [];
   const admin = esAdmin() || !miFarm(), suc = admin ? S.pdSuc : miFarm(), q = norm(S.pdQ).trim().split(/\s+/).filter(Boolean);
