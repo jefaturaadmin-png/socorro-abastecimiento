@@ -413,9 +413,9 @@
       <div class="botones-fila" style="margin-top:12px"><button class="btn" type="button" id="rsCopiar">Copiar</button><button class="btn primario" type="button" data-cerrar-dlg>Listo</button></div></div></div></dialog>
   <!-- vista previa: elegir la sucursal -->
   <dialog id="prevDlg" class="at-info resp-dlg" style="width:min(440px,94vw)"><div><button type="button" class="ab-x resp-x" data-cerrar-dlg aria-label="Cerrar">✕</button>
-    <div class="resp-c"><h2>👁 Vista previa</h2><p class="muted">Mira la página tal como la ve un químico de la sucursal que elijas. No se guarda ningún cambio.</p>
-      <label class="campo"><span class="lbl">Sucursal</span><select id="prevSuc"></select></label>
-      <div class="botones-fila"><button class="btn primario" type="button" id="prevOk">Ver como esta sucursal</button></div></div></div></dialog>
+    <div class="resp-c"><h2>👁 Vista previa</h2><p class="muted">Mira la página tal como la ve el usuario que elijas: solo con los módulos que le habilitaste. No se guarda ningún cambio.</p>
+      <label class="campo"><span class="lbl">Usuario</span><select id="prevSuc"></select></label>
+      <div class="botones-fila"><button class="btn primario" type="button" id="prevOk">Ver como este usuario</button></div></div></div></dialog>
   <!-- nuevo pedido de urgencia: se envía al mismo formulario de Google -->
   <dialog id="urgDlg" class="at-info resp-dlg"><div><button type="button" class="ab-x resp-x" data-cerrar-dlg aria-label="Cerrar">✕</button>
     <div class="resp-c"><h2>➕ Nuevo pedido de urgencia</h2><p class="muted">Se registra en el mismo formulario y en la misma hoja de Drive que revisa Abastecimiento.</p>
@@ -536,6 +536,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610281000"></script>
+<script type="module" src="app.js?v=202610291000"></script>
 </body>
 </html>

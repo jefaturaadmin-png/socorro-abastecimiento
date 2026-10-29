@@ -63,9 +63,9 @@ const S = {
   subs: [], vista: null, origen: null, sel: {}, ficha: null,
   af: { farm: "", motivo: "", estado: "bloqueado", q: "" }
 };
-// S.prev: el administrador está viendo la página como una sucursal (vista previa)
+// S.prev: el usuario como el que el administrador está viendo la página (vista previa): su rol, sucursal y módulos
 const esAdmin = () => S.perfil?.rol === "admin" && !S.prev;
-const esQuimicoV = () => !!S.prev || S.perfil?.rol === "quimico";
+const esQuimicoV = () => S.prev ? S.prev.rol === "quimico" : S.perfil?.rol === "quimico";
 // Vistas que el administrador puede darle a cualquier usuario (se guardan en usuarios/{uid}.vistas). Para agregar otra
 // más adelante basta con sumarla aquí y crear su sección en index.html.
 // c: color del botón en el menú; ic: ícono; desc: lo que se ve en la pantalla de inicio.
@@ -79,9 +79,9 @@ const VISTAS = [
   { id: "faltantes", nombre: "Faltantes de droguería", vista: "vFalt", ic: "i-buscar", desc: "Productos en 0 en droguería que piden las sucursales" },
   { id: "atencion", nombre: "Lo que me van a atender", vista: "vAten", ic: "i-ojo", desc: "Lo que Abastecimiento enviará a tu sucursal", ayuda: "solo químicos: ve su sucursal" },
   { id: "pedidos", nombre: "Productos agotados o de extrema urgencia", vista: "vPed", ic: "i-lista", desc: "Lo que cada sucursal pidió de urgencia (desde el formulario)", ayuda: "químicos: ven los de su sucursal" }];
-const misVistas = () => esAdmin() || S.prev ? VISTAS.filter(v => !S.prev || ["faltantes", "atencion", "pedidos"].includes(v.id)) : VISTAS.filter(v => (S.perfil?.vistas || []).includes(v.id));
+const misVistas = () => esAdmin() ? VISTAS : VISTAS.filter(v => ((S.prev || S.perfil)?.vistas || []).includes(v.id));
 const NOMBRE_ROL = { admin: "Administrador", quimico: "Químico", colaborador: "Colaborador" };
-const miFarm = () => S.prev || S.perfil?.farmacia;
+const miFarm = () => S.prev ? S.prev.farmacia : S.perfil?.farmacia;
 
 /* ===================== catálogo ===================== */
 async function cargarCatalogo() {
@@ -1379,7 +1379,7 @@ const RESP_AT = [
   { id: "no_se_mueve", txt: "No se mueve", clase: "t-pend", campo: "motivo", ph: "¿Por qué motivo? (obligatorio)" },
   { id: "otro_medicamento", txt: "Se tiene otro medicamento en su cambio", clase: "t-ok", campo: "alt", ph: "Busca el medicamento por código o nombre" },
   { id: "otros", txt: "Otros", clase: "m-otro", campo: "motivo", ph: "Escribe tu comentario (obligatorio)" }];
-const puedeResponderAt = () => !!S.prev || !esAdmin() && (S.perfil?.vistas || []).includes("atencion") && !!miFarm();
+const puedeResponderAt = () => !esAdmin() && ((S.prev || S.perfil)?.vistas || []).includes("atencion") && !!miFarm();
 const textoResp = r => { const o = RESP_AT.find(x => x.id === r.estado); return (o?.txt || r.estado) + (r.alternativa ? ": " + r.alternativa : "") + (r.comentario ? (r.alternativa ? " · " : ": ") + r.comentario : ""); };
 // stock y venta diaria de la sucursal (red/stk_SUCURSAL, se publica con la lista) para el medicamento de cambio
 async function cargarStkSuc(suc, ver) {
@@ -1981,24 +1981,27 @@ $("urgDlg").addEventListener("click", async e => {
   finally { b.disabled = false; }
 });
 
-/* ===================== vista previa: el administrador ve la página como la ve una sucursal ===================== */
-function ponerPrevia(f) {
-  S.prev = f || null;
+/* ===================== vista previa: el administrador ve la página como la ve un usuario ===================== */
+const nomUsr = u => `${u.nombre || u.usuario}${u.farmacia ? " · " + corto(u.farmacia) : ""} (${NOMBRE_ROL[u.rol] || u.rol})`;
+function ponerPrevia(u) {
+  S.prev = u ? { ...u, rol: String(u.rol || "").trim().toLowerCase() } : null;
   document.body.classList.toggle("en-previa", !!S.prev);
   $("prevBar").hidden = !S.prev; $("prevBtn").hidden = !!S.prev || S.perfil?.rol !== "admin";
-  if (S.prev) $("prevTxt").textContent = `Vista previa: así ve la página un químico de ${nombreFarm(S.prev)}. No se guarda ningún cambio.`;
-  $("uNombre").textContent = S.prev ? "Vista previa" : (S.perfil.nombre || S.perfil.usuario);
-  $("uRol").textContent = S.prev ? nombreFarm(S.prev) : "Abastecimiento";
+  if (S.prev) $("prevTxt").textContent = `Vista previa: así ve la página ${nomUsr(S.prev)}, con sus módulos habilitados. No se guarda ningún cambio.`;
+  $("uNombre").textContent = S.prev ? (S.prev.nombre || S.prev.usuario) + " (vista previa)" : (S.perfil.nombre || S.perfil.usuario);
+  $("uRol").textContent = S.prev ? (S.prev.farmacia ? nombreFarm(S.prev.farmacia) : NOMBRE_ROL[S.prev.rol] || "") : "Abastecimiento";
   S.atSubSuc = null; S.atStkK = null;   // vuelve a leer lo de la sucursal elegida
   ir(S.vista && S.vista !== "vAdmin" && S.vista !== "vUsuarios" && misVistas().some(v => v.vista === S.vista) || S.vista === "vInicio" || S.vista === "vQuimico" ? S.vista : "vInicio");
 }
 $("prevBtn").addEventListener("click", () => {
-  $("prevSuc").innerHTML = FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => `<option value="${esc(f)}">${esc(corto(f))}</option>`).join("");
+  const us = S.usuarios.filter(u => !u.reemplazadoPor && u.activo !== false && String(u.rol || "").trim().toLowerCase() !== "admin")
+    .sort((a, b) => (a.farmacia || "~").localeCompare(b.farmacia || "~") || (a.nombre || a.usuario).localeCompare(b.nombre || b.usuario));
+  $("prevSuc").innerHTML = us.map(u => `<option value="${esc(u.uid)}">${esc(nomUsr(u))}</option>`).join("") || '<option value="">No hay usuarios</option>';
   $("prevDlg").showModal();
 });
 $("prevDlg").addEventListener("click", e => {
   if (e.target.closest("[data-cerrar-dlg]") || e.target === $("prevDlg")) return $("prevDlg").close();
-  if (e.target.closest("#prevOk")) { $("prevDlg").close(); ponerPrevia($("prevSuc").value); }
+  if (e.target.closest("#prevOk")) { const u = S.usuarios.find(x => x.uid === $("prevSuc").value); if (!u) return; $("prevDlg").close(); ponerPrevia(u); }
 });
 $("prevSalir").addEventListener("click", () => ponerPrevia(null));
 
