@@ -101,7 +101,7 @@ function columnasDe(cab) {
 }
 const num = v => { const t = String(v ?? "").trim(); return +(/,\d{1,3}$/.test(t) && !t.includes(".") ? t.replace(",", ".") : t.replace(/,/g, "")) || 0; };
 const VENTA = "DESCARGO POR VENTA", ANULA = "CARGO POR ANULACIONES", DROG = "DROGUERIA FS";
-const CM_VER = 2, CM_MAX_UNIT = 20000, CM_MAX_MES = 1e6;   // versión del cálculo de compras; topes creíbles (S/)
+const CM_VER = 3, CM_MAX_UNIT = 20000, CM_MAX_MES = 1e6;   // versión del cálculo de compras; topes creíbles (S/)
 const ignorar = alm => /CANJE/i.test(alm) || !alm;
 
 // Algunas filas traen el nombre del cliente partido por tabulaciones: se rearma la fila a 34 columnas.
@@ -424,19 +424,17 @@ async function recalcular() {
     msg(`Leyendo ${mes}…`); releidos++;
     const { d, v, kd } = await leerMes(meta), dm = {}, cm = {};
     for (const cod in d) for (const alm in d[cod]) {
-      // compras del mes en soles (costo), como el reporte «Compras por Laboratorio» del sistema: solo CARGO COMPRA del almacén
-      // DROGUERIA FS (las sucursales reciben de la droguería; contarlas duplicaba). Un costo unitario absurdo (fila mal
-      // leída) se reemplaza por el costo del producto.
-      if (alm === DROG) {
-        for (const [tipo, a] of Object.entries(d[cod][alm])) {
-          if (!/^CARGO COMPRA/.test(tipo) || !(a[0] > 0)) continue;
-          let val = a[2] || 0;
-          if (val / a[0] > CM_MAX_UNIT) { const k = +(maestro.prod[cod]?.[2]) || 0; val = k > 0 && k <= CM_MAX_UNIT ? a[0] * k : 0; }
-          if (val > CM_MAX_MES) val = 0;   // un producto no puede sumar más de S/ 1 millón de compra en un mes
-          if (val > 0) cm[cod] = (cm[cod] || 0) + val;
-        }
-        continue;
+      // compras del mes en soles (costo): solo CARGO COMPRA (en 2024 se compraba en ALMACEN PRINCIPAL; ahora en DROGUERIA FS).
+      // Una fila mal leída (costo unitario absurdo o muy por encima del costo del producto) se valoriza al costo del producto.
+      const k = +(maestro.prod[cod]?.[2]) || 0;
+      for (const [tipo, a] of Object.entries(d[cod][alm])) {
+        if (!/^CARGO COMPRA/.test(tipo) || !(a[0] > 0)) continue;
+        let val = a[2] || 0; const u = val / a[0];
+        if (u > CM_MAX_UNIT || (k > 0 && u > 20 * k)) val = k > 0 && k <= CM_MAX_UNIT ? a[0] * k : 0;
+        if (val > CM_MAX_MES) val = 0;   // un producto no puede sumar más de S/ 1 millón de compra en un mes
+        if (val > 0) cm[cod] = (cm[cod] || 0) + val;
       }
+      if (alm === DROG) continue;
       const t = d[cod][alm]; if (!t[VENTA] && !t[ANULA]) continue;
       (dm[cod] ??= {})[alm] = Math.round(((t[VENTA]?.[1] || 0) - (t[ANULA]?.[0] || 0)) * 1000) / 1000;
     }

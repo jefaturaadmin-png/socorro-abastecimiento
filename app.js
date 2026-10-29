@@ -22,7 +22,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610300400";
+const VERSION_PROY = "202610300500";
 const VERSION_COMP = "202610281500";
 
 /* ===================== utilidades ===================== */
@@ -2144,14 +2144,25 @@ $("evXls").addEventListener("click", () => {
 S.cpLab = ""; S.cpVer = "pct"; S.cpDesde = ""; S.cpHasta = "";
 async function cargarCompras(forzar) {
   if (S.cpCargando || (S.cp && !forzar)) return; S.cpCargando = true;
-  try { const d = await getDoc(doc(db, "red", "compras")); S.cp = d.exists() ? d.data() : { m: [], lab: {} }; S.cpErr = ""; }
-  catch (e) { S.cpErr = textoError(e); S.cp = { m: [], lab: {} }; }
+  try {
+    const [d, r] = await Promise.all([getDoc(doc(db, "red", "compras")), getDoc(doc(db, "red", "compras_rep")).catch(() => null)]);
+    S.cp = d.exists() ? d.data() : { m: [], lab: {} }; S.cpRep = r?.exists() ? r.data() : { m: {} }; S.cpErr = "";
+  }
+  catch (e) { S.cpErr = textoError(e); S.cp = { m: [], lab: {} }; S.cpRep = { m: {} }; }
   S.cpCargando = false; if (S.vista === "vCompL") pintarCompras();
 }
 const MES_L = m => { const [y, mo] = m.split("-"); return ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Dic"][+mo - 1] + "-" + y.slice(2); };
 const solesR = v => "S/ " + Math.round(v).toLocaleString("es-PE");
+// Une lo calculado con el kardex (red/compras) y los meses subidos del reporte del sistema (red/compras_rep), que mandan.
+function compUnidas() {
+  const K = S.cp || { m: [], lab: {} }, R = S.cpRep?.m || {}, km = K.m || [];
+  const meses = [...new Set([...km, ...Object.keys(R)])].sort(), lab = {};
+  for (const [l, t] of Object.entries(K.lab || {})) String(t).split(",").forEach((v, i) => { if (+v && !R[km[i]]) (lab[l] ??= {})[km[i]] = +v; });
+  for (const [mes, j] of Object.entries(R)) { let o = {}; try { o = JSON.parse(j); } catch {} for (const [l, v] of Object.entries(o)) if (+v) (lab[l] ??= {})[mes] = +v; }
+  return { m: meses, lab: Object.fromEntries(Object.entries(lab).map(([l, o]) => [l, meses.map(m => o[m] || 0).join(",")])), rep: new Set(Object.keys(R)) };
+}
 function datosCompras() {
-  const C = S.cp, todos = C.m || [];
+  const C = compUnidas(), todos = C.m || [];
   // toda la historia: desde el primer mes con compras hasta el último
   const tot0 = todos.map((_, i) => Object.values(C.lab || {}).reduce((a, t) => a + Math.max(0, +String(t).split(",")[i] || 0), 0));
   const i0 = Math.max(0, tot0.findIndex(v => v > 0)), i1 = todos.length - 1, meses = todos.slice(i0, i1 + 1);
@@ -2159,16 +2170,17 @@ function datosCompras() {
   const labs = Object.entries(C.lab || {}).map(([l, t]) => { const v = String(t).split(",").map(Number).slice(i0, i1 + 1); return { l, v, tot: v.reduce((a, x) => a + Math.max(0, x), 0) }; })
     .filter(x => x.tot > 0).sort((a, b) => b.tot - a.tot);
   const totMes = meses.map((_, j) => labs.reduce((a, x) => a + Math.max(0, x.v[j]), 0)), tot = totMes.reduce((a, x) => a + x, 0);
-  return { meses, labs, totMes, tot };
+  return { meses, labs, totMes, tot, rep: C.rep };
 }
 function pintarCompras() {
   const C = S.cp; msg("cpMsg", S.cpErr || "", true);
   if (!C) { $("cpTabla").innerHTML = '<tbody><tr class="vacia"><td>Cargando…</td></tr></tbody>'; return; }
-  $("cpCalc").hidden = !esAdmin();
-  if (!C.m?.length) { $("cpInfo").textContent = esAdmin() ? "Aún no hay compras calculadas: pulsa «Calcular compras ahora» (usa el kardex que ya está guardado)." : "Las compras aparecerán cuando Abastecimiento las calcule."; $("cpTabla").innerHTML = ""; $("cpGraf").innerHTML = ""; return; }
+  $("cpCalc").hidden = $("cpRep").hidden = !esAdmin();
+  if (!C.m?.length && !Object.keys(S.cpRep?.m || {}).length) { $("cpInfo").textContent = esAdmin() ? "Aún no hay compras calculadas: pulsa «Calcular compras ahora» (usa el kardex que ya está guardado)." : "Las compras aparecerán cuando Abastecimiento las calcule."; $("cpTabla").innerHTML = ""; $("cpGraf").innerHTML = ""; return; }
   $("cpCalc").hidden = $("cpDiag").hidden = !esAdmin();
-  $("cpInfo").innerHTML = `Compras en soles (costo) según el kardex al <b>${fmtF(C.corte)}</b>: «Cargo compra» del almacén DROGUERIA FS, como el reporte «Compras por Laboratorio» del sistema. Escriba en el buscador y se filtran el gráfico y la tabla a la vez.`;
-  const D = datosCompras();
+  const D = datosCompras(), mRep = D.meses.filter(m => D.rep.has(m));
+  $("cpInfo").innerHTML = `Compras en soles (costo). ` + (mRep.length ? `Meses tomados del reporte «Compras por Laboratorio» del sistema (📄): <b>${mRep.map(MES_L).join(", ")}</b>. ` : "")
+    + (C.m?.length ? `Los demás, del kardex al <b>${fmtF(C.corte)}</b> («Cargo compra»). ` : "") + "Escriba en el buscador y se filtran el gráfico y la tabla a la vez.";
   if (!S.cpLab || !D.labs.some(x => x.l === S.cpLab)) S.cpLab = D.labs[0]?.l || "";
   if (document.activeElement !== $("cpQ")) $("cpQ").value = S.cpQ2 || "";
   document.querySelectorAll("[data-cpver]").forEach(b => b.setAttribute("aria-pressed", b.dataset.cpver === S.cpVer));
@@ -2201,7 +2213,7 @@ function pintarCompras() {
   const q = norm(S.cpQ2 || "").trim();
   const filas = D.labs.filter(a => !q || q.split(/\s+/).every(w => norm(a.l).includes(w)));
   const celda = (v, t) => S.cpVer === "pct" ? (v > 0 ? fP(pct(v, t)) : "–") : (v ? solesR(v) : "–");
-  $("cpTabla").innerHTML = `<thead><tr><th>Laboratorio</th>${D.meses.map(m => `<th class="der">${MES_L(m)}</th>`).join("")}<th class="der">Periodo</th></tr></thead><tbody>` +
+  $("cpTabla").innerHTML = `<thead><tr><th>Laboratorio</th>${D.meses.map(m => `<th class="der"${D.rep.has(m) ? ' title="Del reporte del sistema"' : ""}>${MES_L(m)}${D.rep.has(m) ? " 📄" : ""}</th>`).join("")}<th class="der">Periodo</th></tr></thead><tbody>` +
     filas.slice(0, S.cpMostrar || 100).map(a => `<tr class="clic${a.l === S.cpLab ? " cp-sel" : ""}" data-cplab="${esc(a.l)}"><td><b>${esc(a.l)}</b></td>${a.v.map((v, j) => `<td class="der">${celda(Math.max(0, v), D.totMes[j])}</td>`).join("")}<td class="der"><b>${celda(a.tot, D.tot)}</b></td></tr>`).join("") +
     `</tbody><tfoot><tr><td><b>Compras</b></td>${D.totMes.map(t => `<td class="der"><b>${S.cpVer === "pct" ? (t ? "100%" : "–") : solesR(t)}</b></td>`).join("")}<td class="der"><b>${S.cpVer === "pct" ? "100%" : solesR(D.tot)}</b></td></tr></tfoot>`;
   $("cpMas").innerHTML = filas.length > (S.cpMostrar || 100) ? `<button class="btn" type="button" id="cpMasBtn">Ver más (de ${filas.length})</button>` : "";
@@ -2230,6 +2242,44 @@ $("cpVerBox").addEventListener("click", e => { const b = e.target.closest("[data
 $("cpTabla").addEventListener("click", e => { const r = e.target.closest("[data-cplab]"); if (r) { S.cpLab = r.dataset.cplab; pintarCompras(); scrollTo({ top: 0, behavior: "smooth" }); } });
 $("cpMas").addEventListener("click", e => { if (e.target.closest("#cpMasBtn")) { S.cpMostrar = (S.cpMostrar || 100) + 100; pintarCompras(); } });
 $("cpAct").addEventListener("click", () => cargarCompras(true));
+// Reporte «Compras por Laboratorio» del sistema (.XLS, Establecimiento TODOS): cada mes que cubre reemplaza al del kardex.
+// red/compras_rep = { m: { "2026-08": '{"LAB": soles, …}' }, sub: { "2026-08": "fecha de subida" } }
+function leerReporteCompras(rows) {
+  const txt = rows.map(r => r.join(" ")).join("\n");
+  const rg = txt.match(/Desde\s+Fecha\s*:\s*(\d{1,2})-(\d{1,2})-(\d{4})\s+Hasta\s+Fecha\s*:\s*(\d{1,2})-(\d{1,2})-(\d{4})/i);
+  if (!/Compras\s+por\s+Laboratorio/i.test(txt) || !rg) throw new Error("no parece el reporte «Compras por Laboratorio» (no encuentro «Desde Fecha … Hasta Fecha»).");
+  const desde = `${rg[3]}-${rg[2].padStart(2, "0")}`, hasta = `${rg[6]}-${rg[5].padStart(2, "0")}`, meses = {};
+  for (let m = desde; m <= hasta; ) { meses[m] = {}; const [y, mo] = m.split("-").map(Number); m = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, "0")}`; }
+  let lab = "", filas = 0, total = 0;
+  for (const r of rows) {
+    const v = r.filter(c => c !== "" && c != null);
+    if (/^Laboratorio\s*:?\s*$/i.test(String(v[0] || "").trim()) && v[1]) { lab = String(v[1]).trim(); continue; }
+    if (typeof v[0] !== "number" || v.length < 8 || !lab) continue;
+    const f = v[1]; let mes = "";
+    if (typeof f === "number") mes = new Date(Math.round((f - 25569) * 864e5)).toISOString().slice(0, 7);
+    else { const x = String(f).match(/(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/); if (x) mes = `${x[3]}-${x[2].padStart(2, "0")}`; }
+    mes = mes < desde ? desde : mes > hasta || !mes ? hasta : mes;   // la fecha del documento manda (es el filtro del reporte)
+    const parcial = +v[v.length - 1] || 0; meses[mes][lab] = Math.round(((meses[mes][lab] || 0) + parcial) * 100) / 100; filas++; total += parcial;
+  }
+  if (!filas) throw new Error("no encontré filas de compras en el archivo.");
+  return { desde, hasta, meses, filas, total };
+}
+$("cpRep").addEventListener("click", () => $("cpRepF").click());
+$("cpRepF").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  msg("cpMsg", "Leyendo el reporte…");
+  try {
+    XLSX ??= await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
+    const wb = XLSX.read(await f.arrayBuffer(), { type: "array" }), sh = wb.Sheets[wb.SheetNames[0]];
+    const R = leerReporteCompras(XLSX.utils.sheet_to_json(sh, { header: 1, raw: true, defval: "" }));
+    const prev = S.cpRep || { m: {} }, m = { ...(prev.m || {}) }, sub = { ...(prev.sub || {}) }, hoy = new Date().toISOString();
+    for (const [mes, o] of Object.entries(R.meses)) { m[mes] = JSON.stringify(o); sub[mes] = hoy; }
+    await setDoc(doc(db, "red", "compras_rep"), { m, sub });
+    S.cpRep = { m, sub };
+    msg("cpMsg", `Reporte cargado: ${MES_L(R.desde)}${R.hasta !== R.desde ? " a " + MES_L(R.hasta) : ""} · ${R.filas.toLocaleString("es-PE")} filas · total ${solesR(R.total)}. Esos meses ahora salen del reporte.`);
+    pintarCompras();
+  } catch (er) { msg("cpMsg", "No se pudo leer el reporte: " + (er?.code ? textoError(er) : er.message), true); }
+});
 // Recalcula con el kardex ya guardado (sin subir archivo) y publica: abre en segundo plano el módulo Kardex
 async function calcularCompras() {
   const b = $("cpCalc"); b.disabled = true; msg("cpMsg", "Calculando las compras con el kardex guardado… puede tardar unos minutos la primera vez. No cierres la página.");
