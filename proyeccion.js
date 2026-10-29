@@ -101,6 +101,7 @@ function columnasDe(cab) {
 }
 const num = v => { const t = String(v ?? "").trim(); return +(/,\d{1,3}$/.test(t) && !t.includes(".") ? t.replace(",", ".") : t.replace(/,/g, "")) || 0; };
 const VENTA = "DESCARGO POR VENTA", ANULA = "CARGO POR ANULACIONES", DROG = "DROGUERIA FS";
+const CM_VER = 2, CM_MAX_UNIT = 20000, CM_MAX_MES = 1e6;   // versión del cálculo de compras; topes creíbles (S/)
 const ignorar = alm => /CANJE/i.test(alm) || !alm;
 
 // Algunas filas traen el nombre del cliente partido por tabulaciones: se rearma la fila a 34 columnas.
@@ -418,22 +419,29 @@ async function recalcular() {
   const compras = new Map();   // compras en soles de cada producto en todos los meses del kardex (para el módulo Compras)
   async function resumenMes(mes, meta) {
     const c = cache[mes], conV = mesesV.has(mes);
-    // c.cm: compras del mes (los resúmenes guardados antes no lo tienen: ese mes se vuelve a leer una vez)
-    if (c && c.a === meta.asset && (!conV || c.v) && c.cm) return (nuevoRes[mes] = conV ? c : { a: c.a, d: c.d, cm: c.cm });
+    // c.cm: compras del mes; c.cv: versión del cálculo de compras (si cambia, ese mes se vuelve a leer una vez)
+    if (c && c.a === meta.asset && (!conV || c.v) && c.cm && c.cv === CM_VER) return (nuevoRes[mes] = conV ? c : { a: c.a, d: c.d, cm: c.cm, cv: c.cv });
     msg(`Leyendo ${mes}…`); releidos++;
     const { d, v, kd } = await leerMes(meta), dm = {}, cm = {};
     for (const cod in d) for (const alm in d[cod]) {
-      // compras del mes en soles (costo): CARGO COMPRA menos devoluciones al proveedor, en cualquier almacén
-      for (const [tipo, a] of Object.entries(d[cod][alm])) {
-        if (/^CARGO COMPRA/.test(tipo)) cm[cod] = (cm[cod] || 0) + (a[2] || 0);
-        else if (/DEVOL.*PROVE/.test(tipo)) cm[cod] = (cm[cod] || 0) - (a[3] || 0);
+      // compras del mes en soles (costo), como el reporte «Compras por Laboratorio» del sistema: solo CARGO COMPRA del almacén
+      // DROGUERIA FS (las sucursales reciben de la droguería; contarlas duplicaba). Un costo unitario absurdo (fila mal
+      // leída) se reemplaza por el costo del producto.
+      if (alm === DROG) {
+        for (const [tipo, a] of Object.entries(d[cod][alm])) {
+          if (!/^CARGO COMPRA/.test(tipo) || !(a[0] > 0)) continue;
+          let val = a[2] || 0;
+          if (val / a[0] > CM_MAX_UNIT) { const k = +(maestro.prod[cod]?.[2]) || 0; val = k > 0 && k <= CM_MAX_UNIT ? a[0] * k : 0; }
+          if (val > CM_MAX_MES) val = 0;   // un producto no puede sumar más de S/ 1 millón de compra en un mes
+          if (val > 0) cm[cod] = (cm[cod] || 0) + val;
+        }
+        continue;
       }
-      if (alm === DROG) continue;
       const t = d[cod][alm]; if (!t[VENTA] && !t[ANULA]) continue;
       (dm[cod] ??= {})[alm] = Math.round(((t[VENTA]?.[1] || 0) - (t[ANULA]?.[0] || 0)) * 1000) / 1000;
     }
     for (const cod in cm) cm[cod] = Math.round(cm[cod] * 100) / 100;
-    const r = { a: meta.asset, d: dm, cm }; if (conV) { r.v = v; r.kd = kd === null || !!(kd && kd.size) ? 1 : 0; }
+    const r = { a: meta.asset, d: dm, cm, cv: CM_VER }; if (conV) { r.v = v; r.kd = kd === null || !!(kd && kd.size) ? 1 : 0; }
     return (nuevoRes[mes] = r);
   }
   for (let i = 0; i < meses.length; i++) {

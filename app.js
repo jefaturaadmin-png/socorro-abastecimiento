@@ -22,7 +22,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610300300";
+const VERSION_PROY = "202610300400";
 const VERSION_COMP = "202610281500";
 
 /* ===================== utilidades ===================== */
@@ -2167,10 +2167,10 @@ function pintarCompras() {
   $("cpCalc").hidden = !esAdmin();
   if (!C.m?.length) { $("cpInfo").textContent = esAdmin() ? "Aún no hay compras calculadas: pulsa «Calcular compras ahora» (usa el kardex que ya está guardado)." : "Las compras aparecerán cuando Abastecimiento las calcule."; $("cpTabla").innerHTML = ""; $("cpGraf").innerHTML = ""; return; }
   $("cpCalc").hidden = $("cpDiag").hidden = !esAdmin();
-  $("cpInfo").innerHTML = `Compras en soles (costo) según el kardex al <b>${fmtF(C.corte)}</b>: «Cargo compra» menos devoluciones al proveedor.`;
+  $("cpInfo").innerHTML = `Compras en soles (costo) según el kardex al <b>${fmtF(C.corte)}</b>: «Cargo compra» del almacén DROGUERIA FS, como el reporte «Compras por Laboratorio» del sistema. Escriba en el buscador y se filtran el gráfico y la tabla a la vez.`;
   const D = datosCompras();
   if (!S.cpLab || !D.labs.some(x => x.l === S.cpLab)) S.cpLab = D.labs[0]?.l || "";
-  if (document.activeElement !== $("cpQ")) $("cpQ").value = S.cpLab;
+  if (document.activeElement !== $("cpQ")) $("cpQ").value = S.cpQ2 || "";
   document.querySelectorAll("[data-cpver]").forEach(b => b.setAttribute("aria-pressed", b.dataset.cpver === S.cpVer));
   const pct = (v, t) => t ? v / t * 100 : 0, fP = v => (Math.round(v * 10) / 10).toLocaleString("es-PE") + "%";
   // gráfico del laboratorio elegido: barras por mes con su % de las compras (eje desde 0)
@@ -2199,7 +2199,7 @@ function pintarCompras() {
   } else $("cpGraf").innerHTML = '<p class="muted">Sin compras en ese periodo.</p>';
   // tabla: cada laboratorio con su % de cada mes; al final el total (100 %)
   const q = norm(S.cpQ2 || "").trim();
-  const filas = D.labs.filter(a => !q || norm(a.l).includes(q));
+  const filas = D.labs.filter(a => !q || q.split(/\s+/).every(w => norm(a.l).includes(w)));
   const celda = (v, t) => S.cpVer === "pct" ? (v > 0 ? fP(pct(v, t)) : "–") : (v ? solesR(v) : "–");
   $("cpTabla").innerHTML = `<thead><tr><th>Laboratorio</th>${D.meses.map(m => `<th class="der">${MES_L(m)}</th>`).join("")}<th class="der">Periodo</th></tr></thead><tbody>` +
     filas.slice(0, S.cpMostrar || 100).map(a => `<tr class="clic${a.l === S.cpLab ? " cp-sel" : ""}" data-cplab="${esc(a.l)}"><td><b>${esc(a.l)}</b></td>${a.v.map((v, j) => `<td class="der">${celda(Math.max(0, v), D.totMes[j])}</td>`).join("")}<td class="der"><b>${celda(a.tot, D.tot)}</b></td></tr>`).join("") +
@@ -2214,13 +2214,18 @@ function resLabs() {
     : '<small class="muted" style="padding:8px;display:block">Ningún laboratorio con ese nombre.</small>';
   box.hidden = false;
 }
-$("cpQ").addEventListener("input", resLabs);
-$("cpQ").addEventListener("focus", () => { $("cpQ").select(); resLabs(); });
-const elegirLab = l => { S.cpLab = l; $("cpRes").hidden = true; $("cpQ").value = l; $("cpQ").blur(); pintarCompras(); };
+// un solo buscador: lo escrito filtra la tabla y el gráfico pasa al primer laboratorio que coincide
+$("cpQ").addEventListener("input", () => {
+  S.cpQ2 = $("cpQ").value; const q = norm(S.cpQ2).trim();
+  const m = q && datosCompras().labs.find(a => q.split(/\s+/).every(w => norm(a.l).includes(w)));
+  if (m && !(S.cpLab && q.split(/\s+/).every(w => norm(S.cpLab).includes(w)))) S.cpLab = m.l;
+  pintarCompras(); resLabs();
+});
+$("cpQ").addEventListener("focus", resLabs);
+const elegirLab = l => { S.cpLab = S.cpQ2 = l; $("cpRes").hidden = true; $("cpQ").value = l; $("cpQ").blur(); pintarCompras(); };
 $("cpQ").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); const b = $("cpRes").querySelector("[data-cpsel]"); if (b) elegirLab(b.dataset.cpsel); } else if (e.key === "Escape") $("cpRes").hidden = true; });
 $("cpRes").addEventListener("mousedown", e => { const b = e.target.closest("[data-cpsel]"); if (!b) return; e.preventDefault(); elegirLab(b.dataset.cpsel); });
-$("cpQ").addEventListener("blur", () => setTimeout(() => { $("cpRes").hidden = true; $("cpQ").value = S.cpLab; }, 150));
-$("cpQ2").addEventListener("input", e => { S.cpQ2 = e.target.value; pintarCompras(); });
+$("cpQ").addEventListener("blur", () => setTimeout(() => { $("cpRes").hidden = true; }, 150));
 $("cpVerBox").addEventListener("click", e => { const b = e.target.closest("[data-cpver]"); if (b) { S.cpVer = b.dataset.cpver; pintarCompras(); } });
 $("cpTabla").addEventListener("click", e => { const r = e.target.closest("[data-cplab]"); if (r) { S.cpLab = r.dataset.cplab; pintarCompras(); scrollTo({ top: 0, behavior: "smooth" }); } });
 $("cpMas").addEventListener("click", e => { if (e.target.closest("#cpMasBtn")) { S.cpMostrar = (S.cpMostrar || 100) + 100; pintarCompras(); } });
