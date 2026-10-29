@@ -330,10 +330,11 @@
   <section id="vCompL" hidden>
     <div class="wrap ancho cabeza">
       <div><h1>Compras por laboratorio</h1><p class="muted" id="cpInfo"></p></div>
-      <div class="pd-acc"><button class="btn primario sm" type="button" id="cpCalc" hidden>⚙ Calcular compras ahora</button><button class="btn sm" type="button" id="cpAct">↻ Actualizar</button></div>
+      <div class="pd-acc"><button class="btn primario sm" type="button" id="cpCalc" hidden>⚙ Calcular compras ahora</button><button class="btn sm" type="button" id="cpDiag" hidden>🔍 Revisar meses</button><button class="btn sm" type="button" id="cpAct">↻ Actualizar</button></div>
     </div>
     <div class="wrap ancho cuerpo">
       <div class="msg" id="cpMsg" hidden></div>
+      <section class="card pd-card" id="cpDiagBox" hidden></section>
       <section class="card pd-card">
         <div class="cp-ctl">
           <div class="buscador cp-bus"><input id="cpQ" type="search" placeholder="Buscar laboratorio…" autocomplete="off"><div class="resultados" id="cpRes" hidden></div></div>
@@ -587,6 +588,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610292330"></script>
+<script type="module" src="app.js?v=202610300100"></script>
 </body>
 </html>

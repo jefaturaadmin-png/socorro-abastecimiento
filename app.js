@@ -2166,7 +2166,7 @@ function pintarCompras() {
   if (!C) { $("cpTabla").innerHTML = '<tbody><tr class="vacia"><td>Cargando…</td></tr></tbody>'; return; }
   $("cpCalc").hidden = !esAdmin();
   if (!C.m?.length) { $("cpInfo").textContent = esAdmin() ? "Aún no hay compras calculadas: pulsa «Calcular compras ahora» (usa el kardex que ya está guardado)." : "Las compras aparecerán cuando Abastecimiento las calcule."; $("cpTabla").innerHTML = ""; $("cpGraf").innerHTML = ""; return; }
-  $("cpCalc").hidden = !esAdmin();
+  $("cpCalc").hidden = $("cpDiag").hidden = !esAdmin();
   $("cpInfo").innerHTML = `Compras en soles (costo) según el kardex al <b>${fmtF(C.corte)}</b>: «Cargo compra» menos devoluciones al proveedor.`;
   const D = datosCompras();
   if (!S.cpLab || !D.labs.some(x => x.l === S.cpLab)) S.cpLab = D.labs[0]?.l || "";
@@ -2243,6 +2243,20 @@ async function calcularCompras() {
   finally { b.disabled = false; }
 }
 $("cpCalc").addEventListener("click", calcularCompras);
+// Revisar meses: qué meses del kardex están guardados (proy_config/meses) y cuánto se compró en cada uno
+$("cpDiag").addEventListener("click", async () => {
+  const box = $("cpDiagBox"); box.hidden = !box.hidden; if (box.hidden) return;
+  box.innerHTML = '<p class="muted">Revisando…</p>';
+  try {
+    const d = await getDoc(doc(db, "proy_config", "meses")), m = d.exists() ? d.data().m || {} : {};
+    const C = S.cp || { m: [], lab: {} }, tot = C.m.map((_, i) => Object.values(C.lab || {}).reduce((a, t) => a + Math.max(0, +String(t).split(",")[i] || 0), 0));
+    const meses = [...new Set([...Object.keys(m), ...C.m])].sort();
+    box.innerHTML = `<p class="muted">Cada mes debe tener kardex guardado <b>con todos los almacenes, incluida Droguería FS</b> (ahí se registran las compras). Un mes sin compras normalmente es un mes que no se subió o que se subió solo con las sucursales.</p>
+      <div class="tabla-wrap"><table class="tabla"><thead><tr><th>Mes</th><th class="der">Movimientos del kardex guardados</th><th class="der">Compras (S/)</th><th>Última carga</th></tr></thead><tbody>` +
+      meses.map(x => { const i = C.m.indexOf(x), t = i >= 0 ? tot[i] : null, me = m[x];
+        return `<tr${!t ? ' class="revisar"' : ""}><td><b>${MES_L(x)}</b></td><td class="der">${me ? nf(me.movimientos || 0) : '<span class="mal">no hay kardex de este mes</span>'}</td><td class="der">${t ? solesR(t) : '<span class="mal">sin compras</span>'}</td><td>${me?.actualizado ? fFecha(me.actualizado) : "–"}</td></tr>`; }).join("") + "</tbody></table></div>";
+  } catch (e) { box.innerHTML = `<p class="mal">${esc(textoError(e))}</p>`; }
+});
 $("cpXls").addEventListener("click", () => {
   const D = datosCompras(); if (!D.labs.length) return toast("No hay compras para descargar.");
   const fila = (l, v, t) => ({ Laboratorio: l, ...Object.fromEntries(D.meses.flatMap((m, j) => [[MES_L(m) + " %", D.totMes[j] ? Math.round(Math.max(0, v[j]) / D.totMes[j] * 10000) / 100 : 0], [MES_L(m) + " S/", Math.round(v[j])]])), "Periodo %": D.tot ? Math.round(t / D.tot * 10000) / 100 : 0, "Periodo S/": Math.round(t) });
