@@ -22,7 +22,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610291800";
+const VERSION_PROY = "202610292030";
 const VERSION_COMP = "202610281500";
 
 /* ===================== utilidades ===================== */
@@ -2211,11 +2211,14 @@ async function calcularCompras() {
   try {
     if (!$("karFrame").src) $("karFrame").src = "proyeccion.html?solo=kar&v=" + VERSION_PROY;
     let w = null;
-    for (let i = 0; i < 240 && !w; i++) { await new Promise(r => setTimeout(r, 500)); const x = $("karFrame").contentWindow; if (x?.recalcularPron && x?.publicarFaltantes) w = x; }
+    for (let i = 0; i < 240 && !w; i++) { await new Promise(r => setTimeout(r, 500)); const x = $("karFrame").contentWindow; if (x?.recalcularPron && x?.publicarExtras) w = x; }
     if (!w) throw new Error("no terminó de cargar el módulo Kardex");
-    await w.recalcularPron();
-    const r = await w.publicarFaltantes(); if (r && r.ok === false) throw new Error(r.error);
-    S.cp = null; await cargarCompras(true); msg("cpMsg", ""); toast("Compras calculadas");
+    const aviso = await w.recalcularPron();
+    if (aviso && /no se pudo|error/i.test(aviso)) throw new Error(aviso);
+    const r = await w.publicarExtras();
+    S.cp = null; await cargarCompras(true);
+    if (!S.cp?.m?.length) throw new Error((r?.errores || []).join(" · ") || `no se encontraron compras (productos con compras: ${r?.conCompras ?? "?"})`);
+    msg("cpMsg", r.errores.length ? "Compras calculadas. Otros avisos: " + r.errores.join(" · ") : ""); toast(`Compras calculadas (${r.labs} laboratorios)`);
   } catch (e) { msg("cpMsg", "No se pudo calcular: " + (e.message || e), true); }
   finally { b.disabled = false; }
 }

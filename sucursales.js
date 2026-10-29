@@ -256,6 +256,8 @@
       S.suAuto = true;
       const at = await publicarAtencion();
       const rd = await publicarRed(items);
+      const ex = await publicarExtras();
+      if (ex.errores.length) $('suPub').textContent += ' · no se pudo publicar: ' + ex.errores.join(' · ');
       if (!rd.ok) $('suPub').textContent += ' · no se pudo publicar la información de la red: ' + rd.error;
       if (!at.ok) $('suPub').textContent += ' · no se pudo publicar lo de cada sucursal: ' + at.error;
       return { ok: true, n: items.length };
@@ -297,36 +299,55 @@
         const stk = {}; for (const r of cache.filas) if (r.f === f && (r.st > 0 || r.d > 0)) stk[r.p.c] = [r3(r.st), r3(r.d)];
         await FB.setDoc(FB.doc(FB.db, 'red', 'stk_' + f), window.parent.JSON.parse(JSON.stringify({ p: stk, publicado: hoy })));
       }
-      // stock de droguería de todos los productos (red/stk_DROGUERIA FS): para el tablero de urgencias del administrador
-      const sd = {}; for (const p of S.P.p) { const v = +(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) || 0; if (v > 0) sd[p.c] = [r3(v)]; }
-      await FB.setDoc(FB.doc(FB.db, 'red', 'stk_DROGUERIA FS'), window.parent.JSON.parse(JSON.stringify({ p: sd, publicado: hoy })));
-      // catálogo vivo (todos los productos del kardex: código, nombre, laboratorio) para los buscadores de la página
-      const cat = {}; for (const p of S.P.p) cat[p.c] = [p.n, labDe(p.c) || ''];
-      if (JSON.stringify(cat).length > 950000) for (const c in cat) cat[c] = [cat[c][0]];
-      await FB.setDoc(FB.doc(FB.db, 'red', 'catalogo'), window.parent.JSON.parse(JSON.stringify({ p: cat, publicado: hoy })));
-      // para Evaluación de sucursales (red/eval): de cada sucursal, la cobertura en días y el valor del stock de cada
-      // producto con stock ("dias:soles,dias:soles,…"), los sin rotación (tipo E con stock) y los desabastecidos
-      const ev = {};
-      for (const r of cache.filas) {
-        if (!/^ALMACEN /.test(r.f)) continue;
-        const e = ev[r.f] ??= { c: [], sr: 0, sv: 0, de: 0, dem: 0 }, val = Math.round(r.st * (r.p.k || 0));
-        if (r.d > 0) e.dem++;
-        if (r.st > 0 && r.cat === 'E') { e.sr++; e.sv += val; }
-        else if (r.d > 0 && r.st <= 0) e.de++;
-        else if (r.st > 0) e.c.push((r.d > 0 ? Math.round(r.st / r.d) : 9999) + ':' + val);
-      }
-      for (const f in ev) ev[f].c = ev[f].c.join(',');
-      // compras por laboratorio y mes en soles (red/compras), para el módulo Compras
-      if (S.P.cmM) {
-        const lab = {};
-        for (const p of S.P.p) if (p.cm) { const l = labDe(p.c) || 'SIN LABORATORIO', a = lab[l] ??= Array(S.P.cmM.length).fill(0); p.cm.forEach((v, i) => a[i] += v || 0); }
-        for (const l in lab) lab[l] = lab[l].map(v => Math.round(v)).join(',');
-        await FB.setDoc(FB.doc(FB.db, 'red', 'compras'), window.parent.JSON.parse(JSON.stringify({ m: S.P.cmM, lab, publicado: hoy, corte: S.P.corte })));
-      }
-      await FB.setDoc(FB.doc(FB.db, 'red', 'eval'), window.parent.JSON.parse(JSON.stringify({ s: ev, C: CFG.def.C, Sg: CFG.def.Sg, publicado: hoy, corte: S.P.corte })));
       return { ok: true };
     } catch (e) { return { ok: false, error: e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules) en Firebase.' : e.message }; }
   }
+  // Documentos de apoyo (red/…) para otros módulos. Cada uno se publica por separado: si uno falla, los demás igual
+  // se guardan y el error queda anotado.
+  async function publicarExtras() {
+    const r3 = v => Math.round(v * 1000) / 1000, hoy = new Date().toISOString(), errores = [], hechos = [];
+    const guardar = async (id, datos) => {
+      try { await FB.setDoc(FB.doc(FB.db, 'red', id), window.parent.JSON.parse(JSON.stringify(datos))); hechos.push(id); }
+      catch (e) { errores.push(`${id}: ${e.code === 'permission-denied' ? 'sin permiso (publica las reglas nuevas)' : e.message}`); }
+    };
+    // compras por laboratorio y mes en soles (red/compras), para el módulo Compras
+    let labs = 0;
+    if (S.P.cmM) {
+      const lab = {};
+      for (const p of S.P.p) if (p.cm) { const l = labDe(p.c) || 'SIN LABORATORIO', a = lab[l] ??= Array(S.P.cmM.length).fill(0); p.cm.forEach((v, i) => a[i] += v || 0); }
+      for (const l in lab) lab[l] = lab[l].map(v => Math.round(v)).join(',');
+      labs = Object.keys(lab).length;
+      await guardar('compras', { m: S.P.cmM, lab, publicado: hoy, corte: S.P.corte });
+    } else errores.push('compras: los datos de la proyección aún no traen las compras (hay que recalcular con el kardex)');
+    // stock de droguería de todos los productos (red/stk_DROGUERIA FS): para el tablero de urgencias del administrador
+    const sd = {}; for (const p of S.P.p) { const v = +(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) || 0; if (v > 0) sd[p.c] = [r3(v)]; }
+    await guardar('stk_DROGUERIA FS', { p: sd, publicado: hoy });
+    // catálogo vivo (todos los productos del kardex: código, nombre, laboratorio) para los buscadores de la página
+    const cat = {}; for (const p of S.P.p) cat[p.c] = [p.n, labDe(p.c) || ''];
+    if (JSON.stringify(cat).length > 900000) for (const c in cat) cat[c] = [cat[c][0]];
+    await guardar('catalogo', { p: cat, publicado: hoy });
+    // para Evaluación de sucursales (red/eval): de cada sucursal, la cobertura en días y el valor del stock de cada
+    // producto con stock ("dias:soles,dias:soles,…"), los sin rotación (tipo E con stock) y los desabastecidos
+    const ev = {};
+    for (const r of cache.filas) {
+      if (!/^ALMACEN /.test(r.f)) continue;
+      const e = ev[r.f] ??= { c: [], sr: 0, sv: 0, de: 0, dem: 0 }, val = Math.round(r.st * (r.p.k || 0));
+      if (r.d > 0) e.dem++;
+      if (r.st > 0 && r.cat === 'E') { e.sr++; e.sv += val; }
+      else if (r.d > 0 && r.st <= 0) e.de++;
+      else if (r.st > 0) e.c.push((r.d > 0 ? Math.round(r.st / r.d) : 9999) + ':' + val);
+    }
+    for (const f in ev) ev[f].c = ev[f].c.join(',');
+    await guardar('eval', { s: ev, C: CFG.def.C, Sg: CFG.def.Sg, publicado: hoy, corte: S.P.corte });
+    return { errores, hechos, labs, conCompras: S.P.p.filter(p => p.cm).length };
+  }
+  // para el botón "Calcular compras ahora" (módulo Compras): espera los datos y publica solo los documentos de apoyo
+  window.publicarExtras = async () => {
+    for (let i = 0; i < 240 && !(S.P && S.db && !S.ejemplo); i++) await new Promise(r => setTimeout(r, 500));
+    if (!S.P || S.ejemplo) return { errores: ['los datos de la proyección no terminaron de cargar'], hechos: [] };
+    await cargarCfg(); for (let i = 0; i < 40 && !cfgListo; i++) await new Promise(r => setTimeout(r, 250));
+    calcular(); return publicarExtras();
+  };
   // El producto en toda la red (red/p0, p1…): stock, venta y envío de cada sucursal y el stock de droguería, para el
   // ojito de "Lo que me van a atender" y de Faltantes. Solo los productos que están en alguna de esas listas.
   async function publicarRed(faltantes) {
