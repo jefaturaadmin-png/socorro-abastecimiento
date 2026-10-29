@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610292230">
+<link rel="stylesheet" href="styles.css?v=202610292330">
 </head>
 <body>
 
@@ -336,9 +336,7 @@
       <div class="msg" id="cpMsg" hidden></div>
       <section class="card pd-card">
         <div class="cp-ctl">
-          <div class="filtro buscador cp-bus"><span>Laboratorio</span><input id="cpQ" type="search" placeholder="Escribe para buscar el laboratorio" autocomplete="off"><div class="resultados" id="cpRes" hidden></div></div>
-          <label class="filtro">Desde <select id="cpDesde"></select></label>
-          <label class="filtro">Hasta <select id="cpHasta"></select></label>
+          <div class="buscador cp-bus"><input id="cpQ" type="search" placeholder="Buscar laboratorio…" autocomplete="off"><div class="resultados" id="cpRes" hidden></div></div>
           <div class="pd-per" id="cpVerBox"><button type="button" class="pd-chip" data-cpver="pct">% de las compras</button><button type="button" class="pd-chip" data-cpver="soles">Soles</button></div>
         </div>
         <div id="cpGraf"></div>
@@ -589,6 +587,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610292230"></script>
+<script type="module" src="app.js?v=202610292330"></script>
 </body>
 </html>

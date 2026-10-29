@@ -415,7 +415,7 @@ async function recalcular() {
   const finD = new Date(corte + "T12:00:00"), iniD = new Date(finD); iniD.setDate(iniD.getDate() - 89);
   const mesesV = new Set(); for (let m = iniD.toISOString().slice(0, 7); m <= mesCorte; m = sumaM(m, 1)) mesesV.add(m);
   const res = await leerResumen(), cache = res?.m || {}, nuevoRes = {}; let releidos = 0;
-  const compras = new Map();   // compras en soles de cada producto en los últimos 24 meses (para el módulo Compras)
+  const compras = new Map();   // compras en soles de cada producto en todos los meses del kardex (para el módulo Compras)
   async function resumenMes(mes, meta) {
     const c = cache[mes], conV = mesesV.has(mes);
     // c.cm: compras del mes (los resúmenes guardados antes no lo tienen: ese mes se vuelve a leer una vez)
@@ -440,7 +440,7 @@ async function recalcular() {
     const meta = metas.get(meses[i]); if (!meta) continue;
     conDatos.add(i); conK.add(i);
     const { d, cm } = await resumenMes(meses[i], meta);
-    if (i >= meses.length - 24) for (const cod in cm) (compras.get(cod) ?? compras.set(cod, Array(24).fill(0)).get(cod))[i - (meses.length - 24)] += cm[cod];
+    for (const cod in cm) (compras.get(cod) ?? compras.set(cod, Array(meses.length).fill(0)).get(cod))[i] += cm[cod];
     for (const cod in d) for (const alm in d[cod]) {
       const pf = (demK.get(cod) ?? demK.set(cod, new Map()).get(cod));
       (pf.get(alm) ?? pf.set(alm, Array(meses.length).fill(0)).get(alm))[i] += d[cod][alm];
@@ -508,7 +508,7 @@ async function recalcular() {
     p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: false, h: meses.map(() => 0), b: {}, f: {}, s: {}, st: stf, hf: {}, sd: st[DROG]?.[0] || 0,
       sinVentas: true, dv: {}, um: (pr[3] || "").slice(0, 10), uv: "", ...(compras.has(cod) ? { cm: compras.get(cod).map(v => Math.round(v)) } : {}) });
   }
-  const cmM = Array.from({ length: 24 }, (_, j) => sumaM(meses[meses.length - 1], j - 23));   // meses de p.cm (compras)
+  const cmM = meses.slice();   // meses de p.cm (compras): toda la historia
   const o = { ver: CALC_VER, corte, meses, hfm, bm, fm, metodos: METODOS.filter(m => p.some(x => x.f[m])), farmacias, p, origen: "kardex", cmM,
     dias: diasInfo };
   msg("Guardando pronósticos…"); paso = "guardar los pronósticos (proy_config/datos)";

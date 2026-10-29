@@ -22,7 +22,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610292030";
+const VERSION_PROY = "202610292330";
 const VERSION_COMP = "202610281500";
 
 /* ===================== utilidades ===================== */
@@ -2152,9 +2152,10 @@ const MES_L = m => { const [y, mo] = m.split("-"); return ["Ene", "Feb", "Mar", 
 const solesR = v => "S/ " + Math.round(v).toLocaleString("es-PE");
 function datosCompras() {
   const C = S.cp, todos = C.m || [];
-  if (!S.cpHasta || !todos.includes(S.cpHasta)) S.cpHasta = todos[todos.length - 1] || "";
-  if (!S.cpDesde || !todos.includes(S.cpDesde) || S.cpDesde > S.cpHasta) S.cpDesde = todos[Math.max(0, todos.indexOf(S.cpHasta) - 5)] || "";
-  const i0 = todos.indexOf(S.cpDesde), i1 = todos.indexOf(S.cpHasta), meses = todos.slice(i0, i1 + 1);
+  // toda la historia: desde el primer mes con compras hasta el último
+  const tot0 = todos.map((_, i) => Object.values(C.lab || {}).reduce((a, t) => a + Math.max(0, +String(t).split(",")[i] || 0), 0));
+  const i0 = Math.max(0, tot0.findIndex(v => v > 0)), i1 = todos.length - 1, meses = todos.slice(i0, i1 + 1);
+  S.cpDesde = meses[0] || ""; S.cpHasta = meses[meses.length - 1] || "";
   const labs = Object.entries(C.lab || {}).map(([l, t]) => { const v = String(t).split(",").map(Number).slice(i0, i1 + 1); return { l, v, tot: v.reduce((a, x) => a + Math.max(0, x), 0) }; })
     .filter(x => x.tot > 0).sort((a, b) => b.tot - a.tot);
   const totMes = meses.map((_, j) => labs.reduce((a, x) => a + Math.max(0, x.v[j]), 0)), tot = totMes.reduce((a, x) => a + x, 0);
@@ -2167,9 +2168,7 @@ function pintarCompras() {
   if (!C.m?.length) { $("cpInfo").textContent = esAdmin() ? "Aún no hay compras calculadas: pulsa «Calcular compras ahora» (usa el kardex que ya está guardado)." : "Las compras aparecerán cuando Abastecimiento las calcule."; $("cpTabla").innerHTML = ""; $("cpGraf").innerHTML = ""; return; }
   $("cpCalc").hidden = !esAdmin();
   $("cpInfo").innerHTML = `Compras en soles (costo) según el kardex al <b>${fmtF(C.corte)}</b>: «Cargo compra» menos devoluciones al proveedor.`;
-  const op = sel => C.m.map(m => `<option value="${m}" ${m === sel ? "selected" : ""}>${MES_L(m)}</option>`).join("");
   const D = datosCompras();
-  $("cpDesde").innerHTML = op(S.cpDesde); $("cpHasta").innerHTML = op(S.cpHasta);
   if (!S.cpLab || !D.labs.some(x => x.l === S.cpLab)) S.cpLab = D.labs[0]?.l || "";
   if (document.activeElement !== $("cpQ")) $("cpQ").value = S.cpLab;
   document.querySelectorAll("[data-cpver]").forEach(b => b.setAttribute("aria-pressed", b.dataset.cpver === S.cpVer));
@@ -2196,7 +2195,7 @@ function pintarCompras() {
     });
     g += `<line x1="${L}" x2="${W - 6}" y1="${y(0)}" y2="${y(0)}" stroke="#334"/>`;
     const ley = anios.map(a => `<span><i style="background:${colA(a)}"></i>${a}</span>`).join("");
-    $("cpGraf").innerHTML = `<h3>${esc(x.l)} <small class="muted">· ${fP(pct(x.tot, D.tot))} de las compras del periodo (${solesR(x.tot)})</small></h3><div class="ev-ley">${ley}</div><div class="cp-scroll"><svg viewBox="0 0 ${W} ${H}" class="cp-svg" style="min-width:${Math.min(W, 1400)}px">${g}</svg></div>`;
+    $("cpGraf").innerHTML = `<h3>${esc(x.l)} <small class="muted">· ${fP(pct(x.tot, D.tot))} de las compras de ${MES_L(D.meses[0])} a ${MES_L(D.meses[D.meses.length - 1])} (${solesR(x.tot)})</small></h3><div class="ev-ley">${ley}</div><div class="cp-scroll"><svg viewBox="0 0 ${W} ${H}" class="cp-svg" style="min-width:${Math.min(W, 1400)}px">${g}</svg></div>`;
   } else $("cpGraf").innerHTML = '<p class="muted">Sin compras en ese periodo.</p>';
   // tabla: cada laboratorio con su % de cada mes; al final el total (100 %)
   const q = norm(S.cpQ2 || "").trim();
@@ -2222,8 +2221,6 @@ $("cpQ").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDe
 $("cpRes").addEventListener("mousedown", e => { const b = e.target.closest("[data-cpsel]"); if (!b) return; e.preventDefault(); elegirLab(b.dataset.cpsel); });
 $("cpQ").addEventListener("blur", () => setTimeout(() => { $("cpRes").hidden = true; $("cpQ").value = S.cpLab; }, 150));
 $("cpQ2").addEventListener("input", e => { S.cpQ2 = e.target.value; pintarCompras(); });
-$("cpDesde").addEventListener("change", e => { S.cpDesde = e.target.value; pintarCompras(); });
-$("cpHasta").addEventListener("change", e => { S.cpHasta = e.target.value; pintarCompras(); });
 $("cpVerBox").addEventListener("click", e => { const b = e.target.closest("[data-cpver]"); if (b) { S.cpVer = b.dataset.cpver; pintarCompras(); } });
 $("cpTabla").addEventListener("click", e => { const r = e.target.closest("[data-cplab]"); if (r) { S.cpLab = r.dataset.cplab; pintarCompras(); scrollTo({ top: 0, behavior: "smooth" }); } });
 $("cpMas").addEventListener("click", e => { if (e.target.closest("#cpMasBtn")) { S.cpMostrar = (S.cpMostrar || 100) + 100; pintarCompras(); } });
