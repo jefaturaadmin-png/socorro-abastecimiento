@@ -304,6 +304,19 @@
       const cat = {}; for (const p of S.P.p) cat[p.c] = [p.n, labDe(p.c) || ''];
       if (JSON.stringify(cat).length > 950000) for (const c in cat) cat[c] = [cat[c][0]];
       await FB.setDoc(FB.doc(FB.db, 'red', 'catalogo'), window.parent.JSON.parse(JSON.stringify({ p: cat, publicado: hoy })));
+      // para Evaluación de sucursales (red/eval): de cada sucursal, la cobertura en días y el valor del stock de cada
+      // producto con stock ("dias:soles,dias:soles,…"), los sin rotación (tipo E con stock) y los desabastecidos
+      const ev = {};
+      for (const r of cache.filas) {
+        if (!/^ALMACEN /.test(r.f)) continue;
+        const e = ev[r.f] ??= { c: [], sr: 0, sv: 0, de: 0, dem: 0 }, val = Math.round(r.st * (r.p.k || 0));
+        if (r.d > 0) e.dem++;
+        if (r.st > 0 && r.cat === 'E') { e.sr++; e.sv += val; }
+        else if (r.d > 0 && r.st <= 0) e.de++;
+        else if (r.st > 0) e.c.push((r.d > 0 ? Math.round(r.st / r.d) : 9999) + ':' + val);
+      }
+      for (const f in ev) ev[f].c = ev[f].c.join(',');
+      await FB.setDoc(FB.doc(FB.db, 'red', 'eval'), window.parent.JSON.parse(JSON.stringify({ s: ev, C: CFG.def.C, Sg: CFG.def.Sg, publicado: hoy, corte: S.P.corte })));
       return { ok: true };
     } catch (e) { return { ok: false, error: e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules) en Firebase.' : e.message }; }
   }

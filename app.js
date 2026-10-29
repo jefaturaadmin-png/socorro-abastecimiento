@@ -22,7 +22,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610281900";
+const VERSION_PROY = "202610291400";
 const VERSION_COMP = "202610281500";
 
 /* ===================== utilidades ===================== */
@@ -78,7 +78,8 @@ const VISTAS = [
   { id: "sucursales", nombre: "Atención a sucursales", vista: "vSuc", c: "suc", ic: "i-tienda", desc: "Qué enviar a cada sucursal", ayuda: "también publica las listas" },
   { id: "faltantes", nombre: "Faltantes de droguería", vista: "vFalt", ic: "i-buscar", desc: "Productos en 0 en droguería que piden las sucursales" },
   { id: "atencion", nombre: "Lo que me van a atender", vista: "vAten", ic: "i-ojo", desc: "Lo que Abastecimiento enviará a tu sucursal", ayuda: "solo químicos: ve su sucursal" },
-  { id: "pedidos", nombre: "Productos agotados o de extrema urgencia", vista: "vPed", ic: "i-lista", desc: "Lo que cada sucursal pidió de urgencia (desde el formulario)", ayuda: "químicos: ven los de su sucursal" }];
+  { id: "pedidos", nombre: "Productos agotados o de extrema urgencia", vista: "vPed", ic: "i-lista", desc: "Lo que cada sucursal pidió de urgencia (desde el formulario)", ayuda: "químicos: ven los de su sucursal" },
+  { id: "evaluacion", nombre: "Evaluación de sucursales", vista: "vEval", c: "est", ic: "i-grafico", desc: "Stock, orden, limpieza, capacidad y BPA de cada sucursal", ayuda: "químicos: ven la de su sucursal" }];
 const misVistas = () => esAdmin() ? VISTAS : VISTAS.filter(v => ((S.prev || S.perfil)?.vistas || []).includes(v.id));
 const NOMBRE_ROL = { admin: "Administrador", quimico: "Químico", colaborador: "Colaborador" };
 const miFarm = () => S.prev ? S.prev.farmacia : S.perfil?.farmacia;
@@ -289,7 +290,7 @@ function pintarNav() {
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
@@ -309,7 +310,8 @@ function render() {
   else if (S.vista === "vFicha") pintarFicha();
   else if (S.vista === "vFalt") { escucharFalt(); pintarFalt(); }
   else if (S.vista === "vAten") { escucharAten(); pintarAten(); }
-  else if (S.vista === "vPed") { cargarPedidos(); pintarPedidos(); }   // escucharFalt vuelve a conectar si se había cortado
+  else if (S.vista === "vPed") { cargarPedidos(); pintarPedidos(); }
+  else if (S.vista === "vEval") { cargarEval(); pintarEval(); }   // escucharFalt vuelve a conectar si se había cortado
   pintarSel("bq"); pintarSel("ab"); pintarLados();
   $("ayuda").classList.toggle("mini", S.vista !== "vInicio");   // fuera del inicio solo el ícono, para no tapar botones
 }
@@ -2008,3 +2010,128 @@ $("prevSalir").addEventListener("click", () => ponerPrevia(null));
 // los avisos de los costados empiezan debajo de la cabecera (que puede ocupar 2 o 3 líneas con muchos módulos)
 new ResizeObserver(() => document.documentElement.style.setProperty("--alto-top", ($("top").hidden ? 0 : $("top").getBoundingClientRect().bottom) + "px")).observe($("top"));
 addEventListener("scroll", () => document.documentElement.style.setProperty("--alto-top", ($("top").hidden ? 0 : Math.max(0, $("top").getBoundingClientRect().bottom)) + "px"), { passive: true });
+
+/* ===================== evaluación de sucursales ===================== */
+// Indicadores de stock (automáticos, del kardex publicado en red/eval) + lo que se califica en cada visita
+// (rotulación, orden, limpieza, termómetro), la capacidad de almacén (calculadora de anaqueles) y la lista de BPA.
+// Cada evaluación se guarda por fecha en evaluacion/{AAAA-MM-DD}: { s: { "ALMACEN X": {...} } }.
+const EV_ITEMS = [["rotulacion", "Rotulación"], ["orden", "Orden"], ["limpieza", "Limpieza"], ["termometro", "Termómetro"]];
+const EV_NOTA = { "": ["–", ""], c: ["Cumple", "verde"], p: ["Parcial", "amb"], n: ["No cumple", "rojo"] };
+const EV_PUNTOS = { c: 100, p: 50, n: 0 };
+const BPA = [
+  ["Áreas obligatorias", ["Recepción", "Cuarentena", "Aprobados o almacenamiento", "Muestras de retención", "Baja o rechazados", "Devoluciones", "Embalaje y despacho", "Productos controlados", "Área administrativa"]],
+  ["Infraestructura", ["Parihuelas, racks o estantes (nada en contacto directo con el piso)", "Temperatura de 20 a 25 °C (máx. 30 °C)", "Cadena de frío", "Termómetro con registro de temperatura", "Protegido de la luz y la humedad"]],
+  ["Funcionamiento", ["Flujo sin interferencia de actividades operativas o administrativas", "Instalaciones limpias, con registros de limpieza", "Productos farmacéuticos, dispositivos médicos y sanitarios separados"]]];
+const BPA_TOTAL = BPA.reduce((a, [, xs]) => a + xs.length, 0);
+S.evFecha = hoyISO(); S.evMin = 15; S.evMax = 90;
+try { const g = JSON.parse(localStorage.getItem("ev_umbral") || "{}"); if (g.min) S.evMin = g.min; if (g.max) S.evMax = g.max; } catch {}
+const sucsEval = () => FARMACIAS.filter(f => /^ALMACEN /.test(f) && (esAdmin() || !miFarm() || f === miFarm()));
+async function cargarEval(forzar) {
+  if (S.evCargando) return; S.evCargando = true;
+  try {
+    if (!S.evStock || forzar) { const d = await getDoc(doc(db, "red", "eval")); S.evStock = d.exists() ? d.data() : { s: {} }; }
+    if (!S.evFechas || forzar) { const q = await getDocs(collection(db, "evaluacion")); S.evDocs = new Map(q.docs.map(d => [d.id, d.data()])); S.evFechas = [...S.evDocs.keys()].sort().reverse(); }
+  } catch (e) { S.evErr = textoError(e); S.evStock ??= { s: {} }; }
+  S.evDocs ??= new Map(); S.evFechas ??= [];
+  S.evCargando = false; if (S.vista === "vEval") pintarEval();
+}
+// los 5 indicadores de stock de una sucursal (% de productos), con los días mínimo y máximo elegidos
+function stockEval(f) {
+  const e = S.evStock?.s?.[f]; if (!e) return null;
+  const n = { normo: 0, sobre: 0, sub: 0, sr: e.sr || 0, de: e.de || 0 }, v = { normo: 0, sobre: 0, sub: 0, sr: e.sv || 0 };
+  for (const x of String(e.c || "").split(",").filter(Boolean)) {
+    const [d, val] = x.split(":").map(Number), k = d < S.evMin ? "sub" : d > S.evMax ? "sobre" : "normo";
+    n[k]++; v[k] += val || 0;
+  }
+  const tot = n.normo + n.sobre + n.sub + n.sr + n.de, pc = k => tot ? n[k] / tot * 100 : 0;
+  const disp = e.dem ? (1 - n.de / e.dem) * 100 : null;
+  return { n, v, tot, p: { normo: pc("normo"), sobre: pc("sobre"), sub: pc("sub"), sr: pc("sr"), de: pc("de") }, disp };
+}
+const nivelStock = p => p == null ? ["–", ""] : p >= 60 ? ["Adecuado", "verde"] : p >= 40 ? ["Regular", "amb"] : ["Deficiente", "rojo"];
+const capacidad = c => c && c.largo && c.ancho && c.altura && c.anaqueles ? c.largo * c.ancho * c.altura * c.anaqueles : null;
+const bpaPct = b => b ? Object.values(b).filter(Boolean).length / BPA_TOTAL * 100 : null;
+const evDe = f => S.evDocs?.get(S.evFecha)?.s?.[f] || {};
+const p1 = v => v == null ? "–" : (Math.round(v * 100) / 100).toLocaleString("es-PE", { maximumFractionDigits: 2 }) + " %";
+function pintarEval() {
+  const admin = esAdmin();
+  $("evMin").value = S.evMin; $("evMax").value = S.evMax;
+  const fechas = [...new Set([S.evFecha, ...(S.evFechas || [])])].sort().reverse();
+  $("evFecha").innerHTML = fechas.map(f => `<option value="${f}" ${f === S.evFecha ? "selected" : ""}>${fDia(f)}${S.evDocs?.has(f) ? "" : " (nueva)"}</option>`).join("");
+  $("evNueva").hidden = !admin;
+  $("evInfo").innerHTML = S.evStock?.publicado ? `Indicadores de stock con el kardex al <b>${fmtF(S.evStock.corte)}</b> (publicado el ${fFecha(S.evStock.publicado)}) · por cantidad de productos.`
+    : "Los indicadores de stock aparecerán después de subir el kardex o abrir Atención a sucursales.";
+  msg("evMsg", S.evErr || "", true);
+  const filas = sucsEval().map(f => ({ f, st: stockEval(f), e: evDe(f) }));
+  const celNota = (f, k, val) => admin ? `<select class="ev-sel ${EV_NOTA[val || ""][1]}" data-evf="${esc(f)}" data-evk="${k}">${Object.entries(EV_NOTA).map(([v, [t]]) => `<option value="${v}" ${v === (val || "") ? "selected" : ""}>${t}</option>`).join("")}</select>`
+    : `<span class="chip ${EV_NOTA[val || ""][1]}">${EV_NOTA[val || ""][0]}</span>`;
+  $("evTabla").innerHTML = `<thead><tr><th>Sucursal</th><th>Nivel de stockeo</th><th class="der">Capacidad de almacén</th>${EV_ITEMS.map(([, t]) => `<th>${t}</th>`).join("")}
+      <th class="der">Disponibilidad</th><th class="der ev-n">Normostock</th><th class="der ev-s">Sobrestock</th><th class="der ev-b">Substock</th><th class="der ev-r">Sin rotación</th><th class="der ev-d">Desabastecido</th><th class="der">Cumplimiento de BPA</th><th></th></tr></thead><tbody>` +
+    filas.map(({ f, st, e }) => { const nv = nivelStock(st?.p.normo), cap = capacidad(e.cap), bpa = bpaPct(e.bpa);
+      return `<tr><td><b>${esc(corto(f))}</b></td><td><span class="chip ${nv[1]}">${nv[0]}</span></td><td class="der">${cap != null ? cap.toLocaleString("es-PE", { maximumFractionDigits: 2 }) + " m³" : "–"}</td>
+        ${EV_ITEMS.map(([k]) => `<td>${celNota(f, k, e[k])}</td>`).join("")}
+        <td class="der">${p1(st?.disp)}</td><td class="der ev-n">${p1(st?.p.normo)}</td><td class="der ev-s">${p1(st?.p.sobre)}</td><td class="der ev-b">${p1(st?.p.sub)}</td><td class="der ev-r">${p1(st?.p.sr)}</td><td class="der ev-d">${p1(st?.p.de)}</td>
+        <td class="der"><b>${p1(bpa)}</b></td><td><button class="btn sm" type="button" data-evdet="${esc(f)}">${admin ? "Capacidad y BPA" : "Ver detalle"}</button></td></tr>`; }).join("") + "</tbody>";
+  // barras apiladas: cómo está el stock de cada sucursal
+  const cols = [["normo", "Normostock", "#1E6B5F"], ["sobre", "Sobrestock", "#3d5a99"], ["sub", "Substock", "#B7791F"], ["sr", "Sin rotación", "#8a4f9e"], ["de", "Desabastecido", "#B4321C"]];
+  $("evGraf").innerHTML = filas.some(x => x.st) ? `<div class="ev-ley">${cols.map(([, t, c]) => `<span><i style="background:${c}"></i>${t}</span>`).join("")}</div>` +
+    filas.filter(x => x.st).sort((a, b) => b.st.p.normo - a.st.p.normo).map(({ f, st }) => `<div class="ev-barra"><span>${esc(corto(f))}</span><div>${cols.map(([k, t, c]) => st.p[k] ? `<i style="width:${st.p[k]}%;background:${c}" title="${t}: ${p1(st.p[k])} (${st.n[k]} productos)"></i>` : "").join("")}</div><b>${p1(st.p.normo)}</b></div>`).join("")
+    : '<p class="muted">Aún no hay indicadores de stock publicados.</p>';
+}
+async function guardarEval(f, cambio) {
+  const fecha = S.evFecha, actual = S.evDocs?.get(fecha) || { s: {} };
+  const s = { ...actual.s, [f]: { ...(actual.s?.[f] || {}), ...cambio } };
+  try {
+    await setDoc(doc(db, "evaluacion", fecha), { s, fecha, porNombre: S.perfil.nombre || S.perfil.usuario, actualizado: serverTimestamp() }, { merge: true });
+    S.evDocs.set(fecha, { ...actual, s }); if (!S.evFechas.includes(fecha)) S.evFechas = [fecha, ...S.evFechas].sort().reverse();
+    toast("Evaluación guardada"); pintarEval();
+  } catch (x) { toast(textoError(x)); }
+}
+$("evTabla").addEventListener("change", e => { const t = e.target.closest("[data-evk]"); if (t) guardarEval(t.dataset.evf, { [t.dataset.evk]: t.value }); });
+$("evTabla").addEventListener("click", e => { const b = e.target.closest("[data-evdet]"); if (b) abrirDetEval(b.dataset.evdet); });
+$("evFecha").addEventListener("change", e => { S.evFecha = e.target.value; pintarEval(); });
+$("evNueva").addEventListener("click", () => { const f = prompt("Fecha de la nueva evaluación (AAAA-MM-DD):", hoyISO()); if (f && /^\d{4}-\d{2}-\d{2}$/.test(f)) { S.evFecha = f; pintarEval(); } });
+["evMin", "evMax"].forEach(id => $(id).addEventListener("change", () => {
+  S.evMin = Math.max(1, +$("evMin").value || 15); S.evMax = Math.max(S.evMin + 1, +$("evMax").value || 90);
+  try { localStorage.setItem("ev_umbral", JSON.stringify({ min: S.evMin, max: S.evMax })); } catch {}
+  pintarEval();
+}));
+$("evAct").addEventListener("click", () => cargarEval(true));
+// detalle de una sucursal: calculadora de capacidad y lista de BPA
+function abrirDetEval(f) {
+  const e = evDe(f), c = e.cap || { largo: 1.2, ancho: 0.5, altura: 1.5, anaqueles: 10 }, admin = esAdmin(), st = stockEval(f);
+  let k = 0;
+  $("evDetC").innerHTML = `<h2>${esc(nombreFarm(f))} · evaluación del ${fDia(S.evFecha)}</h2>
+    ${st ? `<p class="muted">Productos con stock o con venta: ${nf(st.tot)} · Normostock ${st.n.normo} · Sobrestock ${st.n.sobre} (S/ ${nf(Math.round(st.v.sobre))}) · Substock ${st.n.sub} · Sin rotación ${st.n.sr} (S/ ${nf(Math.round(st.v.sr))}) · Desabastecido ${st.n.de}</p>` : ""}
+    <h3>Capacidad de almacenamiento</h3>
+    <div class="ev-cap">${[["largo", "Largo del anaquel (m)"], ["ancho", "Ancho del anaquel (m)"], ["altura", "Altura máx. de apilamiento (m)"], ["anaqueles", "N° de anaqueles o parihuelas"]].map(([kk, t]) =>
+      `<label class="campo"><span class="lbl">${t}</span><input type="number" step="0.01" min="0" data-cap="${kk}" value="${c[kk] ?? ""}" ${admin ? "" : "disabled"}></label>`).join("")}</div>
+    <p>Área por anaquel: <b id="evArea"></b> · Volumen útil por anaquel: <b id="evVol"></b> · <b>Total: <span id="evTot"></span></b></p>
+    <h3>Cumplimiento de BPA <span class="muted" id="evBpaPct"></span></h3>
+    ${BPA.map(([g, xs]) => `<div class="ev-bpa"><b>${g}</b>${xs.map(t => { const i = "b" + (k++); return `<label class="check"><input type="checkbox" data-bpa="${i}" ${e.bpa?.[i] ? "checked" : ""} ${admin ? "" : "disabled"}> ${esc(t)}</label>`; }).join("")}</div>`).join("")}
+    <label class="campo"><span class="lbl">Observaciones</span><textarea id="evObs" rows="2" ${admin ? "" : "disabled"}>${esc(e.obs || "")}</textarea></label>
+    ${admin ? `<div class="botones-fila"><button class="btn primario" type="button" id="evGuardar" data-f="${esc(f)}">Guardar</button><button class="btn" type="button" data-cerrar-dlg>Cancelar</button></div>` : ""}`;
+  calcCap(); $("evDet").showModal();
+}
+function calcCap() {
+  const v = k => +($("evDetC").querySelector(`[data-cap="${k}"]`)?.value || 0);
+  const area = v("largo") * v("ancho"), vol = area * v("altura"), n2 = x => x.toLocaleString("es-PE", { maximumFractionDigits: 2 });
+  $("evArea").textContent = n2(area) + " m²"; $("evVol").textContent = n2(vol) + " m³"; $("evTot").textContent = n2(vol * v("anaqueles")) + " m³";
+  const ch = [...$("evDetC").querySelectorAll("[data-bpa]")]; $("evBpaPct").textContent = "· " + p1(ch.filter(x => x.checked).length / BPA_TOTAL * 100);
+}
+$("evDet").addEventListener("input", calcCap);
+$("evDet").addEventListener("change", calcCap);
+$("evDet").addEventListener("click", e => {
+  if (e.target.closest("[data-cerrar-dlg]") || e.target === $("evDet")) return $("evDet").close();
+  const g = e.target.closest("#evGuardar"); if (!g) return;
+  const C = $("evDetC"), cap = Object.fromEntries(["largo", "ancho", "altura", "anaqueles"].map(k => [k, +C.querySelector(`[data-cap="${k}"]`).value || 0]));
+  const bpa = Object.fromEntries([...C.querySelectorAll("[data-bpa]")].map(x => [x.dataset.bpa, x.checked]));
+  guardarEval(g.dataset.f, { cap, bpa, obs: $("evObs").value.trim().slice(0, 500) }); $("evDet").close();
+});
+$("evXls").addEventListener("click", () => {
+  const datos = sucsEval().map(f => { const st = stockEval(f), e = evDe(f), r2 = v => v == null ? "" : Math.round(v * 100) / 100;
+    return { Sucursal: corto(f), "Nivel de stockeo": nivelStock(st?.p.normo)[0], "Capacidad de almacén (m³)": r2(capacidad(e.cap)),
+      ...Object.fromEntries(EV_ITEMS.map(([k, t]) => [t, EV_NOTA[e[k] || ""][0]])), "Disponibilidad %": r2(st?.disp),
+      "Normostock %": r2(st?.p.normo), "Sobrestock %": r2(st?.p.sobre), "Substock %": r2(st?.p.sub), "Sin rotación %": r2(st?.p.sr), "Desabastecido %": r2(st?.p.de),
+      "Total %": st ? 100 : "", "Cumplimiento de BPA %": r2(bpaPct(e.bpa)), Observaciones: e.obs || "" }; });
+  excelDe(datos, "Evaluación", "evaluacion_" + S.evFecha);
+});

@@ -597,3 +597,24 @@ main { padding-bottom: 80px }
 .prev-bar { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; padding: 8px 16px; background: #5b3fa8; color: #fff; font-weight: 600; font-size: 13.5px }
 .prev-bar .btn { background: #fff; color: #5b3fa8; border: 0 }
 body.en-previa .top { top: 42px; box-shadow: inset 0 3px 0 #5b3fa8 }
+/* evaluación de sucursales */
+.ev-sel { min-height: 32px; font-size: 12.5px; padding: 0 6px; width: auto; font-weight: 600 }
+.ev-sel.verde { background: var(--ok-soft); color: var(--ok) } .ev-sel.amb { background: var(--warn-soft); color: #7A4A00 } .ev-sel.rojo { background: var(--bad-soft); color: var(--bad) }
+#evTabla th, #evTabla td { padding: 9px 10px; white-space: nowrap }
+#evTabla th { white-space: normal; vertical-align: bottom }
+.ev-n { color: #1E6B5F } .ev-s { color: #3d5a99 } .ev-b { color: #8a5a00 } .ev-r { color: #8a4f9e } .ev-d { color: var(--bad) }
+.ev-ley { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; margin-bottom: 10px } .ev-ley i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px }
+.ev-barra { display: grid; grid-template-columns: 110px 1fr 70px; gap: 10px; align-items: center; font-size: 13px; margin: 6px 0 }
+.ev-barra > div { display: flex; height: 20px; border-radius: 6px; overflow: hidden; background: var(--soft) } .ev-barra i { display: block; height: 100% }
+.ev-barra b { text-align: right; color: #1E6B5F }
+.ev-def { font-size: 12.5px; line-height: 1.6; margin-bottom: 30px }
+.ev-cap { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px }
+.ev-bpa { display: grid; gap: 4px; margin: 8px 0 } .ev-bpa .check { font-size: 13.5px }
+#evDetC h3 { margin: 14px 0 6px; font-size: 15px }
+.ev-bpa .check { display: flex; gap: 8px; align-items: center; cursor: pointer }
+.ev-bpa .check input { width: 17px; height: 17px; min-height: 0; flex: none; margin: 0; accent-color: var(--brand) }
+#evTabla .ev-sel { width: 104px; padding: 0 4px }
+#evTabla th, #evTabla td { padding: 8px 7px }
+#evTabla th:first-child, #evTabla td:first-child { position: sticky; left: 0; z-index: 1; background: var(--card) }
+#evTabla thead th:first-child { background: #EEF2F8 }
+#evTabla .ev-sel { width: 96px }
