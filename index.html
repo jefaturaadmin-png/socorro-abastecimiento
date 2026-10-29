@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610291400">
+<link rel="stylesheet" href="styles.css?v=202610291800">
 </head>
 <body>
 
@@ -326,6 +326,33 @@
     </div>
   </section>
 
+  <!-- ============ COMPRAS POR LABORATORIO ============ -->
+  <section id="vCompL" hidden>
+    <div class="wrap ancho cabeza">
+      <div><h1>Compras por laboratorio</h1><p class="muted" id="cpInfo"></p></div>
+      <div class="pd-acc"><button class="btn sm" type="button" id="cpAct">↻ Actualizar</button></div>
+    </div>
+    <div class="wrap ancho cuerpo">
+      <div class="msg" id="cpMsg" hidden></div>
+      <section class="card pd-card">
+        <div class="cp-ctl">
+          <label class="filtro">Laboratorio <input id="cpQ" list="cpLabs" placeholder="Buscar laboratorio" autocomplete="off"><datalist id="cpLabs"></datalist></label>
+          <label class="filtro">Desde <select id="cpDesde"></select></label>
+          <label class="filtro">Hasta <select id="cpHasta"></select></label>
+          <div class="pd-per" id="cpVerBox"><button type="button" class="pd-chip" data-cpver="pct">% de las compras</button><button type="button" class="pd-chip" data-cpver="soles">Soles</button></div>
+        </div>
+        <div id="cpGraf"></div>
+      </section>
+      <section class="card lista">
+        <div class="lh"><h2>Participación de cada laboratorio en las compras del mes</h2>
+          <div class="filtros"><label class="filtro">Filtrar <input id="cpQ2" type="search" placeholder="Laboratorio"></label>
+          <button class="btn" id="cpXls" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button></div></div>
+        <div class="tabla-wrap"><table class="tabla" id="cpTabla"></table></div>
+        <div class="mas" id="cpMas"></div>
+      </section>
+    </div>
+  </section>
+
   <!-- ============ EVALUACIÓN DE SUCURSALES ============ -->
   <section id="vEval" hidden>
     <div class="wrap ancho cabeza">
@@ -562,6 +589,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610291400"></script>
+<script type="module" src="app.js?v=202610291800"></script>
 </body>
 </html>

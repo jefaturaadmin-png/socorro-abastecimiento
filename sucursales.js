@@ -316,6 +316,13 @@
         else if (r.st > 0) e.c.push((r.d > 0 ? Math.round(r.st / r.d) : 9999) + ':' + val);
       }
       for (const f in ev) ev[f].c = ev[f].c.join(',');
+      // compras por laboratorio y mes en soles (red/compras), para el módulo Compras
+      if (S.P.cmM) {
+        const lab = {};
+        for (const p of S.P.p) if (p.cm) { const l = labDe(p.c) || 'SIN LABORATORIO', a = lab[l] ??= Array(S.P.cmM.length).fill(0); p.cm.forEach((v, i) => a[i] += v || 0); }
+        for (const l in lab) lab[l] = lab[l].map(v => Math.round(v)).join(',');
+        await FB.setDoc(FB.doc(FB.db, 'red', 'compras'), window.parent.JSON.parse(JSON.stringify({ m: S.P.cmM, lab, publicado: hoy, corte: S.P.corte })));
+      }
       await FB.setDoc(FB.doc(FB.db, 'red', 'eval'), window.parent.JSON.parse(JSON.stringify({ s: ev, C: CFG.def.C, Sg: CFG.def.Sg, publicado: hoy, corte: S.P.corte })));
       return { ok: true };
     } catch (e) { return { ok: false, error: e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules) en Firebase.' : e.message }; }

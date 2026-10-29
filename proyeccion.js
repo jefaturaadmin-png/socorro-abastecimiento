@@ -415,23 +415,32 @@ async function recalcular() {
   const finD = new Date(corte + "T12:00:00"), iniD = new Date(finD); iniD.setDate(iniD.getDate() - 89);
   const mesesV = new Set(); for (let m = iniD.toISOString().slice(0, 7); m <= mesCorte; m = sumaM(m, 1)) mesesV.add(m);
   const res = await leerResumen(), cache = res?.m || {}, nuevoRes = {}; let releidos = 0;
+  const compras = new Map();   // compras en soles de cada producto en los últimos 24 meses (para el módulo Compras)
   async function resumenMes(mes, meta) {
     const c = cache[mes], conV = mesesV.has(mes);
-    if (c && c.a === meta.asset && (!conV || c.v)) return (nuevoRes[mes] = conV ? c : { a: c.a, d: c.d });
+    // c.cm: compras del mes (los resúmenes guardados antes no lo tienen: ese mes se vuelve a leer una vez)
+    if (c && c.a === meta.asset && (!conV || c.v) && c.cm) return (nuevoRes[mes] = conV ? c : { a: c.a, d: c.d, cm: c.cm });
     msg(`Leyendo ${mes}…`); releidos++;
-    const { d, v, kd } = await leerMes(meta), dm = {};
+    const { d, v, kd } = await leerMes(meta), dm = {}, cm = {};
     for (const cod in d) for (const alm in d[cod]) {
+      // compras del mes en soles (costo): CARGO COMPRA menos devoluciones al proveedor, en cualquier almacén
+      for (const [tipo, a] of Object.entries(d[cod][alm])) {
+        if (/^CARGO COMPRA/.test(tipo)) cm[cod] = (cm[cod] || 0) + (a[2] || 0);
+        else if (/DEVOL.*PROVE/.test(tipo)) cm[cod] = (cm[cod] || 0) - (a[3] || 0);
+      }
       if (alm === DROG) continue;
       const t = d[cod][alm]; if (!t[VENTA] && !t[ANULA]) continue;
       (dm[cod] ??= {})[alm] = Math.round(((t[VENTA]?.[1] || 0) - (t[ANULA]?.[0] || 0)) * 1000) / 1000;
     }
-    const r = { a: meta.asset, d: dm }; if (conV) { r.v = v; r.kd = kd === null || !!(kd && kd.size) ? 1 : 0; }
+    for (const cod in cm) cm[cod] = Math.round(cm[cod] * 100) / 100;
+    const r = { a: meta.asset, d: dm, cm }; if (conV) { r.v = v; r.kd = kd === null || !!(kd && kd.size) ? 1 : 0; }
     return (nuevoRes[mes] = r);
   }
   for (let i = 0; i < meses.length; i++) {
     const meta = metas.get(meses[i]); if (!meta) continue;
     conDatos.add(i); conK.add(i);
-    const { d } = await resumenMes(meses[i], meta);
+    const { d, cm } = await resumenMes(meses[i], meta);
+    if (i >= meses.length - 24) for (const cod in cm) (compras.get(cod) ?? compras.set(cod, Array(24).fill(0)).get(cod))[i - (meses.length - 24)] += cm[cod];
     for (const cod in d) for (const alm in d[cod]) {
       const pf = (demK.get(cod) ?? demK.set(cod, new Map()).get(cod));
       (pf.get(alm) ?? pf.set(alm, Array(meses.length).fill(0)).get(alm))[i] += d[cod][alm];
@@ -488,7 +497,8 @@ async function recalcular() {
     }
     const pr = maestro.prod[cod] || (bp ? [bp.n, bp.fr || 1, bp.k || 0] : [cod, 1, 0]);
     p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: apto, h, b: bOk, f: fOk, s, st, hf, sd: maestro.stock[cod]?.[DROG]?.[0] ?? bp?.sd ?? 0,
-      dv: vd.get(cod) || {}, um: (maestro.prod[cod] || [])[3]?.slice(0, 10) || "", uv: maestro.uv?.[cod]?.slice(0, 10) || "" });
+      dv: vd.get(cod) || {}, um: (maestro.prod[cod] || [])[3]?.slice(0, 10) || "", uv: maestro.uv?.[cod]?.slice(0, 10) || "",
+      ...(compras.has(cod) ? { cm: compras.get(cod).map(v => Math.round(v)) } : {}) });
   }
   // productos que aparecen en el kardex pero sin ninguna venta registrada (solo compras, envíos…): se listan sin pronóstico
   for (const cod of Object.keys(maestro.prod)) {
@@ -496,9 +506,10 @@ async function recalcular() {
     const st = maestro.stock[cod] || {}, pr = maestro.prod[cod] || [cod, 1, 0], stf = {};
     for (const fa of farmacias) if (st[fa]) stf[fa] = st[fa][0];
     p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: false, h: meses.map(() => 0), b: {}, f: {}, s: {}, st: stf, hf: {}, sd: st[DROG]?.[0] || 0,
-      sinVentas: true, dv: {}, um: (pr[3] || "").slice(0, 10), uv: "" });
+      sinVentas: true, dv: {}, um: (pr[3] || "").slice(0, 10), uv: "", ...(compras.has(cod) ? { cm: compras.get(cod).map(v => Math.round(v)) } : {}) });
   }
-  const o = { ver: CALC_VER, corte, meses, hfm, bm, fm, metodos: METODOS.filter(m => p.some(x => x.f[m])), farmacias, p, origen: "kardex",
+  const cmM = Array.from({ length: 24 }, (_, j) => sumaM(meses[meses.length - 1], j - 23));   // meses de p.cm (compras)
+  const o = { ver: CALC_VER, corte, meses, hfm, bm, fm, metodos: METODOS.filter(m => p.some(x => x.f[m])), farmacias, p, origen: "kardex", cmM,
     dias: diasInfo };
   msg("Guardando pronósticos…"); paso = "guardar los pronósticos (proy_config/datos)";
   const prev = await getDoc(doc(db, "proy_config", "datos"));

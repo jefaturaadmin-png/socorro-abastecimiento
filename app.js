@@ -22,7 +22,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610291400";
+const VERSION_PROY = "202610291800";
 const VERSION_COMP = "202610281500";
 
 /* ===================== utilidades ===================== */
@@ -79,6 +79,7 @@ const VISTAS = [
   { id: "faltantes", nombre: "Faltantes de droguería", vista: "vFalt", ic: "i-buscar", desc: "Productos en 0 en droguería que piden las sucursales" },
   { id: "atencion", nombre: "Lo que me van a atender", vista: "vAten", ic: "i-ojo", desc: "Lo que Abastecimiento enviará a tu sucursal", ayuda: "solo químicos: ve su sucursal" },
   { id: "pedidos", nombre: "Productos agotados o de extrema urgencia", vista: "vPed", ic: "i-lista", desc: "Lo que cada sucursal pidió de urgencia (desde el formulario)", ayuda: "químicos: ven los de su sucursal" },
+  { id: "compras", nombre: "Compras por laboratorio", vista: "vCompL", c: "comp", ic: "i-grafico", desc: "Qué porcentaje de las compras de cada mes fue de cada laboratorio" },
   { id: "evaluacion", nombre: "Evaluación de sucursales", vista: "vEval", c: "est", ic: "i-grafico", desc: "Stock, orden, limpieza, capacidad y BPA de cada sucursal", ayuda: "químicos: ven la de su sucursal" }];
 const misVistas = () => esAdmin() ? VISTAS : VISTAS.filter(v => ((S.prev || S.perfil)?.vistas || []).includes(v.id));
 const NOMBRE_ROL = { admin: "Administrador", quimico: "Químico", colaborador: "Colaborador" };
@@ -290,7 +291,7 @@ function pintarNav() {
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vCompL", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
@@ -311,7 +312,8 @@ function render() {
   else if (S.vista === "vFalt") { escucharFalt(); pintarFalt(); }
   else if (S.vista === "vAten") { escucharAten(); pintarAten(); }
   else if (S.vista === "vPed") { cargarPedidos(); pintarPedidos(); }
-  else if (S.vista === "vEval") { cargarEval(); pintarEval(); }   // escucharFalt vuelve a conectar si se había cortado
+  else if (S.vista === "vEval") { cargarEval(); pintarEval(); }
+  else if (S.vista === "vCompL") { cargarCompras(); pintarCompras(); }   // escucharFalt vuelve a conectar si se había cortado
   pintarSel("bq"); pintarSel("ab"); pintarLados();
   $("ayuda").classList.toggle("mini", S.vista !== "vInicio");   // fuera del inicio solo el ícono, para no tapar botones
 }
@@ -2134,4 +2136,75 @@ $("evXls").addEventListener("click", () => {
       "Normostock %": r2(st?.p.normo), "Sobrestock %": r2(st?.p.sobre), "Substock %": r2(st?.p.sub), "Sin rotación %": r2(st?.p.sr), "Desabastecido %": r2(st?.p.de),
       "Total %": st ? 100 : "", "Cumplimiento de BPA %": r2(bpaPct(e.bpa)), Observaciones: e.obs || "" }; });
   excelDe(datos, "Evaluación", "evaluacion_" + S.evFecha);
+});
+
+/* ===================== compras por laboratorio ===================== */
+// red/compras (se publica con las listas): { m: ["2024-11", …], lab: { "AC FARMA": "soles,soles,…" } }
+// La participación de cada laboratorio es su compra del mes / la compra total del mes.
+S.cpLab = ""; S.cpVer = "pct"; S.cpDesde = ""; S.cpHasta = "";
+async function cargarCompras(forzar) {
+  if (S.cpCargando || (S.cp && !forzar)) return; S.cpCargando = true;
+  try { const d = await getDoc(doc(db, "red", "compras")); S.cp = d.exists() ? d.data() : { m: [], lab: {} }; S.cpErr = ""; }
+  catch (e) { S.cpErr = textoError(e); S.cp = { m: [], lab: {} }; }
+  S.cpCargando = false; if (S.vista === "vCompL") pintarCompras();
+}
+const MES_L = m => { const [y, mo] = m.split("-"); return ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Dic"][+mo - 1] + "-" + y.slice(2); };
+const solesR = v => "S/ " + Math.round(v).toLocaleString("es-PE");
+function datosCompras() {
+  const C = S.cp, todos = C.m || [];
+  if (!S.cpHasta || !todos.includes(S.cpHasta)) S.cpHasta = todos[todos.length - 1] || "";
+  if (!S.cpDesde || !todos.includes(S.cpDesde) || S.cpDesde > S.cpHasta) S.cpDesde = todos[Math.max(0, todos.indexOf(S.cpHasta) - 5)] || "";
+  const i0 = todos.indexOf(S.cpDesde), i1 = todos.indexOf(S.cpHasta), meses = todos.slice(i0, i1 + 1);
+  const labs = Object.entries(C.lab || {}).map(([l, t]) => { const v = String(t).split(",").map(Number).slice(i0, i1 + 1); return { l, v, tot: v.reduce((a, x) => a + Math.max(0, x), 0) }; })
+    .filter(x => x.tot > 0).sort((a, b) => b.tot - a.tot);
+  const totMes = meses.map((_, j) => labs.reduce((a, x) => a + Math.max(0, x.v[j]), 0)), tot = totMes.reduce((a, x) => a + x, 0);
+  return { meses, labs, totMes, tot };
+}
+function pintarCompras() {
+  const C = S.cp; msg("cpMsg", S.cpErr || "", true);
+  if (!C) { $("cpTabla").innerHTML = '<tbody><tr class="vacia"><td>Cargando…</td></tr></tbody>'; return; }
+  if (!C.m?.length) { $("cpInfo").textContent = "Las compras aparecerán después de subir el kardex (o abrir Atención a sucursales)."; $("cpTabla").innerHTML = ""; $("cpGraf").innerHTML = ""; return; }
+  $("cpInfo").innerHTML = `Compras en soles (costo) según el kardex al <b>${fmtF(C.corte)}</b>: «Cargo compra» menos devoluciones al proveedor.`;
+  const op = sel => C.m.map(m => `<option value="${m}" ${m === sel ? "selected" : ""}>${MES_L(m)}</option>`).join("");
+  const D = datosCompras();
+  $("cpDesde").innerHTML = op(S.cpDesde); $("cpHasta").innerHTML = op(S.cpHasta);
+  $("cpLabs").innerHTML = D.labs.map(x => `<option value="${esc(x.l)}">`).join("");
+  if (!S.cpLab || !D.labs.some(x => x.l === S.cpLab)) S.cpLab = D.labs[0]?.l || "";
+  $("cpQ").value = S.cpLab;
+  document.querySelectorAll("[data-cpver]").forEach(b => b.setAttribute("aria-pressed", b.dataset.cpver === S.cpVer));
+  const pct = (v, t) => t ? v / t * 100 : 0, fP = v => (Math.round(v * 10) / 10).toLocaleString("es-PE") + "%";
+  // gráfico del laboratorio elegido: barras por mes con su % de las compras (eje desde 0)
+  const x = D.labs.find(a => a.l === S.cpLab);
+  if (x) {
+    const vals = D.meses.map((_, j) => S.cpVer === "pct" ? pct(Math.max(0, x.v[j]), D.totMes[j]) : Math.max(0, x.v[j]));
+    const mx = Math.max(...vals, 0.0001) * 1.15, W = 760, H = 290, L = 60, B = 34, T = 34, w = (W - L - 10) / vals.length, y = v => T + (H - T - B) * (1 - v / mx);
+    let g = "";
+    for (let k = 0; k <= 4; k++) { const v = mx * k / 4, yy = y(v); g += `<line x1="${L}" x2="${W - 6}" y1="${yy}" y2="${yy}" stroke="#eceff3"/><text x="${L - 6}" y="${yy + 4}" text-anchor="end" class="ax">${S.cpVer === "pct" ? fP(v) : solesR(v)}</text>`; }
+    vals.forEach((v, j) => { const bx = L + j * w + w * 0.2, bw = w * 0.6;
+      g += `<rect x="${bx}" y="${y(v)}" width="${bw}" height="${y(0) - y(v)}" rx="3" fill="#2F5BA8"><title>${MES_L(D.meses[j])}: ${fP(pct(Math.max(0, x.v[j]), D.totMes[j]))} · ${solesR(x.v[j])} de ${solesR(D.totMes[j])}</title></rect>
+        <text x="${bx + bw / 2}" y="${y(v) - 7}" text-anchor="middle" class="val">${S.cpVer === "pct" ? fP(v) : solesR(v)}</text>
+        <text x="${bx + bw / 2}" y="${H - 12}" text-anchor="middle" class="ax">${MES_L(D.meses[j])}</text>`; });
+    $("cpGraf").innerHTML = `<h3>${esc(x.l)} <small class="muted">· ${fP(pct(x.tot, D.tot))} de las compras del periodo (${solesR(x.tot)})</small></h3><svg viewBox="0 0 ${W} ${H}" class="cp-svg">${g}</svg>`;
+  } else $("cpGraf").innerHTML = '<p class="muted">Sin compras en ese periodo.</p>';
+  // tabla: cada laboratorio con su % de cada mes; al final el total (100 %)
+  const q = norm(S.cpQ2 || "").trim();
+  const filas = D.labs.filter(a => !q || norm(a.l).includes(q));
+  const celda = (v, t) => S.cpVer === "pct" ? (v > 0 ? fP(pct(v, t)) : "–") : (v ? solesR(v) : "–");
+  $("cpTabla").innerHTML = `<thead><tr><th>Laboratorio</th>${D.meses.map(m => `<th class="der">${MES_L(m)}</th>`).join("")}<th class="der">Periodo</th></tr></thead><tbody>` +
+    filas.slice(0, S.cpMostrar || 100).map(a => `<tr class="clic${a.l === S.cpLab ? " cp-sel" : ""}" data-cplab="${esc(a.l)}"><td><b>${esc(a.l)}</b></td>${a.v.map((v, j) => `<td class="der">${celda(Math.max(0, v), D.totMes[j])}</td>`).join("")}<td class="der"><b>${celda(a.tot, D.tot)}</b></td></tr>`).join("") +
+    `</tbody><tfoot><tr><td><b>Compras</b></td>${D.totMes.map(t => `<td class="der"><b>${S.cpVer === "pct" ? (t ? "100%" : "–") : solesR(t)}</b></td>`).join("")}<td class="der"><b>${S.cpVer === "pct" ? "100%" : solesR(D.tot)}</b></td></tr></tfoot>`;
+  $("cpMas").innerHTML = filas.length > (S.cpMostrar || 100) ? `<button class="btn" type="button" id="cpMasBtn">Ver más (de ${filas.length})</button>` : "";
+}
+$("cpQ").addEventListener("change", e => { S.cpLab = e.target.value.trim().toUpperCase(); const D = datosCompras(); if (!D.labs.some(a => a.l === S.cpLab)) S.cpLab = D.labs.find(a => norm(a.l).includes(norm(e.target.value)))?.l || S.cpLab; pintarCompras(); });
+$("cpQ2").addEventListener("input", e => { S.cpQ2 = e.target.value; pintarCompras(); });
+$("cpDesde").addEventListener("change", e => { S.cpDesde = e.target.value; pintarCompras(); });
+$("cpHasta").addEventListener("change", e => { S.cpHasta = e.target.value; pintarCompras(); });
+$("cpVerBox").addEventListener("click", e => { const b = e.target.closest("[data-cpver]"); if (b) { S.cpVer = b.dataset.cpver; pintarCompras(); } });
+$("cpTabla").addEventListener("click", e => { const r = e.target.closest("[data-cplab]"); if (r) { S.cpLab = r.dataset.cplab; pintarCompras(); scrollTo({ top: 0, behavior: "smooth" }); } });
+$("cpMas").addEventListener("click", e => { if (e.target.closest("#cpMasBtn")) { S.cpMostrar = (S.cpMostrar || 100) + 100; pintarCompras(); } });
+$("cpAct").addEventListener("click", () => cargarCompras(true));
+$("cpXls").addEventListener("click", () => {
+  const D = datosCompras(); if (!D.labs.length) return toast("No hay compras para descargar.");
+  const fila = (l, v, t) => ({ Laboratorio: l, ...Object.fromEntries(D.meses.flatMap((m, j) => [[MES_L(m) + " %", D.totMes[j] ? Math.round(Math.max(0, v[j]) / D.totMes[j] * 10000) / 100 : 0], [MES_L(m) + " S/", Math.round(v[j])]])), "Periodo %": D.tot ? Math.round(t / D.tot * 10000) / 100 : 0, "Periodo S/": Math.round(t) });
+  excelDe([...D.labs.map(a => fila(a.l, a.v, a.tot)), fila("COMPRAS (total)", D.totMes, D.tot)], "Compras", `compras_por_laboratorio_${S.cpDesde}_${S.cpHasta}`);
 });
