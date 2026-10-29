@@ -508,7 +508,13 @@ async function recalcular() {
     p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: false, h: meses.map(() => 0), b: {}, f: {}, s: {}, st: stf, hf: {}, sd: st[DROG]?.[0] || 0,
       sinVentas: true, dv: {}, um: (pr[3] || "").slice(0, 10), uv: "", ...(compras.has(cod) ? { cm: compras.get(cod).map(v => Math.round(v)) } : {}) });
   }
-  const cmM = meses.slice();   // meses de p.cm (compras): toda la historia
+  const cmM = meses.slice();   // meses de p.cm (compras): toda la historia, más el mes en curso (aunque esté incompleto)
+  if (metas.has(mesCorte) && !cmM.includes(mesCorte)) {
+    const { cm } = await resumenMes(mesCorte, metas.get(mesCorte)); cmM.push(mesCorte);
+    for (const a of compras.values()) a.push(0);
+    for (const cod in cm) (compras.get(cod) ?? compras.set(cod, Array(cmM.length).fill(0)).get(cod))[cmM.length - 1] += cm[cod];
+    for (const p0 of p) if (compras.has(p0.c)) p0.cm = compras.get(p0.c).map(v => Math.round(v));
+  }
   const o = { ver: CALC_VER, corte, meses, hfm, bm, fm, metodos: METODOS.filter(m => p.some(x => x.f[m])), farmacias, p, origen: "kardex", cmM,
     dias: diasInfo };
   msg("Guardando pronósticos…"); paso = "guardar los pronósticos (proy_config/datos)";
