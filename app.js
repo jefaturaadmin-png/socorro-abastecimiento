@@ -81,7 +81,8 @@ const VISTAS = [
   { id: "pedidos", nombre: "Productos agotados o de extrema urgencia", vista: "vPed", ic: "i-lista", desc: "Lo que cada sucursal pidió de urgencia (desde el formulario)", ayuda: "químicos: ven los de su sucursal" },
   { id: "compras", nombre: "Compras por laboratorio", vista: "vCompL", c: "comp", ic: "i-grafico", desc: "Qué porcentaje de las compras de cada mes fue de cada laboratorio" },
   { id: "evaluacion", nombre: "Evaluación de sucursales", vista: "vEval", c: "est", ic: "i-grafico", desc: "Stock, orden, limpieza, capacidad y BPA de cada sucursal", ayuda: "químicos: ven la de su sucursal" },
-  { id: "nuevos", nombre: "Productos que buscan los clientes", vista: "vNue", c: "suc", ic: "i-mas", desc: "Registrar con foto lo que piden y no tenemos; lo ven todas las sucursales", todos: true }];
+  { id: "nuevos", nombre: "Productos que buscan los clientes", vista: "vNue", c: "suc", ic: "i-mas", desc: "Registrar con foto lo que piden y no tenemos; lo ven todas las sucursales", todos: true },
+  { id: "flujo", nombre: "Flujograma de abastecimiento", vista: "vFlujo", c: "mapa", ic: "i-lista", desc: "Cómo se trabaja: de la compra al proveedor hasta la atención a sucursales", todos: true }];
 // v.todos: módulo abierto a todos los usuarios (no hace falta activarlo en Usuarios)
 const misVistas = () => esAdmin() ? VISTAS : VISTAS.filter(v => v.todos || ((S.prev || S.perfil)?.vistas || []).includes(v.id));
 const NOMBRE_ROL = { admin: "Administrador", quimico: "Químico", colaborador: "Colaborador" };
@@ -295,7 +296,7 @@ function pintarNav() {
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vCompL", "vNue", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vCompL", "vNue", "vFlujo", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
@@ -318,7 +319,8 @@ function render() {
   else if (S.vista === "vPed") { cargarPedidos(); pintarPedidos(); }
   else if (S.vista === "vEval") { cargarEval(); pintarEval(); }
   else if (S.vista === "vCompL") { cargarCompras(); pintarCompras(); }
-  else if (S.vista === "vNue") { escucharNue(); pintarNue(); }   // escucharFalt vuelve a conectar si se había cortado
+  else if (S.vista === "vNue") { escucharNue(); pintarNue(); }
+  else if (S.vista === "vFlujo") pintarFlujo();   // escucharFalt vuelve a conectar si se había cortado
   pintarSel("bq"); pintarSel("ab"); pintarLados();
   $("ayuda").classList.toggle("mini", S.vista !== "vInicio");   // fuera del inicio solo el ícono, para no tapar botones
 }
@@ -2543,3 +2545,46 @@ $("nueXls").addEventListener("click", () => {
     Nota: d.nota || "", "Registró": d.porNombre || "", "También en": (d.tambien || []).map(t => corto(t.suc)).join(", "), Estado: (NUE_EST[d.estado || "nuevo"] || NUE_EST.nuevo)[0].replace(/^\S+ /, ""), "Nota de Abastecimiento": d.notaAdmin || "", Foto: d.foto ? "sí" : "no" })),
     "Productos buscados", "productos_que_buscan_" + hoyISO());
 });
+
+/* ===================== flujograma de abastecimiento ===================== */
+// Cadena de trabajo general (para explicar a los químicos): 4 procesos y, dentro de cada uno, sus pasos.
+// Paso: { t: qué se hace, r: responsable } · decisión: { d: pregunta, si, no, rno: responsable del «no» }
+const FLUJO = [
+  { t: "Requerimiento a proveedores", ic: "🧾", pasos: [
+    { t: "Filtro general de los movimientos (ventas) de un periodo determinado", r: "Abastecimiento" },
+    { t: "Propuesta de compra", r: "Abastecimiento" },
+    { t: "Envío de la orden de compra a los proveedores o distribuidoras designadas", r: "Luigi" },
+    { t: "El proveedor devuelve la orden de compra como una especie de cotización (qué atiende y a qué precio)", r: "Proveedor / distribuidora" },
+    { t: "Evaluación: fechas de vencimiento, escalas, promociones, entre otros", r: "Compras" },
+    { d: "¿El proveedor atiende todo lo pedido?", si: "Se da la conformidad de la orden", no: "Seguimiento: los faltantes se trasladan a otros proveedores con las cantidades que no atiende el inicial", rno: "Luigi" }] },
+  { t: "Llegada de mercadería", ic: "🚚", pasos: [
+    { t: "El proveedor despacha la mercadería", r: "Proveedor / distribuidora" },
+    { t: "Plazo máximo de entrega: 5 días, según lo indicado en el correo del proceso de compras", r: "Proveedor / distribuidora", nota: true },
+    { t: "Se controla cuánto demora en promedio cada distribuidor en enviar", r: "Compras" }] },
+  { t: "Recepción e ingreso de mercadería", ic: "📦", pasos: [
+    { t: "Recepción de la mercadería en droguería (con sus propios procedimientos)", r: "Almacén" },
+    { t: "La factura se envía al área administrativa (área de requerimientos) para su ingreso", r: "Almacén / proveedor" },
+    { t: "Se genera el formato de ingreso: en el sistema, la orden de compra", r: "Luis" },
+    { t: "Revisión de la política de precios, fechas de vencimiento y lote", r: "Jefatura" }] },
+  { t: "Requerimiento por tienda y atención a sucursales", ic: "🏪", pasos: [
+    { t: "Requerimiento de cada tienda: qué necesita cada sucursal", r: "Abastecimiento (Carlos); desde la próxima semana también los químicos" },
+    { t: "Atención a sucursales: se prepara y se envía desde droguería", r: "Droguería" },
+    { t: "La sucursal ve lo que le van a atender y responde en la página («Lo que me van a atender»)", r: "Químico de la sucursal" }] }];
+S.flSel = -1;   // -1 = todos los procesos abiertos
+function pasoFl(p) {
+  if (p.d) return `<div class="fl-dec"><div class="fl-rombo"><span>${esc(p.d)}</span></div>
+      <div class="fl-ramas"><div class="fl-rama si"><b>Sí</b><div class="fl-paso">${esc(p.si)}</div></div>
+        <div class="fl-rama no"><b>No</b><div class="fl-paso">${esc(p.no)}${p.rno ? `<span class="fl-resp">👤 ${esc(p.rno)}</span>` : ""}</div></div></div></div>`;
+  return `<div class="fl-paso${p.nota ? " fl-nota" : ""}">${p.nota ? "⏱ " : ""}${esc(p.t)}${p.r ? `<span class="fl-resp">👤 ${esc(p.r)}</span>` : ""}</div>`;
+}
+function pintarFlujo() {
+  $("flMapa").innerHTML = FLUJO.map((f, i) => `${i ? '<span class="fl-flecha" aria-hidden="true">➜</span>' : ""}<button type="button" class="fl-proc${S.flSel === i ? " sel" : ""}" data-flp="${i}"><small>${i + 1}</small><span class="fl-ic">${f.ic}</span><b>${esc(f.t)}</b></button>`).join("");
+  const ver = S.flSel < 0 ? FLUJO.map((f, i) => [f, i]) : [[FLUJO[S.flSel], S.flSel]];
+  $("flDet").innerHTML = ver.map(([f, i]) => `<section class="card fl-col"><h3><span class="fl-num">${i + 1}</span> ${f.ic} ${esc(f.t)}</h3>
+      <div class="fl-pasos">${f.pasos.map((p, j) => (j ? '<span class="fl-abajo" aria-hidden="true">▼</span>' : "") + pasoFl(p)).join("")}</div></section>`).join("");
+  $("flTodos").hidden = S.flSel < 0;
+}
+$("flMapa").addEventListener("click", e => { const b = e.target.closest("[data-flp]"); if (!b) return; S.flSel = S.flSel === +b.dataset.flp ? -1 : +b.dataset.flp; pintarFlujo(); });
+$("flTodos").addEventListener("click", () => { S.flSel = -1; pintarFlujo(); });
+$("flImp").addEventListener("click", () => { S.flSel = -1; pintarFlujo(); setTimeout(() => print(), 50); });
+$("flPant").addEventListener("click", () => { const el = $("vFlujo"); (document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen?.())?.catch?.(() => {}); });
