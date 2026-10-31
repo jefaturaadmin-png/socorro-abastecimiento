@@ -638,3 +638,13 @@ body.en-previa .top { top: 42px; box-shadow: inset 0 3px 0 #5b3fa8 }
 .ev-lnk { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline dotted; cursor: pointer; }
 .ev-lnk:hover { color: #5b2d6e; text-decoration-style: solid; }
 #srDlgC select { width: auto; display: inline-block; padding: 2px 6px; }
+.sr-tabs { margin: 6px 0 12px; }
+.sr-cab { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin: 6px 0 14px; }
+.sr-bola { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 92px; height: 64px; padding: 0 14px; border-radius: 50%; font-weight: 700; font-size: 1.15rem; }
+.sr-bola small { font-size: .72rem; font-weight: 500; }
+.sr-r { background: #fbd9b8; color: #7a3d0c; }
+.sr-d { background: #cfe8df; color: #1E6B5F; }
+.sr-dias { background: #4a7fd6; color: #fff; }
+.sr-per { border: 1px solid #c9d3df; border-radius: 8px; padding: 4px 10px 8px; display: flex; align-items: center; gap: 8px; }
+.sr-per legend { font-size: .78rem; padding: 0 4px; }
+.sr-per input { width: auto; }

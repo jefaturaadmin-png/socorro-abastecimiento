@@ -22,7 +22,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610310900";
+const VERSION_PROY = "202610311100";
 const VERSION_COMP = "202610281500";
 
 /* ===================== utilidades ===================== */
@@ -2027,18 +2027,18 @@ const BPA = [
   ["Infraestructura", ["Parihuelas, racks o estantes (nada en contacto directo con el piso)", "Temperatura de 20 a 25 °C (máx. 30 °C)", "Cadena de frío", "Termómetro con registro de temperatura", "Protegido de la luz y la humedad"]],
   ["Funcionamiento", ["Flujo sin interferencia de actividades operativas o administrativas", "Instalaciones limpias, con registros de limpieza", "Productos farmacéuticos, dispositivos médicos y sanitarios separados"]]];
 const BPA_TOTAL = BPA.reduce((a, [, xs]) => a + xs.length, 0);
-S.evFecha = hoyISO(); S.evMin = 15; S.evMax = 90; S.evSR = 12;
-try { const g = JSON.parse(localStorage.getItem("ev_umbral") || "{}"); if (g.min) S.evMin = g.min; if (g.max) S.evMax = g.max; if (g.sr) S.evSR = g.sr; } catch {}
+S.evFecha = hoyISO(); S.evMin = 15; S.evMax = 90; S.evDias = 365;
+try { const g = JSON.parse(localStorage.getItem("ev_umbral") || "{}"); if (g.min) S.evMin = g.min; if (g.max) S.evMax = g.max; if (g.srd) S.evDias = g.srd; } catch {}
 const sucsEval = () => FARMACIAS.filter(f => /^ALMACEN /.test(f) && (esAdmin() || !miFarm() || f === miFarm()));
 async function cargarEval(forzar) {
   if (S.evCargando) return; S.evCargando = true;
   try {
     if (!S.evStock || forzar) { const d = await getDoc(doc(db, "red", "eval")); S.evStock = d.exists() ? d.data() : { s: {} }; }
-    // detalle de cada sucursal (stock, venta diaria y meses sin venta de cada producto): para elegir el lapso de «sin rotación»
+    // detalle de cada sucursal (stock, venta diaria y días sin venta de cada producto): para elegir el periodo de «sin rotación»
     if (!S.evR || forzar) {
       S.evR = {};
       await Promise.all(sucsEval().map(async f => { try { const d = await getDoc(doc(db, "red", "ev_" + f)); if (d.exists()) {
-        const x = d.data(); S.evR[f] = { fin: x.fin || "", corte: x.corte, filas: String(x.r || "").split(",").filter(Boolean).map(t => { const [c, st, dd, m, v] = t.split("|"); return { c, st: +st, d: +dd, m: +m, v: +v }; }) };
+        const x = d.data(); S.evR[f] = { fin: x.fin || "", corte: x.corte, filas: String(x.r || "").split(",").filter(Boolean).map(t => { const [c, st, dd, m, v] = t.split("|"); return { c, st: +st, d: +dd, ds: x.u === "dias" ? +m : (+m >= 99 ? 99999 : +m * 30), v: +v }; }) };
       } } catch {} }));
     }
     if (!S.evFechas || forzar) { const q = await getDocs(collection(db, "evaluacion")); S.evDocs = new Map(q.docs.map(d => [d.id, d.data()])); S.evFechas = [...S.evDocs.keys()].sort().reverse(); }
@@ -2049,11 +2049,11 @@ async function cargarEval(forzar) {
 // los 5 indicadores de stock de una sucursal (% de productos), con los días mínimo y máximo elegidos
 function stockEval(f) {
   const R = S.evR?.[f];
-  if (R) {   // con el detalle: «sin rotación» = tiene stock y no vendió en los últimos S.evSR meses
+  if (R) {   // con el detalle: «sin rotación» = tiene stock y no vendió en los últimos S.evDias días
     const n = { normo: 0, sobre: 0, sub: 0, sr: 0, de: 0 }, v = { normo: 0, sobre: 0, sub: 0, sr: 0 }; let dem = 0;
     for (const x of R.filas) {
       if (x.d > 0) dem++;
-      if (x.st > 0 && x.m >= S.evSR) { n.sr++; v.sr += x.v; continue; }
+      if (x.st > 0 && x.ds > S.evDias) { n.sr++; v.sr += x.v; continue; }
       if (x.d > 0 && x.st <= 0) { n.de++; continue; }
       if (!(x.st > 0)) continue;
       const dias = x.d > 0 ? x.st / x.d : 9999, k = dias < S.evMin ? "sub" : dias > S.evMax ? "sobre" : "normo"; n[k]++; v[k] += x.v;
@@ -2078,11 +2078,11 @@ const evDe = f => S.evDocs?.get(S.evFecha)?.s?.[f] || {};
 const p1 = v => v == null ? "–" : (Math.round(v * 100) / 100).toLocaleString("es-PE", { maximumFractionDigits: 2 }) + " %";
 function pintarEval() {
   const admin = esAdmin();
-  $("evMin").value = S.evMin; $("evMax").value = S.evMax; $("evSR").value = S.evSR;
+  $("evMin").value = S.evMin; $("evMax").value = S.evMax; $("evSRd").value = desdeSR(); $("evSRn").textContent = S.evDias + " días";
   const fechas = [...new Set([S.evFecha, ...(S.evFechas || [])])].sort().reverse();
   $("evFecha").innerHTML = fechas.map(f => `<option value="${f}" ${f === S.evFecha ? "selected" : ""}>${fDia(f)}${S.evDocs?.has(f) ? "" : " (nueva)"}</option>`).join("");
   $("evNueva").hidden = !admin;
-  $("evInfo").innerHTML = S.evStock?.publicado ? `Indicadores de stock con el kardex al <b>${fmtF(S.evStock.corte)}</b> (publicado el ${fFecha(S.evStock.publicado)}) · por cantidad de productos.${(() => { const fin = Object.values(S.evR || {})[0]?.fin; return fin ? ` Sin rotación: tiene stock y no se vendió en los últimos <b>${S.evSR} meses</b> (${MES_L(sumaMes(fin, 1 - S.evSR))} a ${MES_L(fin)}, más lo que va del mes). Haga clic en el % de sin rotación para ver laboratorios y productos.` : ""; })()}`
+  $("evInfo").innerHTML = S.evStock?.publicado ? `Indicadores de stock con el kardex al <b>${fmtF(S.evStock.corte)}</b> (publicado el ${fFecha(S.evStock.publicado)}) · por cantidad de productos.${Object.keys(S.evR || {}).length ? ` Haga clic en el % de disponibilidad o de sin rotación para ver laboratorios y productos.` : ""}`
     : "Los indicadores de stock aparecerán después de subir el kardex o abrir Atención a sucursales.";
   msg("evMsg", S.evErr || "", true);
   const filas = sucsEval().map(f => ({ f, st: stockEval(f), e: evDe(f) }));
@@ -2093,7 +2093,7 @@ function pintarEval() {
     filas.map(({ f, st, e }) => { const nv = nivelStock(st?.p.normo), cap = capacidad(e.cap), bpa = bpaPct(e.bpa);
       return `<tr><td><b>${esc(corto(f))}</b></td><td><span class="chip ${nv[1]}">${nv[0]}</span></td><td class="der">${cap != null ? cap.toLocaleString("es-PE", { maximumFractionDigits: 2 }) + " m³" : "–"}</td>
         ${EV_ITEMS.map(([k]) => `<td>${celNota(f, k, e[k])}</td>`).join("")}
-        <td class="der">${p1(st?.disp)}</td><td class="der ev-n">${p1(st?.p.normo)}</td><td class="der ev-s">${p1(st?.p.sobre)}</td><td class="der ev-b">${p1(st?.p.sub)}</td><td class="der ev-r">${S.evR?.[f] ? `<button type="button" class="ev-lnk" data-evsr="${esc(f)}" title="Ver laboratorios y productos sin rotación">${p1(st?.p.sr)}</button>` : p1(st?.p.sr)}</td><td class="der ev-d">${p1(st?.p.de)}</td>
+        <td class="der">${S.evR?.[f] ? `<button type="button" class="ev-lnk" data-evdisp="${esc(f)}" title="Ver lo desabastecido por laboratorio">${p1(st?.disp)}</button>` : p1(st?.disp)}</td><td class="der ev-n">${p1(st?.p.normo)}</td><td class="der ev-s">${p1(st?.p.sobre)}</td><td class="der ev-b">${p1(st?.p.sub)}</td><td class="der ev-r">${S.evR?.[f] ? `<button type="button" class="ev-lnk" data-evsr="${esc(f)}" title="Ver laboratorios y productos sin rotación">${p1(st?.p.sr)}</button>` : p1(st?.p.sr)}</td><td class="der ev-d">${p1(st?.p.de)}</td>
         <td class="der"><b>${p1(bpa)}</b></td><td><button class="btn sm" type="button" data-evdet="${esc(f)}">${admin ? "Capacidad y BPA" : "Ver detalle"}</button></td></tr>`; }).join("") + "</tbody>";
   // barras apiladas: cómo está el stock de cada sucursal
   const cols = [["normo", "Normostock", "#1E6B5F"], ["sobre", "Sobrestock", "#3d5a99"], ["sub", "Substock", "#B7791F"], ["sr", "Sin rotación", "#8a4f9e"], ["de", "Desabastecido", "#B4321C"]];
@@ -2111,46 +2111,55 @@ async function guardarEval(f, cambio) {
   } catch (x) { toast(textoError(x)); }
 }
 $("evTabla").addEventListener("change", e => { const t = e.target.closest("[data-evk]"); if (t) guardarEval(t.dataset.evf, { [t.dataset.evk]: t.value }); });
-$("evTabla").addEventListener("click", e => { const s = e.target.closest("[data-evsr]"); if (s) return abrirSR(s.dataset.evsr); const b = e.target.closest("[data-evdet]"); if (b) abrirDetEval(b.dataset.evdet); });
+$("evTabla").addEventListener("click", e => { const s = e.target.closest("[data-evsr]"); if (s) return abrirSR(s.dataset.evsr, "sr"); const dp = e.target.closest("[data-evdisp]"); if (dp) return abrirSR(dp.dataset.evdisp, "disp"); const b = e.target.closest("[data-evdet]"); if (b) abrirDetEval(b.dataset.evdet); });
 // «Sin rotación» de una sucursal: primero por laboratorio, luego los productos del laboratorio elegido
-const sumaMes = (m, k) => { const [y, mo] = m.split("-").map(Number), t = y * 12 + mo - 1 + k; return `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, "0")}`; };
-const ultVenta = (R, m) => m >= 99 ? "Sin venta en los meses guardados" : m === 0 ? "Este mes o el anterior" : MES_L(sumaMes(R.fin, -m));
-function filasSR(f) {
-  const R = S.evR?.[f]; if (!R) return [];
-  return R.filas.filter(x => x.st > 0 && x.m >= S.evSR).map(x => { const pc = prodCat(x.c); return { ...x, n: pc?.n || "Código " + x.c, lab: pc?.ln || "SIN LABORATORIO" }; });
-}
-function abrirSR(f, lab) {
-  S.srF = f; S.srLab = lab || ""; const R = S.evR[f], todas = filasSR(f), totV = todas.reduce((a, x) => a + x.v, 0);
-  const opts = [1, 2, 3, 4, 6, 9, 12, 18, 24, 36].map(m => `<option value="${m}" ${m === S.evSR ? "selected" : ""}>${m} ${m === 1 ? "mes" : "meses"}</option>`).join("");
-  let h = `<h2>${esc(nombreFarm(f))} · sin rotación</h2>
-    <p class="muted">Productos con stock que no se vendieron en los últimos <select id="srMeses">${opts}</select> (${MES_L(sumaMes(R.fin, 1 - S.evSR))} a ${MES_L(R.fin)}, más lo que va del mes) · kardex al ${fmtF(R.corte)}.
-      <b>${nf(todas.length)}</b> productos · <b>${solesR(totV)}</b> en stock (a costo).</p>`;
+// periodo de «sin rotación»: desde (corte − días) hasta el corte del kardex
+const corteEv = () => String(Object.values(S.evR || {})[0]?.corte || S.evStock?.corte || hoyISO()).slice(0, 10);
+const desdeSR = () => { const d = new Date(corteEv() + "T12:00:00"); d.setDate(d.getDate() - S.evDias); return d.toISOString().slice(0, 10); };
+const ultVenta = x => { if (x.ds >= 99999) return "sin venta en lo guardado"; const d = new Date(corteEv() + "T12:00:00"); d.setDate(d.getDate() - x.ds); return "última venta " + fDia(d.toISOString().slice(0, 10)) + (x.ds > 90 ? " aprox." : ""); };
+const conNombre = x => { const pc = prodCat(x.c); return { ...x, n: pc?.n || "Código " + x.c, lab: pc?.ln || "SIN LABORATORIO" }; };
+// sr: con stock y sin venta en el periodo (por valor en soles) · disp: se venden y están en 0 (por cantidad de productos)
+const filasSR = (f, tab) => (S.evR?.[f]?.filas || []).filter(x => tab === "disp" ? x.d > 0 && x.st <= 0 && !(x.st > 0 && x.ds > S.evDias) : x.st > 0 && x.ds > S.evDias).map(conNombre);
+function abrirSR(f, tab, lab) {
+  S.srF = f; S.srTab = tab || S.srTab || "sr"; S.srLab = lab || ""; const sr = S.srTab === "sr", st = stockEval(f), todas = filasSR(f, S.srTab);
+  const peso = x => sr ? x.v : 1, tot = todas.reduce((a, x) => a + peso(x), 0), pc = (v, t) => t ? p1(v / t * 100) : "–";
+  let h = `<h2>${esc(nombreFarm(f))}</h2>
+    <div class="pd-per sr-tabs"><button type="button" class="pd-chip" data-srtab="disp" aria-pressed="${!sr}">Disponibilidad</button><button type="button" class="pd-chip" data-srtab="sr" aria-pressed="${sr}">Sin rotación</button></div>
+    <div class="sr-cab"><span class="sr-bola ${sr ? "sr-r" : "sr-d"}" title="${sr ? "% de productos sin rotación" : "Disponibilidad"}">${p1(sr ? st?.p.sr : st?.disp)}</span>
+      ${sr ? `<fieldset class="sr-per"><legend>Periodo</legend><input type="date" id="srDesde" value="${desdeSR()}" max="${corteEv()}"> <span>a</span> <input type="date" value="${corteEv()}" disabled title="Fecha del kardex (el stock es de ese día)"></fieldset>
+      <span class="sr-bola sr-dias">${nf(S.evDias)}<small>días</small></span>` : `<p class="muted">Productos que se venden en la sucursal y tienen stock 0 · kardex al ${fmtF(corteEv())}.</p>`}</div>`;
   if (!S.srLab) {
-    const g = new Map(); for (const x of todas) { const a = g.get(x.lab) || { n: 0, u: 0, v: 0 }; a.n++; a.u += x.st; a.v += x.v; g.set(x.lab, a); }
-    const labs = [...g].sort((a, b) => b[1].v - a[1].v || b[1].n - a[1].n);
-    h += `<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Laboratorio</th><th class="der">Productos</th><th class="der">Unidades</th><th class="der">Valor (S/)</th><th class="der">% del valor</th></tr></thead><tbody>` +
-      (labs.length ? labs.map(([l, a]) => `<tr class="clic" data-srlab="${esc(l)}"><td><b>${esc(l)}</b></td><td class="der">${nf(a.n)}</td><td class="der">${nf(Math.round(a.u))}</td><td class="der">${solesR(a.v)}</td><td class="der">${totV ? p1(a.v / totV * 100) : "–"}</td></tr>`).join("")
-        : '<tr class="vacia"><td colspan="5">Ningún producto sin rotación en ese lapso.</td></tr>') + "</tbody></table></div>";
+    const g = new Map(); for (const x of todas) { const a = g.get(x.lab) || { n: 0, v: 0, w: 0 }; a.n++; a.v += x.v; a.w += peso(x); g.set(x.lab, a); }
+    const labs = [...g].sort((a, b) => b[1].w - a[1].w || b[1].n - a[1].n);
+    h += `<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Laboratorio</th><th class="der">%</th><th class="der">Productos</th>${sr ? '<th class="der">Soles</th>' : ""}</tr></thead><tbody>` +
+      (labs.length ? labs.map(([l, a]) => `<tr class="clic" data-srlab="${esc(l)}"><td><b>${esc(l)}</b></td><td class="der">${pc(a.w, tot)}</td><td class="der">${nf(a.n)}</td>${sr ? `<td class="der">${solesR(a.v)}</td>` : ""}</tr>`).join("")
+        : `<tr class="vacia"><td colspan="4">${sr ? "Ningún producto sin rotación en ese periodo." : "No hay productos desabastecidos."}</td></tr>`) +
+      `</tbody><tfoot><tr><td><b>Total</b></td><td class="der"><b>${tot ? "100%" : "–"}</b></td><td class="der"><b>${nf(todas.length)}</b></td>${sr ? `<td class="der"><b>${solesR(tot)}</b></td>` : ""}</tr></tfoot></table></div>`;
   } else {
-    const ps = todas.filter(x => x.lab === S.srLab).sort((a, b) => b.v - a.v);
-    h += `<p><button class="btn sm" type="button" id="srVolver">← Todos los laboratorios</button> <b>${esc(S.srLab)}</b> · ${nf(ps.length)} productos · ${solesR(ps.reduce((a, x) => a + x.v, 0))}</p>
-      <div class="tabla-wrap"><table class="tabla"><thead><tr><th>Código</th><th>Producto</th><th class="der">Stock</th><th class="der">Valor (S/)</th><th>Última venta en la sucursal</th></tr></thead><tbody>` +
-      ps.map(x => `<tr><td><code>${esc(x.c)}</code></td><td>${esc(x.n)}</td><td class="der">${nf(x.st)}</td><td class="der">${solesR(x.v)}</td><td>${ultVenta(R, x.m)}</td></tr>`).join("") + "</tbody></table></div>";
+    const ps = todas.filter(x => x.lab === S.srLab).sort((a, b) => sr ? b.v - a.v : b.d - a.d), tl = ps.reduce((a, x) => a + peso(x), 0);
+    h += `<p><button class="btn sm" type="button" id="srVolver">← Todos los laboratorios</button></p>
+      <h3>Laboratorio ${esc(S.srLab)} <small class="muted">· ${pc(tl, tot)}</small></h3>
+      <div class="tabla-wrap"><table class="tabla"><thead><tr><th>Producto</th>${sr ? '<th class="der">%</th><th class="der">Cantidad</th><th class="der">Soles</th>' : '<th class="der">Venta por día</th><th class="der">Stock</th>'}</tr></thead><tbody>` +
+      ps.map(x => `<tr><td><b>${esc(x.n)}</b> <code>${esc(x.c)}</code><br><small class="muted">${ultVenta(x)}</small></td>${sr ? `<td class="der">${pc(x.v, tl)}</td><td class="der">${nf(x.st)}</td><td class="der">${solesR(x.v)}</td>` : `<td class="der">${nf(Math.round(x.d * 100) / 100)}</td><td class="der">0</td>`}</tr>`).join("") +
+      (sr ? `</tbody><tfoot><tr><td><b>Total</b></td><td class="der"><b>100%</b></td><td class="der"><b>${nf(Math.round(ps.reduce((a, x) => a + x.st, 0) * 1000) / 1000)}</b></td><td class="der"><b>${solesR(tl)}</b></td></tr></tfoot>` : "</tbody>") + "</table></div>";
   }
-  h += `<p><button class="btn" type="button" id="srXls"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel (todos los productos sin rotación)</button></p>`;
+  h += `<p><button class="btn" type="button" id="srXls"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button></p>`;
   $("srDlgC").innerHTML = h; if (!$("srDlg").open) $("srDlg").showModal();
 }
 $("srDlg").addEventListener("click", e => {
   if (e.target.closest("[data-cerrar-dlg]") || e.target === $("srDlg")) return $("srDlg").close();
-  const l = e.target.closest("[data-srlab]"); if (l) return abrirSR(S.srF, l.dataset.srlab);
-  if (e.target.closest("#srVolver")) return abrirSR(S.srF);
-  if (e.target.closest("#srXls")) { const R = S.evR[S.srF];
-    excelDe(filasSR(S.srF).sort((a, b) => a.lab.localeCompare(b.lab) || b.v - a.v).map(x => ({ Sucursal: corto(S.srF), Laboratorio: x.lab, Código: x.c, Producto: x.n, Stock: x.st, "Valor S/": x.v, "Última venta": ultVenta(R, x.m) })),
-      "Sin rotación", `sin_rotacion_${corto(S.srF)}_${S.evSR}m`); }
+  const t = e.target.closest("[data-srtab]"); if (t) return abrirSR(S.srF, t.dataset.srtab);
+  const l = e.target.closest("[data-srlab]"); if (l) return abrirSR(S.srF, S.srTab, l.dataset.srlab);
+  if (e.target.closest("#srVolver")) return abrirSR(S.srF, S.srTab);
+  if (e.target.closest("#srXls")) { const sr = S.srTab === "sr";
+    excelDe(filasSR(S.srF, S.srTab).sort((a, b) => a.lab.localeCompare(b.lab) || b.v - a.v).map(x => ({ Sucursal: corto(S.srF), Laboratorio: x.lab, Código: x.c, Producto: x.n,
+      ...(sr ? { Cantidad: x.st, "Soles (costo)": x.v } : { "Venta por día": Math.round(x.d * 100) / 100 }), "Última venta": ultVenta(x) })),
+      sr ? "Sin rotación" : "Desabastecidos", sr ? `sin_rotacion_${corto(S.srF)}_${desdeSR()}_a_${corteEv()}` : `desabastecidos_${corto(S.srF)}_${corteEv()}`); }
 });
-$("srDlg").addEventListener("change", e => { if (e.target.id !== "srMeses") return; S.evSR = +e.target.value; guardarUmbral(); abrirSR(S.srF, S.srLab); pintarEval(); });
-const guardarUmbral = () => { try { localStorage.setItem("ev_umbral", JSON.stringify({ min: S.evMin, max: S.evMax, sr: S.evSR })); } catch {} };
-$("evSR").addEventListener("change", () => { S.evSR = +$("evSR").value || 12; guardarUmbral(); pintarEval(); });
+const ponerDesde = v => { if (!v) return; S.evDias = Math.max(1, Math.round((new Date(corteEv() + "T12:00:00") - new Date(v + "T12:00:00")) / 864e5)); guardarUmbral(); pintarEval(); };
+$("srDlg").addEventListener("change", e => { if (e.target.id !== "srDesde") return; ponerDesde(e.target.value); abrirSR(S.srF, S.srTab, S.srLab); });
+const guardarUmbral = () => { try { localStorage.setItem("ev_umbral", JSON.stringify({ min: S.evMin, max: S.evMax, srd: S.evDias })); } catch {} };
+$("evSRd").addEventListener("change", e => ponerDesde(e.target.value));
 $("evFecha").addEventListener("change", e => { S.evFecha = e.target.value; pintarEval(); });
 $("evNueva").addEventListener("click", () => { const f = prompt("Fecha de la nueva evaluación (AAAA-MM-DD):", hoyISO()); if (f && /^\d{4}-\d{2}-\d{2}$/.test(f)) { S.evFecha = f; pintarEval(); } });
 ["evMin", "evMax"].forEach(id => $(id).addEventListener("change", () => {

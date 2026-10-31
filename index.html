@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202610310900">
+<link rel="stylesheet" href="styles.css?v=202610311100">
 </head>
 <body>
 
@@ -365,14 +365,14 @@
           <div class="filtros">
             <label class="filtro" title="Por debajo de estos días de cobertura es substock">Substock: menos de <input id="evMin" type="number" min="1" style="width:80px"> días</label>
             <label class="filtro" title="Por encima de estos días de cobertura es sobrestock">Sobrestock: más de <input id="evMax" type="number" min="2" style="width:80px"> días</label>
-            <label class="filtro" title="Tiene stock y no se vendió en este lapso">Sin rotación: sin venta en <select id="evSR"><option value="1">1 mes</option><option value="2">2 meses</option><option value="3">3 meses</option><option value="4">4 meses</option><option value="6">6 meses</option><option value="9">9 meses</option><option value="12">12 meses</option><option value="18">18 meses</option><option value="24">24 meses</option><option value="36">36 meses</option></select></label>
+            <label class="filtro" title="Tiene stock y no se vendió desde esta fecha hasta la fecha del kardex">Sin rotación: sin venta desde <input id="evSRd" type="date" style="width:auto"> <b id="evSRn"></b></label>
             <button class="btn" id="evXls" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button>
           </div></div>
         <div class="tabla-wrap"><table class="tabla" id="evTabla"></table></div>
       </section>
       <section class="card pd-card"><h3>¿Cómo está el stock de cada sucursal? (% de productos)</h3><div id="evGraf"></div></section>
       <p class="muted ev-def"><b>Cómo se calcula:</b> se toma cada producto con stock o con venta en la sucursal. <b>Desabastecido</b>: se vende pero tiene stock 0.
-        <b>Sin rotación</b>: tiene stock pero no se vendió en el lapso elegido arriba (por defecto 12 meses = tipo E); haga clic en su % para ver laboratorios y productos. Con los demás se mira cuántos días le cubre su stock:
+        <b>Sin rotación</b>: tiene stock pero no se vendió en el periodo elegido arriba (desde esa fecha hasta la fecha del kardex; por defecto 365 días). Haga clic en el % de disponibilidad o de sin rotación para ver laboratorios y productos. Con los demás se mira cuántos días le cubre su stock:
         <b>Substock</b> menos del mínimo, <b>Normostock</b> entre el mínimo y el máximo, <b>Sobrestock</b> más del máximo. <b>Disponibilidad</b>: de los productos que se venden, cuántos tienen stock.
         <b>Nivel de stockeo</b>: Adecuado si el normostock es 60 % o más, Regular de 40 % a 60 %, Deficiente menos de 40 %.</p>
     </div>
@@ -590,6 +590,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202610310900"></script>
+<script type="module" src="app.js?v=202610311100"></script>
 </body>
 </html>
