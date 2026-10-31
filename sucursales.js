@@ -339,6 +339,28 @@
     }
     for (const f in ev) ev[f].c = ev[f].c.join(',');
     await guardar('eval', { s: ev, C: CFG.def.C, Sg: CFG.def.Sg, publicado: hoy, corte: S.P.corte });
+    // detalle por sucursal (red/ev_<SUCURSAL>) para elegir el lapso de «sin rotación» y ver laboratorios y productos:
+    // "cod|stock|venta diaria|meses sin venta|valor,…"; meses sin venta = meses completos seguidos sin venta hasta «fin»
+    // (0 si vendió en el último mes o en el mes en curso; 99 si no vendió en ninguno de los meses guardados)
+    const o = S.P, fin = o.meses?.[o.meses.length - 1] || '';
+    let iAct = Infinity;
+    if (o.dias && o.meses?.length) {
+      const fd = new Date(o.dias.hasta + 'T00:00:00Z');
+      for (let i = o.dias.n - 1; i >= 0; i--) { const dd = new Date(fd - (o.dias.n - 1 - i) * 864e5).toISOString().slice(0, 7); if (dd <= fin) { iAct = i + 1; break; } }
+    }
+    const msv = (p, f) => {
+      if ((p.dv?.[f] || []).some(([i, q]) => i >= iAct && q > 0)) return 0;
+      const h = p.hf?.[f];
+      if (!o.hfm || !h) return p.catF?.[f] === 'E' ? 99 : 0;
+      for (let k = 0; k < h.length; k++) if (h[h.length - 1 - k] > 0) return k;
+      return 99;
+    };
+    const det = {};
+    for (const r of cache.filas) {
+      if (!/^ALMACEN /.test(r.f) || !(r.st > 0 || r.d > 0)) continue;
+      (det[r.f] ??= []).push([r.p.c, r3(r.st), r3(r.d), msv(r.p, r.f), Math.round(r.st * (r.p.k || 0))].join('|'));
+    }
+    for (const f in det) await guardar('ev_' + f, { r: det[f].join(','), fin, publicado: hoy, corte: S.P.corte });
     return { errores, hechos, labs, conCompras: S.P.p.filter(p => p.cm).length };
   }
   // para el botón "Calcular compras ahora" (módulo Compras): espera los datos y publica solo los documentos de apoyo
