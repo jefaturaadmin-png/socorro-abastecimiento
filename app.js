@@ -22,7 +22,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610311100";
+const VERSION_PROY = "202610311200";
 const VERSION_COMP = "202610281500";
 
 /* ===================== utilidades ===================== */
@@ -2081,8 +2081,8 @@ function pintarEval() {
   $("evMin").value = S.evMin; $("evMax").value = S.evMax; $("evSRd").value = desdeSR(); $("evSRn").textContent = S.evDias + " días";
   const fechas = [...new Set([S.evFecha, ...(S.evFechas || [])])].sort().reverse();
   $("evFecha").innerHTML = fechas.map(f => `<option value="${f}" ${f === S.evFecha ? "selected" : ""}>${fDia(f)}${S.evDocs?.has(f) ? "" : " (nueva)"}</option>`).join("");
-  $("evNueva").hidden = !admin;
-  $("evInfo").innerHTML = S.evStock?.publicado ? `Indicadores de stock con el kardex al <b>${fmtF(S.evStock.corte)}</b> (publicado el ${fFecha(S.evStock.publicado)}) · por cantidad de productos.${Object.keys(S.evR || {}).length ? ` Haga clic en el % de disponibilidad o de sin rotación para ver laboratorios y productos.` : ""}`
+  $("evNueva").hidden = $("evGen").hidden = !admin;
+  $("evInfo").innerHTML = S.evStock?.publicado ? `Indicadores de stock con el kardex al <b>${fmtF(S.evStock.corte)}</b> (publicado el ${fFecha(S.evStock.publicado)}) · por cantidad de productos.${Object.keys(S.evR || {}).length ? ` Haga clic en el % de disponibilidad o de sin rotación para ver laboratorios y productos.` : admin ? ` <b class="mal">Falta el detalle por sucursal: pulse «⚙ Generar detalle» para poder elegir el periodo y abrir laboratorios y productos.</b>` : ""}`
     : "Los indicadores de stock aparecerán después de subir el kardex o abrir Atención a sucursales.";
   msg("evMsg", S.evErr || "", true);
   const filas = sucsEval().map(f => ({ f, st: stockEval(f), e: evDe(f) }));
@@ -2367,6 +2367,21 @@ async function calcularCompras() {
   finally { b.disabled = false; }
 }
 $("cpCalc").addEventListener("click", calcularCompras);
+// Evaluación: genera el detalle por sucursal (red/ev_…) con el kardex ya guardado, sin pasar por Atención a sucursales
+$("evGen").addEventListener("click", async () => {
+  const b = $("evGen"); b.disabled = true; msg("evMsg", "Generando el detalle de cada sucursal con el kardex guardado… puede tardar un par de minutos. No cierre la página.");
+  try {
+    if (!$("karFrame").src) $("karFrame").src = "proyeccion.html?solo=kar&v=" + VERSION_PROY;
+    let w = null;
+    for (let i = 0; i < 240 && !w; i++) { await new Promise(r => setTimeout(r, 500)); const x = $("karFrame").contentWindow; if (x?.publicarExtras) w = x; }
+    if (!w) throw new Error("no terminó de cargar el módulo Kardex");
+    const r = await w.publicarExtras(), ev = (r?.hechos || []).filter(h => h.startsWith("ev_")).length;
+    await cargarEval(true);
+    if (!ev) throw new Error((r?.errores || []).join(" · ") || "no se generó el detalle de ninguna sucursal");
+    msg("evMsg", r.errores.length ? `Detalle generado (${ev} sucursales). Avisos: ` + r.errores.join(" · ") : ""); toast(`Detalle generado: ${ev} sucursales`);
+  } catch (e) { msg("evMsg", "No se pudo generar el detalle: " + (e.message || e), true); }
+  finally { b.disabled = false; }
+});
 // Revisar meses: qué meses del kardex están guardados (proy_config/meses) y cuánto se compró en cada uno
 $("cpDiag").addEventListener("click", async () => {
   const box = $("cpDiagBox"); box.hidden = !box.hidden; if (box.hidden) return;
