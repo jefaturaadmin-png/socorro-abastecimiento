@@ -149,6 +149,29 @@ service cloud.firestore {
       allow write: if esAdmin();
     }
 
+    // ---------- productos que buscan los clientes: los registra cualquier usuario (con foto opcional) y los ven todos ----------
+    match /productos_nuevos/{id} {
+      allow read: if conPerfil();
+      allow create: if conPerfil()
+        && request.resource.data.porUid == request.auth.uid
+        && request.resource.data.prod is string
+        && request.resource.data.prod.size() >= 2 && request.resource.data.prod.size() <= 150
+        && request.resource.data.estado == 'nuevo';
+      // el administrador cambia el estado y su nota; los demás solo agregan "a mi sucursal también se lo pidieron"
+      allow update: if esAdmin()
+        || (conPerfil() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tambien']));
+      allow delete: if esAdmin() || (conPerfil() && resource.data.porUid == request.auth.uid);
+    }
+    match /productos_nuevos_foto/{id} {
+      allow read: if conPerfil();
+      allow create: if conPerfil()
+        && request.resource.data.porUid == request.auth.uid
+        && request.resource.data.d is string
+        && request.resource.data.d.size() < 900000;
+      allow update: if false;
+      allow delete: if esAdmin() || (conPerfil() && resource.data.porUid == request.auth.uid);
+    }
+
     // ---------- usuario → cuenta con la que entra (cuando el administrador le restablece la contraseña) ----------
     // se lee antes de iniciar sesión (solo dice qué cuenta usar, no contiene contraseñas)
     match /alias/{usuario} {

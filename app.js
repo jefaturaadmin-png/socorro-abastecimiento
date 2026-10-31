@@ -80,8 +80,10 @@ const VISTAS = [
   { id: "atencion", nombre: "Lo que me van a atender", vista: "vAten", ic: "i-ojo", desc: "Lo que Abastecimiento enviará a tu sucursal", ayuda: "solo químicos: ve su sucursal" },
   { id: "pedidos", nombre: "Productos agotados o de extrema urgencia", vista: "vPed", ic: "i-lista", desc: "Lo que cada sucursal pidió de urgencia (desde el formulario)", ayuda: "químicos: ven los de su sucursal" },
   { id: "compras", nombre: "Compras por laboratorio", vista: "vCompL", c: "comp", ic: "i-grafico", desc: "Qué porcentaje de las compras de cada mes fue de cada laboratorio" },
-  { id: "evaluacion", nombre: "Evaluación de sucursales", vista: "vEval", c: "est", ic: "i-grafico", desc: "Stock, orden, limpieza, capacidad y BPA de cada sucursal", ayuda: "químicos: ven la de su sucursal" }];
-const misVistas = () => esAdmin() ? VISTAS : VISTAS.filter(v => ((S.prev || S.perfil)?.vistas || []).includes(v.id));
+  { id: "evaluacion", nombre: "Evaluación de sucursales", vista: "vEval", c: "est", ic: "i-grafico", desc: "Stock, orden, limpieza, capacidad y BPA de cada sucursal", ayuda: "químicos: ven la de su sucursal" },
+  { id: "nuevos", nombre: "Productos que buscan los clientes", vista: "vNue", c: "suc", ic: "i-mas", desc: "Registrar con foto lo que piden y no tenemos; lo ven todas las sucursales", todos: true }];
+// v.todos: módulo abierto a todos los usuarios (no hace falta activarlo en Usuarios)
+const misVistas = () => esAdmin() ? VISTAS : VISTAS.filter(v => v.todos || ((S.prev || S.perfil)?.vistas || []).includes(v.id));
 const NOMBRE_ROL = { admin: "Administrador", quimico: "Químico", colaborador: "Colaborador" };
 const miFarm = () => S.prev ? S.prev.farmacia : S.perfil?.farmacia;
 
@@ -142,7 +144,7 @@ $("fLogin").addEventListener("submit", async e => {
 $("salir").addEventListener("click", () => signOut(auth));
 
 onAuthStateChanged(auth, async user => {
-  S.subs.forEach(u => u()); S.subs = []; S.bloqueos = new Map(); S.perfil = null; $("avisoGlobal").hidden = true;
+  S.subs.forEach(u => u()); S.subs = []; S.nueSub = false; S.bloqueos = new Map(); S.perfil = null; $("avisoGlobal").hidden = true;
   if (!user) { mostrar("vLogin"); $("top").hidden = true; $("ayuda").hidden = $("ladoIzq").hidden = $("ladoDer").hidden = true; document.body.classList.remove("lado-i", "lado-d"); return; }
   try {
     const snap = await getDoc(doc(db, "usuarios", user.uid));
@@ -293,7 +295,7 @@ function pintarNav() {
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vCompL", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vCompL", "vNue", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
@@ -315,7 +317,8 @@ function render() {
   else if (S.vista === "vAten") { escucharAten(); pintarAten(); }
   else if (S.vista === "vPed") { cargarPedidos(); pintarPedidos(); }
   else if (S.vista === "vEval") { cargarEval(); pintarEval(); }
-  else if (S.vista === "vCompL") { cargarCompras(); pintarCompras(); }   // escucharFalt vuelve a conectar si se había cortado
+  else if (S.vista === "vCompL") { cargarCompras(); pintarCompras(); }
+  else if (S.vista === "vNue") { escucharNue(); pintarNue(); }   // escucharFalt vuelve a conectar si se había cortado
   pintarSel("bq"); pintarSel("ab"); pintarLados();
   $("ayuda").classList.toggle("mini", S.vista !== "vInicio");   // fuera del inicio solo el ícono, para no tapar botones
 }
@@ -970,7 +973,7 @@ $("fAccion").addEventListener("click", async e => {
 
 /* ===================== usuarios (solo admin) ===================== */
 $("uRolSel").addEventListener("change", () => { $("uFarm").disabled = $("uRolSel").value !== "quimico"; });
-const chkVistas = (sel = []) => VISTAS.map(v => `<label class="check"><input type="checkbox" data-vista="${esc(v.id)}" ${sel.includes(v.id) ? "checked" : ""}> ${esc(v.nombre)}${v.ayuda ? ` <small class="muted">(${esc(v.ayuda)})</small>` : ""}</label>`).join("");
+const chkVistas = (sel = []) => VISTAS.filter(v => !v.todos).map(v => `<label class="check"><input type="checkbox" data-vista="${esc(v.id)}" ${sel.includes(v.id) ? "checked" : ""}> ${esc(v.nombre)}${v.ayuda ? ` <small class="muted">(${esc(v.ayuda)})</small>` : ""}</label>`).join("");
 $("uVistas").innerHTML = chkVistas();
 const vistasDe = el => [...el.querySelectorAll("[data-vista]:checked")].map(x => x.dataset.vista);
 function pintarUsuarios() {
@@ -2400,4 +2403,143 @@ $("cpXls").addEventListener("click", () => {
   const D = datosCompras(); if (!D.labs.length) return toast("No hay compras para descargar.");
   const fila = (l, v, t) => ({ Laboratorio: l, ...Object.fromEntries(D.meses.flatMap((m, j) => [[MES_L(m) + " %", D.totMes[j] ? Math.round(Math.max(0, v[j]) / D.totMes[j] * 10000) / 100 : 0], [MES_L(m) + " S/", Math.round(v[j])]])), "Periodo %": D.tot ? Math.round(t / D.tot * 10000) / 100 : 0, "Periodo S/": Math.round(t) });
   excelDe([...D.labs.map(a => fila(a.l, a.v, a.tot)), fila("COMPRAS (total)", D.totMes, D.tot)], "Compras", `compras_por_laboratorio_${S.cpDesde}_${S.cpHasta}`);
+});
+
+/* ===================== productos que buscan los clientes ===================== */
+// productos_nuevos/{id} = { prod, tipo: receta|consulta, cant, nota, suc, porUid, porNombre, creado, foto: true|false,
+//   tambien: [{ suc, porNombre, f }] (otras sucursales a las que también se lo pidieron), estado, notaAdmin }
+// productos_nuevos_foto/{id} = { d: "data:image/jpeg;base64,…", porUid }  (la foto aparte, para que la lista cargue rápido)
+const NUE_EST = { nuevo: ["🆕 Nuevo", "amb"], evaluando: ["🔎 En evaluación", "azul"], se_compra: ["🛒 Se va a comprar", "verde"], disponible: ["✅ Ya disponible", "verde"], no_trabaja: ["⛔ No se trabajará", "rojo"] };
+const NUE_TIPO = { receta: "📄 Receta", consulta: "🗣 Consulta del paciente" };
+S.nueFotos = new Map(); S.nueMostrar = 30;
+function escucharNue() {
+  if (S.nueSub) return;
+  S.nueSub = true;
+  S.subs.push(onSnapshot(collection(db, "productos_nuevos"), sn => {
+    S.nue = sn.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.creado?.toMillis?.() || Date.now()) - (a.creado?.toMillis?.() || Date.now()));
+    S.nueErr = ""; if (S.vista === "vNue") pintarNue();
+  }, e => { S.nueErr = textoError(e); S.nueSub = false; if (S.vista === "vNue") pintarNue(); }));
+}
+const fNue = t => { const d = t?.toDate ? t.toDate() : null; return d ? d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "2-digit" }) + " " + d.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" }) : "ahora"; };
+const sucsNue = d => [d.suc, ...(d.tambien || []).map(t => t.suc)].filter(Boolean);
+function filtrosNue() {
+  const q = norm($("nueQ").value).trim().split(/\s+/).filter(Boolean), suc = $("nueSuc").value, est = $("nueEst").value;
+  return (S.nue || []).filter(d => (!suc || sucsNue(d).includes(suc)) && (!est || (d.estado || "nuevo") === est)
+    && (!q.length || q.every(w => norm([d.prod, d.nota, d.porNombre, corto(d.suc)].join(" ")).includes(w))));
+}
+function pintarNue() {
+  msg("nueMsg", S.nueErr || "", true);
+  const admin = esAdmin(), todos = S.nue || [];
+  if (!$("nueSuc").options.length || $("nueSuc").dataset.n !== String(FARMACIAS.length)) {
+    $("nueSuc").innerHTML = '<option value="">Todas las sucursales</option>' + FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => `<option value="${esc(f)}">${esc(corto(f))}</option>`).join("");
+    $("nueSuc").dataset.n = String(FARMACIAS.length);
+    $("nueEst").innerHTML = '<option value="">Todos los estados</option>' + Object.entries(NUE_EST).map(([k, [t]]) => `<option value="${k}">${t}</option>`).join("");
+  }
+  // lo más buscado: el mismo nombre (sin mayúsculas ni tildes) en varias sucursales o varias veces
+  const g = new Map(); for (const d of todos) { const k = norm(d.prod).replace(/\s+/g, " ").trim(); const x = g.get(k) || { n: d.prod, veces: 0, s: new Set() }; x.veces += 1 + (d.tambien || []).length; sucsNue(d).forEach(f => x.s.add(f)); g.set(k, x); }
+  const top = [...g.values()].sort((a, b) => b.s.size - a.s.size || b.veces - a.veces).slice(0, 5);
+  const mes = new Date().toISOString().slice(0, 7), deMes = todos.filter(d => (d.creado?.toDate?.() || new Date()).toISOString().slice(0, 7) === mes);
+  $("nueRes").innerHTML = `<div class="card pd-kpi"><small>Registrados este mes</small><b class="n">${nf(deMes.length)}</b><small>en total: ${nf(todos.length)}</small></div>
+    <div class="card pd-kpi nue-top"><small>Lo más buscado</small>${top.length ? `<ol>${top.map(x => `<li><b>${esc(x.n)}</b> <small class="muted">· ${x.s.size} ${x.s.size === 1 ? "sucursal" : "sucursales"} · ${x.veces} ${x.veces === 1 ? "vez" : "veces"}</small></li>`).join("")}</ol>` : '<small class="muted">Aún no hay registros.</small>'}</div>`;
+  const lista = filtrosNue(), miS = miFarm();
+  $("nueLista").innerHTML = lista.length ? lista.slice(0, S.nueMostrar).map(d => {
+    const e = NUE_EST[d.estado || "nuevo"] || NUE_EST.nuevo, ya = (miS && sucsNue(d).includes(miS)), otros = (d.tambien || []);
+    return `<article class="card nue-item">
+      <div class="nue-foto" data-nuefoto="${esc(d.id)}">${d.foto ? (S.nueFotos.get(d.id) ? `<img src="${S.nueFotos.get(d.id)}" alt="Foto">` : '<span class="muted">📷 cargando…</span>') : '<span class="nue-sin">Sin foto</span>'}</div>
+      <div class="nue-cuerpo">
+        <h3>${esc(d.prod)}</h3>
+        <p class="muted">${NUE_TIPO[d.tipo] || ""}${d.cant ? ` · pedían ${nf(d.cant)}` : ""}</p>
+        ${d.nota ? `<p>${esc(d.nota)}</p>` : ""}
+        <p class="nue-quien"><b>${esc(d.suc ? corto(d.suc) : "Abastecimiento")}</b> · ${esc(d.porNombre || "")} · ${fNue(d.creado)}</p>
+        ${otros.length ? `<p class="nue-tamb">🙋 También lo pidieron en: ${otros.map(t => `<b>${esc(corto(t.suc))}</b>`).join(", ")}</p>` : ""}
+        <div class="nue-acc">
+          ${admin ? `<select class="ev-sel" data-nueest="${esc(d.id)}">${Object.entries(NUE_EST).map(([k, [t]]) => `<option value="${k}" ${k === (d.estado || "nuevo") ? "selected" : ""}>${t}</option>`).join("")}</select>
+            <input class="nue-na" data-nuenota="${esc(d.id)}" value="${esc(d.notaAdmin || "")}" placeholder="Nota de Abastecimiento (opcional)" maxlength="200">`
+          : `<span class="chip ${e[1]}">${e[0]}</span>${d.notaAdmin ? ` <small>${esc(d.notaAdmin)}</small>` : ""}`}
+          ${miS && !ya ? `<button class="btn sm" type="button" data-nuetamb="${esc(d.id)}">🙋 A mi sucursal también se lo pidieron</button>` : ""}
+          ${admin || d.porUid === S.perfil?.uid ? `<button class="btn sm peligro" type="button" data-nueborrar="${esc(d.id)}" title="Borrar este registro">🗑</button>` : ""}
+        </div>
+      </div></article>`; }).join("") : `<p class="muted nue-vacio">${todos.length ? "Ningún registro con esos filtros." : "Todavía no se registró ningún producto. Use «📷 Registrar producto» cuando un cliente busque algo que no tenemos."}</p>`;
+  $("nueMas").innerHTML = lista.length > S.nueMostrar ? `<button class="btn" type="button" id="nueMasBtn">Ver más (de ${lista.length})</button>` : "";
+  cargarFotosNue(lista.slice(0, S.nueMostrar));
+}
+async function cargarFotosNue(lista) {
+  const falta = lista.filter(d => d.foto && !S.nueFotos.has(d.id)); if (!falta.length) return;
+  await Promise.all(falta.map(async d => { try { const x = await getDoc(doc(db, "productos_nuevos_foto", d.id)); S.nueFotos.set(d.id, x.exists() ? x.data().d : ""); } catch { S.nueFotos.set(d.id, ""); } }));
+  if (S.vista === "vNue") for (const d of falta) { const el = document.querySelector(`[data-nuefoto="${CSS.escape(d.id)}"]`); if (el) el.innerHTML = S.nueFotos.get(d.id) ? `<img src="${S.nueFotos.get(d.id)}" alt="Foto">` : '<span class="nue-sin">Sin foto</span>'; }
+}
+// foto: se achica en el teléfono (máx. 1100 px, JPEG) para que pese poco
+function achicarFoto(file) {
+  return new Promise((ok, mal) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.naturalWidth, h = img.naturalHeight; const k = Math.min(1, 1100 / Math.max(w, h)); w = Math.round(w * k); h = Math.round(h * k);
+      const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d").drawImage(img, 0, 0, w, h);
+      let q = 0.72, d = c.toDataURL("image/jpeg", q); while (d.length > 600000 && q > 0.3) { q -= 0.12; d = c.toDataURL("image/jpeg", q); }
+      ok(d);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); mal(new Error("no se pudo leer la foto")); };
+    img.src = url;
+  });
+}
+function abrirNue() {
+  S.nueFoto = ""; S.nueTipo = "receta";
+  $("nueFotoPrev").innerHTML = ""; $("nueProd").value = ""; $("nueCant").value = "1"; $("nueNota").value = ""; $("nueCat").innerHTML = ""; msg("nueDMsg", "");
+  document.querySelectorAll("[data-nuetipo]").forEach(b => b.setAttribute("aria-pressed", b.dataset.nuetipo === S.nueTipo));
+  $("nueSucD").textContent = miFarm() ? corto(miFarm()) : "Abastecimiento (sin sucursal)";
+  $("nueDlg").showModal();
+}
+$("nueNuevo").addEventListener("click", abrirNue);
+$("nueFotoF").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try { S.nueFoto = await achicarFoto(f); $("nueFotoPrev").innerHTML = `<img src="${S.nueFoto}" alt="Foto"><button type="button" class="btn sm" id="nueFotoQuitar">Quitar foto</button>`; }
+  catch (x) { msg("nueDMsg", x.message, true); }
+});
+// si lo que escriben ya está en el catálogo, se avisa (puede que sí lo trabajemos)
+$("nueProd").addEventListener("input", () => {
+  const t = $("nueProd").value.trim(), r = t.length >= 4 ? buscarCat(t).slice(0, 4) : [];
+  $("nueCat").innerHTML = r.length ? `<small class="muted">¿Es alguno de estos? Ya están en nuestro catálogo:</small> ${r.map(p => `<span class="chip">${esc(p.n)} <code>${esc(p.c)}</code></span>`).join(" ")}` : "";
+});
+$("nueDlg").addEventListener("click", async e => {
+  if (e.target.closest("[data-cerrar-dlg]") || e.target === $("nueDlg")) return $("nueDlg").close();
+  const t = e.target.closest("[data-nuetipo]"); if (t) { S.nueTipo = t.dataset.nuetipo; document.querySelectorAll("[data-nuetipo]").forEach(b => b.setAttribute("aria-pressed", b === t)); return; }
+  if (e.target.closest("#nueFotoQuitar")) { S.nueFoto = ""; $("nueFotoPrev").innerHTML = ""; return; }
+  if (!e.target.closest("#nueGuardar")) return;
+  const prod = $("nueProd").value.trim().replace(/\s+/g, " ");
+  if (prod.length < 2 && !S.nueFoto) return msg("nueDMsg", "Escriba qué producto buscan o tome una foto de la receta.", true);
+  const b = $("nueGuardar"); b.disabled = true; msg("nueDMsg", "Guardando…");
+  try {
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    if (S.nueFoto) await setDoc(doc(db, "productos_nuevos_foto", id), { d: S.nueFoto, porUid: S.perfil.uid });
+    await setDoc(doc(db, "productos_nuevos", id), { prod: (prod || "(ver foto)").slice(0, 150), tipo: S.nueTipo, cant: Math.max(0, Math.round(+$("nueCant").value || 0)),
+      nota: $("nueNota").value.trim().slice(0, 300), suc: miFarm() || "", porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario || "",
+      creado: serverTimestamp(), foto: !!S.nueFoto, tambien: [], estado: "nuevo" });
+    if (S.nueFoto) S.nueFotos.set(id, S.nueFoto);
+    $("nueDlg").close(); toast("Registrado. Ya lo ven todas las sucursales y Abastecimiento.");
+  } catch (x) { msg("nueDMsg", textoError(x), true); }
+  finally { b.disabled = false; }
+});
+$("nueLista").addEventListener("click", async e => {
+  const tb = e.target.closest("[data-nuetamb]");
+  if (tb) { const d = (S.nue || []).find(x => x.id === tb.dataset.nuetamb); if (!d) return;
+    try { await updateDoc(doc(db, "productos_nuevos", d.id), { tambien: [...(d.tambien || []), { suc: miFarm(), porNombre: S.perfil.nombre || S.perfil.usuario || "", f: new Date().toISOString() }] }); toast("Anotado: a su sucursal también se lo pidieron"); }
+    catch (x) { toast(textoError(x)); } return; }
+  const br = e.target.closest("[data-nueborrar]");
+  if (br) { if (!confirm("¿Borrar este registro?")) return; const id = br.dataset.nueborrar;
+    try { await deleteDoc(doc(db, "productos_nuevos", id)); deleteDoc(doc(db, "productos_nuevos_foto", id)).catch(() => {}); toast("Registro borrado"); } catch (x) { toast(textoError(x)); } return; }
+  const im = e.target.closest(".nue-foto img"); if (im) window.open().document.write(`<title>Foto</title><img src="${im.src}" style="max-width:100%">`);
+});
+$("nueLista").addEventListener("change", async e => {
+  const s = e.target.closest("[data-nueest]"), n = e.target.closest("[data-nuenota]"); if (!s && !n) return;
+  try { await updateDoc(doc(db, "productos_nuevos", (s || n).dataset[s ? "nueest" : "nuenota"]), s ? { estado: s.value } : { notaAdmin: n.value.trim().slice(0, 200) }); toast("Guardado"); }
+  catch (x) { toast(textoError(x)); }
+});
+["nueQ", "nueSuc", "nueEst"].forEach(id => $(id).addEventListener("input", () => { S.nueMostrar = 30; pintarNue(); }));
+$("nueMas").addEventListener("click", e => { if (e.target.closest("#nueMasBtn")) { S.nueMostrar += 30; pintarNue(); } });
+$("nueXls").addEventListener("click", () => {
+  const l = filtrosNue(); if (!l.length) return toast("No hay registros para descargar.");
+  excelDe(l.map(d => ({ Fecha: fNue(d.creado), Sucursal: d.suc ? corto(d.suc) : "Abastecimiento", Producto: d.prod, Tipo: (NUE_TIPO[d.tipo] || "").replace(/^\S+ /, ""), Cantidad: d.cant || "",
+    Nota: d.nota || "", "Registró": d.porNombre || "", "También en": (d.tambien || []).map(t => corto(t.suc)).join(", "), Estado: (NUE_EST[d.estado || "nuevo"] || NUE_EST.nuevo)[0].replace(/^\S+ /, ""), "Nota de Abastecimiento": d.notaAdmin || "", Foto: d.foto ? "sí" : "no" })),
+    "Productos buscados", "productos_que_buscan_" + hoyISO());
 });
