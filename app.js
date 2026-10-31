@@ -2547,44 +2547,98 @@ $("nueXls").addEventListener("click", () => {
 });
 
 /* ===================== flujograma de abastecimiento ===================== */
-// Cadena de trabajo general (para explicar a los químicos): 4 procesos y, dentro de cada uno, sus pasos.
-// Paso: { t: qué se hace, r: responsable } · decisión: { d: pregunta, si, no, rno: responsable del «no» }
+// Símbolos estándar: ini/fin (óvalo), proc (rectángulo), sub (proceso predefinido: abre su flujograma), doc (documento),
+// io (entrada/salida de datos), dec (decisión: «si» sigue hacia abajo; «no» va al costado y puede volver a un paso).
 const FLUJO = [
-  { t: "Requerimiento a proveedores", ic: "🧾", pasos: [
-    { t: "Filtro general de los movimientos (ventas) de un periodo determinado", r: "Abastecimiento" },
-    { t: "Propuesta de compra", r: "Abastecimiento" },
-    { t: "Envío de la orden de compra a los proveedores o distribuidoras designadas", r: "Luigi" },
-    { t: "El proveedor devuelve la orden de compra como una especie de cotización (qué atiende y a qué precio)", r: "Proveedor / distribuidora" },
-    { t: "Evaluación: fechas de vencimiento, escalas, promociones, entre otros", r: "Compras" },
-    { d: "¿El proveedor atiende todo lo pedido?", si: "Se da la conformidad de la orden", no: "Seguimiento: los faltantes se trasladan a otros proveedores con las cantidades que no atiende el inicial", rno: "Luigi" }] },
-  { t: "Llegada de mercadería", ic: "🚚", pasos: [
-    { t: "El proveedor despacha la mercadería", r: "Proveedor / distribuidora" },
-    { t: "Plazo máximo de entrega: 5 días, según lo indicado en el correo del proceso de compras", r: "Proveedor / distribuidora", nota: true },
-    { t: "Se controla cuánto demora en promedio cada distribuidor en enviar", r: "Compras" }] },
-  { t: "Recepción e ingreso de mercadería", ic: "📦", pasos: [
-    { t: "Recepción de la mercadería en droguería (con sus propios procedimientos)", r: "Almacén" },
-    { t: "La factura se envía al área administrativa (área de requerimientos) para su ingreso", r: "Almacén / proveedor" },
-    { t: "Se genera el formato de ingreso: en el sistema, la orden de compra", r: "Luis" },
-    { t: "Revisión de la política de precios, fechas de vencimiento y lote", r: "Jefatura" }] },
-  { t: "Requerimiento por tienda y atención a sucursales", ic: "🏪", pasos: [
-    { t: "Requerimiento de cada tienda: qué necesita cada sucursal", r: "Abastecimiento (Carlos); desde la próxima semana también los químicos" },
-    { t: "Atención a sucursales: se prepara y se envía desde droguería", r: "Droguería" },
-    { t: "La sucursal ve lo que le van a atender y responde en la página («Lo que me van a atender»)", r: "Químico de la sucursal" }] }];
-S.flSel = -1;   // -1 = todos los procesos abiertos
-function pasoFl(p) {
-  if (p.d) return `<div class="fl-dec"><div class="fl-rombo"><span>${esc(p.d)}</span></div>
-      <div class="fl-ramas"><div class="fl-rama si"><b>Sí</b><div class="fl-paso">${esc(p.si)}</div></div>
-        <div class="fl-rama no"><b>No</b><div class="fl-paso">${esc(p.no)}${p.rno ? `<span class="fl-resp">👤 ${esc(p.rno)}</span>` : ""}</div></div></div></div>`;
-  return `<div class="fl-paso${p.nota ? " fl-nota" : ""}">${p.nota ? "⏱ " : ""}${esc(p.t)}${p.r ? `<span class="fl-resp">👤 ${esc(p.r)}</span>` : ""}</div>`;
+  { t: "Requerimiento a proveedores", pasos: [
+    { k: "ini", t: "Inicio" },
+    { k: "proc", t: "Filtro general de los movimientos de un periodo", r: "Abastecimiento" },
+    { k: "doc", t: "Propuesta de compra", r: "Abastecimiento" },
+    { k: "doc", t: "Orden de compra a proveedores o distribuidoras designadas", r: "Luigi", id: "oc" },
+    { k: "doc", t: "El proveedor la devuelve como cotización", r: "Proveedor" },
+    { k: "proc", t: "Evaluación: vencimiento, escalas, promociones", r: "Compras" },
+    { k: "dec", t: "¿Atiende todo lo pedido?", no: { k: "proc", t: "Trasladar los faltantes a otros proveedores", r: "Luigi" }, vuelve: "oc" },
+    { k: "proc", t: "Conformidad de la orden", r: "Compras" },
+    { k: "fin", t: "Pasa a «Llegada de mercadería»" }] },
+  { t: "Llegada de mercadería", pasos: [
+    { k: "ini", t: "Inicio" },
+    { k: "proc", t: "El proveedor despacha la mercadería", r: "Proveedor", id: "desp" },
+    { k: "dec", t: "¿Llegó dentro de los 5 días?", no: { k: "proc", t: "Seguimiento al proveedor", r: "Compras" }, vuelve: "desp" },
+    { k: "io", t: "Registrar los días que demoró (promedio por distribuidor)", r: "Compras" },
+    { k: "fin", t: "Pasa a «Recepción e ingreso»" }] },
+  { t: "Recepción e ingreso de mercadería", pasos: [
+    { k: "ini", t: "Inicio" },
+    { k: "proc", t: "Recepción de la mercadería en droguería", r: "Almacén" },
+    { k: "doc", t: "Factura al área administrativa (requerimientos)", r: "Almacén" },
+    { k: "proc", t: "Formato de ingreso: orden de compra en el sistema", r: "Luis" },
+    { k: "proc", t: "Revisión de política de precios, vencimiento y lote", r: "Jefatura" },
+    { k: "fin", t: "Mercadería disponible en droguería" }] },
+  { t: "Requerimiento por tienda y atención a sucursales", pasos: [
+    { k: "ini", t: "Inicio" },
+    { k: "proc", t: "Requerimiento de cada tienda", r: "Carlos · desde la próxima semana, los químicos" },
+    { k: "doc", t: "Lista de atención publicada (Atención a sucursales)", r: "Abastecimiento" },
+    { k: "proc", t: "Preparación y envío desde droguería", r: "Droguería" },
+    { k: "io", t: "La sucursal revisa y responde en «Lo que me van a atender»", r: "Químico" },
+    { k: "fin", t: "Fin" }] }];
+const FL_COL = { ini: ["#FFF3B0", "#B89400"], fin: ["#FFF3B0", "#B89400"], proc: ["#ECE6F7", "#7A64A8"], sub: ["#ECE6F7", "#5B2D6E"], doc: ["#DCEBFF", "#2F6FD0"], io: ["#FFE6CC", "#D9730D"], dec: ["#FFE3D3", "#D9602A"] };
+const flLineas = (t, n) => { const out = []; let l = ""; for (const w of String(t).split(" ")) { if ((l + " " + w).trim().length > n && l) { out.push(l); l = w; } else l = (l + " " + w).trim(); } if (l) out.push(l); return out; };
+// una figura centrada en (x, y) de ancho w y alto h, con su texto (y el responsable debajo, más chico)
+function flFig(k, x, y, w, h, t, r, extra = "") {
+  const [f, c] = FL_COL[k], x0 = x - w / 2, y0 = y - h / 2; let sh;
+  if (k === "ini" || k === "fin") sh = `<rect x="${x0}" y="${y0}" width="${w}" height="${h}" rx="${h / 2}" fill="${f}" stroke="${c}" stroke-width="2"/>`;
+  else if (k === "dec") sh = `<polygon points="${x},${y0} ${x0 + w},${y} ${x},${y0 + h} ${x0},${y}" fill="${f}" stroke="${c}" stroke-width="2"/>`;
+  else if (k === "io") sh = `<polygon points="${x0 + 18},${y0} ${x0 + w},${y0} ${x0 + w - 18},${y0 + h} ${x0},${y0 + h}" fill="${f}" stroke="${c}" stroke-width="2"/>`;
+  else if (k === "doc") sh = `<path d="M${x0},${y0} H${x0 + w} V${y0 + h - 8} C${x0 + w * .75},${y0 + h - 22} ${x0 + w * .25},${y0 + h + 8} ${x0},${y0 + h - 8} Z" fill="${f}" stroke="${c}" stroke-width="2"/>`;
+  else sh = `<rect x="${x0}" y="${y0}" width="${w}" height="${h}" rx="4" fill="${f}" stroke="${c}" stroke-width="2"/>` + (k === "sub" ? `<line x1="${x0 + 12}" y1="${y0}" x2="${x0 + 12}" y2="${y0 + h}" stroke="${c}" stroke-width="2"/><line x1="${x0 + w - 12}" y1="${y0}" x2="${x0 + w - 12}" y2="${y0 + h}" stroke="${c}" stroke-width="2"/>` : "");
+  const ls = flLineas(t, k === "dec" ? 16 : k === "sub" ? 18 : 26), lh = 16, tot = ls.length * lh + (r ? 14 : 0), ty = y - tot / 2 + 12 - (k === "doc" ? 4 : 0);
+  return `<g${extra}>${sh}${ls.map((l, i) => `<text x="${x}" y="${ty + i * lh}" text-anchor="middle" class="fl-t">${esc(l)}</text>`).join("")}${r ? `<text x="${x}" y="${ty + ls.length * lh}" text-anchor="middle" class="fl-r">👤 ${esc(r)}</text>` : ""}</g>`;
 }
+const flFlecha = pts => `<polyline points="${pts.map(p => p.join(",")).join(" ")}" fill="none" stroke="#475467" stroke-width="1.8" marker-end="url(#flPunta)"/>`;
+const FL_DEFS = '<defs><marker id="flPunta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#475467"/></marker></defs>';
+const flAlto = p => p.k === "dec" ? 110 : p.k === "ini" || p.k === "fin" ? 48 : Math.max(58, flLineas(p.t, 26).length * 16 + (p.r ? 14 : 0) + 22);
+// flujograma general: Inicio → 4 procesos (clic para abrir) → Fin; horizontal en pantalla ancha, vertical en el celular
+function flGeneral() {
+  const ancho = $("flMapa").clientWidth || 1000, hor = ancho > 760, nodos = [{ k: "ini", t: "Inicio" }, ...FLUJO.map((f, i) => ({ k: "sub", t: `${i + 1}. ${f.t}`, i })), { k: "fin", t: "Fin" }];
+  let g = "", W, H;
+  if (hor) {
+    const ws = nodos.map(n => n.k === "sub" ? 170 : 96), gap = 46; W = ws.reduce((a, b) => a + b, 0) + gap * (nodos.length - 1) + 20; H = 130; let x = 10;
+    nodos.forEach((n, j) => { const cx = x + ws[j] / 2; g += flFig(n.k, cx, 65, ws[j], n.k === "sub" ? 96 : 50, n.t, "", n.k === "sub" ? ` class="fl-clic${S.flSel === n.i ? " sel" : ""}" data-flp="${n.i}"` : "");
+      if (j < nodos.length - 1) g += flFlecha([[x + ws[j] + 2, 65], [x + ws[j] + gap - 2, 65]]); x += ws[j] + gap; });
+  } else {
+    W = 320; let y = 10; H = 0; const hs = nodos.map(n => n.k === "sub" ? 80 : 46), gap = 30;
+    nodos.forEach((n, j) => { const cy = y + hs[j] / 2; g += flFig(n.k, 160, cy, n.k === "sub" ? 260 : 130, hs[j], n.t, "", n.k === "sub" ? ` class="fl-clic${S.flSel === n.i ? " sel" : ""}" data-flp="${n.i}"` : "");
+      if (j < nodos.length - 1) g += flFlecha([[160, y + hs[j] + 2], [160, y + hs[j] + gap - 2]]); y += hs[j] + gap; });
+    H = y - gap + 10;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" class="fl-svg" style="max-width:${W}px">${FL_DEFS}${g}</svg>`;
+}
+// flujograma de un proceso: columna principal; el «no» de cada decisión va a la derecha y vuelve al paso indicado
+function flDetalle(f) {
+  const cx = 170, sx = 430, wP = 250, wS = 190, gap = 34; let y = 12, g = ""; const pos = {}, vueltas = [];
+  f.pasos.forEach((p, j) => {
+    const h = flAlto(p), cy = y + h / 2, w = p.k === "dec" ? 220 : p.k === "ini" || p.k === "fin" ? 200 : wP;
+    g += flFig(p.k, cx, cy, w, h, p.t, p.r); if (p.id) pos[p.id] = { cy, w };
+    if (p.k === "dec" && p.no) {
+      const hn = flAlto(p.no); g += flFig(p.no.k, sx, cy, wS, hn, p.no.t, p.no.r);
+      g += flFlecha([[cx + w / 2, cy], [sx - wS / 2 - 2, cy]]) + `<text x="${cx + w / 2 + 10}" y="${cy - 6}" class="fl-no">No</text>`;
+      if (p.vuelve) vueltas.push({ desde: cy - hn / 2, a: p.vuelve });
+    }
+    if (j < f.pasos.length - 1) { g += flFlecha([[cx, y + h + 2], [cx, y + h + gap - 2]]); if (p.k === "dec") g += `<text x="${cx + 8}" y="${y + h + 20}" class="fl-si">Sí</text>`; }
+    y += h + gap;
+  });
+  for (const v of vueltas) { const d = pos[v.a]; if (d) g += flFlecha([[sx, v.desde - 2], [sx, d.cy], [cx + d.w / 2 + 2, d.cy]]); }
+  return `<svg viewBox="0 0 560 ${y - gap + 14}" class="fl-svg" style="max-width:560px">${FL_DEFS}${g}</svg>`;
+}
+const FL_LEY = [["ini", "Inicio / fin"], ["sub", "Proceso (clic para abrir)"], ["proc", "Actividad"], ["doc", "Documento"], ["dec", "Decisión"], ["io", "Registro de datos"]];
+S.flSel = -1;
 function pintarFlujo() {
-  $("flMapa").innerHTML = FLUJO.map((f, i) => `${i ? '<span class="fl-flecha" aria-hidden="true">➜</span>' : ""}<button type="button" class="fl-proc${S.flSel === i ? " sel" : ""}" data-flp="${i}"><small>${i + 1}</small><span class="fl-ic">${f.ic}</span><b>${esc(f.t)}</b></button>`).join("");
-  const ver = S.flSel < 0 ? FLUJO.map((f, i) => [f, i]) : [[FLUJO[S.flSel], S.flSel]];
-  $("flDet").innerHTML = ver.map(([f, i]) => `<section class="card fl-col"><h3><span class="fl-num">${i + 1}</span> ${f.ic} ${esc(f.t)}</h3>
-      <div class="fl-pasos">${f.pasos.map((p, j) => (j ? '<span class="fl-abajo" aria-hidden="true">▼</span>' : "") + pasoFl(p)).join("")}</div></section>`).join("");
-  $("flTodos").hidden = S.flSel < 0;
+  $("flMapa").innerHTML = `<h3 class="fl-h">Flujograma general</h3>${flGeneral()}`;
+  $("flLey").innerHTML = FL_LEY.map(([k, t]) => `<span><svg viewBox="0 0 60 34" width="46" height="26">${flFig(k, 30, 17, k === "dec" ? 44 : 54, k === "dec" ? 32 : 26, "", "")}</svg>${t}</span>`).join("");
+  $("flDet").innerHTML = S.flSel < 0 ? '<p class="muted fl-ayuda">👆 Haga clic en uno de los 4 procesos para abrir su flujograma con sus subprocesos.</p>'
+    : `<section class="card fl-col"><div class="fl-cab"><h3>${S.flSel + 1}. ${esc(FLUJO[S.flSel].t)}</h3><button class="btn sm fl-no-imp" type="button" id="flCerrar">← Volver al general</button></div>${flDetalle(FLUJO[S.flSel])}</section>`;
 }
-$("flMapa").addEventListener("click", e => { const b = e.target.closest("[data-flp]"); if (!b) return; S.flSel = S.flSel === +b.dataset.flp ? -1 : +b.dataset.flp; pintarFlujo(); });
-$("flTodos").addEventListener("click", () => { S.flSel = -1; pintarFlujo(); });
-$("flImp").addEventListener("click", () => { S.flSel = -1; pintarFlujo(); setTimeout(() => print(), 50); });
+$("flMapa").addEventListener("click", e => { const b = e.target.closest("[data-flp]"); if (!b) return; S.flSel = S.flSel === +b.dataset.flp ? -1 : +b.dataset.flp; pintarFlujo(); if (S.flSel >= 0) $("flDet").scrollIntoView({ behavior: "smooth", block: "start" }); });
+$("flDet").addEventListener("click", e => { if (e.target.closest("#flCerrar")) { S.flSel = -1; pintarFlujo(); } });
+addEventListener("resize", () => { if (S.vista === "vFlujo") pintarFlujo(); });
+$("flImp").addEventListener("click", () => print());
 $("flPant").addEventListener("click", () => { const el = $("vFlujo"); (document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen?.())?.catch?.(() => {}); });

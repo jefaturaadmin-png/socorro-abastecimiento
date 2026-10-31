@@ -665,29 +665,18 @@ body.en-previa .top { top: 42px; box-shadow: inset 0 3px 0 #5b3fa8 }
 .nue-cat { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center }
 @media (max-width: 520px) { .nue-lista { grid-template-columns: 1fr; padding: 8px } .nue-foto { flex-basis: 84px; height: 84px } }
 /* flujograma de abastecimiento */
-.fl-mapa { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin-bottom: 18px }
-.fl-proc { flex: 1 1 180px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 10px; border-radius: 14px; border: 2px solid #c9d6ea; background: #fff; cursor: pointer; font: inherit; text-align: center; position: relative }
-.fl-proc:hover, .fl-proc.sel { border-color: #1E6B5F; background: #eef7f4 }
-.fl-proc small { position: absolute; top: 6px; left: 10px; font-weight: 700; color: #1E6B5F }
-.fl-ic { font-size: 1.8rem }
-.fl-flecha { align-self: center; font-size: 1.6rem; color: #1E6B5F }
-.fl-det { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; align-items: start }
-.fl-col { padding: 14px; margin: 0 } .fl-col h3 { margin: 0 0 12px; font-size: 1rem }
-.fl-num { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; background: #1E6B5F; color: #fff; align-items: center; justify-content: center; font-size: .85rem }
-.fl-pasos { display: flex; flex-direction: column; align-items: stretch }
-.fl-paso { border: 1.5px solid #9fb3cf; border-radius: 10px; padding: 9px 11px; background: #f8fbff; font-size: .9rem }
-.fl-nota { border-style: dashed; border-color: #B7791F; background: #fff8ec }
-.fl-resp { display: block; margin-top: 4px; font-size: .78rem; color: #5b2d6e; font-weight: 600 }
-.fl-abajo { text-align: center; color: #8aa0bd; font-size: .8rem; line-height: 1.4 }
-.fl-dec { display: flex; flex-direction: column; align-items: center; gap: 8px }
-.fl-rombo { position: relative; width: 210px; height: 120px; display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 42px; font-size: .85rem; font-weight: 600 }
-.fl-rombo::before, .fl-rombo::after { content: ""; position: absolute; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%) }
-.fl-rombo::before { inset: 0; background: #B7791F } .fl-rombo::after { inset: 2px; background: #fff8ec }
-.fl-rombo span { position: relative; z-index: 1 }
-.fl-ramas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100% }
-.fl-rama b { display: block; text-align: center; font-size: .8rem; margin-bottom: 3px }
-.fl-rama.si b { color: #1E6B5F } .fl-rama.no b { color: #B4321C }
-.fl-rama.si .fl-paso { border-color: #1E6B5F; background: #eef7f4 } .fl-rama.no .fl-paso { border-color: #B4321C; background: #fdf1ef }
+.fl-gen { padding: 14px 16px; margin-bottom: 16px }
+.fl-h { margin: 0 0 8px; font-size: 1rem }
+.fl-mapa { overflow-x: auto }
+.fl-svg { width: 100%; height: auto; display: block; margin: 0 auto; stroke: none }
+.fl-svg text { stroke: none }
+.fl-t { font-size: 13px; font-weight: 600; fill: #1d2939 } .fl-r { font-size: 10.5px; fill: #5b2d6e; font-weight: 600 }
+.fl-si { font-size: 12px; font-weight: 700; fill: #1E6B5F } .fl-no { font-size: 12px; font-weight: 700; fill: #B4321C }
+.fl-clic { cursor: pointer } .fl-clic:hover rect, .fl-clic.sel rect { fill: #d9ccef }
+.fl-clic.sel rect:first-child { stroke-width: 3.5 }
+.fl-ley { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #eef1f5; font-size: .82rem; color: #475467 }
+.fl-ley span { display: inline-flex; align-items: center; gap: 4px } .fl-ley svg { stroke: none; width: 46px; height: 26px }
+.fl-col { padding: 14px 16px; margin: 0 } .fl-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px } .fl-cab h3 { margin: 0 }
+.fl-ayuda { text-align: center; padding: 10px }
 #vFlujo:fullscreen { background: #fff; overflow: auto; padding: 16px }
-@media (max-width: 700px) { .fl-flecha { transform: rotate(90deg); width: 100%; text-align: center } .fl-proc { flex-basis: 100% } }
-@media print { body * { visibility: hidden } #vFlujo, #vFlujo * { visibility: visible } #vFlujo { position: absolute; inset: 0 } .fl-no-imp { display: none !important } .fl-col { break-inside: avoid } }
+@media print { body * { visibility: hidden } #vFlujo, #vFlujo * { visibility: visible } #vFlujo { position: absolute; inset: 0 } .fl-no-imp { display: none !important } }
