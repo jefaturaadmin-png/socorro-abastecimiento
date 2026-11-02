@@ -681,3 +681,13 @@ body.en-previa .top { top: 42px; box-shadow: inset 0 3px 0 #5b3fa8 }
 #vFlujo:fullscreen { background: #fff; overflow: auto; padding: 16px }
 @media print { body * { visibility: hidden } #vFlujo, #vFlujo * { visibility: visible } #vFlujo { position: absolute; inset: 0 } .fl-no-imp { display: none !important } }
 .fl-vars { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px } .fl-var { text-align: center; margin: 4px 0 8px; font-size: 1rem; color: #1E6B5F; text-transform: uppercase; letter-spacing: .05em }
+/* filtros tipo Excel */
+.fx-btn { margin-left: 4px; border: 1px solid #c9d3df; background: #fff; border-radius: 4px; width: 20px; height: 20px; padding: 0; font-size: 11px; line-height: 1; cursor: pointer; color: #475467; vertical-align: middle }
+.fx-btn.activo { background: #1E6B5F; color: #fff; border-color: #1E6B5F }
+.fx-pop { position: absolute; z-index: 1000; background: #fff; border: 1px solid #c9d3df; border-radius: 8px; box-shadow: 0 8px 24px rgba(16,24,40,.18); padding: 8px; display: flex; flex-direction: column; gap: 4px; font-size: .88rem; text-transform: none; letter-spacing: 0; font-weight: 400; color: #1d2939 }
+.fx-op { text-align: left; background: none; border: 0; padding: 6px 8px; border-radius: 6px; cursor: pointer; font: inherit; color: inherit } .fx-op:hover:not(:disabled) { background: #eef2f7 } .fx-op:disabled { color: #98a2b3; cursor: default }
+.fx-pop input[type=search] { width: 100%; margin: 4px 0 }
+.fx-lista { max-height: 240px; overflow: auto; border: 1px solid #e4e7ec; border-radius: 6px; padding: 4px 6px }
+.fx-lista label { display: flex; align-items: center; gap: 6px; padding: 3px 0; margin: 0; min-height: 0; cursor: pointer; white-space: nowrap; font-weight: 400; font-size: .86rem; line-height: 1.3 } .fx-lista input { width: 15px; height: 15px; margin: 0; flex: none }
+.fx-todo { font-weight: 600 }
+.fx-bot { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px }
