@@ -2807,8 +2807,8 @@ $("atTabla").addEventListener("click", e => {
 /* ===================== busca en la red (catálogos de otras farmacias) ===================== */
 // data/competencia/<tienda>.json = { fecha, p: { id: [nombre, marca, presentación, unidades, precio, oferta, tarjeta, url] } }
 // (los descarga cada noche scripts/precios_competencia.py). El nombre de cada tienda se muestra disfrazado.
-const RED_TIENDAS = [["mifarma", "mi.farma"], ["inkafarma", "inka.farma"], ["boticasperu", "boticas.peru"], ["farmaciaslider", "farmacias.lider"],
-  ["universo", "farmacias.universo"], ["boticasysalud", "boticas.salud"]];
+const RED_TIENDAS = [["mifarma", "mi.far.ma"], ["inkafarma", "in.ka.far.ma"], ["boticasperu", "bo.ti.cas.pe.ru"], ["farmaciaslider", "far.ma.cias.li.der"],
+  ["universo", "u.ni.ver.so"], ["boticasysalud", "bo.ti.ca.sa.lud"]];
 async function cargarRedComp() {
   if (S.red2) return S.red2; if (S.red2P) return S.red2P;
   S.red2P = Promise.all(RED_TIENDAS.map(async ([a, alias]) => {
@@ -2831,9 +2831,8 @@ async function buscarRed() {
   const g = new Map();
   for (const x of hall) { const k = norm(x.n).replace(/[^A-Z0-9]+/g, " ").trim(); const a = g.get(k) || { n: x.n, m: x.m, t: [] }; if (!a.m && x.m) a.m = x.m; a.t.push(x); g.set(k, a); }
   const lista = [...g.values()].sort((a, b) => (norm(b.n).startsWith(ws[0]) - norm(a.n).startsWith(ws[0])) || b.t.length - a.t.length || a.n.localeCompare(b.n, "es")).slice(0, 60);
-  const sol = v => v ? "S/ " + Number(v).toFixed(2) : "";
   box.innerHTML = lista.length ? `<p class="muted">${nf(g.size)} ${g.size === 1 ? "producto" : "productos"}${g.size > 60 ? " · se muestran los primeros 60" : ""}</p>` + lista.map(a => `<div class="red-item">
-      <b>${esc(a.n)}</b>${a.m ? `<small>LAB. / MARCA: ${esc(a.m.toUpperCase())}</small>` : ""}
-      <span class="red-por">Vendido por ${[...new Map(a.t.map(x => [x.t, x])).values()].map(x => `<em>${esc(x.t)}</em>${x.pr ? ` <small class="muted">${sol(x.of || x.pr)}</small>` : ""}`).join(" · ")}</span></div>`).join("")
+      <b>${esc(a.n)}</b>${a.m ? `<small>LAB. ${esc(a.m.toUpperCase())}</small>` : ""}
+      <span class="red-por">Vendido por ${[...new Map(a.t.map(x => [x.t, x])).values()].map(x => `<em>${esc(x.t)}</em>`).join(", ")}</span></div>`).join("")
     : '<p class="muted">Ninguna farmacia de la red lo tiene en su catálogo.</p>';
 }
