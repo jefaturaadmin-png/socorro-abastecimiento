@@ -400,6 +400,22 @@ def jsonld(base, maximo=6000):
     return out
 
 
+def pistas(base, html):
+    """Diagnóstico: qué plataforma y qué direcciones de API aparecen en la página y en sus scripts."""
+    print("  inicio de la página:", re.sub(r"\s+", " ", html[:600]))
+    scripts = re.findall(r'<script[^>]+src="([^"]+)"', html)
+    print("  scripts:", scripts[:15])
+    vistos = set(re.findall(r'https?://[\w.-]+/[\w./-]*(?:api|graphql|catalog|product|search)[\w./?=&-]*', html, re.I))
+    for src in scripts[:8]:
+        u = src if src.startswith("http") else base + "/" + src.lstrip("/")
+        r = pedir(u, intentos=1)
+        if r is not None and r.status_code == 200:
+            vistos |= set(re.findall(r'https?://[\w.-]+/[\w./-]*(?:api|graphql|catalog|product|search)[\w./-]*', r.text, re.I))
+            vistos |= {"(ruta) " + x for x in re.findall(r'["\'](/(?:api|rest|graphql)[\w./-]*)["\']', r.text)[:40]}
+    for v in sorted(vistos)[:80]:
+        print("   ·", v)
+
+
 def generica(nombre, dominios):
     for base in dominios:
         r = pedir(base + "/", intentos=2)
@@ -411,6 +427,7 @@ def generica(nombre, dominios):
             print(f"  {f.__name__}: {len(out)} productos")
             if len(out) >= 50:
                 return out
+        pistas(base, r.text)
     return {}
 
 
