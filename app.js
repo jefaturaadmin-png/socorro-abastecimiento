@@ -2803,3 +2803,37 @@ $("atTabla").addEventListener("click", e => {
   else if (!porTipo) mostrar.push(i.c);                 // mostrar: si su tipo está oculto, se muestra aparte
   guardarVisAten({ ocultos, mostrar });
 });
+
+/* ===================== busca en la red (catálogos de otras farmacias) ===================== */
+// data/competencia/<tienda>.json = { fecha, p: { id: [nombre, marca, presentación, unidades, precio, oferta, tarjeta, url] } }
+// (los descarga cada noche scripts/precios_competencia.py). El nombre de cada tienda se muestra disfrazado.
+const RED_TIENDAS = [["mifarma", "mi.farma"], ["inkafarma", "inka.farma"], ["boticasperu", "boticas.peru"], ["farmaciaslider", "farmacias.lider"],
+  ["universo", "farmacias.universo"], ["boticasysalud", "boticas.salud"]];
+async function cargarRedComp() {
+  if (S.red2) return S.red2; if (S.red2P) return S.red2P;
+  S.red2P = Promise.all(RED_TIENDAS.map(async ([a, alias]) => {
+    try { const r = await fetch(`data/competencia/${a}.json?d=${hoyISO()}`); if (!r.ok) return [];
+      const j = await r.json(); return Object.values(j.p || {}).map(x => ({ n: String(x[0] || ""), m: String(x[1] || ""), pr: x[4], of: x[5], t: alias, k: norm(x[0] + " " + (x[1] || "")) }));
+    } catch { return []; }
+  })).then(l => (S.red2 = l.flat()));
+  return S.red2P;
+}
+let redT = 0;
+$("redQ").addEventListener("input", () => { clearTimeout(redT); redT = setTimeout(buscarRed, 250); });
+async function buscarRed() {
+  const q = norm($("redQ").value).trim(), box = $("redRes");
+  if (q.length < 3) { box.innerHTML = q ? '<p class="muted">Escriba al menos 3 letras.</p>' : ""; return; }
+  if (!S.red2) box.innerHTML = '<p class="muted">Cargando los catálogos…</p>';
+  const todos = await cargarRedComp(), ws = q.split(/\s+/);
+  if (norm($("redQ").value).trim() !== q) return;
+  const hall = todos.filter(x => ws.every(w => x.k.includes(w)));
+  // el mismo producto en varias tiendas: se junta en una fila («Vendido por mi.farma · inka.farma»)
+  const g = new Map();
+  for (const x of hall) { const k = norm(x.n).replace(/[^A-Z0-9]+/g, " ").trim(); const a = g.get(k) || { n: x.n, m: x.m, t: [] }; if (!a.m && x.m) a.m = x.m; a.t.push(x); g.set(k, a); }
+  const lista = [...g.values()].sort((a, b) => (norm(b.n).startsWith(ws[0]) - norm(a.n).startsWith(ws[0])) || b.t.length - a.t.length || a.n.localeCompare(b.n, "es")).slice(0, 60);
+  const sol = v => v ? "S/ " + Number(v).toFixed(2) : "";
+  box.innerHTML = lista.length ? `<p class="muted">${nf(g.size)} ${g.size === 1 ? "producto" : "productos"}${g.size > 60 ? " · se muestran los primeros 60" : ""}</p>` + lista.map(a => `<div class="red-item">
+      <b>${esc(a.n)}</b>${a.m ? `<small>LAB. / MARCA: ${esc(a.m.toUpperCase())}</small>` : ""}
+      <span class="red-por">Vendido por ${[...new Map(a.t.map(x => [x.t, x])).values()].map(x => `<em>${esc(x.t)}</em>${x.pr ? ` <small class="muted">${sol(x.of || x.pr)}</small>` : ""}`).join(" · ")}</span></div>`).join("")
+    : '<p class="muted">Ninguna farmacia de la red lo tiene en su catálogo.</p>';
+}

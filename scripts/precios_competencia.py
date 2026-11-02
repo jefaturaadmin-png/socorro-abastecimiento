@@ -1,5 +1,5 @@
 """
-Precios de la competencia (Mifarma, Boticas Perú y Farmacias Líder) para el módulo Comparativo.
+Precios de la competencia (Mifarma, Boticas Perú, Farmacias Líder, Inkafarma, Farmacias Universo y Boticas y Salud) para el módulo Comparativo.
 
 Lo ejecuta GitHub Actions cada noche (.github/workflows/precios.yml) y guarda en data/competencia/:
   mifarma.json / boticasperu.json   -> catálogo de hoy  {"fecha": "...", "p": {id: [nombre, marca, presentación, unidades, precio, oferta, tarjeta, url]}}
@@ -222,8 +222,213 @@ def farmaciaslider():
     return out
 
 
+# ============================ INKAFARMA ============================
+# Misma plataforma que Mifarma (mismo dueño): sitemap con /producto/<slug>/<id> y la API de productos con otra compañía.
+IK = "https://inkafarma.pe"
+IK_APIS = [("https://5doa19p9r7.execute-api.us-east-1.amazonaws.com/MMPROD/products/", "IKF"),
+           ("https://5doa19p9r7.execute-api.us-east-1.amazonaws.com/MMMFPRD/products/", "IKF"),
+           ("https://5doa19p9r7.execute-api.us-east-1.amazonaws.com/MMIKPRD/products/", "IKF")]
+
+
+def ik_codigos():
+    urls, pendientes, vistos = [], [IK + "/sitemap.xml", "https://www.inkafarma.pe/sitemap.xml"], set()
+    while pendientes:
+        u = pendientes.pop()
+        if u in vistos:
+            continue
+        vistos.add(u)
+        r = pedir(u)
+        if not r or r.status_code != 200:
+            print("  sitemap no disponible:", u)
+            continue
+        locs = re.findall(r"<loc>\s*(.*?)\s*</loc>", r.text)
+        (pendientes if "<sitemapindex" in r.text else urls).extend(locs)
+        time.sleep(PAUSA)
+    cods = [m.group(1) for u in urls if (m := re.search(r"/producto/[^/]+/(\w+)/?$", u))]
+    return list(dict.fromkeys(cods))
+
+
+def inkafarma():
+    cods = ik_codigos()
+    print(f"Inkafarma: {len(cods)} códigos en el sitemap")
+    if not cods:
+        return {}
+    head = dict(MF_HEAD, origin=IK, referer=IK + "/")
+    api = None
+    for url, comp in IK_APIS:   # se prueba cuál responde
+        r = pedir(url + ",".join(cods[:20]), params=dict(MF_PARAMS, companyCode=comp), headers=head)
+        print("  probando", url, comp, "->", None if r is None else r.status_code)
+        if r is not None and r.status_code == 200 and isinstance(r.json(), list) and r.json():
+            api = (url, comp); break
+    if not api:
+        return {}
+    out = {}
+    for i in range(0, len(cods), 20):
+        lote = cods[i:i + 20]
+        r = pedir(api[0] + ",".join(lote), params=dict(MF_PARAMS, companyCode=api[1]), headers=head)
+        if r is None or r.status_code != 200:
+            continue
+        for p in r.json():
+            precio = num(p.get("price"))
+            if not precio:
+                continue
+            out[p["id"]] = [p.get("name"), p.get("brand"), p.get("noFractionatedText"), p.get("quantityUnits") or None,
+                            precio, num(p.get("priceAllPaymentMethod")), num(p.get("priceWithpaymentMethod")),
+                            f"{IK}/producto/{p.get('slug')}/{p['id']}"]
+        if i // 20 % 50 == 0:
+            print(f"  {i + len(lote)}/{len(cods)} · {len(out)} con precio")
+        time.sleep(PAUSA)
+    return out
+
+
+# ============================ TIENDAS CON PLATAFORMA COMÚN ============================
+# Farmacias Universo y Boticas y Salud: se prueba en cada dominio si la tienda es Shopify, VTEX o WooCommerce
+# (las tres tienen un listado público de productos); si ninguna responde, se leen las páginas de producto del sitemap.
+def shopify(base):
+    out, page = {}, 1
+    while page < 400:
+        r = pedir(f"{base}/products.json", params={"limit": 250, "page": page})
+        if not r or r.status_code != 200 or "products" not in r.text[:50]:
+            break
+        prods = r.json().get("products", [])
+        if not prods:
+            break
+        for p in prods:
+            v = (p.get("variants") or [{}])[0]
+            precio, antes = num(v.get("price")), num(v.get("compare_at_price"))
+            if precio:
+                out[str(p["id"])] = [p.get("title"), p.get("vendor"), None, unidades(p.get("title")),
+                                     antes or precio, precio if antes and antes > precio else None, None, f"{base}/products/{p.get('handle')}"]
+        page += 1
+        time.sleep(PAUSA)
+    return out
+
+
+def vtex(base):
+    out, desde = {}, 0
+    while desde < 20000:
+        r = pedir(f"{base}/api/catalog_system/pub/products/search", params={"_from": desde, "_to": desde + 49})
+        if not r or r.status_code not in (200, 206):
+            break
+        try:
+            prods = r.json()
+        except ValueError:
+            break
+        if not isinstance(prods, list) or not prods:
+            break
+        for p in prods:
+            try:
+                of = p["items"][0]["sellers"][0]["commertialOffer"]
+            except (KeyError, IndexError, TypeError):
+                continue
+            precio, antes = num(of.get("Price")), num(of.get("ListPrice"))
+            if precio:
+                out[str(p.get("productId"))] = [p.get("productName"), p.get("brand"), None, unidades(p.get("productName")),
+                                                antes or precio, precio if antes and antes > precio else None, None, p.get("link")]
+        desde += 50
+        time.sleep(PAUSA)
+    return out
+
+
+def woo(base):
+    out, page = {}, 1
+    while page < 400:
+        r = pedir(f"{base}/wp-json/wc/store/v1/products", params={"per_page": 100, "page": page})
+        if not r or r.status_code != 200:
+            break
+        try:
+            prods = r.json()
+        except ValueError:
+            break
+        if not isinstance(prods, list) or not prods:
+            break
+        for p in prods:
+            pr = p.get("prices") or {}
+            div = 10 ** int(pr.get("currency_minor_unit", 2) or 2)
+            precio = num((float(pr.get("price") or 0)) / div)
+            antes = num((float(pr.get("regular_price") or 0)) / div)
+            marca = ((p.get("brands") or [{}])[0] or {}).get("name") if p.get("brands") else None
+            if precio:
+                out[str(p["id"])] = [unescape(p.get("name") or ""), marca, None, unidades(p.get("name")),
+                                     antes or precio, precio if antes and antes > precio else None, None, p.get("permalink")]
+        page += 1
+        time.sleep(PAUSA)
+    return out
+
+
+def jsonld(base, maximo=6000):
+    """Último recurso: lee las páginas de producto del sitemap y toma el Product de su JSON-LD."""
+    urls, pendientes, vistos = [], [base + "/sitemap.xml", base + "/sitemap_index.xml"], set()
+    while pendientes and len(vistos) < 200:
+        u = pendientes.pop()
+        if u in vistos:
+            continue
+        vistos.add(u)
+        r = pedir(u)
+        if not r or r.status_code != 200:
+            continue
+        locs = re.findall(r"<loc>\s*(.*?)\s*</loc>", r.text)
+        if "<sitemapindex" in r.text:
+            pendientes.extend(l for l in locs if "product" in l or "producto" in l or "sitemap" in l)
+        else:
+            urls.extend(l for l in locs if re.search(r"/(product|producto|p)/|/p$|\.html$", l))
+    out = {}
+    for i, u in enumerate(dict.fromkeys(urls)):
+        if i >= maximo:
+            break
+        r = pedir(u, intentos=2)
+        if not r or r.status_code != 200:
+            continue
+        for bloque in re.findall(r'<script[^>]+application/ld\+json[^>]*>(.*?)</script>', r.text, re.S):
+            try:
+                d = json.loads(bloque)
+            except ValueError:
+                continue
+            for x in (d if isinstance(d, list) else d.get("@graph", [d])):
+                if not isinstance(x, dict) or x.get("@type") not in ("Product", ["Product"]):
+                    continue
+                of = x.get("offers") or {}
+                of = of[0] if isinstance(of, list) and of else of
+                precio = num(of.get("price") or of.get("lowPrice")) if isinstance(of, dict) else None
+                marca = x.get("brand")
+                marca = marca.get("name") if isinstance(marca, dict) else marca
+                if precio and x.get("name"):
+                    out[u] = [unescape(x["name"]), marca, None, unidades(x["name"]), precio, None, None, u]
+        if i % 200 == 0:
+            print(f"  {i}/{len(urls)} páginas · {len(out)} productos")
+        time.sleep(0.4)
+    return out
+
+
+def generica(nombre, dominios):
+    for base in dominios:
+        r = pedir(base + "/", intentos=2)
+        print(f"{nombre}: {base} ->", None if r is None else r.status_code)
+        if r is None or r.status_code >= 400:
+            continue
+        for f in (shopify, vtex, woo, jsonld):
+            out = f(base)
+            print(f"  {f.__name__}: {len(out)} productos")
+            if len(out) >= 50:
+                return out
+    return {}
+
+
+def universo():
+    return generica("Farmacias Universo", ["https://www.farmaciasuniverso.com", "https://farmaciasuniverso.com",
+                                           "https://www.farmaciasuniverso.pe", "https://farmaciasuniverso.pe",
+                                           "https://www.farmaciauniverso.com", "https://www.boticasuniverso.com"])
+
+
+def boticasysalud():
+    return generica("Boticas y Salud", ["https://www.boticasysalud.com", "https://boticasysalud.com"])
+
+
 # ============================ GUARDAR ============================
 def guardar(tienda, prods):
+    if not prods:
+        print(f"{tienda}: 0 productos; no se guarda.")
+        return False
     CARPETA.mkdir(parents=True, exist_ok=True)
     f_cat, f_hist = CARPETA / f"{tienda}.json", CARPETA / f"hist-{tienda}.json"
     previo = json.loads(f_cat.read_text("utf-8")) if f_cat.exists() else {"p": {}}
@@ -245,11 +450,12 @@ def guardar(tienda, prods):
 
 
 if __name__ == "__main__":
-    tiendas = sys.argv[1:] or ["boticasperu", "farmaciaslider", "mifarma"]
+    tiendas = sys.argv[1:] or ["boticasperu", "farmaciaslider", "mifarma", "inkafarma", "universo", "boticasysalud"]
     ok = True
     for t in tiendas:
         try:
-            ok &= guardar(t, {"mifarma": mifarma, "boticasperu": boticasperu, "farmaciaslider": farmaciaslider}[t]())
+            ok &= guardar(t, {"mifarma": mifarma, "boticasperu": boticasperu, "farmaciaslider": farmaciaslider,
+                                  "inkafarma": inkafarma, "universo": universo, "boticasysalud": boticasysalud}[t]())
         except SystemExit as e:
             print(e); ok = False
         except Exception as e:

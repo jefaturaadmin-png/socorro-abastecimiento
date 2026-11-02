@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: "37 3 * * *"   # 3:37 UTC = 10:37 p. m. de Lima
   workflow_dispatch:
+    inputs:
+      tiendas:
+        description: "Tiendas a descargar, separadas por espacio (vacío = todas)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -27,7 +32,8 @@ jobs:
       - name: Descargar precios
         env:
           MIFARMA_API_KEY: ${{ secrets.MIFARMA_API_KEY }}   # opcional: solo si Mifarma empieza a pedir token
-        run: python scripts/precios_competencia.py
+          TIENDAS: ${{ github.event.inputs.tiendas }}
+        run: python scripts/precios_competencia.py $TIENDAS
         continue-on-error: true
       - name: Guardar en el repositorio
         run: |
