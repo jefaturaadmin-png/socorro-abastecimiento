@@ -680,3 +680,4 @@ body.en-previa .top { top: 42px; box-shadow: inset 0 3px 0 #5b3fa8 }
 .fl-ayuda { text-align: center; padding: 10px }
 #vFlujo:fullscreen { background: #fff; overflow: auto; padding: 16px }
 @media print { body * { visibility: hidden } #vFlujo, #vFlujo * { visibility: visible } #vFlujo { position: absolute; inset: 0 } .fl-no-imp { display: none !important } }
+.fl-vars { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px } .fl-var { text-align: center; margin: 4px 0 8px; font-size: 1rem; color: #1E6B5F; text-transform: uppercase; letter-spacing: .05em }

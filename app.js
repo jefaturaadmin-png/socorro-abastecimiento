@@ -2550,36 +2550,55 @@ $("nueXls").addEventListener("click", () => {
 // Símbolos estándar: ini/fin (óvalo), proc (rectángulo), sub (proceso predefinido: abre su flujograma), doc (documento),
 // io (entrada/salida de datos), dec (decisión: «si» sigue hacia abajo; «no» va al costado y puede volver a un paso).
 const FLUJO = [
-  { t: "Requerimiento a proveedores", pasos: [
+  { t: "Compras", pasos: [
     { k: "ini", t: "Inicio" },
-    { k: "proc", t: "Filtro general de los movimientos de un periodo", r: "Abastecimiento" },
-    { k: "doc", t: "Propuesta de compra", r: "Abastecimiento" },
-    { k: "doc", t: "Orden de compra a proveedores o distribuidoras designadas", r: "Luigi", id: "oc" },
-    { k: "doc", t: "El proveedor la devuelve como cotización", r: "Proveedor" },
-    { k: "proc", t: "Evaluación: vencimiento, escalas, promociones", r: "Compras" },
-    { k: "dec", t: "¿Atiende todo lo pedido?", no: { k: "proc", t: "Trasladar los faltantes a otros proveedores", r: "Luigi" }, vuelve: "oc" },
-    { k: "proc", t: "Conformidad de la orden", r: "Compras" },
-    { k: "fin", t: "Pasa a «Llegada de mercadería»" }] },
-  { t: "Llegada de mercadería", pasos: [
+    { k: "proc", t: "A. Filtro de movimientos de productos en un periodo" },
+    { k: "doc", t: "B. Envío de solicitud de cotización", id: "cot" },
+    { k: "doc", t: "C. Recepción de propuesta de compra" },
+    { k: "proc", t: "D. Evaluación: vencimiento, lotes, fechas, precio" },
+    { k: "dec", t: "E. ¿Se confirma?", vuelve: "cot" },
+    { k: "proc", t: "Espera de llegada de mercadería (x días)" },
+    { k: "fin", t: "Pasa a 2. Recepción y revisión" }] },
+  { t: "Recepción y revisión", sub: "Toda operación en droguería", pasos: [
     { k: "ini", t: "Inicio" },
-    { k: "proc", t: "El proveedor despacha la mercadería", r: "Proveedor", id: "desp" },
-    { k: "dec", t: "¿Llegó dentro de los 5 días?", no: { k: "proc", t: "Seguimiento al proveedor", r: "Compras" }, vuelve: "desp" },
-    { k: "io", t: "Registrar los días que demoró (promedio por distribuidor)", r: "Compras" },
-    { k: "fin", t: "Pasa a «Recepción e ingreso»" }] },
-  { t: "Recepción e ingreso de mercadería", pasos: [
+    { k: "proc", t: "A. Recepción de mercadería" },
+    { k: "io", t: "B. Registro de llegada" },
+    { k: "proc", t: "C. Espera" },
+    { k: "proc", t: "D. Revisión de mercadería" },
+    { k: "dec", t: "E. ¿Conforme?", no: { k: "proc", t: "Se registra la observación" } },
+    { k: "doc", t: "F. Envío de factura a administración" },
+    { k: "fin", t: "Pasa a 3. Ingreso y almacenamiento" }] },
+  { t: "Ingreso y almacenamiento", sub: "Administración y droguería", pasos: [
     { k: "ini", t: "Inicio" },
-    { k: "proc", t: "Recepción de la mercadería en droguería", r: "Almacén" },
-    { k: "doc", t: "Factura al área administrativa (requerimientos)", r: "Almacén" },
-    { k: "proc", t: "Formato de ingreso: orden de compra en el sistema", r: "Luis" },
-    { k: "proc", t: "Revisión de política de precios, vencimiento y lote", r: "Jefatura" },
-    { k: "fin", t: "Mercadería disponible en droguería" }] },
-  { t: "Requerimiento por tienda y atención a sucursales", pasos: [
-    { k: "ini", t: "Inicio" },
-    { k: "proc", t: "Requerimiento de cada tienda", r: "Carlos · desde la próxima semana, los químicos" },
-    { k: "doc", t: "Lista de atención publicada (Atención a sucursales)", r: "Abastecimiento" },
-    { k: "proc", t: "Preparación y envío desde droguería", r: "Droguería" },
-    { k: "io", t: "La sucursal revisa y responde en «Lo que me van a atender»", r: "Químico" },
-    { k: "fin", t: "Fin" }] }];
+    { k: "proc", t: "G. Revisión con la orden de compra (comparación)" },
+    { k: "doc", t: "H. Ingreso de la orden de compra" },
+    { k: "proc", t: "I. Envío a gerencia: revisión de política, vencimiento y lotes" },
+    { k: "proc", t: "J. Finalizar observación" },
+    { k: "proc", t: "Separación de productos" },
+    { k: "proc", t: "Ingreso de mercadería a almacén (almacenaje)" },
+    { k: "fin", t: "Pasa a 4. Distribución" }] },
+  { t: "Distribución", vars: [
+    { t: "Actual", pasos: [
+      { k: "ini", t: "Inicio" },
+      { k: "doc", t: "Requerimiento de sucursales" },
+      { k: "proc", t: "Revisión en droguería" },
+      { k: "proc", t: "Filtrado" },
+      { k: "proc", t: "Preparación" },
+      { k: "proc", t: "Envío" },
+      { k: "fin", t: "Entrega" }] },
+    { t: "Futuro", pasos: [
+      { k: "ini", t: "Inicio" },
+      { k: "proc", t: "Evaluación de desabastecimiento", r: "Carlos" },
+      { k: "doc", t: "Lista de atención", r: "Carlos" },
+      { k: "io", t: "Ingreso a sistema", r: "Carlos" },
+      { k: "proc", t: "Preparación", r: "Droguería" },
+      { k: "proc", t: "Envío y entrega" },
+      { k: "proc", t: "Evaluación de productos faltantes" },
+      { k: "proc", t: "Seguimiento de productos pendientes" },
+      { k: "doc", t: "Envío de faltantes a compras o gerencia" },
+      { k: "dec", t: "¿Compras da respuesta?", no: { k: "proc", t: "Se espera" } },
+      { k: "proc", t: "Se abastece" },
+      { k: "fin", t: "Fin" }] }] }];
 const FL_COL = { ini: ["#FFF3B0", "#B89400"], fin: ["#FFF3B0", "#B89400"], proc: ["#ECE6F7", "#7A64A8"], sub: ["#ECE6F7", "#5B2D6E"], doc: ["#DCEBFF", "#2F6FD0"], io: ["#FFE6CC", "#D9730D"], dec: ["#FFE3D3", "#D9602A"] };
 const flLineas = (t, n) => { const out = []; let l = ""; for (const w of String(t).split(" ")) { if ((l + " " + w).trim().length > n && l) { out.push(l); l = w; } else l = (l + " " + w).trim(); } if (l) out.push(l); return out; };
 // una figura centrada en (x, y) de ancho w y alto h, con su texto (y el responsable debajo, más chico)
@@ -2598,7 +2617,7 @@ const FL_DEFS = '<defs><marker id="flPunta" viewBox="0 0 10 10" refX="9" refY="5
 const flAlto = p => p.k === "dec" ? 110 : p.k === "ini" || p.k === "fin" ? 48 : Math.max(58, flLineas(p.t, 26).length * 16 + (p.r ? 14 : 0) + 22);
 // flujograma general: Inicio → 4 procesos (clic para abrir) → Fin; horizontal en pantalla ancha, vertical en el celular
 function flGeneral() {
-  const ancho = $("flMapa").clientWidth || 1000, hor = ancho > 760, nodos = [{ k: "ini", t: "Inicio" }, ...FLUJO.map((f, i) => ({ k: "sub", t: `${i + 1}. ${f.t}`, i })), { k: "fin", t: "Fin" }];
+  const ancho = $("flMapa").clientWidth || 1000, hor = ancho > 760, nodos = [{ k: "ini", t: "Inicio" }, ...FLUJO.map((f, i) => ({ k: "sub", t: `${i + 1}. ${f.t}${f.sub ? ` (${f.sub})` : ""}`, i })), { k: "fin", t: "Fin" }];
   let g = "", W, H;
   if (hor) {
     const ws = nodos.map(n => n.k === "sub" ? 170 : 96), gap = 46; W = ws.reduce((a, b) => a + b, 0) + gap * (nodos.length - 1) + 20; H = 130; let x = 10;
@@ -2622,6 +2641,9 @@ function flDetalle(f) {
       const hn = flAlto(p.no); g += flFig(p.no.k, sx, cy, wS, hn, p.no.t, p.no.r);
       g += flFlecha([[cx + w / 2, cy], [sx - wS / 2 - 2, cy]]) + `<text x="${cx + w / 2 + 10}" y="${cy - 6}" class="fl-no">No</text>`;
       if (p.vuelve) vueltas.push({ desde: cy - hn / 2, a: p.vuelve });
+    } else if (p.k === "dec" && p.vuelve) {
+      g += `<polyline points="${cx + w / 2},${cy} ${sx},${cy}" fill="none" stroke="#475467" stroke-width="1.8"/><text x="${cx + w / 2 + 10}" y="${cy - 6}" class="fl-no">No</text>`;
+      vueltas.push({ desde: cy + 2, a: p.vuelve });
     }
     if (j < f.pasos.length - 1) { g += flFlecha([[cx, y + h + 2], [cx, y + h + gap - 2]]); if (p.k === "dec") g += `<text x="${cx + 8}" y="${y + h + 20}" class="fl-si">Sí</text>`; }
     y += h + gap;
@@ -2635,7 +2657,8 @@ function pintarFlujo() {
   $("flMapa").innerHTML = `<h3 class="fl-h">Flujograma general</h3>${flGeneral()}`;
   $("flLey").innerHTML = FL_LEY.map(([k, t]) => `<span><svg viewBox="0 0 60 34" width="46" height="26">${flFig(k, 30, 17, k === "dec" ? 44 : 54, k === "dec" ? 32 : 26, "", "")}</svg>${t}</span>`).join("");
   $("flDet").innerHTML = S.flSel < 0 ? '<p class="muted fl-ayuda">👆 Haga clic en uno de los 4 procesos para abrir su flujograma con sus subprocesos.</p>'
-    : `<section class="card fl-col"><div class="fl-cab"><h3>${S.flSel + 1}. ${esc(FLUJO[S.flSel].t)}</h3><button class="btn sm fl-no-imp" type="button" id="flCerrar">← Volver al general</button></div>${flDetalle(FLUJO[S.flSel])}</section>`;
+    : (f => `<section class="card fl-col"><div class="fl-cab"><h3>${S.flSel + 1}. ${esc(f.t)}${f.sub ? ` <small class="muted">(${esc(f.sub)})</small>` : ""}</h3><button class="btn sm fl-no-imp" type="button" id="flCerrar">← Volver al general</button></div>
+      ${f.vars ? `<div class="fl-vars">${f.vars.map(v => `<div><h4 class="fl-var">${esc(v.t)}</h4>${flDetalle(v)}</div>`).join("")}</div>` : flDetalle(f)}</section>`)(FLUJO[S.flSel]);
 }
 $("flMapa").addEventListener("click", e => { const b = e.target.closest("[data-flp]"); if (!b) return; S.flSel = S.flSel === +b.dataset.flp ? -1 : +b.dataset.flp; pintarFlujo(); if (S.flSel >= 0) $("flDet").scrollIntoView({ behavior: "smooth", block: "start" }); });
 $("flDet").addEventListener("click", e => { if (e.target.closest("#flCerrar")) { S.flSel = -1; pintarFlujo(); } });
