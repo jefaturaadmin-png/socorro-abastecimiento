@@ -2036,20 +2036,25 @@ S.evFecha = hoyISO(); S.evMin = 15; S.evMax = 90; S.evDias = 365;
 try { const g = JSON.parse(localStorage.getItem("ev_umbral") || "{}"); if (g.min) S.evMin = g.min; if (g.max) S.evMax = g.max; if (g.srd) S.evDias = g.srd; } catch {}
 const sucsEval = () => FARMACIAS.filter(f => /^ALMACEN /.test(f) && (esAdmin() || !miFarm() || f === miFarm()));
 async function cargarEval(forzar) {
-  if (S.evCargando) return; S.evCargando = true;
+  if (S.evCargando) { S.evOtra = Math.max(S.evOtra || 0, forzar ? 2 : 1); return; } S.evCargando = true;
   try {
     if (!S.evStock || forzar) { const d = await getDoc(doc(db, "red", "eval")); S.evStock = d.exists() ? d.data() : { s: {} }; }
     // detalle de cada sucursal (stock, venta diaria y días sin venta de cada producto): para elegir el periodo de «sin rotación»
-    if (!S.evR || forzar) {
-      S.evR = {};
-      await Promise.all(sucsEval().map(async f => { try { const d = await getDoc(doc(db, "red", "ev_" + f)); if (d.exists()) {
+    // se cargan las sucursales que falten (p. ej. después de salir de la vista previa de un químico, que solo trae la suya)
+    if (!S.evR || forzar) { S.evR = {}; S.evRVisto = new Set(); }
+    const faltan = sucsEval().filter(f => !S.evRVisto.has(f));
+    if (faltan.length) {
+      faltan.forEach(f => S.evRVisto.add(f));
+      await Promise.all(faltan.map(async f => { try { const d = await getDoc(doc(db, "red", "ev_" + f)); if (d.exists()) {
         const x = d.data(); S.evR[f] = { fin: x.fin || "", corte: x.corte, filas: String(x.r || "").split(",").filter(Boolean).map(t => { const [c, st, dd, m, v] = t.split("|"); return { c, st: +st, d: +dd, ds: x.u === "dias" ? +m : (+m >= 99 ? 99999 : +m * 30), v: +v }; }) };
       } } catch {} }));
     }
     if (!S.evFechas || forzar) { const q = await getDocs(collection(db, "evaluacion")); S.evDocs = new Map(q.docs.map(d => [d.id, d.data()])); S.evFechas = [...S.evDocs.keys()].sort().reverse(); }
   } catch (e) { S.evErr = textoError(e); S.evStock ??= { s: {} }; }
   S.evDocs ??= new Map(); S.evFechas ??= [];
-  S.evCargando = false; if (S.vista === "vEval") pintarEval();
+  S.evCargando = false;
+  if (S.evOtra) { const fz = S.evOtra === 2; S.evOtra = 0; return cargarEval(fz); }   // se pidió otra carga mientras esta corría
+  if (S.vista === "vEval") pintarEval();
 }
 // los 5 indicadores de stock de una sucursal (% de productos), con los días mínimo y máximo elegidos
 function stockEval(f) {
@@ -2087,7 +2092,7 @@ function pintarEval() {
   const fechas = [...new Set([S.evFecha, ...(S.evFechas || [])])].sort().reverse();
   $("evFecha").innerHTML = fechas.map(f => `<option value="${f}" ${f === S.evFecha ? "selected" : ""}>${fDia(f)}${S.evDocs?.has(f) ? "" : " (nueva)"}</option>`).join("");
   $("evNueva").hidden = $("evGen").hidden = !admin;
-  $("evInfo").innerHTML = S.evStock?.publicado ? `Indicadores de stock con el kardex al <b>${fmtF(S.evStock.corte)}</b> (publicado el ${fFecha(S.evStock.publicado)}) · por cantidad de productos.${Object.keys(S.evR || {}).length ? ` Haga clic en el % de disponibilidad o de sin rotación para ver laboratorios y productos.` : admin ? ` <b class="mal">Falta el detalle por sucursal: pulse «⚙ Generar detalle» para poder elegir el periodo y abrir laboratorios y productos.</b>` : ""}`
+  $("evInfo").innerHTML = S.evStock?.publicado ? `Indicadores de stock con el kardex al <b>${fmtF(S.evStock.corte)}</b> (publicado el ${fFecha(S.evStock.publicado)}) · por cantidad de productos.${Object.keys(S.evR || {}).length ? ` Haga clic en el % de disponibilidad o de sin rotación para ver laboratorios y productos.` : admin ? ` <b class="mal">Falta el detalle por sucursal: pulse «⚙ Generar detalle» para poder elegir el periodo y abrir laboratorios y productos.</b>` : ""}${(() => { const sin = admin && Object.keys(S.evR || {}).length ? sucsEval().filter(f => !S.evR[f]) : []; return sin.length ? ` <b class="mal">Sin detalle: ${sin.map(corto).join(", ")}. Pulse «⚙ Generar detalle».</b>` : ""; })()}`
     : "Los indicadores de stock aparecerán después de subir el kardex o abrir Atención a sucursales.";
   msg("evMsg", S.evErr || "", true);
   const filas = sucsEval().map(f => ({ f, st: stockEval(f), e: evDe(f) }));
