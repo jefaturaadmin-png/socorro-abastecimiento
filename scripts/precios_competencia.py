@@ -431,6 +431,29 @@ def generica(nombre, dominios):
     return {}
 
 
+def bys_diag():
+    """Diagnóstico de Boticas y Salud (Next.js): sitemap, rutas de productos y datos de una página de producto."""
+    B = "https://www.boticasysalud.com"
+    for u in ("/robots.txt", "/sitemap.xml", "/sitemap-0.xml", "/server-sitemap.xml", "/tienda/productos"):
+        r = pedir(B + u, intentos=1)
+        print(u, "->", None if r is None else r.status_code, "" if r is None else re.sub(r"\s+", " ", r.text[:500]))
+    r = pedir(B + "/", intentos=1)
+    rutas, bases = set(), set()
+    for src in re.findall(r'<script[^>]+src="([^"]+)"', r.text if r else ""):
+        rr = pedir(src if src.startswith("http") else B + src, intentos=1)
+        if rr is None or rr.status_code != 200:
+            continue
+        rutas |= set(re.findall(r'["\'](/api/[\w./-]*(?:Product|product|Catalog|catalog|Search|search|Categor|categor|Presentation|presentation)[\w./-]*)', rr.text))
+        bases |= set(re.findall(r'https?://[\w.-]+(?:\.azurewebsites\.net|\.amazonaws\.com|boticasysalud[\w.-]*|\.cloudfront\.net)[\w./-]*', rr.text))
+    print("rutas de productos:", sorted(rutas))
+    print("bases:", sorted(bases)[:40])
+    p = pedir(B + "/tienda/productos/86474-relazzz50mgsoloralcjax1fcox120ml?presentationCode=uK2D90cHTb", intentos=1)
+    if p is not None:
+        m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', p.text, re.S)
+        print("producto:", p.status_code, "NEXT_DATA:", (m.group(1)[:2500] if m else "no hay"))
+    return {}
+
+
 def universo():
     return generica("Farmacias Universo", ["https://www.farmaciasuniverso.com", "https://farmaciasuniverso.com",
                                            "https://www.farmaciasuniverso.pe", "https://farmaciasuniverso.pe",
@@ -472,7 +495,7 @@ if __name__ == "__main__":
     for t in tiendas:
         try:
             ok &= guardar(t, {"mifarma": mifarma, "boticasperu": boticasperu, "farmaciaslider": farmaciaslider,
-                                  "inkafarma": inkafarma, "universo": universo, "boticasysalud": boticasysalud}[t]())
+                                  "inkafarma": inkafarma, "universo": universo, "boticasysalud": boticasysalud, "bysdiag": bys_diag}[t]())
         except SystemExit as e:
             print(e); ok = False
         except Exception as e:
