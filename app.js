@@ -420,12 +420,11 @@ $("iniClaveF").addEventListener("submit", async e => {
 // Avisos a la izquierda e información a la derecha (en pantallas anchas; en las angostas se ven dentro de la página).
 function pintarLados() {
   if (!S.perfil) return;
-  // cada aviso en su módulo: generales en el menú principal, el cierre en Bloqueos, "de prueba" en lo que me van a atender
+  // cada aviso en su módulo: generales en el menú principal, el cierre en Bloqueos
   const av = [], inf = [], e = !esAdmin() && estadoCierre(S.perfil.cierre);
   if (S.vista === "vInicio") av.push(...htmlAvisos());
   if (S.vista === "vQuimico" && e) av.push(`<div class="aviso cierre-aviso${e.vigente ? "" : " prox"}">${esc(avisoCierre(e))}</div>`);
   if (S.vista === "vAten") {
-    av.push(`<div class="aviso prueba">🧪 Módulo de prueba · solo informativo. Los datos pueden cambiar; ante cualquier duda consulta con Abastecimiento.</div>`);
     if ($("atFiltro").innerHTML.trim()) inf.push(`<div class="at-filtro">${$("atFiltro").innerHTML}</div>`);
   }
   $("avisosLado").innerHTML = av.join(""); $("infoLado").innerHTML = inf.join("");
