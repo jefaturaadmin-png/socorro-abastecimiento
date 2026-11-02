@@ -131,6 +131,12 @@ service cloud.firestore {
       allow delete: if tieneVista('atencion') && resource.data.suc == perfil().get('farmacia', '');
     }
 
+    // qué ve cada sucursal en «Lo que me van a atender» (tipos visibles y productos ocultos o mostrados aparte): lo decide el administrador
+    match /aten_vis/{suc} {
+      allow read: if publica() || (tieneVista('atencion') && (rol() == 'admin' || perfil().get('farmacia', '') == suc));
+      allow write: if publica();
+    }
+
     // ---------- el producto en toda la red (para el ojito de información; lo publica el administrador) ----------
     match /red/{id} {
       allow read: if tieneVista('atencion') || tieneVista('faltantes') || tieneVista('pedidos') || tieneVista('evaluacion') || tieneVista('compras') || publica();

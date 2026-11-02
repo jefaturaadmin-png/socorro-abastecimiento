@@ -1373,7 +1373,10 @@ function escucharAten() {
   S.atRespUnsub = onSnapshot(query(collection(db, "atencion_resp"), where("suc", "==", suc)), sn => {
     S.atResp = new Map(sn.docs.map(d => [d.data().codpro, d.data()])); if (S.vista === "vAten") pintarAten();
   }, e => avisar(e));
-  S.subs.push(() => S.atUnsub?.(), () => S.atRespUnsub?.());
+  // lo que el administrador decide que vea la sucursal (aten_vis/{SUCURSAL}): tipos visibles y productos ocultos o mostrados aparte
+  S.atVis = null; S.atVisUnsub?.();
+  S.atVisUnsub = onSnapshot(doc(db, "aten_vis", suc), sn => { S.atVis = sn.exists() ? sn.data() : null; if (S.vista === "vAten") pintarAten(); }, () => { S.atVis = null; });
+  S.subs.push(() => S.atUnsub?.(), () => S.atRespUnsub?.(), () => S.atVisUnsub?.());
   // lo que respondió droguería en Faltantes (descontinuado, agotado, en tránsito…), para verlo en cada producto
   if (!S.faltSubs && !S.fEstAten) { S.fEstAten = true;
     S.subs.push(onSnapshot(collection(db, "faltantes_estado"), sn => { S.fEst = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === "vAten" && !S.atEdit) pintarAten(); },
@@ -1506,14 +1509,17 @@ function pintarAten() {
     · venta diaria según ${esc(fte)} · ${A.tipos === "todos" ? "todo lo que se vende en la sucursal" : "productos de venta frecuente (tipo A lo necesario; tipo B 1 unidad si no le alcanza)"}
     ${(A.items || []).some(i => i.aj) ? "<br>Algunos productos tienen un criterio propio (se indica en la columna Nota)." : ""}
     <br><small class="muted">Datos al ${fmtF(A.corte)} · publicado el ${fFecha(A.publicado)}</small>`;
-  const q = norm(S.atQ).trim();
-  const lista = (A.items || []).filter(i => (S.atVer !== "urg" || i.urg) && (S.atVer !== "env" || i.pide > 0)
+  const q = norm(S.atQ).trim(), admin = esAdmin(), todos = A.items || [];
+  // la sucursal solo ve lo que el administrador dejó visible; el administrador ve todo (lo oculto, en gris)
+  const base = admin ? todos : todos.filter(visAten);
+  pintarVisAten(todos);
+  const lista = base.filter(i => (S.atVer !== "urg" || i.urg) && (S.atVer !== "env" || i.pide > 0)
     && (S.atVer !== "sinr" || !S.atResp?.has(i.c)) && (S.atVer !== "resp" || S.atResp?.has(i.c))
     && (!q || q.split(/\s+/).every(w => norm(i.c + " " + i.n + " " + i.l).includes(w))));
   $("atTit").textContent = `${nf(lista.length)} productos · ${nf(lista.filter(i => i.urg).length)} urgentes`;
   const colCob = i => i.d <= 0 ? "#9e9e9e" : i.cob == null ? "#1e6bb8" : i.cob < A.Sg ? "#d9302c" : i.cob < A.C + A.Sg ? "#e0a030" : "#43a047";
-  $("atTabla").innerHTML = `<thead><tr><th>Producto</th><th class="at-ojo">Información</th><th>Tipo</th><th class="der">Cobertura</th><th class="der">Venta diaria</th><th class="der">Tu stock</th><th class="der">Se te enviará</th><th>Nota</th><th>Respuesta de la sucursal</th></tr></thead><tbody>` +
-    (lista.length ? lista.map(i => `<tr><td class="p"><b>${esc(i.c)} - ${esc(i.n)}</b><code>${esc(i.l)}</code></td>
+  $("atTabla").innerHTML = `<thead><tr><th>Producto</th><th class="at-ojo">Información</th><th>Tipo</th><th class="der">Cobertura</th><th class="der">Venta diaria</th><th class="der">Tu stock</th><th class="der">Se te enviará</th><th>Nota</th><th>Respuesta de la sucursal</th>${admin ? '<th>¿Lo ve la sucursal?</th>' : ""}</tr></thead><tbody>` +
+    (lista.length ? lista.map(i => `<tr${admin && !visAten(i) ? ' class="at-oculto"' : ""}><td class="p"><b>${esc(i.c)} - ${esc(i.n)}</b><code>${esc(i.l)}</code></td>
       <td class="at-ojo">${i.hv ? `<button type="button" class="at-ibtn" data-info="${esc(i.c)}" title="Ver la información de este producto en tu local" aria-label="Información de ${esc(i.n)}">${OJO}</button>` : ""}</td>
       <td><span class="at-cat ${esc(i.cat)}">${esc(i.cat)}</span></td>
       <td class="der"><span class="at-cob" style="background:${colCob(i)}">${i.d <= 0 ? "sin venta" : i.cob == null ? "–" : nf(i.cob) + " días"}</span></td>
@@ -1521,8 +1527,8 @@ function pintarAten() {
       <td class="der">${noEnvia(i) ? '<span class="muted">No</span>' : `<b>${i.pide ? nf(i.pide) : "–"}</b>`}</td>
       <td class="at-nota">${noEnvia(i) ? `<span class="tag t-rech at-drog">No se te envía: ${esc(noEnvia(i))}</span>`
         : `${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${(i.de || []).map(x => `<span class="tag t-ok">${nf(x.q)} de ${esc(x.f)}</span>`).join(" ")}${i.cmp ? `<span class="tag t-rech">${nf(i.cmp)} por comprar</span>` : ""}`}${i.cmb ? `<span class="tag t-ok">En cambio de ${esc(i.cmb)}</span>` : ""}${tagDrog(i)}${i.enl ? `<span class="tag t-ok at-drog">Se te envía en lugar de ${esc(i.enl)} (droguería)</span>` : ""}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td>
-      <td class="at-resp">${celdaResp(i)}</td></tr>`).join("")
-      : `<tr class="vacia"><td colspan="9">Nada que mostrar.</td></tr>`) + "</tbody>";
+      <td class="at-resp">${celdaResp(i)}</td>${admin ? `<td>${visAten(i) ? `<button type="button" class="btn sm at-vis" data-atvis="${esc(i.c)}" title="Ocultar este producto a la sucursal">👁 Visible</button>` : `<button type="button" class="btn sm at-vis no" data-atvis="${esc(i.c)}" title="Mostrar este producto a la sucursal">🚫 Oculto</button>`}</td>` : ""}</tr>`).join("")
+      : `<tr class="vacia"><td colspan="10">Nada que mostrar.</td></tr>`) + "</tbody>";
   const iEd = S.atEdit && (A.items || []).find(x => x.c === S.atEdit);
   fxAplicar($("atTabla"), "aten", [1], (v, t) => { $("atTit").textContent = `${nf(v)}${v < t ? ` de ${nf(t)}` : ""} productos · ${nf(lista.filter(i => i.urg).length)} urgentes`; });
   ventanaResp("atDlg", iEd ? `<h2>${esc(iEd.c)} - ${esc(iEd.n)}</h2><p class="muted">${esc(iEd.l || "")} · se te enviará ${nf(iEd.pide || 0)}</p>` + formRespAt(iEd) : "");
@@ -1690,7 +1696,7 @@ $("atInfo").addEventListener("click", e => { const t = e.target.closest("[data-a
 $("atXls").addEventListener("click", () => {
   const A = S.aten, suc = esAdmin() ? (S.atSuc || FARMACIAS[0]) : miFarm();
   if (!A?.items?.length) return toast("Aún no hay lista publicada para descargar.");
-  const datos = A.items.map(i => { const r = S.atResp?.get(i.c);
+  const datos = (esAdmin() ? A.items : A.items.filter(visAten)).map(i => { const r = S.atResp?.get(i.c);
     return { "Código": i.c, Producto: i.n, Laboratorio: i.l || "", Tipo: i.cat || "", "Cobertura (días)": i.d <= 0 ? "sin venta" : i.cob ?? "",
       "Venta diaria": +Number(i.d || 0).toFixed(2), "Tu stock": i.st, "Se te enviará": i.pide || 0,
       Urgente: i.urg ? "Sí" : "", Nota: [i.pide && i.falta ? `${i.falta} sin stock en droguería` : "", ...(i.de || []).map(x => `${x.q} de ${x.f}`), i.cmp ? `${i.cmp} por comprar` : "", i.aj ? "Criterio propio: " + i.aj : "", i.cmb ? "En cambio de " + i.cmb : "", i.rmp ? "Droguería lo reemplaza por " + i.rmp : "", i.enl ? "En lugar de " + i.enl : "",
@@ -2749,3 +2755,49 @@ $("fxPop").addEventListener("input", e => {
   $("fxPop").querySelectorAll("[data-fxv]").forEach(x => { const ok = !q || norm(x.dataset.fxv).includes(q); x.parentElement.hidden = !ok; if (q) x.checked = ok; });
 });
 $("fxPop").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); $("fxOk").click(); } else if (e.key === "Escape") fxCerrar(); });
+
+/* ===================== lo que ve cada sucursal en «Lo que me van a atender» ===================== */
+// aten_vis/{SUCURSAL} = { tipos: ["A","B",…] (sin el campo: todos), ocultos: [códigos], mostrar: [códigos que se ven aunque su tipo no] }
+const AT_TIPOS = ["A", "B", "C", "D", "E"];
+function visAten(i) {
+  const V = S.atVis; if (!V) return true;
+  if ((V.mostrar || []).includes(i.c)) return true;
+  if ((V.ocultos || []).includes(i.c)) return false;
+  return !V.tipos || V.tipos.includes(i.cat || "E");
+}
+function pintarVisAten(todos) {
+  const box = $("atVisBox"), admin = esAdmin(); box.hidden = !admin || !todos.length; if (box.hidden) return;
+  const V = S.atVis || {}, tipos = V.tipos || AT_TIPOS, n = todos.filter(visAten).length, porT = t => todos.filter(i => (i.cat || "E") === t).length;
+  box.innerHTML = `<b>Lo que ve la sucursal:</b>
+    <span class="at-vis-tipos">${AT_TIPOS.map(t => `<label class="check"><input type="checkbox" data-attipo="${t}" ${tipos.includes(t) ? "checked" : ""}> <span class="at-cat ${t}">${t}</span> <small class="muted">${nf(porT(t))}</small></label>`).join("")}</span>
+    <span class="muted">· ve <b>${nf(n)}</b> de ${nf(todos.length)} productos${(V.ocultos || []).length ? ` · ${nf(V.ocultos.length)} ocultos uno por uno` : ""}${(V.mostrar || []).length ? ` · ${nf(V.mostrar.length)} mostrados aparte` : ""}</span>
+    ${S.atVis ? '<button type="button" class="btn sm" id="atVisReset">Mostrar todo</button>' : ""}
+    <small class="muted at-vis-ayuda">Marque los tipos que verá la sucursal. Con el botón de la última columna puede ocultar o mostrar productos uno por uno.</small>`;
+}
+async function guardarVisAten(cambio) {
+  const suc = S.atSuc || FARMACIAS[0], V = S.atVis || {};
+  const nuevo = { tipos: V.tipos || AT_TIPOS, ocultos: V.ocultos || [], mostrar: V.mostrar || [], ...cambio };
+  try { await setDoc(doc(db, "aten_vis", suc), { ...nuevo, porNombre: S.perfil.nombre || S.perfil.usuario || "", actualizado: serverTimestamp() }); S.atVis = nuevo; pintarAten(); }
+  catch (e) { toast(textoError(e)); }
+}
+$("atVisBox").addEventListener("change", e => {
+  const t = e.target.closest("[data-attipo]"); if (!t) return;
+  const tipos = [...$("atVisBox").querySelectorAll("[data-attipo]")].filter(x => x.checked).map(x => x.dataset.attipo);
+  // al cambiar los tipos, los productos sueltos de esos tipos vuelven a seguir la regla general
+  const V = S.atVis || {}, cat = new Map((S.aten?.items || []).map(i => [i.c, i.cat || "E"]));
+  guardarVisAten({ tipos, ocultos: (V.ocultos || []).filter(c => cat.get(c) !== t.dataset.attipo), mostrar: (V.mostrar || []).filter(c => cat.get(c) !== t.dataset.attipo) });
+});
+$("atVisBox").addEventListener("click", async e => {
+  if (!e.target.closest("#atVisReset")) return;
+  if (!confirm("¿Volver a mostrar todo a la sucursal?")) return;
+  try { await deleteDoc(doc(db, "aten_vis", S.atSuc || FARMACIAS[0])); S.atVis = null; pintarAten(); } catch (x) { toast(textoError(x)); }
+});
+$("atTabla").addEventListener("click", e => {
+  const b = e.target.closest("[data-atvis]"); if (!b) return;
+  const i = (S.aten?.items || []).find(x => x.c === b.dataset.atvis); if (!i) return;
+  const V = S.atVis || {}, tipos = V.tipos || AT_TIPOS, porTipo = tipos.includes(i.cat || "E");
+  let ocultos = (V.ocultos || []).filter(c => c !== i.c), mostrar = (V.mostrar || []).filter(c => c !== i.c);
+  if (visAten(i)) { if (porTipo) ocultos.push(i.c); }   // ocultar: si su tipo es visible, se oculta aparte
+  else if (!porTipo) mostrar.push(i.c);                 // mostrar: si su tipo está oculto, se muestra aparte
+  guardarVisAten({ ocultos, mostrar });
+});
