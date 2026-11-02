@@ -454,6 +454,34 @@ def bys_diag():
     return {}
 
 
+def bys_diag2():
+    """Diagnóstico 2 de Boticas y Salud: en todos los scripts del sitio, cómo se llama a searchbyfilter y a qué servidor."""
+    B = "https://www.boticasysalud.com"
+    r = pedir(B + "/", intentos=1)
+    srcs = set(re.findall(r'<script[^>]+src="([^"]+)"', r.text if r else ""))
+    man = [x for x in srcs if "_buildManifest" in x]
+    if man:
+        m = pedir(B + man[0], intentos=1)
+        srcs |= {"/_next/" + x for x in re.findall(r'"(static/chunks/[^"]+\.js)"', m.text if m else "")}
+    print("scripts:", len(srcs))
+    for src in sorted(srcs):
+        rr = pedir(src if src.startswith("http") else B + src, intentos=1)
+        if rr is None or rr.status_code != 200:
+            continue
+        t = rr.text
+        for pat in ("searchbyfilter", "getbyparameters", "azurewebsites", "baseURL", "NEXT_PUBLIC"):
+            for mm in list(re.finditer(pat, t))[:3]:
+                print(f"[{src.split('/')[-1]}] {pat}:", t[max(0, mm.start() - 350):mm.end() + 350].replace("\n", " "))
+    for u in (B + "/api/ServiceProduct/searchbyfilter", "https://app-bys-payapi-prod-a3bbfzadd7dpgkdr.eastus-01.azurewebsites.net/api/ServiceProduct/searchbyfilter"):
+        for metodo in ("get", "post"):
+            try:
+                rr = getattr(sesion, metodo)(u, timeout=30, **({"json": {"page": 1, "pageSize": 20, "text": "paracetamol"}} if metodo == "post" else {}))
+                print(metodo.upper(), u, "->", rr.status_code, rr.text[:300])
+            except requests.RequestException as e:
+                print(metodo.upper(), u, "error", e)
+    return {}
+
+
 def universal():
     return generica("Farmacia Universal", ["https://www.farmaciauniversal.com", "https://farmaciauniversal.com"])
 
@@ -493,7 +521,7 @@ if __name__ == "__main__":
     for t in tiendas:
         try:
             ok &= guardar(t, {"mifarma": mifarma, "boticasperu": boticasperu, "farmaciaslider": farmaciaslider,
-                                  "inkafarma": inkafarma, "universal": universal, "boticasysalud": boticasysalud, "bysdiag": bys_diag}[t]())
+                                  "inkafarma": inkafarma, "universal": universal, "boticasysalud": boticasysalud, "bysdiag": bys_diag, "bysdiag2": bys_diag2}[t]())
         except SystemExit as e:
             print(e); ok = False
         except Exception as e:
