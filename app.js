@@ -2093,12 +2093,22 @@ function pintarEval() {
   const filas = sucsEval().map(f => ({ f, st: stockEval(f), e: evDe(f) }));
   const celNota = (f, k, val) => admin ? `<select class="ev-sel ${EV_NOTA[val || ""][1]}" data-evf="${esc(f)}" data-evk="${k}">${Object.entries(EV_NOTA).map(([v, [t]]) => `<option value="${v}" ${v === (val || "") ? "selected" : ""}>${t}</option>`).join("")}</select>`
     : `<span class="chip ${EV_NOTA[val || ""][1]}">${EV_NOTA[val || ""][0]}</span>`;
+  // químicos (y vista previa): solo disponibilidad y sin rotación de su sucursal
+  document.querySelectorAll(".ev-adm").forEach(el => el.hidden = !admin);
+  document.querySelectorAll(".ev-quim").forEach(el => el.hidden = admin);
+  const celDisp = (f, st) => S.evR?.[f] ? `<button type="button" class="ev-lnk" data-evdisp="${esc(f)}" title="Ver lo desabastecido por laboratorio">${p1(st?.disp)}</button>` : p1(st?.disp);
+  const celSR = (f, st) => S.evR?.[f] ? `<button type="button" class="ev-lnk" data-evsr="${esc(f)}" title="Ver laboratorios y productos sin rotación">${p1(st?.p.sr)}</button>` : p1(st?.p.sr);
+  if (!admin) {
+    $("evTabla").innerHTML = `<thead><tr><th>Sucursal</th><th class="der">Disponibilidad</th><th class="der ev-r">Sin rotación</th></tr></thead><tbody>` +
+      (filas.length ? filas.map(({ f, st }) => `<tr><td><b>${esc(corto(f))}</b></td><td class="der">${celDisp(f, st)}</td><td class="der ev-r">${celSR(f, st)}</td></tr>`).join("") : '<tr class="vacia"><td colspan="3">Sin datos de su sucursal.</td></tr>') + "</tbody>";
+    $("evGraf").innerHTML = ""; return;
+  }
   $("evTabla").innerHTML = `<thead><tr><th>Sucursal</th><th>Nivel de stockeo</th><th class="der">Capacidad de almacén</th>${EV_ITEMS.map(([, t]) => `<th>${t}</th>`).join("")}
       <th class="der">Disponibilidad</th><th class="der ev-n">Normostock</th><th class="der ev-s">Sobrestock</th><th class="der ev-b">Substock</th><th class="der ev-r">Sin rotación</th><th class="der ev-d">Desabastecido</th><th class="der">Cumplimiento de BPA</th><th></th></tr></thead><tbody>` +
     filas.map(({ f, st, e }) => { const nv = nivelStock(st?.p.normo), cap = capacidad(e.cap), bpa = bpaPct(e.bpa);
       return `<tr><td><b>${esc(corto(f))}</b></td><td><span class="chip ${nv[1]}">${nv[0]}</span></td><td class="der">${cap != null ? cap.toLocaleString("es-PE", { maximumFractionDigits: 2 }) + " m³" : "–"}</td>
         ${EV_ITEMS.map(([k]) => `<td>${celNota(f, k, e[k])}</td>`).join("")}
-        <td class="der">${S.evR?.[f] ? `<button type="button" class="ev-lnk" data-evdisp="${esc(f)}" title="Ver lo desabastecido por laboratorio">${p1(st?.disp)}</button>` : p1(st?.disp)}</td><td class="der ev-n">${p1(st?.p.normo)}</td><td class="der ev-s">${p1(st?.p.sobre)}</td><td class="der ev-b">${p1(st?.p.sub)}</td><td class="der ev-r">${S.evR?.[f] ? `<button type="button" class="ev-lnk" data-evsr="${esc(f)}" title="Ver laboratorios y productos sin rotación">${p1(st?.p.sr)}</button>` : p1(st?.p.sr)}</td><td class="der ev-d">${p1(st?.p.de)}</td>
+        <td class="der">${celDisp(f, st)}</td><td class="der ev-n">${p1(st?.p.normo)}</td><td class="der ev-s">${p1(st?.p.sobre)}</td><td class="der ev-b">${p1(st?.p.sub)}</td><td class="der ev-r">${celSR(f, st)}</td><td class="der ev-d">${p1(st?.p.de)}</td>
         <td class="der"><b>${p1(bpa)}</b></td><td><button class="btn sm" type="button" data-evdet="${esc(f)}">${admin ? "Capacidad y BPA" : "Ver detalle"}</button></td></tr>`; }).join("") + "</tbody>";
   // barras apiladas: cómo está el stock de cada sucursal
   const cols = [["normo", "Normostock", "#1E6B5F"], ["sobre", "Sobrestock", "#3d5a99"], ["sub", "Substock", "#B7791F"], ["sr", "Sin rotación", "#8a4f9e"], ["de", "Desabastecido", "#B4321C"]];
@@ -2206,6 +2216,7 @@ $("evDet").addEventListener("click", e => {
 });
 $("evXls").addEventListener("click", () => {
   const datos = sucsEval().map(f => { const st = stockEval(f), e = evDe(f), r2 = v => v == null ? "" : Math.round(v * 100) / 100;
+    if (!esAdmin()) return { Sucursal: corto(f), "Disponibilidad %": r2(st?.disp), "Sin rotación %": r2(st?.p.sr), "Sin venta desde": desdeSR() };
     return { Sucursal: corto(f), "Nivel de stockeo": nivelStock(st?.p.normo)[0], "Capacidad de almacén (m³)": r2(capacidad(e.cap)),
       ...Object.fromEntries(EV_ITEMS.map(([k, t]) => [t, EV_NOTA[e[k] || ""][0]])), "Disponibilidad %": r2(st?.disp),
       "Normostock %": r2(st?.p.normo), "Sobrestock %": r2(st?.p.sobre), "Substock %": r2(st?.p.sub), "Sin rotación %": r2(st?.p.sr), "Desabastecido %": r2(st?.p.de),
