@@ -703,3 +703,6 @@ tr.at-oculto td { opacity: .45 } tr.at-oculto td:last-child { opacity: 1 }
 .red-res { margin-top: 8px; max-height: 460px; overflow: auto } .red-res > p { margin: 4px 0 }
 .red-item { display: flex; flex-direction: column; gap: 1px; padding: 8px 4px; border-bottom: 1px solid #eef1f5 }
 .red-item small { color: #667085; font-size: .78rem } .red-por { font-size: .85rem; color: #344054 } .red-por em { font-style: normal; font-weight: 700; color: #1E6B5F }
+.red-fila { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 6px } .red-fila input { flex: 1 1 260px; max-width: 460px; margin: 0 }
+.red-item { position: relative; padding-right: 110px } .red-add { position: absolute; right: 4px; top: 50%; transform: translateY(-50%) }
+@media (max-width: 520px) { .red-item { padding-right: 4px } .red-add { position: static; transform: none; align-self: flex-start; margin-bottom: 4px } }

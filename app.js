@@ -2831,8 +2831,15 @@ async function buscarRed() {
   const g = new Map();
   for (const x of hall) { const k = norm(x.n).replace(/[^A-Z0-9]+/g, " ").trim(); const a = g.get(k) || { n: x.n, m: x.m, t: [] }; if (!a.m && x.m) a.m = x.m; a.t.push(x); g.set(k, a); }
   const lista = [...g.values()].sort((a, b) => (norm(b.n).startsWith(ws[0]) - norm(a.n).startsWith(ws[0])) || b.t.length - a.t.length || a.n.localeCompare(b.n, "es")).slice(0, 60);
-  box.innerHTML = lista.length ? `<p class="muted">${nf(g.size)} ${g.size === 1 ? "producto" : "productos"}${g.size > 60 ? " · se muestran los primeros 60" : ""}</p>` + lista.map(a => `<div class="red-item">
+  S.redLista = lista;
+  box.innerHTML = lista.length ? `<p class="muted">${nf(g.size)} ${g.size === 1 ? "producto" : "productos"}${g.size > 60 ? " · se muestran los primeros 60" : ""}</p>` + lista.map((a, j) => `<div class="red-item"><button type="button" class="btn sm red-add" data-redadd="${j}" title="Registrar este producto como buscado por un cliente">➕ Añadir</button>
       <b>${esc(a.n)}</b>${a.m ? `<small>LAB. ${esc(a.m.toUpperCase())}</small>` : ""}
       <span class="red-por">Vendido por ${[...new Map(a.t.map(x => [x.t, x])).values()].map(x => `<em>${esc(x.t)}</em>`).join(", ")}</span></div>`).join("")
     : '<p class="muted">Ninguna farmacia de la red lo tiene en su catálogo.</p>';
 }
+// «Añadir» en un resultado de la red: abre el registro con el nombre (y el laboratorio en la nota) ya puestos
+$("redRes").addEventListener("click", e => {
+  const b = e.target.closest("[data-redadd]"); if (!b) return; const a = S.redLista?.[+b.dataset.redadd]; if (!a) return;
+  abrirNue(); $("nueProd").value = a.n.slice(0, 150); if (a.m) $("nueNota").value = ("Lab. " + a.m).slice(0, 300);
+  $("nueProd").dispatchEvent(new Event("input"));
+});

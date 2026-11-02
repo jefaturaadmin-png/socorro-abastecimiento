@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611021700">
+<link rel="stylesheet" href="styles.css?v=202611021720">
 </head>
 <body>
 
@@ -382,7 +382,6 @@
   <section id="vNue" hidden>
     <div class="wrap ancho cabeza">
       <div><h1>Productos que buscan los clientes</h1><p class="muted">Cuando llega una receta o un paciente busca algo que no tenemos, regístrelo aquí (con foto si puede). Lo ven todas las sucursales y Abastecimiento.</p></div>
-      <div class="pd-acc"><button class="btn primario nue-btn" type="button" id="nueNuevo">📷 Registrar producto</button></div>
     </div>
     <div class="wrap ancho cuerpo">
       <div class="msg" id="nueMsg" hidden></div>
@@ -390,7 +389,7 @@
       <section class="card pd-card nue-red">
         <h3>🔎 Busca en la red</h3>
         <p class="muted">Busque un medicamento y vea quién más lo vende y de qué laboratorio.</p>
-        <input id="redQ" type="search" placeholder="Ej. levozetaler" autocomplete="off">
+        <div class="red-fila"><input id="redQ" type="search" placeholder="Ej. levozetaler" autocomplete="off"><button class="btn primario nue-btn" type="button" id="nueNuevo">📷 Registrar producto</button></div>
         <div id="redRes" class="red-res"></div>
       </section>
       <section class="card lista">
@@ -638,6 +637,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202611021710"></script>
+<script type="module" src="app.js?v=202611021720"></script>
 </body>
 </html>
