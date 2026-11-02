@@ -2808,7 +2808,7 @@ $("atTabla").addEventListener("click", e => {
 // data/competencia/<tienda>.json = { fecha, p: { id: [nombre, marca, presentación, unidades, precio, oferta, tarjeta, url] } }
 // (los descarga cada noche scripts/precios_competencia.py). El nombre de cada tienda se muestra disfrazado.
 const RED_TIENDAS = [["mifarma", "mi.far.ma"], ["inkafarma", "in.ka.far.ma"], ["boticasperu", "bo.ti.cas.pe.ru"], ["farmaciaslider", "far.ma.cias.li.der"],
-  ["universo", "u.ni.ver.so"], ["boticasysalud", "bo.ti.ca.sa.lud"]];
+  ["universal", "u.ni.ver.sal"], ["boticasysalud", "bo.ti.ca.sa.lud"]];
 async function cargarRedComp() {
   if (S.red2) return S.red2; if (S.red2P) return S.red2P;
   S.red2P = Promise.all(RED_TIENDAS.map(async ([a, alias]) => {

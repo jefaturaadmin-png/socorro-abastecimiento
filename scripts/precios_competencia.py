@@ -1,5 +1,5 @@
 """
-Precios de la competencia (Mifarma, Boticas Perú, Farmacias Líder, Inkafarma, Farmacias Universo y Boticas y Salud) para el módulo Comparativo.
+Precios de la competencia (Mifarma, Boticas Perú, Farmacias Líder, Inkafarma, Farmacia Universal y Boticas y Salud) para el módulo Comparativo.
 
 Lo ejecuta GitHub Actions cada noche (.github/workflows/precios.yml) y guarda en data/competencia/:
   mifarma.json / boticasperu.json   -> catálogo de hoy  {"fecha": "...", "p": {id: [nombre, marca, presentación, unidades, precio, oferta, tarjeta, url]}}
@@ -282,7 +282,7 @@ def inkafarma():
 
 
 # ============================ TIENDAS CON PLATAFORMA COMÚN ============================
-# Farmacias Universo y Boticas y Salud: se prueba en cada dominio si la tienda es Shopify, VTEX o WooCommerce
+# Farmacia Universal y Boticas y Salud: se prueba en cada dominio si la tienda es Shopify, VTEX o WooCommerce
 # (las tres tienen un listado público de productos); si ninguna responde, se leen las páginas de producto del sitemap.
 def shopify(base):
     out, page = {}, 1
@@ -454,10 +454,8 @@ def bys_diag():
     return {}
 
 
-def universo():
-    return generica("Farmacias Universo", ["https://www.farmaciasuniverso.com", "https://farmaciasuniverso.com",
-                                           "https://www.farmaciasuniverso.pe", "https://farmaciasuniverso.pe",
-                                           "https://www.farmaciauniverso.com", "https://www.boticasuniverso.com"])
+def universal():
+    return generica("Farmacia Universal", ["https://www.farmaciauniversal.com", "https://farmaciauniversal.com"])
 
 
 def boticasysalud():
@@ -490,12 +488,12 @@ def guardar(tienda, prods):
 
 
 if __name__ == "__main__":
-    tiendas = sys.argv[1:] or ["boticasperu", "farmaciaslider", "mifarma", "inkafarma", "universo", "boticasysalud"]
+    tiendas = sys.argv[1:] or ["boticasperu", "farmaciaslider", "mifarma", "inkafarma", "universal", "boticasysalud"]
     ok = True
     for t in tiendas:
         try:
             ok &= guardar(t, {"mifarma": mifarma, "boticasperu": boticasperu, "farmaciaslider": farmaciaslider,
-                                  "inkafarma": inkafarma, "universo": universo, "boticasysalud": boticasysalud, "bysdiag": bys_diag}[t]())
+                                  "inkafarma": inkafarma, "universal": universal, "boticasysalud": boticasysalud, "bysdiag": bys_diag}[t]())
         except SystemExit as e:
             print(e); ok = False
         except Exception as e:
