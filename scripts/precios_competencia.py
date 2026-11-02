@@ -327,7 +327,42 @@ def vtex(base):
                                                 antes or precio, precio if antes and antes > precio else None, None, p.get("link")]
         desde += 50
         time.sleep(PAUSA)
+    if len(out) >= 2400:
+        vtex_categorias(base, out)
     return out
+
+
+def vtex_categorias(base, out):
+    """VTEX no da más de 2500 resultados por búsqueda: se completa recorriendo cada categoría."""
+    r = pedir(f"{base}/api/catalog_system/pub/category/tree/3")
+    if not r or r.status_code != 200:
+        return
+    ids = []
+    def recorrer(n):
+        for c in n:
+            ids.append(c["id"]); recorrer(c.get("children") or [])
+    recorrer(r.json())
+    for cid in ids:
+        desde = 0
+        while desde < 2500:
+            rr = pedir(f"{base}/api/catalog_system/pub/products/search", params={"fq": f"C:/{cid}/", "_from": desde, "_to": desde + 49})
+            if not rr or rr.status_code not in (200, 206) or not rr.text.startswith("["):
+                break
+            prods = rr.json()
+            if not prods:
+                break
+            for p in prods:
+                try:
+                    of = p["items"][0]["sellers"][0]["commertialOffer"]
+                except (KeyError, IndexError, TypeError):
+                    continue
+                precio, antes = num(of.get("Price")), num(of.get("ListPrice"))
+                if precio:
+                    out[str(p.get("productId"))] = [p.get("productName"), p.get("brand"), None, unidades(p.get("productName")),
+                                                    antes or precio, precio if antes and antes > precio else None, None, p.get("link")]
+            desde += 50
+            time.sleep(PAUSA)
+    print(f"  vtex por categorías: {len(ids)} categorías · {len(out)} productos")
 
 
 def woo(base):
@@ -487,7 +522,37 @@ def universal():
 
 
 def boticasysalud():
-    return generica("Boticas y Salud", ["https://www.boticasysalud.com", "https://boticasysalud.com"])
+    """Boticas y Salud (Next.js): no publica el catálogo; se usa su buscador (searchbyfilter) con las palabras
+    de los nombres de nuestro catálogo y se juntan los productos que devuelve (grupo 5 = productos)."""
+    B = "https://www.boticasysalud.com"
+    cat = json.loads((CARPETA.parent.parent / "catalogo.json").read_text("utf-8"))
+    palabras = sorted({w for p in cat for w in re.findall(r"[A-Za-zÁÉÍÓÚÑáéíóúñ]{4,}", (p.get("n") or "").split(" ")[0])})
+    print(f"Boticas y Salud: {len(palabras)} palabras para buscar")
+    out, muestra = {}, True
+    for i, w in enumerate(palabras):
+        r = pedir(f"{B}/api/ServiceProduct/searchbyfilter", params={"filter": w.lower()}, intentos=2)
+        if r is None or r.status_code != 200:
+            continue
+        try:
+            d = r.json()
+        except ValueError:
+            continue
+        if muestra and d.get("data"):
+            print("  ejemplo de respuesta:", json.dumps(d, ensure_ascii=False)[:1200]); muestra = False
+        for g in d.get("data") or []:
+            if g.get("group") != 5:
+                continue
+            for x in g.get("filters") or []:
+                precio, oferta = num(x.get("price")), num(x.get("discountedPrice"))
+                nombre = x.get("title") or ""
+                if not precio or not nombre:
+                    continue
+                out[str(x.get("value"))] = [nombre, x.get("brand") or x.get("laboratory") or x.get("subtitle"), None, unidades(nombre),
+                                            precio, oferta if oferta and oferta < precio else None, None, f"{B}/tienda/productos/{x.get('value')}"]
+        if i % 200 == 0:
+            print(f"  {i}/{len(palabras)} palabras · {len(out)} productos")
+        time.sleep(0.5)
+    return out
 
 
 # ============================ GUARDAR ============================
