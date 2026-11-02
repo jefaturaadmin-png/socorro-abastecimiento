@@ -1157,6 +1157,9 @@ S.falt = null; S.fEst = new Map(); S.fFil = { est: "sin", lab: "", suc: "", q: "
 // vuelve a "Sin responder" mostrando lo que se había respondido.
 const vencida = e => { const h = hoyISO(); return !!e && ((e.estado === "agotado" && e.hasta && e.hasta < h) || (e.estado === "transito" && e.llega && e.llega < h)); };
 const estVig = c => { const e = S.fEst.get(c); return e && !vencida(e) ? e : null; };
+// quién respondió en Faltantes (nombre del usuario) en lugar de decir solo «droguería»
+const quienDrog = e => (e?.porNombre || "").trim() || "Droguería";
+const quienEnl = enl => quienDrog(estVig(String(enl || "").split(/\s*-\s*|,/)[0].trim()));
 const faltSinResp = () => (S.falt?.items || []).filter(i => !estVig(i.c)).length;
 function escucharFalt() {
   if (S.faltSubs) return; S.faltSubs = true;
@@ -1384,7 +1387,7 @@ function escucharAten() {
 const tagDrog = i => { const e = estVig(i.c); if (!e) return "";
   // el stock que tiene la sucursal del medicamento que indicó droguería
   const alts = (e.alternativas || []).map(a => tagStock(i, a.c, `${a.c} ${a.n}: `)).join("");
-  return `<span class="tag fs-tag ${esc(e.estado)} at-drog" title="${esc((e.porNombre || "") + (e.comentario ? ": " + e.comentario : ""))}">Droguería: ${esc(textoEstado(e))}${e.comentario ? " · " + esc(e.comentario) : ""}</span>${alts}`; };
+  return `<span class="tag fs-tag ${esc(e.estado)} at-drog" title="${esc((e.porNombre || "") + (e.comentario ? ": " + e.comentario : ""))}">${esc(quienDrog(e))}: ${esc(textoEstado(e))}${e.comentario ? " · " + esc(e.comentario) : ""}</span>${alts}`; };
 // Lo que el químico puede responder sobre cada producto que le van a enviar
 const RESP_AT = [
   { id: "si_requiere", txt: "Sí se requiere en esta sucursal", clase: "t-ok" },
@@ -1419,8 +1422,8 @@ const tagStock = (i, c, pre = "", n = 1) => { const x = stockCambio(i, c, n); re
 function noEnvia(i) {
   const r = S.atResp?.get(i.c), e = estVig(i.c);
   if (r?.estado === "otro_medicamento" && r.altCod) return `usas en su cambio ${r.alternativa || r.altCod}`;
-  if (i.rmp) return `droguería lo reemplaza por ${i.rmp}`;
-  if (e?.estado === "descontinuado") return e.alternativas?.length ? `descontinuado; lo reemplaza ${e.alternativas[0].c} ${e.alternativas[0].n}` : "descontinuado (droguería)";
+  if (i.rmp) return `${quienDrog(e)} lo reemplaza por ${i.rmp}`;
+  if (e?.estado === "descontinuado") return e.alternativas?.length ? `descontinuado; lo reemplaza ${e.alternativas[0].c} ${e.alternativas[0].n} (${quienDrog(e)})` : `descontinuado (${quienDrog(e)})`;
   return "";
 }
 function celdaResp(i) {
@@ -1525,7 +1528,7 @@ function pintarAten() {
       <td class="der">${fCaja(i.d, i.fr)}</td><td class="der">${fCaja(i.st, i.fr)}</td>
       <td class="der">${noEnvia(i) ? '<span class="muted">No</span>' : `<b>${i.pide ? nf(i.pide) : "–"}</b>`}</td>
       <td class="at-nota">${noEnvia(i) ? `<span class="tag t-rech at-drog">No se te envía: ${esc(noEnvia(i))}</span>`
-        : `${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${(i.de || []).map(x => `<span class="tag t-ok">${nf(x.q)} de ${esc(x.f)}</span>`).join(" ")}${i.cmp ? `<span class="tag t-rech">${nf(i.cmp)} por comprar</span>` : ""}`}${i.cmb ? `<span class="tag t-ok">En cambio de ${esc(i.cmb)}</span>` : ""}${tagDrog(i)}${i.enl ? `<span class="tag t-ok at-drog">Se te envía en lugar de ${esc(i.enl)} (droguería)</span>` : ""}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td>
+        : `${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${(i.de || []).map(x => `<span class="tag t-ok">${nf(x.q)} de ${esc(x.f)}</span>`).join(" ")}${i.cmp ? `<span class="tag t-rech">${nf(i.cmp)} por comprar</span>` : ""}`}${i.cmb ? `<span class="tag t-ok">En cambio de ${esc(i.cmb)}</span>` : ""}${tagDrog(i)}${i.enl ? `<span class="tag t-ok at-drog">Se te envía en lugar de ${esc(i.enl)} (${esc(quienEnl(i.enl))})</span>` : ""}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td>
       <td class="at-resp">${celdaResp(i)}</td>${admin ? `<td>${visAten(i) ? `<button type="button" class="btn sm at-vis" data-atvis="${esc(i.c)}" title="Ocultar este producto a la sucursal">👁 Visible</button>` : `<button type="button" class="btn sm at-vis no" data-atvis="${esc(i.c)}" title="Mostrar este producto a la sucursal">🚫 Oculto</button>`}</td>` : ""}</tr>`).join("")
       : `<tr class="vacia"><td colspan="10">Nada que mostrar.</td></tr>`) + "</tbody>";
   const iEd = S.atEdit && (A.items || []).find(x => x.c === S.atEdit);
@@ -1698,7 +1701,7 @@ $("atXls").addEventListener("click", () => {
   const datos = (esAdmin() ? A.items : A.items.filter(visAten)).map(i => { const r = S.atResp?.get(i.c);
     return { "Código": i.c, Producto: i.n, Laboratorio: i.l || "", Tipo: i.cat || "", "Cobertura (días)": i.d <= 0 ? "sin venta" : i.cob ?? "",
       "Venta diaria": +Number(i.d || 0).toFixed(2), "Tu stock": i.st, "Se te enviará": i.pide || 0,
-      Urgente: i.urg ? "Sí" : "", Nota: [i.pide && i.falta ? `${i.falta} sin stock en droguería` : "", ...(i.de || []).map(x => `${x.q} de ${x.f}`), i.cmp ? `${i.cmp} por comprar` : "", i.aj ? "Criterio propio: " + i.aj : "", i.cmb ? "En cambio de " + i.cmb : "", i.rmp ? "Droguería lo reemplaza por " + i.rmp : "", i.enl ? "En lugar de " + i.enl : "",
+      Urgente: i.urg ? "Sí" : "", Nota: [i.pide && i.falta ? `${i.falta} sin stock en droguería` : "", ...(i.de || []).map(x => `${x.q} de ${x.f}`), i.cmp ? `${i.cmp} por comprar` : "", i.aj ? "Criterio propio: " + i.aj : "", i.cmb ? "En cambio de " + i.cmb : "", i.rmp ? quienDrog(estVig(i.c)) + " lo reemplaza por " + i.rmp : "", i.enl ? "En lugar de " + i.enl + " (" + quienEnl(i.enl) + ")" : "",
         ...(i.alt || []).map(a => `${a.c} ${a.n}: tienes ${a.st}${a.cob != null ? ` (${a.cob} días)` : ""}`)].filter(Boolean).join(" · "),
       "Respuesta de droguería": estVig(i.c) ? textoEstado(estVig(i.c)) + (estVig(i.c).comentario ? " · " + estVig(i.c).comentario : "") : "",
       Respuesta: r ? RESP_AT.find(x => x.id === r.estado)?.txt || r.estado : "", "Medicamento en su cambio": r?.alternativa || "", Comentario: r?.comentario || "",
