@@ -23,7 +23,7 @@ const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Pro
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
 const VERSION_PROY = "202610311200";
-const VERSION_COMP = "202610281500";
+const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
 const $ = id => document.getElementById(id);
@@ -2897,7 +2897,7 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catc
 function mostrarInstalar() {
   let no = false; try { no = localStorage.getItem("inst_no") === "1"; } catch {}
   const directo = new URLSearchParams(location.search).has("m");
-  $("instalar").hidden = enApp() || (no && !directo) || !(pedirInstalar || (esIOS && esCel));
+  $("instalar").hidden = !esCel || enApp() || (no && !directo) || !(pedirInstalar || esIOS);
   if (esIOS && !pedirInstalar) { $("instTxt").innerHTML = "📲 Para instalar la app: toque <b>Compartir</b> (el cuadro con flecha ⬆) y luego <b>«Agregar a inicio»</b>."; $("instBtn").hidden = true; }
 }
 addEventListener("beforeinstallprompt", e => { e.preventDefault(); pedirInstalar = e; mostrarInstalar(); });

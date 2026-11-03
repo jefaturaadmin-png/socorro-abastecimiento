@@ -502,11 +502,18 @@ function nuestroDe(k, id) {   // nuestro producto emparejado con ese de la compe
   if (!S.inv[k]) { S.inv[k] = new Map(); for (const p of S.cat) { const pa = pareja(p.c, k); if (pa.id) S.inv[k].set(pa.id, p); } }
   return S.inv[k].get(id);
 }
+// El buscador mira también las cadenas que no están en la comparación de precios (se cargan la primera vez que se busca)
+const TIENDAS_BUS = [...TIENDAS, { k: "ik", archivo: "inkafarma", nombre: "Inkafarma" }, { k: "un", archivo: "universal", nombre: "Farmacia Universal" },
+  { k: "bs", archivo: "boticasysalud", nombre: "Boticas y Salud" }];
+let extrasBus = null;
+const cargarExtrasBus = () => extrasBus ??= Promise.all(TIENDAS_BUS.filter(t => !S.comp[t.k]).map(async t => {
+  try { const r = await fetch(`data/competencia/${t.archivo}.json?d=${new Date().toISOString().slice(0, 10)}`); if (r.ok) S.comp[t.k] = await r.json(); } catch {}
+}));
 function buscarComp(texto) {
   const pals = sinTildes(texto).split(/\s+/).filter(Boolean);
   if (!pals.length) return [];
   const items = [];
-  for (const t of TIENDAS) {
+  for (const t of TIENDAS_BUS) {
     let n = 0;
     for (const [id, p] of Object.entries(S.comp[t.k]?.p || {})) {
       const txt = sinTildes(p[0] + " " + (p[1] || "") + " " + (p[2] || ""));
@@ -534,25 +541,27 @@ function buscarComp(texto) {
   for (const it of items) if (!grupoDe.has(it)) grupoDe.set(it, { [it.k]: it });
   const grupos = [];
   for (const g of new Set(grupoDe.values())) {
-    const xs = TIENDAS.map(t => g[t.k]).filter(Boolean), min = Math.min(...xs.map(x => x.pr));
+    const xs = TIENDAS_BUS.map(t => g[t.k]).filter(Boolean), min = Math.min(...xs.map(x => x.pr));
     let nuestro = null; for (const x of xs) { nuestro = nuestroDe(x.k, x.id); if (nuestro) break; }
     grupos.push({ g, n: xs.length, min, nuestro, precioN: nuestro ? S.lista?.p?.[nuestro.c] ?? null : null });
   }
   return grupos.sort((a, b) => b.n - a.n || a.min - b.min);
 }
-function pintarBusquedaComp() {
+async function pintarBusquedaComp() {
   const q = $("qComp").value.trim(), box = $("bcRes");
   if (q.length < 3) { box.hidden = true; $("bcCuenta").textContent = ""; return; }
+  if (!extrasBus) $("bcCuenta").textContent = "Cargando las otras cadenas…";
+  await cargarExtrasBus(); if ($("qComp").value.trim() !== q) return;
   const gs = buscarComp(q), vis = gs.slice(0, 80);
-  $("bcCuenta").textContent = `${gs.length} productos · ${gs.filter(g => g.n === TIENDAS.length).length} en las ${TIENDAS.length} cadenas`;
+  $("bcCuenta").textContent = `${gs.length} productos · ${gs.filter(g => g.n === TIENDAS_BUS.length).length} en las ${TIENDAS_BUS.length} cadenas`;
   box.hidden = false;
   const celda = (x, min) => !x ? `<td class="t vacio">–</td>` : `<td class="t${Math.abs(x.pr - min) < 0.005 ? " min" : ""}"><div class="pr">${x.p[5] && x.p[5] < x.p[4] ? `<s>${sol(x.p[4])}</s> ` : ""}${sol(x.pr)}</div>
     <div class="nm">${x.p[7] ? `<a href="${esc(x.p[7])}" target="_blank" rel="noopener">${esc(x.p[0])} ↗</a>` : esc(x.p[0])}</div>${x.p[2] ? `<div class="nm">${esc(x.p[2])}</div>` : ""}</td>`;
-  $("tComp").innerHTML = `<thead><tr><th class="l">Producto</th><th>Nuestro precio</th>${TIENDAS.map(t => `<th class="t">${t.nombre}</th>`).join("")}<th>Más barato</th></tr></thead><tbody>` +
-    (vis.map(g => { const x0 = TIENDAS.map(t => g.g[t.k]).find(Boolean), barato = TIENDAS.filter(t => g.g[t.k] && Math.abs(g.g[t.k].pr - g.min) < 0.005).map(t => t.nombre);
-      return `<tr><td class="l"><b>${esc(x0.p[0])}</b><span class="bc-n" title="En cuántas cadenas está">${g.n}/${TIENDAS.length}</span>${g.nuestro ? `<div class="nm">Nuestro: ${esc(g.nuestro.c)} · ${esc(g.nuestro.n)}</div>` : ""}</td>
+  $("tComp").innerHTML = `<thead><tr><th class="l">Producto</th><th>Nuestro precio</th>${TIENDAS_BUS.map(t => `<th class="t">${t.nombre}</th>`).join("")}<th>Más barato</th></tr></thead><tbody>` +
+    (vis.map(g => { const x0 = TIENDAS_BUS.map(t => g.g[t.k]).find(Boolean), barato = TIENDAS_BUS.filter(t => g.g[t.k] && Math.abs(g.g[t.k].pr - g.min) < 0.005).map(t => t.nombre);
+      return `<tr><td class="l"><b>${esc(x0.p[0])}</b><span class="bc-n" title="En cuántas cadenas está">${g.n}/${TIENDAS_BUS.length}</span>${g.nuestro ? `<div class="nm">Nuestro: ${esc(g.nuestro.c)} · ${esc(g.nuestro.n)}</div>` : ""}</td>
         <td class="n">${g.precioN != null ? sol(g.precioN) + (g.precioN > g.min + 0.005 ? `<div class="nm caro">+${Math.round((g.precioN / g.min - 1) * 100)} % vs más barato</div>` : "") : "–"}</td>
-        ${TIENDAS.map(t => celda(g.g[t.k], g.min)).join("")}<td class="l">${esc(barato.join(" / "))}<div class="nm">${sol(g.min)}</div></td></tr>`; }).join("")
-      || `<tr><td colspan="${TIENDAS.length + 3}" class="vacio-tabla">No se encontró «${esc(q)}» en ninguna de las 3 cadenas.</td></tr>`) + "</tbody>";
+        ${TIENDAS_BUS.map(t => celda(g.g[t.k], g.min)).join("")}<td class="l">${esc(barato.join(" / "))}<div class="nm">${sol(g.min)}</div></td></tr>`; }).join("")
+      || `<tr><td colspan="${TIENDAS_BUS.length + 3}" class="vacio-tabla">No se encontró «${esc(q)}» en ninguna de las ${TIENDAS_BUS.length} cadenas.</td></tr>`) + "</tbody>";
 }
 let tBC; $("qComp").addEventListener("input", () => { clearTimeout(tBC); tBC = setTimeout(pintarBusquedaComp, 250); });
