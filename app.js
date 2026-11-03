@@ -8,7 +8,7 @@ import {
   serverTimestamp, writeBatch as fsBatch, deleteField
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION, FORM_URGENCIA } from "./config.js?v=202610280700";
-import { crearEditor, ejemploAbastecimiento, FORMAS, COLORES, svgDe, limites } from "./flued.js?v=202611032000";
+import { crearEditor, ejemploAbastecimiento, FORMAS, COLORES, svgDe, limites } from "./flued.js?v=202611032100";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -331,10 +331,11 @@ function render() {
   else if (S.vista === "vAten") { escucharAten(); pintarAten(); }
   else if (S.vista === "vPed") { cargarPedidos(); pintarPedidos(); }
   else if (S.vista === "vEval") { cargarEval(); pintarEval(); }
-  else if (S.vista === "vCompL") { cargarCompras(); pintarCompras(); }
+  else if (S.vista === "vCompL") { cargarCompras(); pintarCompras(); }   // escucharFalt vuelve a conectar si se había cortado
   else if (S.vista === "vNue") { escucharNue(); marcarNueVisto(); pintarNue(); }
   else if (S.vista === "vFlujo") pintarFlujo();
-  else if (S.vista === "vFlued") abrirFlued();   // escucharFalt vuelve a conectar si se había cortado
+  else if (S.vista === "vFlued") abrirFlued();
+  if (S.vista !== "vFlued" && document.body.classList.contains("fe-full")) fePantalla(false);
   pintarSel("bq"); pintarSel("ab"); pintarLados();
   $("ayuda").classList.toggle("mini", S.vista !== "vInicio");   // fuera del inicio solo el ícono, para no tapar botones
 }
@@ -2997,6 +2998,8 @@ async function abrirFlued() {
     $("fePaleta").innerHTML = FORMAS.map(([k, t]) => `<button type="button" class="fe-forma" data-feadd="${k}" title="${esc(t)}">${feIcono(k)}<small>${esc(t)}</small></button>`).join("");
     $("feLienzo").addEventListener("fe-editar", () => setTimeout(() => $("feTxt")?.focus(), 30));
   }
+  if (S.fe.listo) return;   // render() se llama seguido: la lista se lee una sola vez
+  S.fe.listo = true;
   try {
     const q = await getDocs(collection(db, "flujogramas"));
     S.fe.lista = q.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es"));
@@ -3082,6 +3085,14 @@ $("feReh").addEventListener("click", () => FE.rehacer());
 $("feMas").addEventListener("click", () => FE.zoom(1 / 1.25));
 $("feMenos").addEventListener("click", () => FE.zoom(1.25));
 $("feAjus").addEventListener("click", () => FE.ajustar());
+$("fe100").addEventListener("click", () => FE.real());
+// pantalla completa: el editor ocupa toda la pantalla (Esc o el mismo botón para salir)
+function fePantalla(on) {
+  document.body.classList.toggle("fe-full", on); $("feFull").textContent = on ? "✕ Salir de pantalla completa" : "⛶ Pantalla completa";
+  try { if (on && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {}); else if (!on && document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); } catch {}
+}
+$("feFull").addEventListener("click", () => fePantalla(!document.body.classList.contains("fe-full")));
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && document.body.classList.contains("fe-full")) fePantalla(false); });
 $("feSel").addEventListener("change", async e => { await feGuardar(); feCargar(e.target.value); });
 $("feNuevo").addEventListener("click", async () => {
   const nombre = prompt("Nombre del nuevo flujograma:", "Nuevo flujograma"); if (!nombre) return;

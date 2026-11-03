@@ -752,3 +752,9 @@ svg.fe-ico { width: 44px; height: 30px; stroke: none; fill: initial }
 .fe-lados button[aria-pressed="true"] { background: #1E6B5F; color: #fff; border-color: #1E6B5F }
 .fe-guia { padding-left: 18px; margin: 0; line-height: 1.45 } .fe-guia li { margin-bottom: 4px }
 @media (max-width: 900px) { .fe-area { grid-template-columns: 1fr; height: auto } .fe-paleta { flex-direction: row; overflow-x: auto } .fe-caja { height: 60vh } }
+/* editor de flujogramas a pantalla completa */
+body.fe-full #top, body.fe-full #vFlued .cabeza, body.fe-full #ayuda, body.fe-full .instalar { display: none !important }
+body.fe-full #vFlued .cuerpo { max-width: none; padding: 8px 10px; margin: 0 }
+body.fe-full .fe-area { height: calc(100vh - 62px); grid-template-columns: 96px 1fr 240px }
+body.fe-full .fe-barra { margin-bottom: 6px }
+.fe-area { height: calc(100vh - 190px); min-height: 560px }

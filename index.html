@@ -16,7 +16,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611032000">
+<link rel="stylesheet" href="styles.css?v=202611032100">
 </head>
 <body>
   <!-- instalar la página como app en el celular -->
@@ -451,7 +451,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
       <div class="fe-barra">
         <button class="btn sm" type="button" id="feCon" aria-pressed="false">↗ Conectar</button>
         <button class="btn sm" type="button" id="feDes" title="Deshacer (Ctrl+Z)">↶</button><button class="btn sm" type="button" id="feReh" title="Rehacer">↷</button>
-        <button class="btn sm" type="button" id="feMas" title="Acercar">＋</button><button class="btn sm" type="button" id="feMenos" title="Alejar">－</button><button class="btn sm" type="button" id="feAjus">⤢ Ver todo</button>
+        <button class="btn sm" type="button" id="feMas" title="Acercar">＋</button><button class="btn sm" type="button" id="feMenos" title="Alejar">－</button><button class="btn sm" type="button" id="fe100" title="Tamaño real">100 %</button><button class="btn sm" type="button" id="feAjus">⤢ Ver todo</button><button class="btn sm primario" type="button" id="feFull">⛶ Pantalla completa</button>
         <span class="fe-ayuda" id="feAyuda"></span><span class="fe-estado ok" id="feEstado">✓ Guardado</span>
         <button class="btn sm" type="button" id="fePng">🖼 Imagen PNG</button><button class="btn sm" type="button" id="feImp">🖨 Imprimir / PDF</button>
       </div>
@@ -675,6 +675,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202611032000"></script>
+<script type="module" src="app.js?v=202611032100"></script>
 </body>
 </html>

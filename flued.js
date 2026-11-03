@@ -37,7 +37,7 @@ function figura(n, sel) {
 }
 // texto partido en renglones según el ancho útil de la figura
 function renglones(t, ancho) {
-  const max = Math.max(4, Math.floor(ancho / 6.3)), out = [];
+  const max = Math.max(4, Math.floor(ancho / 7)), out = [];
   for (const par of String(t || "").split("\n")) {
     let l = "";
     for (const w of par.split(" ")) { if ((l + " " + w).trim().length > max && l) { out.push(l); l = w; } else l = (l + " " + w).trim(); }
@@ -45,9 +45,20 @@ function renglones(t, ancho) {
   }
   return out;
 }
+const utilDe = n => n.k === "dec" ? n.w * .6 : n.k === "datos" || n.k === "manual" || n.k === "prep" ? n.w - 30 : n.w - 12;
+// alto mínimo para que el texto entre en la figura (las figuras crecen solas al escribir)
+function ajustarAlto(n) {
+  if (n.k === "con" || n.k === "texto") return n;
+  // una palabra más larga que el ancho útil: la figura se ensancha
+  const larga = Math.max(0, ...String(n.t || "").split(/\s+/).map(w => w.length)) * 7.3, util = utilDe(n);
+  if (larga > util) n.w = Math.ceil((n.w + (larga - util) / (n.k === "dec" ? .6 : 1)) / 5) * 5;
+  const ls = renglones(n.t, utilDe(n)).length, extra = n.k === "dec" ? 40 : n.k === "doc" || n.k === "mdoc" ? 24 : n.k === "cil" ? 22 : 14;
+  n.h = Math.max(n.h, Math.ceil((ls * 14.5 + extra) / 5) * 5);
+  return n;
+}
 function textoNodo(n) {
-  const util = n.k === "dec" ? n.w * .62 : n.k === "datos" || n.k === "manual" || n.k === "prep" ? n.w - 30 : n.w - 12;
-  const ls = renglones(n.t, util), lh = 13, y0 = n.y - (ls.length - 1) * lh / 2 + 4 - (n.k === "doc" || n.k === "mdoc" ? 4 : 0);
+  const util = utilDe(n);
+  const ls = renglones(n.t, util), lh = 14.5, y0 = n.y - (ls.length - 1) * lh / 2 + 4 - (n.k === "doc" || n.k === "mdoc" ? 4 : 0);
   let s = ls.map((l, i) => `<text x="${n.x}" y="${y0 + i * lh}" text-anchor="middle" class="fe-t">${esc(l)}</text>`).join("");
   if (n.tm) s += `<text x="${n.x}" y="${n.y + n.h / 2 + 13}" text-anchor="middle" class="fe-tm">⏱ ${esc(n.tm)}</text>`;
   return s;
@@ -101,7 +112,7 @@ export function svgDe(D, sel = {}, marco = null) {
   return `<svg xmlns="${NS}" viewBox="${vb.join(" ")}" class="fe-svg"><defs>
     <marker id="fePunta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3c4654"/></marker>
     <marker id="fePuntaS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1E6B5F"/></marker>
-    <style>.fe-t{font:600 11px system-ui,Segoe UI,Arial,sans-serif;fill:#1d2939}.fe-tm{font:600 10px system-ui,Arial,sans-serif;fill:#B7791F}.fe-lt{font:700 11px system-ui,Arial,sans-serif;fill:#3c4654}</style></defs>${lin}${nod}</svg>`;
+    <style>.fe-t{font:600 12.5px system-ui,Segoe UI,Arial,sans-serif;fill:#1d2939}.fe-tm{font:600 11px system-ui,Arial,sans-serif;fill:#B7791F}.fe-lt{font:700 12px system-ui,Arial,sans-serif;fill:#3c4654}</style></defs>${lin}${nod}</svg>`;
 }
 export function limites(D) {
   if (!D.nodos.length) return [0, 0, 1200, 700];
@@ -165,7 +176,7 @@ export function crearEditor(caja, { alCambiar } = {}) {
     } else if (e.key === "Escape") { modo = "sel"; sel = {}; pintar(); cambio(); }
   });
   const api = {
-    cargar(d) { D = { nodos: (d?.nodos || []).map(n => ({ ...n })), lineas: (d?.lineas || []).map(l => ({ ...l })) }; sel = {}; historia = []; fut = []; api.ajustar(); },
+    cargar(d) { D = { nodos: (d?.nodos || []).map(n => ajustarAlto({ ...n })), lineas: (d?.lineas || []).map(l => ({ ...l })) }; sel = {}; historia = []; fut = []; api.real(); },
     datos: () => JSON.parse(JSON.stringify(D)),
     sel: () => sel,
     nodoSel: () => sel.n ? nodo(sel.n) : null,
@@ -182,7 +193,7 @@ export function crearEditor(caja, { alCambiar } = {}) {
     modo: () => modo,
     cambiar(campos) {
       guardarHist(); const o = sel.n ? nodo(sel.n) : sel.l ? D.lineas.find(l => l.id === sel.l) : null; if (!o) return;
-      Object.assign(o, campos); pintar(); cambio();
+      Object.assign(o, campos); if (sel.n && ("t" in campos || "w" in campos || "k" in campos)) ajustarAlto(o); pintar(); cambio();
     },
     borrar() {
       if (!sel.n && !sel.l) return; guardarHist();
@@ -200,10 +211,21 @@ export function crearEditor(caja, { alCambiar } = {}) {
       let [x, y, w, h] = b; if (w / h > asp) { const nh = w / asp; y -= (nh - h) / 2; h = nh; } else { const nw = h * asp; x -= (nw - w) / 2; w = nw; }
       vista = [x, y, w, h]; pintar();
     },
+    // tamaño real (100 %): cada punto del dibujo es un píxel; se empieza por la esquina de arriba a la izquierda
+    real() {
+      const b = limites(D), r = lienzo.getBoundingClientRect();
+      vista = [b[0], b[1], r.width || 1200, r.height || 700]; pintar();
+    },
+    escala: () => { const r = lienzo.getBoundingClientRect(); return r.width ? r.width / vista[2] : 1; },
     svg: () => svgDe(D),
     pintar
   };
-  new ResizeObserver(() => pintar()).observe(lienzo);
+  let ancho0 = 0, alto0 = 0;
+  new ResizeObserver(() => {
+    const r = lienzo.getBoundingClientRect();
+    if (ancho0 && r.width && r.height) { vista[2] *= r.width / ancho0; vista[3] *= r.height / alto0; }
+    ancho0 = r.width; alto0 = r.height; pintar();
+  }).observe(lienzo);
   return api;
 }
 
