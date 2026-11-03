@@ -273,6 +273,7 @@ function iniciar() {
   }
   montarAyuda(); escucharAvisos();
   // enlace directo a un módulo (p. ej. ?m=nuevos, el que abre la app instalada en el celular); en el celular se recuerda
+  if (misVistas().some(v => v.id === "nuevos")) escucharNue();   // para avisar de lo que registran otros
   const vDir = MODO_M && misVistas().find(v => v.id === MODO_M);
   if (vDir) ir(vDir.vista);
   $("prevBtn").hidden = S.perfil.rol !== "admin";
@@ -299,7 +300,7 @@ function pintarNav() {
     ...(esAdmin() ? [["vAdmin", "Bloqueos" + (pend ? `<span class="badge">${pend}</span>` : "")],
        ["vUsuarios", "Usuarios" + (solicitudesSucursal().length ? `<span class="badge">${solicitudesSucursal().length}</span>` : "")]]
       : esQuimicoV() ? [["vQuimico", "Bloqueos"]] : []),
-    ...misVistas().map(v => [v.vista, v.nombre + (esAdmin() && v.id === "faltantes" && faltSinResp() ? `<span class="badge">${faltSinResp()}</span>` : ""), v.c])];
+    ...misVistas().map(v => [v.vista, v.nombre + (esAdmin() && v.id === "faltantes" && faltSinResp() ? `<span class="badge">${faltSinResp()}</span>` : "") + (v.id === "nuevos" && nueSinVer() ? `<span class="badge">${nueSinVer()}</span>` : ""), v.c])];
   const actual = S.vista === "vFicha" ? S.origen : S.vista;
   pintarMenuBtn?.();
   $("nav").innerHTML = items.map(([v, t, c]) => `<button type="button" data-ir="${v}" ${c ? `class="${c}"` : ""} ${v === actual ? 'aria-current="page"' : ""}>${t}</button>`).join("");
@@ -329,7 +330,7 @@ function render() {
   else if (S.vista === "vPed") { cargarPedidos(); pintarPedidos(); }
   else if (S.vista === "vEval") { cargarEval(); pintarEval(); }
   else if (S.vista === "vCompL") { cargarCompras(); pintarCompras(); }
-  else if (S.vista === "vNue") { escucharNue(); pintarNue(); }
+  else if (S.vista === "vNue") { escucharNue(); marcarNueVisto(); pintarNue(); }
   else if (S.vista === "vFlujo") pintarFlujo();   // escucharFalt vuelve a conectar si se había cortado
   pintarSel("bq"); pintarSel("ab"); pintarLados();
   $("ayuda").classList.toggle("mini", S.vista !== "vInicio");   // fuera del inicio solo el ícono, para no tapar botones
@@ -2452,9 +2453,14 @@ S.nueFotos = new Map(); S.nueMostrar = 30;
 function escucharNue() {
   if (S.nueSub) return;
   S.nueSub = true;
+  S.nueIni = false;
   S.subs.push(onSnapshot(collection(db, "productos_nuevos"), sn => {
     S.nue = sn.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.creado?.toMillis?.() || Date.now()) - (a.creado?.toMillis?.() || Date.now()));
-    S.nueErr = ""; if (S.vista === "vNue") pintarNue();
+    // aviso de lo que registran otros (no en la primera carga ni lo propio)
+    if (S.nueIni) for (const c of sn.docChanges()) if (c.type === "added" && !c.doc.metadata.hasPendingWrites && c.doc.data().porUid !== S.perfil?.uid) alertarNue({ id: c.doc.id, ...c.doc.data() });
+    S.nueIni = true;
+    if (S.vista === "vNue") marcarNueVisto();
+    S.nueErr = ""; pintarNav(); if (S.vista === "vNue") pintarNue();
   }, e => { S.nueErr = textoError(e); S.nueSub = false; if (S.vista === "vNue") pintarNue(); }));
 }
 const fNue = t => { const d = t?.toDate ? t.toDate() : null; return d ? d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "2-digit" }) + " " + d.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" }) : "ahora"; };
@@ -2918,3 +2924,60 @@ $("nav").addEventListener("click", e => {
   // ir al menú principal desde el modo celular: se deja de abrir directo el módulo
   if (e.target.closest("[data-ir]").dataset.ir === "vInicio") { try { localStorage.removeItem("modo_m"); } catch {} document.body.classList.remove("modo-cel"); }
 });
+
+/* ===================== aviso cuando otro registra un producto buscado ===================== */
+// Con la página abierta (aunque esté en otra pestaña o minimizada): sonido, notificación del navegador y número en el menú.
+const nueMs = d => d.creado?.toMillis?.() || 0;
+const nueVisto = () => { try { return +localStorage.getItem("nue_visto") || 0; } catch { return 0; } };
+const nueSinVer = () => (S.nue || []).filter(d => d.porUid !== S.perfil?.uid && nueMs(d) > nueVisto()).length;
+function marcarNueVisto() {
+  const m = Math.max(0, ...(S.nue || []).map(nueMs)); if (!m) return;
+  try { if (m > nueVisto()) { localStorage.setItem("nue_visto", String(m)); pintarNav(); } } catch {}
+  if (document.title.startsWith("(")) document.title = document.title.replace(/^\(\d+\)\s*/, "");
+}
+let audioCtx = null;
+// el navegador solo deja sonar después de que la persona tocó la página alguna vez
+addEventListener("pointerdown", () => { try { audioCtx ??= new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch {} }, { once: true });
+function sonarAviso() {
+  try {
+    audioCtx ??= new (window.AudioContext || window.webkitAudioContext)();
+    const t = audioCtx.currentTime;
+    [[880, 0], [1320, 0.13]].forEach(([f, d]) => {   // «ding-ding» corto, como un mensaje
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = "sine"; o.frequency.value = f; o.connect(g); g.connect(audioCtx.destination);
+      g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(0.35, t + d + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.28);
+      o.start(t + d); o.stop(t + d + 0.3);
+    });
+  } catch {}
+  try { navigator.vibrate?.([120, 80, 120]); } catch {}
+}
+function alertarNue(d) {
+  sonarAviso();
+  const quien = `${d.suc ? corto(d.suc) : "Abastecimiento"} · ${d.porNombre || ""}`;
+  toast(`🔔 Nuevo: ${d.prod} (${quien})`);
+  if (S.vista !== "vNue" || document.hidden) {
+    const n = nueSinVer(); document.title = `(${n || 1}) ` + document.title.replace(/^\(\d+\)\s*/, "");
+  }
+  if ("Notification" in window && Notification.permission === "granted" && (document.hidden || S.vista !== "vNue")) {
+    try {
+      const nt = new Notification("🔎 Producto que busca un cliente", { body: `${d.prod}\n${quien}`, icon: "iconos/icono-192.png", tag: "nue-" + d.id });
+      nt.onclick = () => { focus(); ir("vNue"); nt.close(); };
+    } catch {}
+  }
+}
+addEventListener("focus", () => { if (S.vista === "vNue") marcarNueVisto(); });
+// botón para activar las notificaciones del navegador (lo tiene que pedir la persona con un toque)
+function pintarAlertasBtn() {
+  const b = $("nueAlertas"); if (!b) return;
+  const p = "Notification" in window ? Notification.permission : "no";
+  b.hidden = p === "granted" || p === "no";
+  b.textContent = p === "denied" ? "🔕 Notificaciones bloqueadas en este navegador" : "🔔 Activar alertas";
+  b.disabled = p === "denied";
+}
+$("nueAlertas").addEventListener("click", async () => {
+  sonarAviso();   // de paso prueba el sonido
+  try { await Notification.requestPermission(); } catch {}
+  pintarAlertasBtn();
+  if (Notification.permission === "granted") toast("Alertas activadas: sonará cuando otra sucursal registre algo");
+});
+pintarAlertasBtn();

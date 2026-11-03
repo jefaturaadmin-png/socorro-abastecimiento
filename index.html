@@ -398,7 +398,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
       <section class="card pd-card nue-red">
         <h3>🔎 Busca en la red</h3>
         <p class="muted">Busque un medicamento y vea quién más lo vende y de qué laboratorio.</p>
-        <div class="red-fila"><input id="redQ" type="search" placeholder="Ej. levozetaler" autocomplete="off"><button class="btn primario nue-btn" type="button" id="nueNuevo">📷 Registrar producto</button><button class="btn sm" type="button" id="nueLink" hidden title="Copiar el enlace para que las sucursales abran este módulo en su celular">🔗 Enlace para celulares</button></div>
+        <div class="red-fila"><input id="redQ" type="search" placeholder="Ej. levozetaler" autocomplete="off"><button class="btn primario nue-btn" type="button" id="nueNuevo">📷 Registrar producto</button><button class="btn sm" type="button" id="nueAlertas" hidden>🔔 Activar alertas</button><button class="btn sm" type="button" id="nueLink" hidden title="Copiar el enlace para que las sucursales abran este módulo en su celular">🔗 Enlace para celulares</button></div>
         <div id="redRes" class="red-res"></div>
       </section>
       <section class="card lista">
@@ -651,6 +651,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202611031700"></script>
+<script type="module" src="app.js?v=202611031800"></script>
 </body>
 </html>
