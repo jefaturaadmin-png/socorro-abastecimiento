@@ -87,6 +87,12 @@ const VISTAS = [
 const misVistas = () => esAdmin() ? VISTAS : VISTAS.filter(v => v.todos || ((S.prev || S.perfil)?.vistas || []).includes(v.id));
 const NOMBRE_ROL = { admin: "Administrador", quimico: "Químico", colaborador: "Colaborador" };
 const miFarm = () => S.prev ? S.prev.farmacia : S.perfil?.farmacia;
+// modo celular: el enlace ?m=<módulo> abre directo ese módulo; en el celular queda recordado (hasta pulsar «Menú completo»)
+const MODO_M = (() => {
+  const q = new URLSearchParams(location.search).get("m"), cel = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  try { if (q && cel) localStorage.setItem("modo_m", q); return q || (cel ? localStorage.getItem("modo_m") : null); } catch { return q; }
+})();
+if (MODO_M) document.body.classList.add("modo-cel");
 
 /* ===================== catálogo ===================== */
 async function cargarCatalogo() {
@@ -266,8 +272,8 @@ function iniciar() {
     ir("vInicio");
   }
   montarAyuda(); escucharAvisos();
-  // enlace directo a un módulo (p. ej. ?m=nuevos, el que abre la app instalada en el celular)
-  const mDir = new URLSearchParams(location.search).get("m"), vDir = mDir && misVistas().find(v => v.id === mDir);
+  // enlace directo a un módulo (p. ej. ?m=nuevos, el que abre la app instalada en el celular); en el celular se recuerda
+  const vDir = MODO_M && misVistas().find(v => v.id === MODO_M);
   if (vDir) ir(vDir.vista);
   $("prevBtn").hidden = S.perfil.rol !== "admin";
 }
@@ -295,6 +301,7 @@ function pintarNav() {
       : esQuimicoV() ? [["vQuimico", "Bloqueos"]] : []),
     ...misVistas().map(v => [v.vista, v.nombre + (esAdmin() && v.id === "faltantes" && faltSinResp() ? `<span class="badge">${faltSinResp()}</span>` : ""), v.c])];
   const actual = S.vista === "vFicha" ? S.origen : S.vista;
+  pintarMenuBtn?.();
   $("nav").innerHTML = items.map(([v, t, c]) => `<button type="button" data-ir="${v}" ${c ? `class="${c}"` : ""} ${v === actual ? 'aria-current="page"' : ""}>${t}</button>`).join("");
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
@@ -2896,4 +2903,18 @@ mostrarInstalar();
 $("nueLink")?.addEventListener("click", async () => {
   const url = location.origin + location.pathname + "?m=nuevos";
   try { await navigator.clipboard.writeText(url); toast("Enlace copiado: " + url); } catch { prompt("Copie este enlace:", url); }
+});
+
+/* ===================== menú plegable en el celular ===================== */
+// En pantallas angostas el menú de módulos se esconde detrás de «☰ <módulo actual>»; al elegir uno se vuelve a plegar.
+function pintarMenuBtn() {
+  const v = VISTAS.find(x => x.vista === S.vista);
+  $("menuTxt").textContent = S.vista === "vInicio" ? "Menú principal" : v ? v.nombre : S.vista === "vQuimico" || S.vista === "vAdmin" ? "Bloqueos" : S.vista === "vUsuarios" ? "Usuarios" : "Menú";
+}
+$("menuBtn").addEventListener("click", () => { const ab = document.body.classList.toggle("nav-abierta"); $("menuBtn").setAttribute("aria-expanded", ab); });
+$("nav").addEventListener("click", e => {
+  if (!e.target.closest("[data-ir]")) return;
+  document.body.classList.remove("nav-abierta"); $("menuBtn").setAttribute("aria-expanded", "false");
+  // ir al menú principal desde el modo celular: se deja de abrir directo el módulo
+  if (e.target.closest("[data-ir]").dataset.ir === "vInicio") { try { localStorage.removeItem("modo_m"); } catch {} document.body.classList.remove("modo-cel"); }
 });

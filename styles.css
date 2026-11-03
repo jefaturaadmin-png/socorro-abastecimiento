@@ -713,3 +713,20 @@ tr.at-oculto td { opacity: .45 } tr.at-oculto td:last-child { opacity: 1 }
 .instalar { position: sticky; top: 0; z-index: 900; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #1E6B5F; color: #fff; font-size: .95rem }
 .instalar span { flex: 1 1 220px } .instalar .btn.primario { background: #fff; color: #1E6B5F; border-color: #fff; font-weight: 700 }
 .instalar .ab-x { background: transparent; color: #fff; border: 0; font-size: 1.1rem; cursor: pointer }
+/* menú plegable en el celular */
+.menu-btn { display: none; border: 1px solid var(--line); background: var(--card); color: inherit; border-radius: 10px; padding: 8px 12px; font: inherit; font-weight: 600; cursor: pointer; max-width: 60vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+@media (max-width: 760px) {
+  .menu-btn { display: inline-block; margin-left: auto }
+  .top-in { gap: 8px 10px; padding-block: 8px }
+  .top .nav { display: none; flex-basis: 100% }
+  body.nav-abierta .top .nav { display: flex }
+  .marca b { font-size: 1rem } .marca span { font-size: .75rem }
+  .quien { flex-basis: 100%; justify-content: space-between } .quien small { display: none }
+  body:not(.nav-abierta) .quien { display: none }
+  body.nav-abierta .quien { display: flex }
+  #prevBtn { display: none !important }
+}
+/* modo celular (enlace ?m=nuevos / app instalada): solo lo necesario */
+body.modo-cel #vNue .cabeza p, body.modo-cel #vNue .nue-res, body.modo-cel #ayuda { display: none !important }
+body.modo-cel #vNue .cabeza h1 { font-size: 1.25rem; margin: 0 }
+body.modo-cel #vNue .nue-btn { width: 100%; font-size: 1.1rem; padding: 14px }
