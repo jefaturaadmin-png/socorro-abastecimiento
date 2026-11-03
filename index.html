@@ -9,14 +9,22 @@
 <link rel="icon" type="image/png" sizes="192x192" href="iconos/icono-192.png">
 <link rel="apple-touch-icon" href="iconos/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
+<script>/* enlace directo a un módulo (?m=nuevos): la app que se instala abre ese módulo */
+if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySelector('link[rel="manifest"]').href = "nuevos.webmanifest";</script>
 <meta name="theme-color" content="#F28C1E">
 <meta name="apple-mobile-web-app-title" content="Abastecimiento">
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611031200">
+<link rel="stylesheet" href="styles.css?v=202611031600">
 </head>
 <body>
+  <!-- instalar la página como app en el celular -->
+  <div class="instalar" id="instalar" hidden>
+    <span id="instTxt">📲 Instale la app en su celular para registrar más rápido (con foto y WhatsApp).</span>
+    <button class="btn primario" type="button" id="instBtn">⬇ Descargar la app</button>
+    <button class="ab-x" type="button" id="instNo" aria-label="Ahora no">✕</button>
+  </div>
 
 <!-- íconos (trazo, usan el color del texto) -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -389,7 +397,7 @@
       <section class="card pd-card nue-red">
         <h3>🔎 Busca en la red</h3>
         <p class="muted">Busque un medicamento y vea quién más lo vende y de qué laboratorio.</p>
-        <div class="red-fila"><input id="redQ" type="search" placeholder="Ej. levozetaler" autocomplete="off"><button class="btn primario nue-btn" type="button" id="nueNuevo">📷 Registrar producto</button></div>
+        <div class="red-fila"><input id="redQ" type="search" placeholder="Ej. levozetaler" autocomplete="off"><button class="btn primario nue-btn" type="button" id="nueNuevo">📷 Registrar producto</button><button class="btn sm" type="button" id="nueLink" hidden title="Copiar el enlace para que las sucursales abran este módulo en su celular">🔗 Enlace para celulares</button></div>
         <div id="redRes" class="red-res"></div>
       </section>
       <section class="card lista">
@@ -642,6 +650,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202611031500"></script>
+<script type="module" src="app.js?v=202611031600"></script>
 </body>
 </html>

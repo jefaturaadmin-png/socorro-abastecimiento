@@ -1,0 +1,30 @@
+{
+  "name": "Socorro · Productos que buscan los clientes",
+  "short_name": "Productos buscados",
+  "description": "Registrar con foto lo que buscan los clientes y avisar al grupo de WhatsApp",
+  "start_url": "./?m=nuevos",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#F28C1E",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "iconos/icono-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "iconos/icono-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "iconos/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "./?m=nuevos"
+}

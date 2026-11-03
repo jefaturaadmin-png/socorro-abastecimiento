@@ -709,3 +709,7 @@ tr.at-oculto td { opacity: .45 } tr.at-oculto td:last-child { opacity: 1 }
 .nue-ok { text-align: center } .nue-wa-grande { background: #1fa855; border-color: #1fa855; font-size: 1.05rem; padding: 12px 18px; margin: 8px 0 }
 .nue-wa { color: #1a8f48 }
 .nue-wa-grande { display: block; width: 100%; max-width: 340px; margin: 8px auto } .nue-wa-grande.hecho { opacity: .6 } .nue-wa-grande.hecho::after { content: " ✓" }
+/* instalar como app */
+.instalar { position: sticky; top: 0; z-index: 900; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #1E6B5F; color: #fff; font-size: .95rem }
+.instalar span { flex: 1 1 220px } .instalar .btn.primario { background: #fff; color: #1E6B5F; border-color: #fff; font-weight: 700 }
+.instalar .ab-x { background: transparent; color: #fff; border: 0; font-size: 1.1rem; cursor: pointer }

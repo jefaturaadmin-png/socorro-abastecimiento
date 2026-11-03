@@ -266,6 +266,9 @@ function iniciar() {
     ir("vInicio");
   }
   montarAyuda(); escucharAvisos();
+  // enlace directo a un módulo (p. ej. ?m=nuevos, el que abre la app instalada en el celular)
+  const mDir = new URLSearchParams(location.search).get("m"), vDir = mDir && misVistas().find(v => v.id === mDir);
+  if (vDir) ir(vDir.vista);
   $("prevBtn").hidden = S.perfil.rol !== "admin";
 }
 // Si el administrador le cambia el rol, las vistas o lo deshabilita, se recarga con los datos nuevos.
@@ -2457,6 +2460,7 @@ function filtrosNue() {
 function pintarNue() {
   msg("nueMsg", S.nueErr || "", true);
   const admin = esAdmin(), todos = S.nue || [];
+  $("nueLink").hidden = !admin;
   if (!$("nueSuc").options.length || $("nueSuc").dataset.n !== String(FARMACIAS.length)) {
     $("nueSuc").innerHTML = '<option value="">Todas las sucursales</option>' + FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => `<option value="${esc(f)}">${esc(corto(f))}</option>`).join("");
     $("nueSuc").dataset.n = String(FARMACIAS.length);
@@ -2869,4 +2873,27 @@ $("nueOkDlg").addEventListener("click", e => {
 });
 $("nueLista").addEventListener("click", e => {
   const b = e.target.closest("[data-nuewa]"); if (!b) return; const d = (S.nue || []).find(x => x.id === b.dataset.nuewa); if (d) compartirWa(d);
+});
+
+/* ===================== instalar como app en el celular ===================== */
+// Android/Chrome: botón «Descargar la app» (el aviso de instalación del navegador). iPhone: se explica cómo agregarla a inicio.
+const enApp = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+const esIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent), esCel = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+let pedirInstalar = null;
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+function mostrarInstalar() {
+  let no = false; try { no = localStorage.getItem("inst_no") === "1"; } catch {}
+  const directo = new URLSearchParams(location.search).has("m");
+  $("instalar").hidden = enApp() || (no && !directo) || !(pedirInstalar || (esIOS && esCel));
+  if (esIOS && !pedirInstalar) { $("instTxt").innerHTML = "📲 Para instalar la app: toque <b>Compartir</b> (el cuadro con flecha ⬆) y luego <b>«Agregar a inicio»</b>."; $("instBtn").hidden = true; }
+}
+addEventListener("beforeinstallprompt", e => { e.preventDefault(); pedirInstalar = e; mostrarInstalar(); });
+addEventListener("appinstalled", () => { pedirInstalar = null; $("instalar").hidden = true; toast("App instalada: búsquela en la pantalla de su celular"); });
+$("instBtn").addEventListener("click", async () => { if (!pedirInstalar) return; pedirInstalar.prompt(); await pedirInstalar.userChoice.catch(() => {}); pedirInstalar = null; mostrarInstalar(); });
+$("instNo").addEventListener("click", () => { $("instalar").hidden = true; try { localStorage.setItem("inst_no", "1"); } catch {} });
+mostrarInstalar();
+// administrador: copiar el enlace del módulo para mandarlo a las sucursales
+$("nueLink")?.addEventListener("click", async () => {
+  const url = location.origin + location.pathname + "?m=nuevos";
+  try { await navigator.clipboard.writeText(url); toast("Enlace copiado: " + url); } catch { prompt("Copie este enlace:", url); }
 });
