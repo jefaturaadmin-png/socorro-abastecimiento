@@ -2855,39 +2855,14 @@ function textoWa(d) {
 }
 async function compartirWa(d) {
   const texto = textoWa(d), foto = d.foto ? S.nueFotos.get(d.id) : "";
-  // el texto queda copiado: si WhatsApp solo toma la foto, se pega como comentario
-  try { await navigator.clipboard.writeText(texto); } catch {}
-  // foto + texto solo en el celular (en la computadora WhatsApp toma la foto y descarta el texto)
-  const celular = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (foto && celular && navigator.canShare) {
+  if (foto && navigator.canShare) {
     try {
       const blob = await (await fetch(foto)).blob(), file = new File([blob], "receta.jpg", { type: blob.type || "image/jpeg" });
-      if (navigator.canShare({ files: [file], text: texto })) {
-        toast("Texto copiado: si no aparece con la foto, péguelo como comentario");
-        await navigator.share({ files: [file], text: texto }); return;
-      }
+      if (navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: texto }); return; }
     } catch (e) { if (e?.name === "AbortError") return; }
   }
-  // computadora con foto: dos pasos (WhatsApp no recibe foto y texto juntos desde la computadora)
-  if (foto && !celular) { S.waPend = { texto, foto }; $("waDlg").showModal(); return; }
   window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank");
 }
-$("waDlg").addEventListener("click", async e => {
-  const P = S.waPend;
-  if (e.target.closest("#waTexto") && P) { window.open("https://wa.me/?text=" + encodeURIComponent(P.texto), "_blank"); e.target.closest("#waTexto").classList.add("hecho"); return; }
-  if (e.target.closest("#waFoto") && P) {
-    const btn = e.target.closest("#waFoto");
-    try {
-      const blob = await (await fetch(P.foto)).blob(), file = new File([blob], "receta.jpg", { type: blob.type || "image/jpeg" });
-      if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file] }); btn.classList.add("hecho"); return; }
-    } catch (x) { if (x?.name === "AbortError") return; }
-    // sin «compartir» en este navegador: se descarga la foto para adjuntarla en WhatsApp
-    const a = document.createElement("a"); a.href = P.foto; a.download = "receta.jpg"; a.click(); btn.classList.add("hecho");
-    toast("Foto descargada: adjúntela en el mismo chat de WhatsApp (clip 📎)");
-    return;
-  }
-  if (e.target.closest("[data-cerrar-dlg]") || e.target === $("waDlg")) $("waDlg").close();
-});
 $("nueOkDlg").addEventListener("click", e => {
   if (e.target.closest("#nueOkWa")) { compartirWa(S.nueWa); $("nueOkDlg").close(); return; }
   if (e.target.closest("[data-cerrar-dlg]") || e.target === $("nueOkDlg")) $("nueOkDlg").close();
