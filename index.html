@@ -16,7 +16,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611031700">
+<link rel="stylesheet" href="styles.css?v=202611032000">
 </head>
 <body>
   <!-- instalar la página como app en el celular -->
@@ -438,6 +438,30 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
     </div>
   </section>
   <div id="fxPop" class="fx-pop" hidden></div>
+  <!-- ============ EDITOR DE FLUJOGRAMAS ============ -->
+  <section id="vFlued" hidden>
+    <div class="wrap ancho cabeza">
+      <div><h1>Editor de flujogramas</h1><p class="muted">Arme sus flujogramas con figuras estándar, flechas, textos y tiempos. Se guarda solo.</p></div>
+      <div class="pd-acc"><label class="filtro">Flujograma <select id="feSel"></select></label>
+        <button class="btn sm" type="button" id="feNuevo">➕ Nuevo</button><button class="btn sm" type="button" id="feRen">✎ Renombrar</button>
+        <button class="btn sm" type="button" id="feCopia">⧉ Copiar</button><button class="btn sm peligro" type="button" id="feBorrarF">🗑</button></div>
+    </div>
+    <div class="wrap ancho cuerpo">
+      <div class="msg" id="feMsg" hidden></div>
+      <div class="fe-barra">
+        <button class="btn sm" type="button" id="feCon" aria-pressed="false">↗ Conectar</button>
+        <button class="btn sm" type="button" id="feDes" title="Deshacer (Ctrl+Z)">↶</button><button class="btn sm" type="button" id="feReh" title="Rehacer">↷</button>
+        <button class="btn sm" type="button" id="feMas" title="Acercar">＋</button><button class="btn sm" type="button" id="feMenos" title="Alejar">－</button><button class="btn sm" type="button" id="feAjus">⤢ Ver todo</button>
+        <span class="fe-ayuda" id="feAyuda"></span><span class="fe-estado ok" id="feEstado">✓ Guardado</span>
+        <button class="btn sm" type="button" id="fePng">🖼 Imagen PNG</button><button class="btn sm" type="button" id="feImp">🖨 Imprimir / PDF</button>
+      </div>
+      <div class="fe-area">
+        <div class="fe-paleta" id="fePaleta"></div>
+        <div class="fe-caja" id="feLienzo"></div>
+        <div class="fe-props card" id="feProps"></div>
+      </div>
+    </div>
+  </section>
   <dialog id="srDlg" class="at-info resp-dlg"><div><button type="button" class="ab-x resp-x" data-cerrar-dlg aria-label="Cerrar">✕</button><div class="resp-c" id="srDlgC"></div></div></dialog>
   <dialog id="evDet" class="at-info resp-dlg"><div><button type="button" class="ab-x resp-x" data-cerrar-dlg aria-label="Cerrar">✕</button><div class="resp-c" id="evDetC"></div></div></dialog>
 
@@ -651,6 +675,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202611031900"></script>
+<script type="module" src="app.js?v=202611032000"></script>
 </body>
 </html>

@@ -730,3 +730,25 @@ tr.at-oculto td { opacity: .45 } tr.at-oculto td:last-child { opacity: 1 }
 body.modo-cel #vNue .cabeza p, body.modo-cel #vNue .nue-res, body.modo-cel #ayuda { display: none !important }
 body.modo-cel #vNue .cabeza h1 { font-size: 1.25rem; margin: 0 }
 body.modo-cel #vNue .nue-btn { width: 100%; font-size: 1.1rem; padding: 14px }
+/* editor de flujogramas */
+.fe-barra { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px }
+.fe-barra [aria-pressed="true"] { background: #1E6B5F; color: #fff; border-color: #1E6B5F }
+.fe-ayuda { color: #1E6B5F; font-weight: 600; font-size: .9rem } .fe-estado { margin-left: auto; font-size: .85rem; color: #B7791F } .fe-estado.ok { color: #1E6B5F }
+.fe-area { display: grid; grid-template-columns: 110px 1fr 250px; gap: 10px; height: calc(100vh - 230px); min-height: 480px }
+.fe-paleta { display: flex; flex-direction: column; gap: 4px; overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px }
+.fe-forma { display: flex; flex-direction: column; align-items: center; gap: 1px; border: 1px solid transparent; background: none; border-radius: 8px; padding: 4px 2px; cursor: pointer; font: inherit; color: inherit }
+.fe-forma:hover { background: #eef2f7; border-color: #c9d3df } .fe-forma small { font-size: .68rem; line-height: 1.1; text-align: center }
+svg.fe-ico { width: 44px; height: 30px; stroke: none; fill: initial }
+.fe-caja { min-width: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff;
+  background-image: radial-gradient(#dfe5ee 1px, transparent 1px); background-size: 20px 20px }
+.fe-lienzo { width: 100%; height: 100%; outline: none; touch-action: none; cursor: grab } .fe-lienzo.conectando { cursor: crosshair }
+.fe-lienzo svg.fe-svg { width: 100%; height: 100%; display: block; stroke: none; fill: initial; user-select: none }
+.fe-lienzo .fe-nod { cursor: move } .fe-lienzo .fe-lin { cursor: pointer } .fe-lienzo .fe-res { cursor: nwse-resize }
+.fe-props { padding: 12px; overflow: auto; margin: 0; font-size: .9rem } .fe-props h4 { margin: 0 0 8px }
+.fe-props label { display: block; margin: 6px 0 2px; font-weight: 600; font-size: .82rem } .fe-props textarea, .fe-props input, .fe-props select { width: 100%; margin-top: 2px }
+.fe-col { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 } .fe-col button { width: 24px; height: 24px; border-radius: 6px; border: 1px solid #c9d3df; cursor: pointer } .fe-col button.sel { outline: 2px solid #1E6B5F }
+.fe-dos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px } .fe-bots { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px }
+.fe-lados { display: flex; gap: 3px } .fe-lados button { flex: 1; border: 1px solid #c9d3df; background: #fff; border-radius: 6px; padding: 4px 0; cursor: pointer }
+.fe-lados button[aria-pressed="true"] { background: #1E6B5F; color: #fff; border-color: #1E6B5F }
+.fe-guia { padding-left: 18px; margin: 0; line-height: 1.45 } .fe-guia li { margin-bottom: 4px }
+@media (max-width: 900px) { .fe-area { grid-template-columns: 1fr; height: auto } .fe-paleta { flex-direction: row; overflow-x: auto } .fe-caja { height: 60vh } }

@@ -8,6 +8,7 @@ import {
   serverTimestamp, writeBatch as fsBatch, deleteField
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION, FORM_URGENCIA } from "./config.js?v=202610280700";
+import { crearEditor, ejemploAbastecimiento, FORMAS, COLORES, svgDe, limites } from "./flued.js?v=202611032000";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -82,7 +83,8 @@ const VISTAS = [
   { id: "compras", nombre: "Compras por laboratorio", vista: "vCompL", c: "comp", ic: "i-grafico", desc: "Qué porcentaje de las compras de cada mes fue de cada laboratorio" },
   { id: "evaluacion", nombre: "Evaluación de sucursales", vista: "vEval", c: "est", ic: "i-grafico", desc: "Stock, orden, limpieza, capacidad y BPA de cada sucursal", ayuda: "químicos: ven la de su sucursal" },
   { id: "nuevos", nombre: "Productos que buscan los clientes", vista: "vNue", c: "suc", ic: "i-mas", desc: "Registrar con foto lo que piden y no tenemos; lo ven todas las sucursales", ayuda: "ve lo que reportan todas las sucursales" },
-  { id: "flujo", nombre: "Flujograma de abastecimiento", vista: "vFlujo", c: "mapa", ic: "i-lista", desc: "Cómo se trabaja: de la compra al proveedor hasta la atención a sucursales", todos: true }];
+  { id: "flujo", nombre: "Flujograma de abastecimiento", vista: "vFlujo", c: "mapa", ic: "i-lista", desc: "Cómo se trabaja: de la compra al proveedor hasta la atención a sucursales", todos: true },
+  { id: "flued", nombre: "Editor de flujogramas", vista: "vFlued", c: "est", ic: "i-grafico", desc: "Crear y editar flujogramas con figuras, flechas, textos y tiempos" }];
 // v.todos: módulo abierto a todos los usuarios (no hace falta activarlo en Usuarios)
 const misVistas = () => esAdmin() ? VISTAS : VISTAS.filter(v => v.todos || ((S.prev || S.perfil)?.vistas || []).includes(v.id));
 const NOMBRE_ROL = { admin: "Administrador", quimico: "Químico", colaborador: "Colaborador" };
@@ -307,7 +309,7 @@ function pintarNav() {
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vCompL", "vNue", "vFlujo", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vCompL", "vNue", "vFlujo", "vFlued", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
@@ -331,7 +333,8 @@ function render() {
   else if (S.vista === "vEval") { cargarEval(); pintarEval(); }
   else if (S.vista === "vCompL") { cargarCompras(); pintarCompras(); }
   else if (S.vista === "vNue") { escucharNue(); marcarNueVisto(); pintarNue(); }
-  else if (S.vista === "vFlujo") pintarFlujo();   // escucharFalt vuelve a conectar si se había cortado
+  else if (S.vista === "vFlujo") pintarFlujo();
+  else if (S.vista === "vFlued") abrirFlued();   // escucharFalt vuelve a conectar si se había cortado
   pintarSel("bq"); pintarSel("ab"); pintarLados();
   $("ayuda").classList.toggle("mini", S.vista !== "vInicio");   // fuera del inicio solo el ícono, para no tapar botones
 }
@@ -2981,3 +2984,140 @@ $("nueAlertas").addEventListener("click", async () => {
   if (Notification.permission === "granted") toast("Alertas activadas: sonará cuando otra sucursal registre algo");
 });
 pintarAlertasBtn();
+
+/* ===================== editor de flujogramas ===================== */
+// flujogramas/{id} = { nombre, nodos: [...], lineas: [...], actualizado, porNombre } (el dibujo lo maneja flued.js)
+let FE = null;
+S.fe = { lista: [], id: "", guardado: true };
+const feIcono = k => `<svg viewBox="0 0 44 30" class="fe-ico">${svgDe({ nodos: [{ id: "i", k, x: 22, y: 15, w: k === "con" ? 22 : 38, h: k === "con" ? 22 : 22, t: k === "texto" ? "Aa" : "", c: "" }], lineas: [] }, {}, [0, 0, 44, 30]).replace(/^<svg[^>]*>|<\/svg>$/g, "")}</svg>`;
+async function abrirFlued() {
+  if (!FE) {
+    // el panel se vuelve a pintar al cambiar de selección (no mientras se escribe en él)
+    FE = crearEditor($("feLienzo"), { alCambiar: () => { if (!S.fe.escribiendo) pintarFeProps(); feSucio(); } });
+    $("fePaleta").innerHTML = FORMAS.map(([k, t]) => `<button type="button" class="fe-forma" data-feadd="${k}" title="${esc(t)}">${feIcono(k)}<small>${esc(t)}</small></button>`).join("");
+    $("feLienzo").addEventListener("fe-editar", () => setTimeout(() => $("feTxt")?.focus(), 30));
+  }
+  try {
+    const q = await getDocs(collection(db, "flujogramas"));
+    S.fe.lista = q.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es"));
+    // la primera vez se guarda el flujograma que se venía armando en SmartDraw
+    if (!S.fe.lista.length && !S.prev) {
+      const id = "abastecimiento-" + Date.now().toString(36), d = { nombre: "Flujograma de abastecimiento (SmartDraw)", ...ejemploAbastecimiento() };
+      await setDoc(doc(db, "flujogramas", id), { ...d, actualizado: serverTimestamp(), porNombre: S.perfil.nombre || S.perfil.usuario || "" });
+      S.fe.lista = [{ id, ...d }];
+    }
+    msg("feMsg", "");
+  } catch (e) { msg("feMsg", textoError(e), true); }
+  if (!S.fe.id || !S.fe.lista.some(x => x.id === S.fe.id)) feCargar(S.fe.lista[0]?.id || "");
+  pintarFeLista();
+}
+function pintarFeLista() {
+  $("feSel").innerHTML = S.fe.lista.length ? S.fe.lista.map(x => `<option value="${esc(x.id)}" ${x.id === S.fe.id ? "selected" : ""}>${esc(x.nombre || "Sin nombre")}</option>`).join("") : '<option value="">(sin flujogramas)</option>';
+}
+function feCargar(id) {
+  const d = S.fe.lista.find(x => x.id === id); S.fe.id = id; S.fe.guardado = true;
+  FE.cargar(d || { nodos: [], lineas: [] }); pintarFeEstado(); pintarFeProps();
+}
+let feT = 0;
+function feSucio() { S.fe.guardado = false; pintarFeEstado(); clearTimeout(feT); feT = setTimeout(feGuardar, 1500); }   // se guarda solo
+async function feGuardar() {
+  if (!S.fe.id || S.fe.guardado) return;
+  const d = FE.datos(), x = S.fe.lista.find(y => y.id === S.fe.id); if (!x) return;
+  $("feEstado").textContent = "Guardando…";
+  try {
+    await setDoc(doc(db, "flujogramas", S.fe.id), { nombre: x.nombre, nodos: d.nodos, lineas: d.lineas, actualizado: serverTimestamp(), porNombre: S.perfil.nombre || S.perfil.usuario || "" });
+    Object.assign(x, d); S.fe.guardado = true;
+  } catch (e) { toast(textoError(e)); }
+  pintarFeEstado();
+}
+const pintarFeEstado = () => { $("feEstado").textContent = S.fe.guardado ? "✓ Guardado" : "Cambios sin guardar…"; $("feEstado").className = "fe-estado" + (S.fe.guardado ? " ok" : ""); };
+function pintarFeProps() {
+  const n = FE.nodoSel(), l = FE.lineaSel(), box = $("feProps");
+  $("feCon").setAttribute("aria-pressed", FE.modo() === "con");
+  $("feAyuda").textContent = FE.modo() === "con" ? (FE.sel().a ? "Ahora toque la figura de destino." : "Toque la figura de origen.") : "";
+  if (n) {
+    box.innerHTML = `<h4>Figura</h4>
+      <label>Texto<textarea id="feTxt" rows="3">${esc(n.t)}</textarea></label>
+      <label>Tiempo <small class="muted">(opcional, p. ej. «5 días»)</small><input id="feTm" value="${esc(n.tm || "")}" placeholder="⏱ tiempo"></label>
+      <label>Forma<select id="feK">${FORMAS.map(([k, t]) => `<option value="${k}" ${k === n.k ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
+      <div class="fe-col">${COLORES.map(c => `<button type="button" data-fecol="${c}" style="background:${c}" class="${(n.c || "#FFFFFF") === c ? "sel" : ""}" title="Color"></button>`).join("")}</div>
+      <div class="fe-dos"><label>Ancho<input id="feW" type="number" value="${n.w}" min="30"></label><label>Alto<input id="feH" type="number" value="${n.h}" min="24"></label></div>
+      <div class="fe-bots"><button type="button" class="btn sm" id="feDup">⧉ Duplicar</button><button type="button" class="btn sm peligro" id="feBorrar">🗑 Borrar</button></div>`;
+  } else if (l) {
+    const lados = (id, v) => `<div class="fe-lados" data-felado="${id}">${[["", "Auto"], ["t", "↑"], ["r", "→"], ["b", "↓"], ["l", "←"]].map(([k, t]) => `<button type="button" data-v="${k}" aria-pressed="${(v || "") === k}">${t}</button>`).join("")}</div>`;
+    box.innerHTML = `<h4>Flecha</h4>
+      <label>Etiqueta<input id="feLt" value="${esc(l.t || "")}" placeholder="Sí, No…"></label>
+      <div class="fe-bots"><button type="button" class="btn sm" data-felt="Sí">Sí</button><button type="button" class="btn sm" data-felt="No">No</button><button type="button" class="btn sm" data-felt="">Sin texto</button></div>
+      <label>Sale por</label>${lados("pa", l.pa)}<label>Llega por</label>${lados("pb", l.pb)}
+      <div class="fe-bots"><button type="button" class="btn sm" id="feInv">⇄ Invertir</button><button type="button" class="btn sm peligro" id="feBorrar">🗑 Borrar</button></div>`;
+  } else box.innerHTML = `<h4>Cómo se usa</h4><ul class="fe-guia">
+      <li><b>Agregar:</b> toque una figura de la izquierda. Si tiene una figura elegida, la nueva se pone a su lado y se conecta sola.</li>
+      <li><b>Mover:</b> arrastre la figura. <b>Tamaño:</b> el cuadrito verde de la esquina.</li>
+      <li><b>Flechas:</b> «↗ Conectar» y toque origen y destino. Toque la flecha para ponerle Sí/No o cambiar por dónde sale y llega.</li>
+      <li><b>Texto y tiempo:</b> doble clic en la figura.</li>
+      <li><b>Mover el dibujo:</b> arrastre el fondo. <b>Zoom:</b> rueda del mouse o los botones.</li>
+      <li><b>Atajos:</b> Supr borra · Ctrl+Z deshace · Ctrl+D duplica · flechas del teclado mueven.</li>
+      <li>Se guarda solo.</li></ul>`;
+}
+$("fePaleta").addEventListener("click", e => { const b = e.target.closest("[data-feadd]"); if (b && FE) FE.agregar(b.dataset.feadd); });
+$("feProps").addEventListener("input", e => {
+  const id = e.target.id; S.fe.escribiendo = true;
+  if (id === "feTxt") FE.cambiar({ t: e.target.value }); else if (id === "feTm") FE.cambiar({ tm: e.target.value.trim() });
+  else if (id === "feW" || id === "feH") FE.cambiar({ [id === "feW" ? "w" : "h"]: Math.max(24, +e.target.value || 0) });
+  else if (id === "feLt") FE.cambiar({ t: e.target.value });
+  S.fe.escribiendo = false;
+});
+$("feProps").addEventListener("change", e => { if (e.target.id === "feK") FE.cambiar({ k: e.target.value }); });
+$("feProps").addEventListener("click", e => {
+  const c = e.target.closest("[data-fecol]"); if (c) return FE.cambiar({ c: c.dataset.fecol === "#FFFFFF" ? "" : c.dataset.fecol });
+  const lt = e.target.closest("[data-felt]"); if (lt) return FE.cambiar({ t: lt.dataset.felt });
+  const ld = e.target.closest("[data-felado] [data-v]"); if (ld) return FE.cambiar({ [ld.closest("[data-felado]").dataset.felado]: ld.dataset.v });
+  if (e.target.closest("#feDup")) return FE.duplicar();
+  if (e.target.closest("#feInv")) return FE.invertir();
+  if (e.target.closest("#feBorrar")) return FE.borrar();
+});
+$("feCon").addEventListener("click", () => FE.conectar());
+$("feDes").addEventListener("click", () => FE.deshacer());
+$("feReh").addEventListener("click", () => FE.rehacer());
+$("feMas").addEventListener("click", () => FE.zoom(1 / 1.25));
+$("feMenos").addEventListener("click", () => FE.zoom(1.25));
+$("feAjus").addEventListener("click", () => FE.ajustar());
+$("feSel").addEventListener("change", async e => { await feGuardar(); feCargar(e.target.value); });
+$("feNuevo").addEventListener("click", async () => {
+  const nombre = prompt("Nombre del nuevo flujograma:", "Nuevo flujograma"); if (!nombre) return;
+  await feGuardar();
+  const id = "f-" + Date.now().toString(36), d = { nombre: nombre.trim().slice(0, 80), nodos: [{ id: "ini", k: "term", x: 200, y: 200, w: 100, h: 40, t: "Inicio", tm: "", c: "" }], lineas: [] };
+  try { await setDoc(doc(db, "flujogramas", id), { ...d, actualizado: serverTimestamp(), porNombre: S.perfil.nombre || S.perfil.usuario || "" }); S.fe.lista.push({ id, ...d }); pintarFeLista(); feCargar(id); pintarFeLista(); }
+  catch (x) { toast(textoError(x)); }
+});
+$("feRen").addEventListener("click", async () => {
+  const x = S.fe.lista.find(y => y.id === S.fe.id); if (!x) return;
+  const nombre = prompt("Nuevo nombre:", x.nombre); if (!nombre) return;
+  x.nombre = nombre.trim().slice(0, 80); S.fe.guardado = false; await feGuardar(); pintarFeLista();
+});
+$("feCopia").addEventListener("click", async () => {
+  const x = S.fe.lista.find(y => y.id === S.fe.id); if (!x) return; await feGuardar();
+  const id = "f-" + Date.now().toString(36), d = { nombre: (x.nombre + " (copia)").slice(0, 80), ...FE.datos() };
+  try { await setDoc(doc(db, "flujogramas", id), { ...d, actualizado: serverTimestamp(), porNombre: S.perfil.nombre || S.perfil.usuario || "" }); S.fe.lista.push({ id, ...d }); feCargar(id); pintarFeLista(); toast("Copia creada"); }
+  catch (e) { toast(textoError(e)); }
+});
+$("feBorrarF").addEventListener("click", async () => {
+  const x = S.fe.lista.find(y => y.id === S.fe.id); if (!x || !confirm(`¿Borrar el flujograma «${x.nombre}»? No se puede deshacer.`)) return;
+  try { await deleteDoc(doc(db, "flujogramas", x.id)); S.fe.lista = S.fe.lista.filter(y => y.id !== x.id); feCargar(S.fe.lista[0]?.id || ""); pintarFeLista(); } catch (e) { toast(textoError(e)); }
+});
+// exportar: imagen PNG (alta resolución) o imprimir / guardar como PDF
+function feSvgSuelto() { const s = FE.svg(); return s.replace('class="fe-svg"', `class="fe-svg" width="${limites(FE.datos())[2]}" height="${limites(FE.datos())[3]}"`); }
+$("fePng").addEventListener("click", () => {
+  const nombre = (S.fe.lista.find(y => y.id === S.fe.id)?.nombre || "flujograma").replace(/[^\w\- áéíóúñ]+/gi, "_");
+  const [, , w, h] = limites(FE.datos()), k = 2.5, img = new Image();
+  img.onload = () => { const c = document.createElement("canvas"); c.width = w * k; c.height = h * k; const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+    const a = document.createElement("a"); a.href = c.toDataURL("image/png"); a.download = nombre + ".png"; a.click(); };
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(feSvgSuelto());
+});
+$("feImp").addEventListener("click", () => {
+  const nombre = S.fe.lista.find(y => y.id === S.fe.id)?.nombre || "Flujograma", v = open("", "_blank"); if (!v) return toast("Permita las ventanas emergentes para imprimir");
+  v.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(nombre)}</title><style>@page{size:A4 landscape;margin:10mm}body{margin:0;font-family:system-ui}h1{font-size:16px;margin:0 0 8px}svg{width:100%;height:auto}</style></head><body><h1>${esc(nombre)}</h1>${FE.svg()}<script>setTimeout(()=>print(),300)<\/script></body></html>`);
+  v.document.close();
+});
+addEventListener("keydown", e => { if (S.vista === "vFlued" && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); clearTimeout(feT); feGuardar(); } });
+addEventListener("beforeunload", e => { if (S.vista === "vFlued" && !S.fe.guardado) { feGuardar(); e.preventDefault(); } });

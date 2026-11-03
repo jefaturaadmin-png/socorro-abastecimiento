@@ -178,6 +178,11 @@ service cloud.firestore {
       allow delete: if esAdmin() || (tieneVista('nuevos') && resource.data.porUid == request.auth.uid);
     }
 
+    // ---------- editor de flujogramas: lo usan el administrador y quien tenga el módulo ----------
+    match /flujogramas/{id} {
+      allow read, write: if tieneVista('flued');
+    }
+
     // ---------- usuario → cuenta con la que entra (cuando el administrador le restablece la contraseña) ----------
     // se lee antes de iniciar sesión (solo dice qué cuenta usar, no contiene contraseñas)
     match /alias/{usuario} {
