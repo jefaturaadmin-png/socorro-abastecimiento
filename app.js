@@ -2855,13 +2855,20 @@ function textoWa(d) {
 }
 async function compartirWa(d) {
   const texto = textoWa(d), foto = d.foto ? S.nueFotos.get(d.id) : "";
-  if (foto && navigator.canShare) {
+  // el texto queda copiado: si WhatsApp solo toma la foto, se pega como comentario
+  try { await navigator.clipboard.writeText(texto); } catch {}
+  // foto + texto solo en el celular (en la computadora WhatsApp toma la foto y descarta el texto)
+  const celular = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (foto && celular && navigator.canShare) {
     try {
       const blob = await (await fetch(foto)).blob(), file = new File([blob], "receta.jpg", { type: blob.type || "image/jpeg" });
-      if (navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: texto }); return; }
+      if (navigator.canShare({ files: [file], text: texto })) {
+        toast("Texto copiado: si no aparece con la foto, péguelo como comentario");
+        await navigator.share({ files: [file], text: texto }); return;
+      }
     } catch (e) { if (e?.name === "AbortError") return; }
   }
-  window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank");
+  window.open("https://wa.me/?text=" + encodeURIComponent(texto + (foto && !celular ? "\n📷 La foto de la receta está en la página." : "")), "_blank");
 }
 $("nueOkDlg").addEventListener("click", e => {
   if (e.target.closest("#nueOkWa")) { compartirWa(S.nueWa); $("nueOkDlg").close(); return; }
