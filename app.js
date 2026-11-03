@@ -2484,7 +2484,7 @@ function pintarNue() {
             <input class="nue-na" data-nuenota="${esc(d.id)}" value="${esc(d.notaAdmin || "")}" placeholder="Nota de Abastecimiento (opcional)" maxlength="200">`
           : `<span class="chip ${e[1]}">${e[0]}</span>${d.notaAdmin ? ` <small>${esc(d.notaAdmin)}</small>` : ""}`}
           ${miS && !ya ? `<button class="btn sm" type="button" data-nuetamb="${esc(d.id)}">🙋 A mi sucursal también se lo pidieron</button>` : ""}
-          <button class="btn sm nue-wa" type="button" data-nuewa="${esc(d.id)}" title="Enviar a un grupo de WhatsApp">📲 WhatsApp</button>
+          ${admin ? `<button class="btn sm nue-wa" type="button" data-nuewa="${esc(d.id)}" title="Enviar a un grupo de WhatsApp">📲 WhatsApp</button>` : ""}
           ${admin || d.porUid === S.perfil?.uid ? `<button class="btn sm peligro" type="button" data-nueborrar="${esc(d.id)}" title="Borrar este registro">🗑</button>` : ""}
         </div>
       </div></article>`; }).join("") : `<p class="muted nue-vacio">${todos.length ? "Ningún registro con esos filtros." : "Todavía no se registró ningún producto. Use «📷 Registrar producto» cuando un cliente busque algo que no tenemos."}</p>`;
