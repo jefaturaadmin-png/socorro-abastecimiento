@@ -2484,6 +2484,7 @@ function pintarNue() {
             <input class="nue-na" data-nuenota="${esc(d.id)}" value="${esc(d.notaAdmin || "")}" placeholder="Nota de Abastecimiento (opcional)" maxlength="200">`
           : `<span class="chip ${e[1]}">${e[0]}</span>${d.notaAdmin ? ` <small>${esc(d.notaAdmin)}</small>` : ""}`}
           ${miS && !ya ? `<button class="btn sm" type="button" data-nuetamb="${esc(d.id)}">🙋 A mi sucursal también se lo pidieron</button>` : ""}
+          <button class="btn sm nue-wa" type="button" data-nuewa="${esc(d.id)}" title="Enviar a un grupo de WhatsApp">📲 WhatsApp</button>
           ${admin || d.porUid === S.perfil?.uid ? `<button class="btn sm peligro" type="button" data-nueborrar="${esc(d.id)}" title="Borrar este registro">🗑</button>` : ""}
         </div>
       </div></article>`; }).join("") : `<p class="muted nue-vacio">${todos.length ? "Ningún registro con esos filtros." : "Todavía no se registró ningún producto. Use «📷 Registrar producto» cuando un cliente busque algo que no tenemos."}</p>`;
@@ -2539,11 +2540,13 @@ $("nueDlg").addEventListener("click", async e => {
   try {
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     if (S.nueFoto) await setDoc(doc(db, "productos_nuevos_foto", id), { d: S.nueFoto, porUid: S.perfil.uid });
-    await setDoc(doc(db, "productos_nuevos", id), { prod: (prod || "(ver foto)").slice(0, 150), tipo: S.nueTipo, cant: Math.max(0, Math.round(+$("nueCant").value || 0)),
+    const reg = { prod: (prod || "(ver foto)").slice(0, 150), tipo: S.nueTipo, cant: Math.max(0, Math.round(+$("nueCant").value || 0)),
       nota: $("nueNota").value.trim().slice(0, 300), suc: miFarm() || "", porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario || "",
-      creado: serverTimestamp(), foto: !!S.nueFoto, tambien: [], estado: "nuevo" });
+      creado: serverTimestamp(), foto: !!S.nueFoto, tambien: [], estado: "nuevo" };
+    await setDoc(doc(db, "productos_nuevos", id), reg);
     if (S.nueFoto) S.nueFotos.set(id, S.nueFoto);
-    $("nueDlg").close(); toast("Registrado. Ya lo ven todas las sucursales y Abastecimiento.");
+    // listo: se ofrece mandarlo al grupo de WhatsApp (el envío lo confirma la persona en WhatsApp)
+    S.nueWa = { id, ...reg }; $("nueDlg").close(); $("nueOkDlg").showModal();
   } catch (x) { msg("nueDMsg", textoError(x), true); }
   finally { b.disabled = false; }
 });
@@ -2842,4 +2845,28 @@ $("redRes").addEventListener("click", e => {
   const b = e.target.closest("[data-redadd]"); if (!b) return; const a = S.redLista?.[+b.dataset.redadd]; if (!a) return;
   abrirNue(); $("nueProd").value = a.n.slice(0, 150); if (a.m) $("nueNota").value = ("Lab. " + a.m).slice(0, 300);
   $("nueProd").dispatchEvent(new Event("input"));
+});
+
+// WhatsApp: no se puede publicar solo en un grupo; se abre WhatsApp con el mensaje armado (y la foto, si el teléfono deja
+// compartir archivos) para que la persona elija el grupo y lo envíe
+function textoWa(d) {
+  return [`🔎 *Producto que busca un cliente*`, `*${d.prod}*`, `${(NUE_TIPO[d.tipo] || "").replace(/^\S+ /, "")}${d.cant ? ` · pedían ${d.cant}` : ""}`,
+    d.nota ? `📝 ${d.nota}` : "", `🏪 ${d.suc ? corto(d.suc) : "Abastecimiento"} · ${d.porNombre || ""}`, `Ver en la página: ${location.origin}`].filter(Boolean).join("\n");
+}
+async function compartirWa(d) {
+  const texto = textoWa(d), foto = d.foto ? S.nueFotos.get(d.id) : "";
+  if (foto && navigator.canShare) {
+    try {
+      const blob = await (await fetch(foto)).blob(), file = new File([blob], "receta.jpg", { type: blob.type || "image/jpeg" });
+      if (navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: texto }); return; }
+    } catch (e) { if (e?.name === "AbortError") return; }
+  }
+  window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank");
+}
+$("nueOkDlg").addEventListener("click", e => {
+  if (e.target.closest("#nueOkWa")) { compartirWa(S.nueWa); $("nueOkDlg").close(); return; }
+  if (e.target.closest("[data-cerrar-dlg]") || e.target === $("nueOkDlg")) $("nueOkDlg").close();
+});
+$("nueLista").addEventListener("click", e => {
+  const b = e.target.closest("[data-nuewa]"); if (!b) return; const d = (S.nue || []).find(x => x.id === b.dataset.nuewa); if (d) compartirWa(d);
 });

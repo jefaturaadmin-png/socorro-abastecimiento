@@ -14,7 +14,7 @@
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611021720">
+<link rel="stylesheet" href="styles.css?v=202611031000">
 </head>
 <body>
 
@@ -401,6 +401,11 @@
       </section>
     </div>
   </section>
+  <dialog id="nueOkDlg" class="at-info resp-dlg"><div><button type="button" class="ab-x resp-x" data-cerrar-dlg aria-label="Cerrar">✕</button>
+    <div class="resp-c nue-ok"><h2>✅ Registrado</h2><p>Ya lo ven todas las sucursales y Abastecimiento.</p>
+      <button class="btn primario nue-wa-grande" type="button" id="nueOkWa">📲 Enviar al grupo de WhatsApp</button>
+      <p class="muted"><small>Se abre WhatsApp con el mensaje (y la foto) listo: elija el grupo y envíe.</small></p>
+      <button class="btn" type="button" data-cerrar-dlg>No, gracias</button></div></div></dialog>
   <dialog id="nueDlg" class="at-info resp-dlg"><div><button type="button" class="ab-x resp-x" data-cerrar-dlg aria-label="Cerrar">✕</button>
     <div class="resp-c"><h2>📷 Registrar producto que buscan</h2><p class="muted">Sucursal: <b id="nueSucD"></b></p>
       <label class="nue-foto-btn"><input type="file" id="nueFotoF" accept="image/*" capture="environment" hidden>📷 Tomar foto de la receta o del producto <small>(opcional)</small></label>
@@ -637,6 +642,6 @@
 </main>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="app.js?v=202611021800"></script>
+<script type="module" src="app.js?v=202611031000"></script>
 </body>
 </html>
