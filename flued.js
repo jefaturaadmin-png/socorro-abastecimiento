@@ -10,9 +10,18 @@ export const COLORES = ["#FFFFFF", "#FFF3B0", "#ECE6F7", "#DCEBFF", "#E3F4EA", "
 // áreas (leyenda): cada color de relleno corresponde a un área; las que tienen nombre salen en la leyenda
 export const AREAS0 = [{ c: "#FFF3B0", n: "Compras" }, { c: "#DCEBFF", n: "Droguería / almacén" }, { c: "#ECE6F7", n: "Administración" },
   { c: "#E3F4EA", n: "Sucursales" }, { c: "#FFE3D3", n: "Gerencia" }, { c: "#FDE2E2", n: "" }, { c: "#EEF1F5", n: "" }];
-// tiempo en minutos: «45 min», «1 h 30 min»
-export const fmtMin = m => { m = Math.round(+m || 0); if (m < 60) return m + " min"; const h = Math.floor(m / 60), r = m % 60; return h + " h" + (r ? " " + r + " min" : ""); };
-export const totalMin = D => D.nodos.reduce((a, n) => a + (parseFloat(n.tm) || 0), 0);
+// tiempo de cada figura: tm = cantidad, tu = unidad ("min", "h" o "d"; un día = 24 h). El total se muestra en días, horas y minutos.
+export const UNIDADES = [["min", "minutos"], ["h", "horas"], ["d", "días"]];
+const MIN_POR = { min: 1, h: 60, d: 1440 };
+export const minutosDe = n => (parseFloat(n.tm) || 0) * (MIN_POR[n.tu || "min"] || 1);
+const num = v => String(Math.round(v * 100) / 100).replace(".", ",");
+export const textoTiempo = n => { const v = parseFloat(n.tm); if (isNaN(v)) return String(n.tm || "");
+  return num(v) + ({ d: v === 1 ? " día" : " días", h: " h" }[n.tu] || " min"); };
+export const fmtMin = m => {
+  m = Math.round(+m || 0); const d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60), r = m % 60;
+  return [d ? d + (d === 1 ? " día" : " días") : "", h ? h + " h" : "", r || (!d && !h) ? r + " min" : ""].filter(Boolean).join(" ");
+};
+export const totalMin = D => D.nodos.reduce((a, n) => a + minutosDe(n), 0);
 const TAM = { term: [100, 40], proc: [120, 50], dec: [120, 70], datos: [130, 50], doc: [120, 54], mdoc: [120, 58], cil: [120, 56],
   demora: [120, 50], manual: [120, 50], prep: [120, 50], con: [40, 40], texto: [160, 40] };
 const LADOS = { t: [0, -1], r: [1, 0], b: [0, 1], l: [-1, 0] };
@@ -67,7 +76,7 @@ function textoNodo(n) {
   const ls = renglones(n.t, util), lh = 14.5, y0 = n.y - (ls.length - 1) * lh / 2 + 4 - (n.k === "doc" || n.k === "mdoc" ? 4 : 0);
   let s = ls.map((l, i) => `<text x="${n.x}" y="${y0 + i * lh}" text-anchor="middle" class="fe-t">${esc(l)}</text>`).join("");
   // el tiempo va arriba a la derecha de la figura (abajo chocaría con las flechas)
-  if (n.tm) s += `<text x="${n.x + n.w / 2}" y="${n.y - n.h / 2 - 5}" text-anchor="end" class="fe-tm">⏱ ${esc(isNaN(+n.tm) ? n.tm : fmtMin(n.tm))}</text>`;
+  if (n.tm) s += `<text x="${n.x + n.w / 2}" y="${n.y - n.h / 2 - 5}" text-anchor="end" class="fe-tm">⏱ ${esc(textoTiempo(n))}</text>`;
   return s;
 }
 // punto de un lado del nodo

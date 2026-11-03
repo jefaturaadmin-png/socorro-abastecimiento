@@ -8,7 +8,7 @@ import {
   serverTimestamp, writeBatch as fsBatch, deleteField
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION, FORM_URGENCIA } from "./config.js?v=202610280700";
-import { crearEditor, ejemploAbastecimiento, FORMAS, COLORES, svgDe, limites, fmtMin, totalMin } from "./flued.js?v=202611032200";
+import { crearEditor, ejemploAbastecimiento, FORMAS, COLORES, svgDe, limites, fmtMin, totalMin, UNIDADES } from "./flued.js?v=202611032300";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -3042,7 +3042,8 @@ function pintarFeProps() {
   if (n) {
     box.innerHTML = `<h4>Figura</h4>
       <label>Texto<textarea id="feTxt" rows="3">${esc(n.t)}</textarea></label>
-      <label>Tiempo <small class="muted">(minutos)</small><input id="feTm" type="number" min="0" step="1" value="${esc(isNaN(+n.tm) ? "" : n.tm || "")}" placeholder="p. ej. 15"></label>
+      <label>Tiempo</label><div class="fe-dos"><input id="feTm" type="number" min="0" step="any" value="${esc(isNaN(parseFloat(n.tm)) ? "" : n.tm)}" placeholder="p. ej. 15">
+        <select id="feTu">${UNIDADES.map(([k, t]) => `<option value="${k}" ${(n.tu || "min") === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>
       <label>Forma<select id="feK">${FORMAS.map(([k, t]) => `<option value="${k}" ${k === n.k ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
       <label>Área (color)</label>
       <div class="fe-areas">${COLORES.map(c => { const a = FE.areas().find(x => x.c === c); return `<button type="button" data-fecol="${c}" class="${(n.c || "#FFFFFF") === c ? "sel" : ""}"><i style="background:${c}"></i>${c === "#FFFFFF" ? "Sin área" : esc(a?.n || "(sin nombre)")}</button>`; }).join("")}</div>
@@ -3061,7 +3062,7 @@ function pintarFeProps() {
       <li><b>Agregar:</b> toque una figura de la izquierda. Si tiene una figura elegida, la nueva se pone a su lado y se conecta sola.</li>
       <li><b>Mover:</b> arrastre la figura. <b>Tamaño:</b> el cuadrito verde de la esquina.</li>
       <li><b>Flechas:</b> «↗ Conectar» y toque origen y destino. Toque la flecha para ponerle Sí/No o cambiar por dónde sale y llega.</li>
-      <li><b>Texto, tiempo (minutos) y área:</b> doble clic en la figura.</li>
+      <li><b>Texto, tiempo (minutos, horas o días) y área:</b> doble clic en la figura.</li>
       <li><b>Mover el dibujo:</b> arrastre el fondo. <b>Zoom:</b> rueda del mouse o los botones.</li>
       <li><b>Atajos:</b> Supr borra · Ctrl+Z deshace · Ctrl+D duplica · flechas del teclado mueven.</li>
       <li>Se guarda solo.</li></ul>`;
@@ -3075,7 +3076,7 @@ $("feProps").addEventListener("input", e => {
   else if (id === "feLt") FE.cambiar({ t: e.target.value });
   S.fe.escribiendo = false;
 });
-$("feProps").addEventListener("change", e => { if (e.target.id === "feK") FE.cambiar({ k: e.target.value }); });
+$("feProps").addEventListener("change", e => { if (e.target.id === "feK") FE.cambiar({ k: e.target.value }); else if (e.target.id === "feTu") FE.cambiar({ tu: e.target.value }); });
 $("feProps").addEventListener("click", e => {
   const c = e.target.closest("[data-fecol]"); if (c) return FE.cambiar({ c: c.dataset.fecol === "#FFFFFF" ? "" : c.dataset.fecol });
   const lt = e.target.closest("[data-felt]"); if (lt) return FE.cambiar({ t: lt.dataset.felt });
