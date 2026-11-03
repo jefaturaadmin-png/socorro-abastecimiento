@@ -8,7 +8,7 @@ import {
   serverTimestamp, writeBatch as fsBatch, deleteField
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION, FORM_URGENCIA } from "./config.js?v=202610280700";
-import { crearEditor, ejemploAbastecimiento, FORMAS, COLORES, svgDe, limites } from "./flued.js?v=202611032100";
+import { crearEditor, ejemploAbastecimiento, FORMAS, COLORES, svgDe, limites, fmtMin, totalMin } from "./flued.js?v=202611032200";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -2994,7 +2994,7 @@ const feIcono = k => `<svg viewBox="0 0 44 30" class="fe-ico">${svgDe({ nodos: [
 async function abrirFlued() {
   if (!FE) {
     // el panel se vuelve a pintar al cambiar de selección (no mientras se escribe en él)
-    FE = crearEditor($("feLienzo"), { alCambiar: () => { if (!S.fe.escribiendo) pintarFeProps(); feSucio(); } });
+    FE = crearEditor($("feLienzo"), { alCambiar: () => { if (!S.fe.escribiendo) pintarFeProps(); pintarFeTot(); feSucio(); } });
     $("fePaleta").innerHTML = FORMAS.map(([k, t]) => `<button type="button" class="fe-forma" data-feadd="${k}" title="${esc(t)}">${feIcono(k)}<small>${esc(t)}</small></button>`).join("");
     $("feLienzo").addEventListener("fe-editar", () => setTimeout(() => $("feTxt")?.focus(), 30));
   }
@@ -3019,7 +3019,7 @@ function pintarFeLista() {
 }
 function feCargar(id) {
   const d = S.fe.lista.find(x => x.id === id); S.fe.id = id; S.fe.guardado = true;
-  FE.cargar(d || { nodos: [], lineas: [] }); pintarFeEstado(); pintarFeProps();
+  FE.cargar(d || { nodos: [], lineas: [] }); pintarFeEstado(); pintarFeProps(); pintarFeTot();
 }
 let feT = 0;
 function feSucio() { S.fe.guardado = false; pintarFeEstado(); clearTimeout(feT); feT = setTimeout(feGuardar, 1500); }   // se guarda solo
@@ -3028,11 +3028,12 @@ async function feGuardar() {
   const d = FE.datos(), x = S.fe.lista.find(y => y.id === S.fe.id); if (!x) return;
   $("feEstado").textContent = "Guardando…";
   try {
-    await setDoc(doc(db, "flujogramas", S.fe.id), { nombre: x.nombre, nodos: d.nodos, lineas: d.lineas, actualizado: serverTimestamp(), porNombre: S.perfil.nombre || S.perfil.usuario || "" });
+    await setDoc(doc(db, "flujogramas", S.fe.id), { nombre: x.nombre, nodos: d.nodos, lineas: d.lineas, areas: d.areas || [], actualizado: serverTimestamp(), porNombre: S.perfil.nombre || S.perfil.usuario || "" });
     Object.assign(x, d); S.fe.guardado = true;
   } catch (e) { toast(textoError(e)); }
   pintarFeEstado();
 }
+const pintarFeTot = () => { const t = FE ? totalMin(FE.datos()) : 0; $("feTot").textContent = t ? "⏱ Total: " + fmtMin(t) : ""; };
 const pintarFeEstado = () => { $("feEstado").textContent = S.fe.guardado ? "✓ Guardado" : "Cambios sin guardar…"; $("feEstado").className = "fe-estado" + (S.fe.guardado ? " ok" : ""); };
 function pintarFeProps() {
   const n = FE.nodoSel(), l = FE.lineaSel(), box = $("feProps");
@@ -3041,9 +3042,10 @@ function pintarFeProps() {
   if (n) {
     box.innerHTML = `<h4>Figura</h4>
       <label>Texto<textarea id="feTxt" rows="3">${esc(n.t)}</textarea></label>
-      <label>Tiempo <small class="muted">(opcional, p. ej. «5 días»)</small><input id="feTm" value="${esc(n.tm || "")}" placeholder="⏱ tiempo"></label>
+      <label>Tiempo <small class="muted">(minutos)</small><input id="feTm" type="number" min="0" step="1" value="${esc(isNaN(+n.tm) ? "" : n.tm || "")}" placeholder="p. ej. 15"></label>
       <label>Forma<select id="feK">${FORMAS.map(([k, t]) => `<option value="${k}" ${k === n.k ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
-      <div class="fe-col">${COLORES.map(c => `<button type="button" data-fecol="${c}" style="background:${c}" class="${(n.c || "#FFFFFF") === c ? "sel" : ""}" title="Color"></button>`).join("")}</div>
+      <label>Área (color)</label>
+      <div class="fe-areas">${COLORES.map(c => { const a = FE.areas().find(x => x.c === c); return `<button type="button" data-fecol="${c}" class="${(n.c || "#FFFFFF") === c ? "sel" : ""}"><i style="background:${c}"></i>${c === "#FFFFFF" ? "Sin área" : esc(a?.n || "(sin nombre)")}</button>`; }).join("")}</div>
       <div class="fe-dos"><label>Ancho<input id="feW" type="number" value="${n.w}" min="30"></label><label>Alto<input id="feH" type="number" value="${n.h}" min="24"></label></div>
       <div class="fe-bots"><button type="button" class="btn sm" id="feDup">⧉ Duplicar</button><button type="button" class="btn sm peligro" id="feBorrar">🗑 Borrar</button></div>`;
   } else if (l) {
@@ -3053,11 +3055,13 @@ function pintarFeProps() {
       <div class="fe-bots"><button type="button" class="btn sm" data-felt="Sí">Sí</button><button type="button" class="btn sm" data-felt="No">No</button><button type="button" class="btn sm" data-felt="">Sin texto</button></div>
       <label>Sale por</label>${lados("pa", l.pa)}<label>Llega por</label>${lados("pb", l.pb)}
       <div class="fe-bots"><button type="button" class="btn sm" id="feInv">⇄ Invertir</button><button type="button" class="btn sm peligro" id="feBorrar">🗑 Borrar</button></div>`;
-  } else box.innerHTML = `<h4>Cómo se usa</h4><ul class="fe-guia">
+  } else box.innerHTML = `<h4>Áreas de la leyenda</h4><p class="muted fe-mini">Cada color es un área. Escriba el nombre; en la leyenda salen las áreas con nombre que se usan.</p>
+      <div class="fe-arealist">${FE.areas().map((a, i) => `<label class="fe-arow"><i style="background:${a.c}"></i><input data-feareai="${i}" value="${esc(a.n)}" placeholder="Nombre del área"></label>`).join("")}</div>
+      <h4 style="margin-top:14px">Cómo se usa</h4><ul class="fe-guia">
       <li><b>Agregar:</b> toque una figura de la izquierda. Si tiene una figura elegida, la nueva se pone a su lado y se conecta sola.</li>
       <li><b>Mover:</b> arrastre la figura. <b>Tamaño:</b> el cuadrito verde de la esquina.</li>
       <li><b>Flechas:</b> «↗ Conectar» y toque origen y destino. Toque la flecha para ponerle Sí/No o cambiar por dónde sale y llega.</li>
-      <li><b>Texto y tiempo:</b> doble clic en la figura.</li>
+      <li><b>Texto, tiempo (minutos) y área:</b> doble clic en la figura.</li>
       <li><b>Mover el dibujo:</b> arrastre el fondo. <b>Zoom:</b> rueda del mouse o los botones.</li>
       <li><b>Atajos:</b> Supr borra · Ctrl+Z deshace · Ctrl+D duplica · flechas del teclado mueven.</li>
       <li>Se guarda solo.</li></ul>`;
@@ -3065,7 +3069,8 @@ function pintarFeProps() {
 $("fePaleta").addEventListener("click", e => { const b = e.target.closest("[data-feadd]"); if (b && FE) FE.agregar(b.dataset.feadd); });
 $("feProps").addEventListener("input", e => {
   const id = e.target.id; S.fe.escribiendo = true;
-  if (id === "feTxt") FE.cambiar({ t: e.target.value }); else if (id === "feTm") FE.cambiar({ tm: e.target.value.trim() });
+  if (id === "feTxt") FE.cambiar({ t: e.target.value }); else if (id === "feTm") FE.cambiar({ tm: e.target.value === "" ? "" : Math.max(0, +e.target.value || 0) });
+  else if (e.target.dataset.feareai != null) FE.ponerArea(+e.target.dataset.feareai, { n: e.target.value.slice(0, 40) });
   else if (id === "feW" || id === "feH") FE.cambiar({ [id === "feW" ? "w" : "h"]: Math.max(24, +e.target.value || 0) });
   else if (id === "feLt") FE.cambiar({ t: e.target.value });
   S.fe.escribiendo = false;

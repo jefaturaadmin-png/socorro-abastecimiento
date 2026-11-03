@@ -7,6 +7,12 @@ export const FORMAS = [
   ["mdoc", "Varios documentos"], ["cil", "Base de datos"], ["demora", "Espera / demora"], ["manual", "Operación manual"],
   ["prep", "Preparación"], ["con", "Conector"], ["texto", "Texto libre"]];
 export const COLORES = ["#FFFFFF", "#FFF3B0", "#ECE6F7", "#DCEBFF", "#E3F4EA", "#FFE3D3", "#FDE2E2", "#EEF1F5"];
+// áreas (leyenda): cada color de relleno corresponde a un área; las que tienen nombre salen en la leyenda
+export const AREAS0 = [{ c: "#FFF3B0", n: "Compras" }, { c: "#DCEBFF", n: "Droguería / almacén" }, { c: "#ECE6F7", n: "Administración" },
+  { c: "#E3F4EA", n: "Sucursales" }, { c: "#FFE3D3", n: "Gerencia" }, { c: "#FDE2E2", n: "" }, { c: "#EEF1F5", n: "" }];
+// tiempo en minutos: «45 min», «1 h 30 min»
+export const fmtMin = m => { m = Math.round(+m || 0); if (m < 60) return m + " min"; const h = Math.floor(m / 60), r = m % 60; return h + " h" + (r ? " " + r + " min" : ""); };
+export const totalMin = D => D.nodos.reduce((a, n) => a + (parseFloat(n.tm) || 0), 0);
 const TAM = { term: [100, 40], proc: [120, 50], dec: [120, 70], datos: [130, 50], doc: [120, 54], mdoc: [120, 58], cil: [120, 56],
   demora: [120, 50], manual: [120, 50], prep: [120, 50], con: [40, 40], texto: [160, 40] };
 const LADOS = { t: [0, -1], r: [1, 0], b: [0, 1], l: [-1, 0] };
@@ -60,7 +66,8 @@ function textoNodo(n) {
   const util = utilDe(n);
   const ls = renglones(n.t, util), lh = 14.5, y0 = n.y - (ls.length - 1) * lh / 2 + 4 - (n.k === "doc" || n.k === "mdoc" ? 4 : 0);
   let s = ls.map((l, i) => `<text x="${n.x}" y="${y0 + i * lh}" text-anchor="middle" class="fe-t">${esc(l)}</text>`).join("");
-  if (n.tm) s += `<text x="${n.x}" y="${n.y + n.h / 2 + 13}" text-anchor="middle" class="fe-tm">⏱ ${esc(n.tm)}</text>`;
+  // el tiempo va arriba a la derecha de la figura (abajo chocaría con las flechas)
+  if (n.tm) s += `<text x="${n.x + n.w / 2}" y="${n.y - n.h / 2 - 5}" text-anchor="end" class="fe-tm">⏱ ${esc(isNaN(+n.tm) ? n.tm : fmtMin(n.tm))}</text>`;
   return s;
 }
 // punto de un lado del nodo
@@ -91,6 +98,17 @@ function etiquetaEn(pts) {
 }
 
 // SVG completo (para mostrar, exportar o imprimir)
+// cuadro de leyenda (áreas con nombre y tiempo total), arriba a la izquierda del dibujo
+function leyenda(D) {
+  const ar = (D.areas || []).filter(a => a.n && D.nodos.some(n => (n.c || "") === a.c)), tot = totalMin(D);
+  if (!ar.length && !tot) return null;
+  const filas = ar.length + (tot ? 1 : 0), w = Math.max(150, ...ar.map(a => a.n.length * 7.2 + 50), tot ? 200 : 0), h = 30 + filas * 20;
+  const b = limNodos(D), x = b[0], y = b[1] - h - 30;
+  let s = `<g class="fe-ley"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="#fff" stroke="#c9d3df"/><text x="${x + 12}" y="${y + 19}" class="fe-lh">Leyenda</text>`;
+  ar.forEach((a, i) => { const yy = y + 30 + i * 20; s += `<rect x="${x + 12}" y="${yy}" width="22" height="14" rx="3" fill="${a.c}" stroke="#5f6b7a"/><text x="${x + 42}" y="${yy + 11}" class="fe-ly">${esc(a.n)}</text>`; });
+  if (tot) s += `<text x="${x + 12}" y="${y + 30 + ar.length * 20 + 11}" class="fe-ly">⏱ Tiempo total: ${fmtMin(tot)}</text>`;
+  return { s: s + "</g>", y };
+}
 export function svgDe(D, sel = {}, marco = null) {
   const byId = new Map(D.nodos.map(n => [n.id, n]));
   let lin = "";
@@ -112,10 +130,16 @@ export function svgDe(D, sel = {}, marco = null) {
   return `<svg xmlns="${NS}" viewBox="${vb.join(" ")}" class="fe-svg"><defs>
     <marker id="fePunta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3c4654"/></marker>
     <marker id="fePuntaS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1E6B5F"/></marker>
-    <style>.fe-t{font:600 12.5px system-ui,Segoe UI,Arial,sans-serif;fill:#1d2939}.fe-tm{font:600 11px system-ui,Arial,sans-serif;fill:#B7791F}.fe-lt{font:700 12px system-ui,Arial,sans-serif;fill:#3c4654}</style></defs>${lin}${nod}</svg>`;
+    <style>.fe-lh{font:700 13px system-ui,Arial,sans-serif;fill:#1d2939}.fe-ly{font:600 12px system-ui,Arial,sans-serif;fill:#344054}.fe-t{font:600 12.5px system-ui,Segoe UI,Arial,sans-serif;fill:#1d2939}.fe-tm{font:600 11px system-ui,Arial,sans-serif;fill:#B7791F}.fe-lt{font:700 12px system-ui,Arial,sans-serif;fill:#3c4654}</style></defs>${leyenda(D)?.s || ""}${lin}${nod}</svg>`;
+}
+function limNodos(D) {
+  const xs = D.nodos.flatMap(n => [n.x - n.w / 2, n.x + n.w / 2]), ys = D.nodos.flatMap(n => [n.y - n.h / 2 - 10, n.y + n.h / 2 + 20]);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 export function limites(D) {
   if (!D.nodos.length) return [0, 0, 1200, 700];
+  const L = leyenda(D);
+  if (L) { const [a, b, c, d] = limNodos(D), y0 = Math.min(b, L.y) - 40, x0 = a - 40; return [x0, y0, c - x0 + 40, d - y0 + 40]; }
   const xs = D.nodos.flatMap(n => [n.x - n.w / 2, n.x + n.w / 2]), ys = D.nodos.flatMap(n => [n.y - n.h / 2 - 10, n.y + n.h / 2 + 20]);
   const x0 = Math.min(...xs) - 40, y0 = Math.min(...ys) - 40;
   return [x0, y0, Math.max(...xs) - x0 + 40, Math.max(...ys) - y0 + 40];
@@ -176,8 +200,11 @@ export function crearEditor(caja, { alCambiar } = {}) {
     } else if (e.key === "Escape") { modo = "sel"; sel = {}; pintar(); cambio(); }
   });
   const api = {
-    cargar(d) { D = { nodos: (d?.nodos || []).map(n => ajustarAlto({ ...n })), lineas: (d?.lineas || []).map(l => ({ ...l })) }; sel = {}; historia = []; fut = []; api.real(); },
+    cargar(d) { D = { nodos: (d?.nodos || []).map(n => ajustarAlto({ ...n })), lineas: (d?.lineas || []).map(l => ({ ...l })),
+      areas: (d?.areas?.length ? d.areas : AREAS0).map(a => ({ ...a })) }; sel = {}; historia = []; fut = []; api.real(); },
     datos: () => JSON.parse(JSON.stringify(D)),
+    areas: () => D.areas,
+    ponerArea(i, campos) { guardarHist(); Object.assign(D.areas[i], campos); pintar(); cambio(); },
     sel: () => sel,
     nodoSel: () => sel.n ? nodo(sel.n) : null,
     lineaSel: () => sel.l ? D.lineas.find(l => l.id === sel.l) : null,
