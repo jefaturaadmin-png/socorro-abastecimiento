@@ -1313,10 +1313,26 @@ function pintarPron() {
   if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${(S.verMet ? mets.length + 1 : 0) + o.fm.length + 6}">${esc(porQueNo(Q_ACTUAL()))}</td></tr>`;
   $('pTabla').innerHTML = h + '</tbody>'; ajustarC0($('pTabla'));
   let tc = 0, ts = 0; for (const p of fil) { const x = compra(p).cmp; tc += x; ts += x * (p.k || 0); }
-  $('pMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(fil.length)} medicamentos, de mayor a menor demanda · <b>a comprar para ${S.pCob} + ${S.pSeg} días: ${nf0.format(tc)} cajas · S/ ${nf0.format(ts)}</b></span>` +
+  S.pFil = fil;
+  $('pMore').innerHTML = `<button type="button" class="btn sm" id="pXls">⬇ Descargar Excel</button><span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(fil.length)} medicamentos, de mayor a menor demanda · <b>a comprar para ${S.pCob} + ${S.pSeg} días: ${nf0.format(tc)} cajas · S/ ${nf0.format(ts)}</b></span>` +
     (fil.length > vis.length ? `<button class="btn" id="pMas">Ver ${Math.min(PAGINA, fil.length - vis.length)} más</button>` : '');
   if ($('pMas')) $('pMas').onclick = () => { S.pMostrar += PAGINA; pintarPron(); };
 }
+// Excel (CSV) de la proyección: todos los medicamentos del filtro actual, no solo los que se ven en pantalla
+$('pMore').addEventListener('click', e => {
+  if (!e.target.closest('#pXls')) return;
+  const o = S.P, H = S.pCob + S.pSeg, num = v => String(Math.round((+v || 0) * 1000) / 1000).replace('.', ',');
+  const t = [['Código', 'Medicamento', 'Laboratorio', 'Genérico', 'Familia', 'Tipo', 'Estacional', 'Stock total', 'Stock droguería', 'Método',
+    ...o.fm.map(m => 'Pronóstico ' + et(m)), 'Vendido mes en curso', `Necesita ${S.pCob} + ${S.pSeg} d`, 'Comprar', 'Costo unitario S/', 'Comprar S/']];
+  for (const p of S.pFil || []) {
+    const s = stockTotal(p), nec = necesidad(p, H), cmp = Math.max(0, Math.ceil(nec - s.t - 1e-9)), x = clas(p), av = avance(p);
+    t.push([p.c, p.n, labDe(p.c) || '', x.g || '', x.f || '', S.tR && p.catP ? p.catP : p.cat, p.est ? 'sí' : '', num(s.t), num(s.d), corto(elegido(p.c) || ''),
+      ...o.fm.map((m, j) => num(pronDe(p, j))), av ? num(av.v) : '', num(nec), cmp, num(p.k), num(cmp * (p.k || 0))]);
+  }
+  const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' }));
+  a.download = `proyeccion_compras_${o.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
 $('pTabla').addEventListener('click', e => {
   if (e.target.closest('[data-vermet]')) { S.verMet = !S.verMet; return pintarPron(); }
   const a = e.target.closest('[data-abrir]'); if (a) return abrirFichaP(a.dataset.abrir, 'pron');
