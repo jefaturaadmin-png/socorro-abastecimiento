@@ -274,6 +274,9 @@
       return { c: a.c, n: a.n, st: Math.round(st * 1000) / 1000, cob: d > 0 ? Math.floor(st / d) : null }; }) };
   }
   // Lo que se le va a atender a cada sucursal (atencion/{SUCURSAL}): lo lee el químico de esa sucursal si tiene la vista.
+  // tamaño aproximado de un valor en Firestore (bytes): textos = largo UTF-8 + 1; números 8; mapas = nombre de cada campo + 1
+  const tamFS = v => v == null || typeof v === 'boolean' ? 1 : typeof v === 'number' ? 8 : typeof v === 'string' ? new TextEncoder().encode(v).length + 1
+    : Array.isArray(v) ? v.reduce((a, x) => a + tamFS(x), 0) : Object.entries(v).reduce((a, [k, x]) => a + k.length + 1 + tamFS(x), 0);
   async function publicarAtencion() {
     const r3 = v => Math.round(v * 1000) / 1000, hoy = new Date().toISOString();
     try {
@@ -289,8 +292,13 @@
               hv, pr: m.f12.map(r3), ...(av ? { av: r3(av.v) } : {}), met: m.metodo, pat: m.fp?.patron || '', adi: m.fp?.adi != null ? r3(m.fp.adi) : null, cv2: m.fp?.cv2 != null ? r3(m.fp.cv2) : null,
               li: x.t || '', ge: x.g || '', fa: x.f || '', k: r3(r.p.k || 0), vd: r.metodo };
           });
-        // un documento de Firestore admite hasta 1 MB
-        while (items.length && JSON.stringify(items).length > 880000) items.pop();
+        // un documento de Firestore admite hasta 1 MB (medido como lo mide Firestore: cada número son 8 bytes y cada
+        // campo suma su nombre). Si no entra, primero se guarda solo un año de historial y luego se quitan los menos urgentes.
+        const lim = 960000, txt = a => a.map(v => v == null ? '' : v).join(',');
+        for (const it of items) { it.hv = txt(it.hv); it.pr = txt(it.pr); }   // como texto «1.5,2,0,…» pesan la mitad
+        if (tamFS(items) > lim) for (const it of items) it.hv = it.hv.split(',').slice(-12).join(',');
+        let tam = tamFS(items);
+        while (items.length && tam > lim) tam -= tamFS(items.pop()) + 1;
         const o = cfgSuc(f), datos = { suc: f, nombre: nomSuc(f), items, corte: S.P.corte, publicado: hoy, C: o.C, Sg: o.Sg, fte: o.fte, tipos: o.tipos, propio: !!CFG.suc[f],
           meses: (S.P.hfm || []).slice(-24), fm: Array.from({ length: 12 }, (_, i) => sumaMes(S.P.fm[0], i)), avDia: S.P.dias ? +S.P.dias.hasta.slice(8, 10) : null };
         await FB.setDoc(FB.doc(FB.db, 'atencion', f), window.parent.JSON.parse(JSON.stringify(datos)));

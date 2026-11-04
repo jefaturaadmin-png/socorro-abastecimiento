@@ -23,7 +23,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611041200";
+const VERSION_PROY = "202611041400";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1436,7 +1436,7 @@ function escucharAten() {
   const suc = esAdmin() ? (S.atSuc || FARMACIAS[0]) : miFarm();
   if (S.atSubSuc === suc) return;
   S.atUnsub?.(); S.atSubSuc = suc; S.aten = null;
-  S.atUnsub = onSnapshot(doc(db, "atencion", suc), sn => { S.aten = sn.exists() ? sn.data() : { items: [] }; cargarStkSuc(suc, S.aten.publicado); if (S.vista === "vAten") pintarAten(); },
+  S.atUnsub = onSnapshot(doc(db, "atencion", suc), sn => { S.aten = sn.exists() ? sn.data() : { items: [] }; normAten(S.aten); cargarStkSuc(suc, S.aten.publicado); if (S.vista === "vAten") pintarAten(); },
     e => { S.atSubSuc = null; avisar(e); });
   // respuestas del químico por producto (atencion_resp/{SUCURSAL}__{codpro})
   S.atResp = new Map(); S.atRespUnsub?.();
@@ -1451,6 +1451,16 @@ function escucharAten() {
   if (!S.faltSubs && !S.fEstAten) { S.fEstAten = true;
     S.subs.push(onSnapshot(collection(db, "faltantes_estado"), sn => { S.fEst = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === "vAten" && !S.atEdit) pintarAten(); },
       () => { S.fEstAten = false; })); }
+}
+// la venta por mes (hv) y el pronóstico (pr) llegan como texto «1.5,2,0,…» (pesan menos); si hay menos meses que la
+// cabecera (se guardó solo un año), se completan adelante con vacíos para que coincidan con sus meses
+function normAten(A) {
+  const arr = v => typeof v === "string" ? (v ? v.split(",").map(x => x === "" ? null : +x) : []) : v || [];
+  for (const i of A.items || []) {
+    i.hv = arr(i.hv); i.pr = arr(i.pr);
+    const n = (A.meses || []).length; if (i.hv.length && i.hv.length < n) i.hv = [...Array(n - i.hv.length).fill(null), ...i.hv];
+    if (!i.hv.length) i.hv = null;
+  }
 }
 const tagDrog = i => { const e = estVig(i.c); if (!e) return "";
   // el stock que tiene la sucursal del medicamento que indicó droguería
