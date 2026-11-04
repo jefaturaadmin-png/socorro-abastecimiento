@@ -23,7 +23,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611041600";
+const VERSION_PROY = "202611041700";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -315,6 +315,10 @@ function iniciar() {
       render();
     }, e => avisar(e));
     S.subs.push(escuchar(miFarm(), "propia"), escuchar("TODAS", "todas"));
+    // lo bloqueado en droguería también vale para su sucursal (se guarda aparte: no es un bloqueo que pueda gestionar)
+    S.subs.push(onSnapshot(query(collection(db, "bloqueos"), where("farmacia", "==", "DROGUERIA FS")), snap => {
+      S.bloqDrog = new Map(snap.docs.map(d => [d.id, { id: d.id, ...d.data() }])); if (S.vista === "vAten") pintarAten();
+    }, () => {}));
     // Si el administrador le cambia la sucursal, el rol o la deshabilita, se recarga con los datos nuevos.
     pintarPedidoSucursal();
     S.subs.push(onSnapshot(doc(db, "usuarios", S.perfil.uid), snap => {
@@ -1501,7 +1505,8 @@ const tagStock = (i, c, pre = "", n = 1) => { const x = stockCambio(i, c, n); re
 // publicado antes de bloquearlo
 function bloqAten(i) {
   const suc = esAdmin() ? (S.atSuc || FARMACIAS[0]) : miFarm();
-  const b = S.bloqueos?.get(suc + "__" + i.c) || S.bloqueos?.get("TODAS__" + i.c);
+  // niveles: general (kardex) y droguería bloquean en todas las sucursales; el de la sucursal, solo ahí
+  const b = S.bloqueos?.get(suc + "__" + i.c) || S.bloqueos?.get("TODAS__" + i.c) || S.bloqueos?.get("DROGUERIA FS__" + i.c) || S.bloqDrog?.get("DROGUERIA FS__" + i.c);
   return b && b.estado === "bloqueado" ? b : null;
 }
 function noEnvia(i) {
@@ -1614,7 +1619,7 @@ function pintarAten() {
       <td class="der">${fCaja(i.d, i.fr)}</td><td class="der">${fCaja(i.st, i.fr)}</td>
       <td class="der">${noEnvia(i) ? '<span class="muted">No</span>' : `<b>${i.pide ? nf(i.pide) : "–"}</b>`}</td>
       <td class="at-nota">${noEnvia(i) ? `<span class="tag t-rech at-drog">No se te envía: ${esc(noEnvia(i))}</span>`
-        : `${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${(i.de || []).map(x => `<span class="tag t-ok">${nf(x.q)} de ${esc(x.f)}</span>`).join(" ")}${i.cmp ? `<span class="tag t-rech">${nf(i.cmp)} por comprar</span>` : ""}`}${i.cmb ? `<span class="tag t-ok">En cambio de ${esc(i.cmb)}</span>` : ""}${tagDrog(i)}${i.enl ? `<span class="tag t-ok at-drog">Se te envía en lugar de ${esc(i.enl)} (${esc(quienEnl(i.enl))})</span>` : ""}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td>
+        : `${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${(i.de || []).map(x => `<span class="tag t-ok">${nf(x.q)} de ${esc(x.f)}</span>`).join(" ")}${i.cmp ? `<span class="tag t-rech">${nf(i.cmp)} por comprar</span>` : ""}`}${i.cmb ? `<span class="tag t-ok">En cambio de ${esc(i.cmb)}</span>` : ""}${tagDrog(i)}${i.enl ? `<span class="tag t-ok at-drog">Se te envía en lugar de ${esc(i.enl)} (${esc(quienEnl(i.enl))})</span>` : ""}${i.krv ? `<span class="tag t-pend at-drog">🔁 Se termina lo que queda: ahora se trabaja con ${esc(i.krv)}</span>` : ""}${i.krn ? `<span class="tag t-ok at-drog">🔁 Reemplaza a ${esc(i.krn)}</span>` : ""}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td>
       <td class="at-resp">${celdaResp(i)}</td>${admin ? `<td>${visAten(i) ? `<button type="button" class="btn sm at-vis" data-atvis="${esc(i.c)}" title="Ocultar este producto a la sucursal">👁 Visible</button>` : `<button type="button" class="btn sm at-vis no" data-atvis="${esc(i.c)}" title="Mostrar este producto a la sucursal">🚫 Oculto</button>`}</td>` : ""}</tr>`).join("")
       : `<tr class="vacia"><td colspan="10">Nada que mostrar.</td></tr>`) + "</tbody>";
   const iEd = S.atEdit && (A.items || []).find(x => x.c === S.atEdit);

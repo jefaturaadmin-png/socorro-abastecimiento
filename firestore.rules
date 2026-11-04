@@ -70,8 +70,9 @@ service cloud.firestore {
           && s.porUid == request.auth.uid;
       }
 
+      // el químico ve los de su farmacia, los generales y los de droguería (que también valen para su sucursal)
       allow read: if esAdmin()
-        || (esQuimico() && (resource.data.farmacia == miFarmacia() || resource.data.farmacia == 'TODAS'));
+        || (esQuimico() && resource.data.farmacia in [miFarmacia(), 'TODAS', 'DROGUERIA FS']);
 
       allow create: if esAdmin() || (esQuimico() && !cerrado() && nuevoBloqueoQuimico());
 
@@ -190,6 +191,12 @@ service cloud.firestore {
     // ---------- editor de flujogramas: lo usan el administrador y quien tenga el módulo ----------
     match /flujogramas/{id} {
       allow read, write: if tieneVista('flued');
+    }
+
+    // ---------- reemplazos del kardex (un código se deja y se trabaja con otro): los registra quien sube el kardex ----------
+    match /reemplazos/{cod} {
+      allow read: if conPerfil();
+      allow write: if publica();
     }
 
     // ---------- usuario → cuenta con la que entra (cuando el administrador le restablece la contraseña) ----------

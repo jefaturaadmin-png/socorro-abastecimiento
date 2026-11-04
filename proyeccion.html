@@ -111,7 +111,11 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .tag.man { background: var(--accent-soft); color: var(--accent) }
 .cat { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; font-size: 12px; font-weight: 700; color: #fff }
 .cat.A { background: #1f7a6d } .cat.B { background: #3d5a99 } .cat.C { background: #b8860b } .cat.D { background: #8a4f9e } .cat.E { background: #a33b3b }
-.tag.pap { background: #e3e9f6; color: #3d5a99 } .tag.est { background: #f6ead0; color: #9a6a00 } .tag.ped { background: #f1ebe6; color: #74685f }
+.kr-dlg { border: 0; border-radius: 14px; padding: 0; max-width: 900px; width: 94vw } .kr-dlg::backdrop { background: rgba(0,0,0,.35) }
+.kr-in { padding: 18px 20px } .kr-cab { display: flex; justify-content: space-between; align-items: center } .kr-cab h2 { margin: 0 }
+.kr-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 12px 0 } .kr-form .field { flex: 1 1 200px } .kr-flecha { font-size: 1.4rem; padding-bottom: 22px }
+.kr-msg { min-height: 1.2em; margin-bottom: 8px; font-weight: 600 }
+.tag.kr { background: #e6f2ee; color: #1E6B5F } .tag.pap { background: #e3e9f6; color: #3d5a99 } .tag.est { background: #f6ead0; color: #9a6a00 } .tag.ped { background: #f1ebe6; color: #74685f }
 .c1 small.sub { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap }
 .tag.bloq { background: #fde2dd; color: #b6400b }
 .tag.auto { background: var(--bg); color: var(--muted); border: 1px solid var(--line) }
@@ -585,6 +589,18 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
     </details>
   </section>
 
+  <dialog id="krDlg" class="kr-dlg"><div class="kr-in">
+    <div class="kr-cab"><h2>🔁 Reemplazos de productos</h2><button type="button" class="btn sm" data-krcerrar>✕</button></div>
+    <p class="z">Cuando un código se deja de trabajar y se reemplaza por otro. El que se deja <b>no se compra</b>: lo que queda en droguería se reparte a las sucursales según cuánto vende cada una, hasta terminarlo. El nuevo se envía con su propia proyección (si aún no tiene historial, con la del que reemplaza), descontando lo que se envió del anterior. Se aplica en Atención a sucursales, Lo que me van a atender y Proyección de compras.</p>
+    <div class="kr-form">
+      <label class="field"><span>Código que se deja</span><input id="krV" placeholder="p. ej. 19727" autocomplete="off"><small id="krVn" class="z"></small></label>
+      <span class="kr-flecha">→</span>
+      <label class="field"><span>Código nuevo</span><input id="krN" placeholder="p. ej. 26845" autocomplete="off"><small id="krNn" class="z"></small></label>
+      <button type="button" class="btn primary" id="krGuardar">Guardar reemplazo</button>
+    </div>
+    <div class="kr-msg z" id="krMsg"></div>
+    <div class="scroll"><table class="cells" id="krTabla"></table></div>
+  </div></dialog>
   <section id="vKar" hidden>
     <div class="head">
       <div><div class="eyebrow" id="kEyebrow"></div><h1>Kardex · stock actual</h1></div>
@@ -597,6 +613,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
           <label class="field"><span>Línea</span><select class="sLin"><option value="">Todas</option></select></label>
           <label class="field"><span>Familia</span><select class="sFam"><option value="">Todas</option></select></label>
           <button type="button" class="btn sm" id="kXls">⬇ Descargar Excel</button>
+          <button type="button" class="btn sm" id="kReemp" title="Registrar que un código se reemplaza por otro">🔁 Reemplazos</button>
         </div>
       </div>
     </div>
@@ -1149,7 +1166,9 @@ unir('.sLin', 'lin', 'change'); unir('.sFam', 'fam', 'change'); unir('.sGen', 'g
 document.querySelectorAll('.sGen').forEach(s => s.addEventListener('input', e => { if (!e.target.value && S.gen) { S.gen = ''; document.querySelectorAll('.sGen').forEach(x => x.value = ''); render(); } }));
 
 const catBadge = c => `<span class="cat ${c}" title="${c} · ${NCAT[c]}">${c}</span>`;
-const etiquetas = p => (p.pap ? '<span class="tag pap" title="Programa de apoyo al paciente">PAP</span>' : '') + (p.est ? '<span class="tag est" title="Venta por temporadas">Estacional</span>' : '');
+const tagKR = c => window.REEMP?.has(c) ? `<span class="tag kr" title="Ya no se compra: se reparte lo que queda hasta terminarlo">🔁 reemplazado por ${esc(window.REEMP.get(c).nuevo)}</span>`
+  : window.REEMP_NUEVO?.has(c) ? `<span class="tag kr" title="Si no tiene historial, se proyecta con el que reemplaza">🔁 reemplaza a ${esc(window.REEMP_NUEVO.get(c).join(', '))}</span>` : '';
+const etiquetas = p => (p.pap ? '<span class="tag pap" title="Programa de apoyo al paciente">PAP</span>' : '') + (p.est ? '<span class="tag est" title="Venta por temporadas">Estacional</span>' : '') + tagKR(p.c);
 // en Reposición por farmacia se usa la categoría de esa farmacia
 const pasaTipo = p => {
   const per = S.vista === 'pron' && S.tR;
@@ -1282,6 +1301,19 @@ function necesidad(p, H) {
   }
   return t;
 }
+// Compra con los reemplazos del kardex: el viejo no se compra (se termina lo que queda); el nuevo usa su propia
+// proyección o, si aún no tiene historial, la del viejo, y se le resta lo que queda del viejo.
+const conHistorial = p => !p.sinVentas && (p.h || []).some(v => v > 0);
+function compraKR(p, H) {
+  if (window.REEMP?.has(p.c)) return { nec: necesidad(p, H), cmp: 0 };
+  const viejos = (window.REEMP_NUEVO?.get(p.c) || []).map(c => S.idx.get(c)).filter(Boolean);
+  let nec = necesidad(p, H), resta = 0;
+  if (viejos.length) {
+    if (!conHistorial(p)) nec = Math.max(nec, viejos.reduce((a, q) => a + necesidad(q, H), 0));
+    resta = viejos.reduce((a, q) => a + stockTotal(q).t, 0);
+  }
+  return { nec, cmp: Math.max(0, Math.ceil(nec - stockTotal(p).t - resta - 1e-9)) };
+}
 function pintarPron() {
   const o = S.P, mets = o.metodos, conv = (p, v) => soles() ? v * p.k : v;
   llenarLabs(); llenarClas(); pintarTipos();
@@ -1289,7 +1321,7 @@ function pintarPron() {
   if (S.lab) lista = lista.filter(p => labDe(p.c) === S.lab);
   lista = lista.filter(pasaTipo);
   const fil = filtroTexto(lista, $('pq').value), vis = fil.slice(0, S.pMostrar), H = S.pCob + S.pSeg;
-  const compra = p => { const nec = necesidad(p, H); return { nec, cmp: Math.max(0, Math.ceil(nec - stockTotal(p).t - 1e-9)) }; };
+  const compra = p => compraKR(p, H);
 
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th title="Categoría por movimiento (últimos 12 meses)">Tipo</th><th title="Droguería + todas las sucursales y almacenes">Stock actual</th>${S.verMet ? mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="Error del método (WAPE). Clic en una celda para usarlo.">${esc(corto(m))}</th>`).join('') + '<th class="sep">Método usado</th>' : ''}
     <th class="sep"><button type="button" class="btn sm" data-vermet title="${S.verMet ? 'Ocultar' : 'Ver'} el error de cada modelo y el método usado">${S.verMet ? '◂ Ocultar modelos' : 'Modelos ▸'}</button></th>${o.fm.map(m => `<th class="pj">${et(m)}</th>`).join('')}<th class="sep" title="Pronóstico de los próximos ${H} días (${S.pCob} de stock + ${S.pSeg} de seguridad)">Necesita ${S.pCob} + ${S.pSeg} d</th><th title="Lo que necesita menos el stock actual (droguería + sucursales)">Comprar</th></tr></thead><tbody>`;
@@ -1325,7 +1357,7 @@ $('pMore').addEventListener('click', e => {
   const t = [['Código', 'Medicamento', 'Laboratorio', 'Genérico', 'Familia', 'Tipo', 'Estacional', 'Stock total', 'Stock droguería', 'Método',
     ...o.fm.map(m => 'Pronóstico ' + et(m)), 'Vendido mes en curso', `Necesita ${S.pCob} + ${S.pSeg} d`, 'Comprar', 'Costo unitario S/', 'Comprar S/']];
   for (const p of S.pFil || []) {
-    const s = stockTotal(p), nec = necesidad(p, H), cmp = Math.max(0, Math.ceil(nec - s.t - 1e-9)), x = clas(p), av = avance(p);
+    const s = stockTotal(p), { nec, cmp } = compraKR(p, H), x = clas(p), av = avance(p);
     t.push([p.c, p.n, labDe(p.c) || '', x.g || '', x.f || '', S.tR && p.catP ? p.catP : p.cat, p.est ? 'sí' : '', num(s.t), num(s.d), corto(elegido(p.c) || ''),
       ...o.fm.map((m, j) => num(pronDe(p, j))), av ? num(av.v) : '', num(nec), cmp, num(p.k), num(cmp * (p.k || 0))]);
   }
@@ -1362,7 +1394,7 @@ function pintarKar() {
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th class="drog">Droguería</th>${farms.map(f => `<th>${esc(nomSuc(f))}</th>`).join('')}<th class="sep">Sucursales</th><th>Total</th></tr></thead><tbody>`;
   for (const r of vis) {
     const p = r.p;
-    h += `<tr><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a><small class="sub">${esc(labDe(p.c))}</small></td>
+    h += `<tr><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${tagKR(p.c)}<small class="sub">${esc(labDe(p.c))}</small></td>
       <td class="n big drog">${cel(p, r.drog)}</td>${r.sf.map(v => `<td class="n">${cel(p, v)}</td>`).join('')}<td class="n sep">${cel(p, r.tot - r.drog)}</td><td class="n big">${cel(p, r.tot)}</td></tr>`;
   }
   if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${farms.length + 4}">Nada que mostrar con estos filtros.</td></tr>`;
@@ -1382,6 +1414,35 @@ $('kXls').addEventListener('click', () => {
   const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' }));
   a.download = `stock_${o.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
+
+/* ---------- REEMPLAZOS (desde el kardex) ---------- */
+const nomDe = c => S.idx?.get(String(c || '').trim())?.n || '';
+function pintarKR() {
+  const filas = [...(window.REEMP || new Map())].sort((a, b) => String(b[1].desde || '').localeCompare(String(a[1].desde || '')));
+  $('krTabla').innerHTML = `<thead><tr><th class="c1">Se deja</th><th class="c1">Nuevo</th><th>Queda del anterior</th><th>Desde</th><th>Registró</th><th></th></tr></thead><tbody>` +
+    (filas.length ? filas.map(([v, r]) => { const p = S.idx.get(v), st = p ? stockTotal(p) : null;
+      return `<tr><td class="c1"><b>${esc(v)}</b> ${esc(r.nViejo || nomDe(v))}</td><td class="c1"><b>${esc(r.nuevo)}</b> ${esc(r.nNuevo || nomDe(r.nuevo))}</td>
+        <td class="n">${st ? fmtS(p, st.t) + (st.d ? ` <small class="z">(droguería ${fmtS(p, st.d)})</small>` : '') : '–'}</td><td>${esc(String(r.desde || '').slice(0, 10).split('-').reverse().join('/'))}</td><td>${esc(r.porNombre || '')}</td>
+        <td><button type="button" class="btn sm" data-krborrar="${esc(v)}" title="Quitar el reemplazo">🗑</button></td></tr>`; }).join('')
+      : '<tr><td class="c1" colspan="6">Todavía no hay reemplazos registrados.</td></tr>') + '</tbody>';
+}
+$('kReemp').addEventListener('click', () => { pintarKR(); $('krMsg').textContent = ''; $('krDlg').showModal(); $('krV').focus(); });
+['krV', 'krN'].forEach(id => $(id).addEventListener('input', () => { $(id + 'n').textContent = nomDe($(id).value) || ($(id).value.trim() ? 'No está en el kardex' : ''); }));
+$('krDlg').addEventListener('click', async e => {
+  if (e.target.closest('[data-krcerrar]') || e.target === $('krDlg')) return $('krDlg').close();
+  const b = e.target.closest('[data-krborrar]');
+  if (b) { if (!confirm(`¿Quitar el reemplazo del ${b.dataset.krborrar}?`)) return; try { await window.borrarReemp(b.dataset.krborrar); setTimeout(pintarKR, 400); } catch (x) { $('krMsg').textContent = 'No se pudo quitar: ' + x.message; } return; }
+  if (!e.target.closest('#krGuardar')) return;
+  const v = $('krV').value.trim(), n = $('krN').value.trim();
+  if (!v || !n || v === n) return $('krMsg').textContent = 'Escriba los dos códigos (distintos).';
+  if (!nomDe(v) || !nomDe(n)) return $('krMsg').textContent = 'Alguno de los códigos no está en el kardex.';
+  if (window.REEMP?.has(n)) return $('krMsg').textContent = `El ${n} ya está reemplazado por otro; elija el código vigente.`;
+  try {
+    const quien = window.parent?.document?.getElementById('uNombre')?.textContent || '';
+    await window.guardarReemp(v, { nuevo: n, nViejo: nomDe(v), nNuevo: nomDe(n), desde: new Date().toISOString(), porNombre: quien });
+    $('krV').value = $('krN').value = ''; $('krVn').textContent = $('krNn').textContent = ''; $('krMsg').textContent = `Listo: ${v} → ${n}.`; setTimeout(pintarKR, 400);
+  } catch (x) { $('krMsg').textContent = 'No se pudo guardar: ' + (x.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules).' : x.message); }
 });
 
 /* ---------- FICHA PRONÓSTICO ---------- */
@@ -1566,7 +1627,8 @@ function dibujar(id, cfg) { if (S.charts[id]) S.charts[id].destroy(); S.charts[i
 
 /* ---------- REPOSICIÓN ---------- */
 // Lo que una sucursal bloqueó (o Abastecimiento bloqueó para todas) no se compra ni se le reparte.
-const bloqueado = (c, f) => !!window.BLOQ && (window.BLOQ.has('TODAS__' + c) || window.BLOQ.has(f + '__' + c));
+// niveles de bloqueo: el general (kardex) y el de droguería bloquean en todas las sucursales; el de una sucursal, solo ahí
+const bloqueado = (c, f) => !!window.BLOQ && (window.BLOQ.has('TODAS__' + c) || window.BLOQ.has('DROGUERIA FS__' + c) || window.BLOQ.has(f + '__' + c));
 function plan(p, f, obj) {
   const o = S.P, sh = p.s?.[f] || 0;
   const pr = m => { const j = o.fm.indexOf(m); return j < 0 ? 0 : pronDe(p, j) * sh; };
@@ -1961,8 +2023,8 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202610270100"></script>
-<script src="sucursales.js?v=202611041400"></script>
+<script src="sucursales.js?v=202611041700"></script>
 <script src="estadistica.js?v=202610270100"></script>
-<script type="module" src="proyeccion.js?v=202611041200"></script>
+<script type="module" src="proyeccion.js?v=202611041700"></script>
 
 </body></html>

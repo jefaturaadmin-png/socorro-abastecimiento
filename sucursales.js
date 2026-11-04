@@ -91,11 +91,13 @@
   /* ---------- cálculo de toda la red (todas las sucursales, para repartir lo de droguería) ---------- */
   let cache = null, cacheClave = '';
   function calcular() {
-    const clave = cfgVer + '|' + respVer + '|' + JSON.stringify(CFG);
+    const clave = cfgVer + '|' + respVer + '|' + (window.REEMP_VER || 0) + '|' + (window.BLOQ_VER || 0) + '|' + JSON.stringify(CFG);
     if (cache && cacheDe === S.P && cacheClave === clave) return cache;
     cacheDe = S.P; cacheClave = clave;
-    const filas = [], porProd = new Map();
-    for (const p of S.P.p) {
+    const filas = [], porProd = new Map(), R = window.REEMP || new Map();
+    // los reemplazados por el kardex van primero: lo que se envía de ellos se descuenta del nuevo
+    S.krEnviado = new Map();
+    for (const p of [...S.P.p.filter(p => R.has(p.c)), ...S.P.p.filter(p => !R.has(p.c))]) {
       const red = [];
       for (const f of S.P.farmacias) {
         const r = filaBase(p, f);
@@ -122,7 +124,11 @@
           const oo = cfgDe(f, op.c), dO = diaria(op, f, oo).d, stO = +(window.STOCK_TODOS?.[op.c]?.[f]?.[0] ?? op.st?.[f] ?? 0) || 0;
           if (dO > 0 && stO < dO * (oo.C + oo.Sg)) { extra += dO; enLugar.push(op.c + ' - ' + op.n); }
         }
-        const d = Math.max(dv.d, dOrig) + extra;
+        // nuevo que reemplaza a otro en el kardex: si en esta sucursal aún no tiene venta, se proyecta con la del anterior
+        const viejos = usa ? [] : (window.REEMP_NUEVO?.get(p.c) || []).map(prodDe).filter(Boolean);
+        let dV = 0, stV = 0, envV = 0;
+        for (const q of viejos) { dV += diaria(q, f, cfgDe(f, q.c)).d; stV += stockEn(q.c, f); envV += S.krEnviado?.get(q.c + '__' + f) || 0; }
+        const d = Math.max(dv.d, dOrig) + extra + (viejos.length && !(dv.d > 0) ? dV : 0);
         const bloq = bloqueado(p.c, f), nec = d * (o.C + o.Sg), seg = d * o.Sg, cob = d > 0 ? st / d : Infinity;
         let pide = 0, nota = '';
         if (usa) return { p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide: 0, nota: 'usa en su cambio ' + usa, bloq, exceso: 0, o, aj, urgente: false, usa };
@@ -134,6 +140,9 @@
         else if (o.tipos !== 'todos' && c === 'B') pide = d > 0 && st < nec ? 1 : 0;   // B: 1 caja solo si su stock no cubre los días elegidos
         else if (d > 0) nota = c === 'C' ? 'a pedido' : c === 'D' ? 'solo con pedido' : '';
         if (!bloq && extra > 0) { pide = Math.max(pide, Math.ceil(nec - st - 1e-9)); nota = 'en lugar de ' + enLugar.join(', ') + ' (droguería)'; }
+        // lo que necesita menos su stock, menos lo que le queda del anterior y lo que se le envía del anterior
+        const krN = viejos.length && !bloq ? viejos.map(q => q.c + ' - ' + q.n).join(', ') : '';
+        if (krN && o.modo !== 'excluir') { pide = d > 0 ? Math.max(0, Math.ceil(nec - st - stV - envV - 1e-9)) : 0; nota = 'reemplaza a ' + viejos.map(q => q.c).join(', ') + ' (kardex)' + (stV + envV ? ` · ya tiene/recibe ${Math.round((stV + envV) * 10) / 10} del anterior` : ''); }
         // el original sin stock en droguería y con reemplazo: no se pide (se atiende el reemplazo)
         const rd = reempDe.get(p.c); let reemp = '', pideOrig = 0;
         if (rd && pide > 0 && !cambio && !(+(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) > 0)) { pideOrig = pide; pide = 0; reemp = rd.c + ' - ' + rd.n; nota = 'droguería lo reemplaza por ' + rd.c; }
@@ -142,7 +151,7 @@
         if (!reemp && pide > 0 && !cambio && de?.estado === 'descontinuado' && !vencida(de) && !(+(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) > 0)) { pideOrig = pide; pide = 0; nota = 'descontinuado (droguería)'; }
         const exceso = !bloq && st > 0 && (d === 0 ? st >= 1 : st - nec * 2 >= 1) ? Math.floor(d === 0 ? st : st - nec) : 0;
         return { p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide, nota, bloq, exceso, o, aj, urgente: d > 0 && st < seg && !bloq && o.modo !== 'excluir',
-          ...(cambio ? { cambio: cambio.orig.c + ' - ' + cambio.orig.n } : {}), ...(reemp ? { reemp } : {}), ...(pideOrig ? { pideOrig } : {}), ...(enLugar.length && extra ? { enLugar: enLugar.join(', ') } : {}) };
+          ...(cambio ? { cambio: cambio.orig.c + ' - ' + cambio.orig.n } : {}), ...(reemp ? { reemp } : {}), ...(pideOrig ? { pideOrig } : {}), ...(enLugar.length && extra ? { enLugar: enLugar.join(', ') } : {}), ...(krN ? { krN } : {}) };
   }
   // respuestas de las sucursales (atencion_resp): el producto que dejan de usar y el que usan en su cambio
   let respVer = 0, cambios = new Map(), prodIdx = null;
@@ -178,6 +187,22 @@
       // reparto de lo que hay en droguería: primero las sucursales con menos días de cobertura
       let disp = Math.max(0, +(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) || 0);
       red.drogIni = disp;
+      const kr = window.REEMP?.get(p.c);
+      if (kr) {
+        // reemplazado en el kardex: no se compra; lo que queda en droguería se reparte según la venta de cada sucursal
+        // (con tope en lo que necesita) hasta terminarlo
+        const nuevo = kr.nuevo + ' - ' + (kr.nNuevo || prodDe(kr.nuevo)?.n || '');
+        const quieren = red.filter(r => !r.bloq && !r.usa && r.d > 0 && r.nec - r.st > 0), sd = quieren.reduce((a, r) => a + r.d, 0);
+        for (const r of red) { r.krV = nuevo; r.krPide = r.pide; r.drog = 0; r.falta = 0; r.comprar = 0; r.desde = []; }
+        let resto = Math.floor(disp);
+        for (const r of quieren) { r.drog = Math.min(Math.ceil(r.nec - r.st - 1e-9), Math.floor(disp * r.d / sd)); resto -= r.drog; }
+        for (const r of [...quieren].sort((a, b) => b.d - a.d)) { if (resto <= 0) break; if (r.drog < Math.ceil(r.nec - r.st - 1e-9)) { r.drog++; resto--; } }
+        for (const r of red) {
+          r.pide = r.drog; r.nota = r.bloq ? 'bloqueado' : `se termina: lo reemplaza ${kr.nuevo} (kardex)`;
+          S.krEnviado?.set(p.c + '__' + r.f, r.drog);
+        }
+        return;
+      }
       for (const r of [...red].filter(r => r.pide > 0).sort((a, b) => a.cob - b.cob)) {
         r.drog = Math.min(r.pide, Math.floor(disp)); disp -= r.drog; r.falta = r.pide - r.drog;
       }
@@ -286,7 +311,7 @@
             // información del producto en esta sucursal para el botón ⓘ: su venta de 12 meses, pronóstico y patrón
             const m = motorEn(r.p, f), hv = (m.hv || []).slice(-24).map(v => r3(v || 0)), x = clas(r.p), av = avance(r.p, f);
             return { c: r.p.c, n: r.p.n, l: labDe(r.p.c) || '', cat: r.cat, fr: r.p.fr || 1, d: r3(r.d), st: r3(r.st), nec: r3(r.nec), cob: isFinite(r.cob) ? Math.floor(r.cob) : null,
-              pide: r.pide, drog: r.drog || 0, falta: r.falta || 0, urg: !!r.urgente, ...(r.aj ? { aj: ajTxt(r.aj) } : {}), ...(r.cambio ? { cmb: r.cambio } : {}), ...(r.reemp ? { rmp: r.reemp } : {}), ...(r.enLugar ? { enl: r.enLugar } : {}),
+              pide: r.pide, drog: r.drog || 0, falta: r.falta || 0, urg: !!r.urgente, ...(r.aj ? { aj: ajTxt(r.aj) } : {}), ...(r.cambio ? { cmb: r.cambio } : {}), ...(r.reemp ? { rmp: r.reemp } : {}), ...(r.enLugar ? { enl: r.enLugar } : {}), ...(r.krV ? { krv: r.krV } : {}), ...(r.krN ? { krn: r.krN } : {}),
               ...altEn(r.p.c, f),
               ...(r.desde?.length ? { de: r.desde.map(([g, q]) => ({ f: nomSuc(g), q })) } : {}), ...(r.comprar ? { cmp: r.comprar } : {}),
               hv, pr: m.f12.map(r3), ...(av ? { av: r3(av.v) } : {}), met: m.metodo, pat: m.fp?.patron || '', adi: m.fp?.adi != null ? r3(m.fp.adi) : null, cv2: m.fp?.cv2 != null ? r3(m.fp.cv2) : null,

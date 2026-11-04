@@ -83,7 +83,7 @@ onAuthStateChanged(auth, async u => {
   if (arrancado) return; arrancado = true;
   window.claude = { use: async n => n === "db" ? dbShim : n === "assets" ? assetsShim : null };
   window.iniciarKardex();
-  escucharBloqueos();
+  escucharBloqueos(); escucharReemplazos();
 });
 
 /* =====================================================================
@@ -539,9 +539,24 @@ window.pronosticar = pronosticar; window.METODOS = METODOS;
 
 /* ---------- bloqueos: lo bloqueado por una sucursal no se compra ni se le reparte ---------- */
 window.BLOQ = new Set();
+/* ---------- reemplazos del kardex: «el 19727 ahora se trabaja con el 26845» ----------
+   reemplazos/{códigoViejo} = { nuevo, nViejo, nNuevo, desde, porNombre }. Lo usan Atención a sucursales (reparto del
+   viejo hasta acabarlo y envío del nuevo) y Proyección de compras (no se compra el viejo). */
+window.REEMP = new Map(); window.REEMP_NUEVO = new Map(); window.REEMP_VER = 0;
+function escucharReemplazos() {
+  onSnapshot(collection(db, "reemplazos"), s => {
+    window.REEMP = new Map(s.docs.map(d => [d.id, d.data()]));
+    window.REEMP_NUEVO = new Map();
+    for (const [v, r] of window.REEMP) { if (!window.REEMP_NUEVO.has(r.nuevo)) window.REEMP_NUEVO.set(r.nuevo, []); window.REEMP_NUEVO.get(r.nuevo).push(v); }
+    window.REEMP_VER++; if (S.P) render();
+  }, () => {});
+}
+window.guardarReemp = (viejo, d) => setDoc(doc(db, "reemplazos", viejo), d);
+window.borrarReemp = viejo => deleteDoc(doc(db, "reemplazos", viejo));
 function escucharBloqueos() {
   onSnapshot(collection(db, "bloqueos"), s => {
     window.BLOQ = new Set(s.docs.filter(d => d.data().estado === "bloqueado").map(d => d.id));
+    window.BLOQ_VER = (window.BLOQ_VER || 0) + 1;
     if (S.P) render();
   }, () => {});
 }
