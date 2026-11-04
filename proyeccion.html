@@ -636,6 +636,8 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
           <label class="field"><span>Mostrar</span><select id="kVer"><option value="stock">Con stock</option><option value="drog0">En 0 en droguería y con stock en sucursales</option><option value="cero">Sin stock en ningún lado</option><option value="">Todos</option></select></label>
           <label class="field"><span>Línea</span><select class="sLin"><option value="">Todas</option></select></label>
           <label class="field"><span>Familia</span><select class="sFam"><option value="">Todas</option></select></label>
+          <label class="field"><span>Días de stock</span><input id="kCob" type="number" min="0" max="180" value="30" style="width:70px"></label>
+          <label class="field"><span>Días de seguridad</span><input id="kSeg" type="number" min="0" max="180" value="15" style="width:70px"></label>
           <button type="button" class="btn sm" id="kXls">⬇ Descargar Excel</button>
           <button type="button" class="btn sm" id="kReemp" title="Registrar que un código se reemplaza por otro">🔁 Reemplazos</button>
         </div>
@@ -1415,21 +1417,31 @@ function filasKar() {
   }
   return filtroTexto(filas, q).sort((a, b) => b.tot * (soles() ? b.p.k : 1) - a.tot * (soles() ? a.p.k : 1));
 }
+S.kCob = 30; S.kSeg = 15;
+function compraKar(p) {
+  const x = compraKR(p, S.kCob + S.kSeg);
+  if (window.BLOQ?.has('TODAS__' + p.c) || window.BLOQ?.has('DROGUERIA FS__' + p.c)) return { nec: x.nec, cmp: 0, bloq: true };
+  return x;
+}
+$('kCob').addEventListener('change', e => { S.kCob = Math.max(0, +e.target.value || 0); pintarKar(); });
+$('kSeg').addEventListener('change', e => { S.kSeg = Math.max(0, +e.target.value || 0); pintarKar(); });
 function pintarKar() {
   llenarLabs(); llenarClas();
   const o = S.P, farms = o.farmacias, conv = (p, v) => soles() ? v * p.k : v, cel = (p, v) => v ? fmtS(p, conv(p, v)) : '<span class="z">0</span>';
   const filas = filasKar(), vis = filas.slice(0, S.kMostrar);
   $('kEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · en ${soles() ? 'soles' : 'cajas y fracciones'} · del último kardex subido`;
-  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th class="drog">Droguería</th>${farms.map(f => `<th>${esc(nomSuc(f))}</th>`).join('')}<th class="sep">Sucursales</th><th>Total</th></tr></thead><tbody>`;
+  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th class="drog">Droguería</th>${farms.map(f => `<th>${esc(nomSuc(f))}</th>`).join('')}<th class="sep">Sucursales</th><th>Total</th><th class="sep" title="Lo que necesita la red para los días elegidos (pronóstico)">Necesita ${S.kCob} + ${S.kSeg} d</th><th title="Necesita − stock total (droguería + sucursales)">Comprar</th></tr></thead><tbody>`;
   for (const r of vis) {
-    const p = r.p;
+    const p = r.p, cx = compraKar(p);
     h += `<tr><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${tagKR(p.c)}<small class="sub">${esc(labDe(p.c))}</small></td>
-      <td class="n big drog">${cel(p, r.drog)}</td>${r.sf.map(v => `<td class="n">${cel(p, v)}</td>`).join('')}<td class="n sep">${cel(p, r.tot - r.drog)}</td><td class="n big">${cel(p, r.tot)}</td></tr>`;
+      <td class="n big drog">${cel(p, r.drog)}</td>${r.sf.map(v => `<td class="n">${cel(p, v)}</td>`).join('')}<td class="n sep">${cel(p, r.tot - r.drog)}</td><td class="n big">${cel(p, r.tot)}</td>
+      <td class="n sep">${fmtE(p, conv(p, cx.nec))}</td><td class="n comprar">${cx.bloq ? '<span class="z">bloqueado</span>' : cx.cmp ? fmt(conv(p, cx.cmp)) : '<span class="z">·</span>'}</td></tr>`;
   }
-  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${farms.length + 4}">Nada que mostrar con estos filtros.</td></tr>`;
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${farms.length + 6}">Nada que mostrar con estos filtros.</td></tr>`;
   $('kTabla').innerHTML = h + '</tbody>'; ajustarC0($('kTabla'));
   const sum = (k) => filas.reduce((a, r) => a + (soles() ? r[k] * (r.p.k || 0) : r[k]), 0);
-  $('kMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(filas.length)} productos · total ${soles() ? 'S/ ' + nf0.format(sum('tot')) : nf0.format(sum('tot')) + ' cajas'} (droguería ${soles() ? 'S/ ' + nf0.format(sum('drog')) : nf0.format(sum('drog'))})</span>` +
+  let tc = 0, ts = 0; for (const r of filas) { const x = compraKar(r.p).cmp; tc += x; ts += x * (r.p.k || 0); }
+  $('kMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(filas.length)} productos · total ${soles() ? 'S/ ' + nf0.format(sum('tot')) : nf0.format(sum('tot')) + ' cajas'} (droguería ${soles() ? 'S/ ' + nf0.format(sum('drog')) : nf0.format(sum('drog'))}) · <b>a comprar para ${S.kCob} + ${S.kSeg} días: ${nf0.format(tc)} cajas · S/ ${nf0.format(ts)}</b></span>` +
     (filas.length > vis.length ? `<button class="btn" id="kMas">Ver ${Math.min(PAGINA, filas.length - vis.length)} más</button>` : '');
   if ($('kMas')) $('kMas').onclick = () => { S.kMostrar += PAGINA; pintarKar(); };
 }
@@ -1438,8 +1450,8 @@ $('kVer').addEventListener('change', () => { S.kMostrar = PAGINA; pintarKar(); }
 $('kTabla').addEventListener('click', e => { const a = e.target.closest('[data-abrir]'); if (a) abrirFichaP(a.dataset.abrir, 'kar'); });
 $('kXls').addEventListener('click', () => {
   const o = S.P, farms = o.farmacias, filas = filasKar(), num = v => String(Math.round(v * 1000) / 1000).replace('.', ',');
-  const t = [['Código', 'Medicamento', 'Laboratorio', 'Droguería', ...farms.map(nomSuc), 'Sucursales', 'Total'],
-    ...filas.map(r => [r.p.c, r.p.n, labDe(r.p.c), num(r.drog), ...r.sf.map(num), num(r.tot - r.drog), num(r.tot)])];
+  const t = [['Código', 'Medicamento', 'Laboratorio', 'Droguería', ...farms.map(nomSuc), 'Sucursales', 'Total', `Necesita ${S.kCob} + ${S.kSeg} d`, 'Comprar', 'Comprar S/'],
+    ...filas.map(r => { const x = compraKar(r.p); return [r.p.c, r.p.n, labDe(r.p.c), num(r.drog), ...r.sf.map(num), num(r.tot - r.drog), num(r.tot), num(x.nec), x.bloq ? 'bloqueado' : x.cmp, num(x.cmp * (r.p.k || 0))]; })];
   const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' }));
   a.download = `stock_${o.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
