@@ -1497,8 +1497,16 @@ function stockCambio(i, c, n = 1) {
 }
 const tagStock = (i, c, pre = "", n = 1) => { const x = stockCambio(i, c, n); return `<span class="tag ${x.cls} at-drog">${pre}${esc(x.txt)}</span>`; };
 // el producto ya no se le envía: la sucursal usa otro en su cambio, o droguería lo dio por descontinuado o reemplazado
+// bloqueo vigente del producto en la sucursal que se mira (o en todas): se aplica en vivo, aunque la lista se haya
+// publicado antes de bloquearlo
+function bloqAten(i) {
+  const suc = esAdmin() ? (S.atSuc || FARMACIAS[0]) : miFarm();
+  const b = S.bloqueos?.get(suc + "__" + i.c) || S.bloqueos?.get("TODAS__" + i.c);
+  return b && b.estado === "bloqueado" ? b : null;
+}
 function noEnvia(i) {
-  const r = S.atResp?.get(i.c), e = estVig(i.c);
+  const r = S.atResp?.get(i.c), e = estVig(i.c), bq = bloqAten(i);
+  if (bq) return `bloqueado${bq.farmacia === "TODAS" ? " en todas las farmacias" : ""}${bq.motivo ? " (" + bq.motivo + ")" : ""}`;
   if (r?.estado === "otro_medicamento" && r.altCod) return `usas en su cambio ${r.alternativa || r.altCod}`;
   if (i.rmp) return `${quienDrog(e)} lo reemplaza por ${i.rmp}`;
   if (e?.estado === "descontinuado") return e.alternativas?.length ? `descontinuado; lo reemplaza ${e.alternativas[0].c} ${e.alternativas[0].n} (${quienDrog(e)})` : `descontinuado (${quienDrog(e)})`;
