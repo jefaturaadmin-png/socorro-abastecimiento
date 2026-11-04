@@ -763,3 +763,12 @@ body.fe-full .fe-barra { margin-bottom: 6px }
 .fe-areas button.sel { border-color: #1E6B5F; box-shadow: 0 0 0 1px #1E6B5F } .fe-areas i, .fe-arow i { width: 22px; height: 14px; border-radius: 3px; border: 1px solid #8a94a6; flex: none }
 .fe-arow { display: flex !important; align-items: center; gap: 8px; margin: 4px 0 !important } .fe-arow input { margin: 0 !important } .fe-mini { font-size: .8rem; margin: 0 0 6px }
 .fe-props .fe-areas button, .fe-props .fe-areas button.sel { display: flex; flex-direction: row; width: 100% }
+/* menú plegado detrás de «☰» en todas las pantallas: al abrirlo sale como panel sobre la página */
+.top-in { position: relative }
+.menu-btn { display: inline-block; order: 2 }
+.top .quien { order: 3; margin-left: auto }
+.top .nav { display: none }
+body.nav-abierta .top .nav { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 2px 6px; position: absolute; left: 0; right: 0; top: 100%;
+  z-index: 50; background: var(--card); border: 1px solid var(--line); border-radius: 0 0 14px 14px; box-shadow: 0 14px 30px rgba(16,24,40,.18); padding: 10px 14px; max-height: 75vh; overflow: auto }
+body.nav-abierta .top .nav button { text-align: left; justify-content: flex-start }
+@media (min-width: 761px) { body:not(.nav-abierta) .quien, body.nav-abierta .quien { display: flex } }

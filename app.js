@@ -3016,6 +3016,9 @@ function pintarMenuBtn() {
   const v = VISTAS.find(x => x.vista === S.vista);
   $("menuTxt").textContent = S.vista === "vInicio" ? "Menú principal" : v ? v.nombre : S.vista === "vQuimico" || S.vista === "vAdmin" ? "Bloqueos" : S.vista === "vUsuarios" ? "Usuarios" : "Menú";
 }
+// se cierra al hacer clic fuera del menú o con Esc
+document.addEventListener("click", e => { if (document.body.classList.contains("nav-abierta") && !e.target.closest("#nav, #menuBtn")) { document.body.classList.remove("nav-abierta"); $("menuBtn").setAttribute("aria-expanded", "false"); } });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && document.body.classList.contains("nav-abierta")) { document.body.classList.remove("nav-abierta"); $("menuBtn").setAttribute("aria-expanded", "false"); } });
 $("menuBtn").addEventListener("click", () => { const ab = document.body.classList.toggle("nav-abierta"); $("menuBtn").setAttribute("aria-expanded", ab); });
 $("nav").addEventListener("click", e => {
   if (!e.target.closest("[data-ir]")) return;
