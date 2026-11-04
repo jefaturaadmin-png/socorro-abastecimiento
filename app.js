@@ -23,7 +23,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611041800";
+const VERSION_PROY = "202611041900";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -72,7 +72,7 @@ const esQuimicoV = () => S.prev ? S.prev.rol === "quimico" : S.perfil?.rol === "
 // c: color del botón en el menú; ic: ícono; desc: lo que se ve en la pantalla de inicio.
 const VISTAS = [
   { id: "drogueria", nombre: "Droguería", vista: "vDrog", c: "kar", ic: "i-tienda", desc: "Stock de droguería, modelo, lo que se necesita y lo que hay que comprar" },
-  { id: "porsucursal", nombre: "Por sucursal", vista: "vSucx", c: "suc", ic: "i-tienda", desc: "Cada sucursal (por prioridad de ventas): stock, lo que necesita y lo que hay que pedir" },
+  { id: "porsucursal", nombre: "Módulos por sucursal", vista: "vSucx", c: "suc", ic: "i-tienda", desc: "Un módulo por cada sucursal: stock, lo que necesita y lo que hay que pedir", porSuc: true },
   { id: "kardex", nombre: "Kardex", vista: "vKar", c: "kar", ic: "i-bajar", desc: "Subir el kardex del día y publicar las listas", ayuda: "también publica las listas" },
   { id: "proyeccion", nombre: "Proyección de compras", vista: "vProy", ic: "i-grafico", desc: "Pronóstico, reposición y alertas" },
   { id: "comparativo", nombre: "Comparativo", vista: "vComp", c: "comp", ic: "i-lista", desc: "Comparar precios y proveedores" },
@@ -88,7 +88,12 @@ const VISTAS = [
   { id: "flujo", nombre: "Flujograma de abastecimiento", vista: "vFlujo", c: "mapa", ic: "i-lista", desc: "Cómo se trabaja: de la compra al proveedor hasta la atención a sucursales", todos: true },
   { id: "flued", nombre: "Editor de flujogramas", vista: "vFlued", c: "est", ic: "i-grafico", desc: "Crear y editar flujogramas con figuras, flechas, textos y tiempos" }];
 // v.todos: módulo abierto a todos los usuarios (no hace falta activarlo en Usuarios)
-const misVistas = () => esAdmin() ? VISTAS : VISTAS.filter(v => v.todos || ((S.prev || S.perfil)?.vistas || []).includes(v.id));
+// «Módulos por sucursal» se abre en un módulo por cada sucursal (ordenadas por prioridad de ventas, la que más vende primero)
+const ordenSucs = () => { let pr = []; try { pr = JSON.parse(localStorage.getItem("prio_sucs") || "[]"); } catch {}
+  const suc = FARMACIAS.filter(f => /^ALMACEN /.test(f)); return [...pr.filter(f => suc.includes(f)), ...suc.filter(f => !pr.includes(f))]; };
+const expandirSucs = l => l.flatMap(v => !v.porSuc ? [v] : ordenSucs().map((f, i, a) => ({ ...v, nombre: nombreFarm(f), vista: "vSucx:" + f, farm: f,
+  desc: `Prioridad ${i + 1} de ${a.length}: stock, lo que necesita y lo que hay que pedir` })));
+const misVistas = () => expandirSucs(esAdmin() ? VISTAS : VISTAS.filter(v => v.todos || ((S.prev || S.perfil)?.vistas || []).includes(v.id)));
 const NOMBRE_ROL = { admin: "Administrador", quimico: "Químico", colaborador: "Colaborador" };
 const miFarm = () => S.prev ? S.prev.farmacia : S.perfil?.farmacia;
 // modo celular: el enlace ?m=<módulo> abre directo ese módulo; en el celular queda recordado (hasta pulsar «Menú completo»)
@@ -347,6 +352,8 @@ function vigilarPerfil() {
       || JSON.stringify(d.vistas || []) !== JSON.stringify(S.perfil.vistas || [])) location.reload();
   }));
 }
+// el módulo de una sucursal avisa el orden por prioridad de ventas: el menú se reordena
+window.pintarNavExt = () => { if (!S.perfil) return; pintarNav(); if (S.vista === "vInicio") pintarInicio(); };
 // Después de subir un kardex, los demás módulos abiertos (proyección, estadística, sucursales, mapa) se recargan con los datos nuevos.
 window.recargarModulos = origen => {
   for (const id of ["proyFrame", "estFrame", "sucFrame", "mapaFrame", "karFrame", "drogFrame", "sucxFrame"]) {
@@ -376,10 +383,15 @@ function ir(vista) {
   if (vista === "vSuc" && !$("sucFrame").src) $("sucFrame").src = "proyeccion.html?solo=suc&v=" + VERSION_PROY;
   if (vista === "vEst" && !$("estFrame").src) $("estFrame").src = "proyeccion.html?solo=est&v=" + VERSION_PROY;
   if (vista === "vDrog" && !$("drogFrame").src) $("drogFrame").src = "proyeccion.html?solo=drog&v=" + VERSION_PROY;
-  if (vista === "vSucx" && !$("sucxFrame").src) $("sucxFrame").src = "proyeccion.html?solo=sucx&v=" + VERSION_PROY;
+  // módulo de una sucursal: el mismo marco, que pasa a mostrar esa sucursal
+  if (vista.startsWith("vSucx:")) {
+    const f = vista.slice(6), fr = $("sucxFrame");
+    if (!fr.src) fr.src = "proyeccion.html?solo=sucx&f=" + encodeURIComponent(f) + "&v=" + VERSION_PROY;
+    else try { fr.contentWindow.ponerSucursal?.(f); } catch {}
+  }
   if (vista === "vMapa" && !$("mapaFrame").src) $("mapaFrame").src = "proyeccion.html?solo=mapa&v=" + VERSION_PROY;
   if (vista === "vComp" && !$("compFrame").src) $("compFrame").src = "comparativo.html?v=" + VERSION_COMP;
-  S.vista = vista; mostrar(vista); render(); scrollTo({ top: 0 }); }
+  S.vista = vista; mostrar(vista.split(":")[0]); render(); scrollTo({ top: 0 }); }
 function render() {
   if (!S.perfil) return;
   pintarNav();

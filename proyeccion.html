@@ -1120,6 +1120,7 @@ if (SOLO === 'mapa') {
 }
 else if (SOLO === 'drog' || SOLO === 'sucx') {
   S.tab = S.vista = 'stk'; S.xModo = SOLO; document.body.classList.add('solo-mapa');
+  if (SOLO === 'sucx') { S.xFarm = new URLSearchParams(location.search).get('f') || ''; document.body.classList.add('x-una'); }
   document.querySelector('.bar .brand').innerHTML = '<i></i>' + (SOLO === 'drog' ? 'Droguería' : 'Por sucursal');
 }
 else if (SOLO === 'kar') {
@@ -1448,7 +1449,9 @@ $('kXls').addEventListener('click', () => {
    Droguería: stock de droguería, el modelo de pronóstico, lo que necesita la red para los días elegidos y Comprar = necesita − stock.
    Por sucursal: lo mismo para una sucursal (su parte de la venta) y Pedir = necesita − su stock.
    Respetan bloqueos (general, droguería y de la sucursal) y reemplazos del kardex. */
-S.xCob = 30; S.xSeg = 15; S.xMostrar = PAGINA; S.xFarm = '';
+S.xCob = 30; S.xSeg = 15; S.xMostrar = PAGINA; S.xFarm ??= '';
+// la página principal cambia de sucursal sin recargar (un módulo por sucursal en el menú)
+window.ponerSucursal = f => { S.xFarm = f; S.xMostrar = PAGINA; if (S.P) pintarStk(); };
 const stDe = (p, f) => Math.max(0, +(window.STOCK_TODOS?.[p.c]?.[f]?.[0] ?? (f === 'DROGUERIA FS' ? p.sd : p.st?.[f]) ?? 0) || 0);
 // prioridad de las sucursales: las que más venden primero (venta de los últimos 3 meses de todos los productos)
 function prioridadSucs() {
@@ -1456,6 +1459,7 @@ function prioridadSucs() {
   const tot = new Map(o.farmacias.map(f => [f, 0]));
   for (const p of o.p) for (const f of o.farmacias) { const h = p.hf?.[f]; tot.set(f, tot.get(f) + (h ? sum(h.slice(-3).map(v => v || 0)) : (p.s?.[f] || 0) * sum((p.h || []).slice(-3).map(v => v || 0)))); }
   S.xPrioDe = o; S.xPrio = [...tot].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  try { const l = JSON.stringify(S.xPrio.map(([f]) => f)); if (localStorage.getItem('prio_sucs') !== l) { localStorage.setItem('prio_sucs', l); window.parent?.pintarNavExt?.(); } } catch {}
   return S.xPrio;
 }
 function filasStk() {
@@ -1490,11 +1494,12 @@ function pintarStk() {
   if (!drog) {
     const pr = prioridadSucs(); if (!S.xFarm || !pr.some(([f]) => f === S.xFarm)) S.xFarm = pr[0]?.[0] || o.farmacias[0];
     const n = pr.length;
-    $('xSucs').hidden = false;
+    $('xSucs').hidden = document.body.classList.contains('x-una');
     $('xSucs').innerHTML = pr.map(([f], i) => `<button type="button" data-xfarm="${esc(f)}" aria-pressed="${f === S.xFarm}" title="Prioridad ${i + 1} de ${n} (por venta de los últimos 3 meses)">${i + 1}. ${esc(nomSuc(f))}${i === 0 ? ' <small>· prioridad</small>' : i === n - 1 ? ' <small>· final</small>' : ''}</button>`).join('');
   } else $('xSucs').hidden = true;
   const f = drog ? 'DROGUERIA FS' : S.xFarm, H = S.xCob + S.xSeg, filas = filasStk(), vis = filas.slice(0, S.xMostrar);
-  $('xTit').textContent = drog ? 'Droguería' : nomSuc(f);
+  const prio = drog ? -1 : prioridadSucs().findIndex(([x]) => x === f);
+  $('xTit').textContent = drog ? 'Droguería' : nomSuc(f) + (prio >= 0 ? ` · prioridad ${prio + 1} de ${prioridadSucs().length}` : '');
   $('xEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · necesita para ${S.xCob} + ${S.xSeg} días · ${drog ? 'Comprar = necesita de la red − stock de droguería' : 'Pedir = necesita de la sucursal (su parte de la venta) − su stock'}`;
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th>Tipo</th><th>Stock actual</th>${S.verMet ? mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="Error del método (WAPE). Clic para usarlo.">${esc(corto(m))}</th>`).join('') : ''}
     <th class="sep"><button type="button" class="btn sm" data-vermet>${S.verMet ? '◂ Ocultar modelos' : 'Modelos ▸'}</button></th><th class="sep">Necesita ${S.xCob} + ${S.xSeg} d</th><th>${drog ? 'Comprar' : 'Pedir'}</th></tr></thead><tbody>`;
