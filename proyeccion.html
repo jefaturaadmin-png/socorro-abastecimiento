@@ -117,6 +117,8 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .kr-msg { min-height: 1.2em; margin-bottom: 8px; font-weight: 600 }
 .x-sucs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px } .x-sucs button { border: 1px solid var(--line, #d0d5dd); background: #fff; border-radius: 999px; padding: 5px 12px; cursor: pointer; font: inherit; font-size: .85rem }
 .x-sucs button[aria-pressed="true"] { background: #1E6B5F; color: #fff; border-color: #1E6B5F } .x-sucs small { opacity: .75 }
+.tag.gest { background: #fff1d6; color: #8a5a00; white-space: normal } .k-acc { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle }
+.k-acc button { border: 1px solid #d0d5dd; background: #fff; border-radius: 6px; padding: 1px 5px; cursor: pointer; font-size: .8rem } .k-acc button:hover { background: #eef2f7 }
 .tag.kr { background: #e6f2ee; color: #1E6B5F } .tag.pap { background: #e3e9f6; color: #3d5a99 } .tag.est { background: #f6ead0; color: #9a6a00 } .tag.ped { background: #f1ebe6; color: #74685f }
 .c1 small.sub { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap }
 .tag.bloq { background: #fde2dd; color: #b6400b }
@@ -591,6 +593,14 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
     </details>
   </section>
 
+  <dialog id="gsDlg" class="kr-dlg"><div class="kr-in">
+    <div class="kr-cab"><h2>📢 Gestionado por droguería</h2><button type="button" class="btn sm" data-gscerrar>✕</button></div>
+    <p><b id="gsTit"></b></p>
+    <p class="z">Comunicado que verán droguería y las sucursales junto a este producto (Kardex, Droguería, cada sucursal, Atención a sucursales y «Lo que me van a atender»).</p>
+    <label class="field"><span>Comunicado (opcional)</span><textarea id="gsNota" rows="3" maxlength="200" placeholder="Ej. llega el lunes · se atiende a pedido · consultar a droguería"></textarea></label>
+    <div class="kr-msg z" id="gsMsg"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn primary" id="gsGuardar">Guardar</button><button type="button" class="btn" id="gsQuitar">Quitar marca</button></div>
+  </div></dialog>
   <dialog id="krDlg" class="kr-dlg"><div class="kr-in">
     <div class="kr-cab"><h2>🔁 Reemplazos de productos</h2><button type="button" class="btn sm" data-krcerrar>✕</button></div>
     <p class="z">Cuando un código se deja de trabajar y se reemplaza por otro. El que se deja <b>no se compra</b>: lo que queda en droguería se reparte a las sucursales según cuánto vende cada una, hasta terminarlo. El nuevo se envía con su propia proyección (si aún no tiene historial, con la del que reemplaza), descontando lo que se envió del anterior. Se aplica en Atención a sucursales, Lo que me van a atender y Proyección de compras.</p>
@@ -1199,7 +1209,8 @@ document.querySelectorAll('.sGen').forEach(s => s.addEventListener('input', e =>
 const catBadge = c => `<span class="cat ${c}" title="${c} · ${NCAT[c]}">${c}</span>`;
 const tagKR = c => window.REEMP?.has(c) ? `<span class="tag kr" title="Ya no se compra: se reparte lo que queda hasta terminarlo">🔁 reemplazado por ${esc(window.REEMP.get(c).nuevo)}</span>`
   : window.REEMP_NUEVO?.has(c) ? `<span class="tag kr" title="Si no tiene historial, se proyecta con el que reemplaza">🔁 reemplaza a ${esc(window.REEMP_NUEVO.get(c).join(', '))}</span>` : '';
-const etiquetas = p => (p.pap ? '<span class="tag pap" title="Programa de apoyo al paciente">PAP</span>' : '') + (p.est ? '<span class="tag est" title="Venta por temporadas">Estacional</span>' : '') + tagKR(p.c);
+const tagGest = c => window.GEST?.has(c) ? `<span class="tag gest" title="${esc((window.GEST.get(c).porNombre || '') + ' · ' + String(window.GEST.get(c).fecha || '').slice(0, 10))}">📢 Gestionado por droguería${window.GEST.get(c).nota ? ': ' + esc(window.GEST.get(c).nota) : ''}</span>` : '';
+const etiquetas = p => tagGest(p.c) + (p.pap ? '<span class="tag pap" title="Programa de apoyo al paciente">PAP</span>' : '') + (p.est ? '<span class="tag est" title="Venta por temporadas">Estacional</span>' : '') + tagKR(p.c);
 // en Reposición por farmacia se usa la categoría de esa farmacia
 const pasaTipo = p => {
   const per = S.vista === 'pron' && S.tR;
@@ -1433,7 +1444,7 @@ function pintarKar() {
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th class="drog">Droguería</th>${farms.map(f => `<th>${esc(nomSuc(f))}</th>`).join('')}<th class="sep">Sucursales</th><th>Total</th><th class="sep" title="Lo que necesita la red para los días elegidos (pronóstico)">Necesita ${S.kCob} + ${S.kSeg} d</th><th title="Necesita − stock total (droguería + sucursales)">Comprar</th></tr></thead><tbody>`;
   for (const r of vis) {
     const p = r.p, cx = compraKar(p);
-    h += `<tr><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${tagKR(p.c)}<small class="sub">${esc(labDe(p.c))}</small></td>
+    h += `<tr><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a><span class="k-acc"><button type="button" data-kkr="${esc(p.c)}" title="Reemplazar este producto por otro">🔁</button><button type="button" data-kgest="${esc(p.c)}" title="Comunicado: gestionado por droguería">📢</button></span>${tagKR(p.c)}${tagGest(p.c)}<small class="sub">${esc(labDe(p.c))}</small></td>
       <td class="n big drog">${cel(p, r.drog)}</td>${r.sf.map(v => `<td class="n">${cel(p, v)}</td>`).join('')}<td class="n sep">${cel(p, r.tot - r.drog)}</td><td class="n big">${cel(p, r.tot)}</td>
       <td class="n sep">${fmtE(p, conv(p, cx.nec))}</td><td class="n comprar">${cx.bloq ? '<span class="z">bloqueado</span>' : cx.cmp ? fmt(conv(p, cx.cmp)) : '<span class="z">·</span>'}</td></tr>`;
   }
@@ -1447,7 +1458,21 @@ function pintarKar() {
 }
 $('kq').addEventListener('input', () => { S.kMostrar = PAGINA; pintarKar(); });
 $('kVer').addEventListener('change', () => { S.kMostrar = PAGINA; pintarKar(); });
-$('kTabla').addEventListener('click', e => { const a = e.target.closest('[data-abrir]'); if (a) abrirFichaP(a.dataset.abrir, 'kar'); });
+$('kTabla').addEventListener('click', e => {
+  const r = e.target.closest('[data-kkr]');
+  if (r) { pintarKR(); $('krMsg').textContent = ''; $('krV').value = r.dataset.kkr; $('krVn').textContent = nomDe(r.dataset.kkr); $('krN').value = ''; $('krNn').textContent = ''; $('krDlg').showModal(); $('krN').focus(); return; }
+  const g = e.target.closest('[data-kgest]');
+  if (g) { const c = g.dataset.kgest, x = window.GEST?.get(c); S.gestCod = c; $('gsTit').textContent = `${c} · ${nomDe(c)}`; $('gsNota').value = x?.nota || ''; $('gsQuitar').hidden = !x; $('gsMsg').textContent = ''; $('gsDlg').showModal(); $('gsNota').focus(); return; }
+  const a = e.target.closest('[data-abrir]'); if (a) abrirFichaP(a.dataset.abrir, 'kar');
+});
+$('gsDlg').addEventListener('click', async e => {
+  if (e.target.closest('[data-gscerrar]') || e.target === $('gsDlg')) return $('gsDlg').close();
+  const quien = window.parent?.document?.getElementById('uNombre')?.textContent || '';
+  try {
+    if (e.target.closest('#gsGuardar')) { await window.guardarGest(S.gestCod, { nota: $('gsNota').value.trim().slice(0, 200), porNombre: quien, fecha: new Date().toISOString() }); $('gsDlg').close(); }
+    else if (e.target.closest('#gsQuitar')) { await window.borrarGest(S.gestCod); $('gsDlg').close(); }
+  } catch (x) { $('gsMsg').textContent = 'No se pudo guardar: ' + (x.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules).' : x.message); }
+});
 $('kXls').addEventListener('click', () => {
   const o = S.P, farms = o.farmacias, filas = filasKar(), num = v => String(Math.round(v * 1000) / 1000).replace('.', ',');
   const t = [['Código', 'Medicamento', 'Laboratorio', 'Droguería', ...farms.map(nomSuc), 'Sucursales', 'Total', `Necesita ${S.kCob} + ${S.kSeg} d`, 'Comprar', 'Comprar S/'],
@@ -2159,8 +2184,8 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202610270100"></script>
-<script src="sucursales.js?v=202611041800"></script>
+<script src="sucursales.js?v=202611042100"></script>
 <script src="estadistica.js?v=202610270100"></script>
-<script type="module" src="proyeccion.js?v=202611041800"></script>
+<script type="module" src="proyeccion.js?v=202611042100"></script>
 
 </body></html>

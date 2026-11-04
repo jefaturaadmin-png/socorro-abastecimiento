@@ -199,6 +199,12 @@ service cloud.firestore {
       allow write: if publica();
     }
 
+    // ---------- «gestionado por droguería»: comunicado por producto que ven droguería y las sucursales ----------
+    match /gestion/{cod} {
+      allow read: if conPerfil();
+      allow write: if publica();
+    }
+
     // ---------- usuario → cuenta con la que entra (cuando el administrador le restablece la contraseña) ----------
     // se lee antes de iniciar sesión (solo dice qué cuenta usar, no contiene contraseñas)
     match /alias/{usuario} {

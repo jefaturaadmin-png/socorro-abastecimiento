@@ -83,7 +83,7 @@ onAuthStateChanged(auth, async u => {
   if (arrancado) return; arrancado = true;
   window.claude = { use: async n => n === "db" ? dbShim : n === "assets" ? assetsShim : null };
   window.iniciarKardex();
-  escucharBloqueos(); escucharReemplazos();
+  escucharBloqueos(); escucharReemplazos(); escucharGestion();
 });
 
 /* =====================================================================
@@ -552,6 +552,13 @@ function escucharReemplazos() {
   }, () => {});
 }
 window.guardarReemp = (viejo, d) => setDoc(doc(db, "reemplazos", viejo), d);
+/* ---------- «gestionado por droguería»: comunicado por producto (gestion/{código} = { nota, porNombre, fecha }) ---------- */
+window.GEST = new Map();
+function escucharGestion() {
+  onSnapshot(collection(db, "gestion"), s => { window.GEST = new Map(s.docs.map(d => [d.id, d.data()])); window.REEMP_VER++; if (S.P) render(); }, () => {});
+}
+window.guardarGest = (c, d) => setDoc(doc(db, "gestion", c), d);
+window.borrarGest = c => deleteDoc(doc(db, "gestion", c));
 window.borrarReemp = viejo => deleteDoc(doc(db, "reemplazos", viejo));
 function escucharBloqueos() {
   onSnapshot(collection(db, "bloqueos"), s => {
