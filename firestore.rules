@@ -86,12 +86,21 @@ service cloud.firestore {
     }
 
     // ---------- proyección de compras: el administrador o quien tenga un módulo que la use ----------
-    match /proy_config/{id} { allow read, write: if verProy(); }
+    // el kardex general (productos y stock) lo leen todos los usuarios: es la base de los buscadores de medicamentos
+    function kardexGeneral(id) { return conPerfil() && get(/databases/$(database)/documents/proy_config/maestro).data.asset == id; }
+    match /proy_config/{id} {
+      allow read: if verProy() || (id == 'maestro' && conPerfil());
+      allow write: if verProy();
+    }
     match /proy_meses/{id} { allow read, write: if verProy(); }
     match /proy_elecciones/{id} { allow read, write: if verProy(); }
     match /proy_blobs/{id} {
-      allow read, write: if verProy();
-      match /partes/{parte} { allow read, write: if verProy(); }
+      allow read: if verProy() || kardexGeneral(id);
+      allow write: if verProy();
+      match /partes/{parte} {
+        allow read: if verProy() || kardexGeneral(id);
+        allow write: if verProy();
+      }
     }
 
     // ---------- comparativo de precios: el administrador o quien tenga el módulo Comparativo ----------

@@ -134,6 +134,32 @@ function escucharCatVivo() {
     }
   }, () => { S.catSub = false; }));
 }
+// La base de los buscadores es el KARDEX GENERAL (proy_config/maestro): todos los productos que existen y existieron.
+// Se escucha en vivo: apenas se sube un kardex, los buscadores de todas las páginas abiertas tienen sus productos.
+function escucharKardex() {
+  if (S.karSub) return; S.karSub = true;
+  S.subs.push(onSnapshot(doc(db, "proy_config", "maestro"), async sn => {
+    const a = sn.exists() ? sn.data().asset : ""; if (!a || a === S.karAsset) return;
+    const nuevo = !!S.karAsset; S.karAsset = a;
+    try {
+      // el kardex está comprimido (gzip) y partido en trozos (proy_blobs/{id}/partes)
+      const q = await getDocs(collection(db, "proy_blobs", a, "partes"));
+      const b64 = q.docs.sort((x, y) => x.id - y.id).map(d => d.data().d).join(""), bin = atob(b64), u = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      const m = JSON.parse(await new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream("gzip"))).text());
+      let n = 0;
+      for (const [c, pr] of Object.entries(m.prod || {})) {
+        const nom = String(pr?.[0] || "").trim(); if (!c || !nom) continue;
+        const ya = S.catIdx.get(c);
+        if (ya) { if (ya.n !== nom && ya.vivo) { ya.n = nom; ya.k = norm([c, nom, ya.ln].join(" ")); } continue; }
+        const p = { c, n: nom, l: "", ln: "", k: norm(c + " " + nom), vivo: true }; S.catalogo.push(p); S.catIdx.set(c, p); n++;
+      }
+      for (const x of S.ped?.datos || []) if (!x.nom && x.cod) { const pc = prodCat(x.cod); if (pc) { x.cod = pc.c; x.nom = pc.n; x.lab = pc.ln; } }
+      if (n && S.vista === "vPed") pintarPedidos();
+      if (nuevo) { S.cp = null; S.evStock = null; S.evR = null; S.ped = null; if (["vCompL", "vEval", "vPed", "vNue"].includes(S.vista)) render(); toast("Datos actualizados con el kardex nuevo"); }
+    } catch (e) { S.karAsset = ""; console.warn("No se pudo leer el kardex general", e); }
+  }, () => { S.karSub = false; }));
+}
 function usarCatVivo(x) {
   {
     let n = 0;
@@ -141,7 +167,7 @@ function usarCatVivo(x) {
     const filas = x.t ? String(x.t).split("\n").map(l => { const [c, nom = "", lab = ""] = l.split("\t"); return [c, [nom, lab]]; }) : Object.entries(x.p || {});
     for (const [c, [nom, lab = ""]] of filas) {
       if (!c) continue;
-      if (S.catIdx.has(c)) continue;
+      const ya = S.catIdx.get(c); if (ya) { if (!ya.ln && lab) { ya.ln = String(lab); ya.k = norm([c, ya.n, lab].join(" ")); } continue; }
       const p = { c, n: String(nom), l: "", ln: String(lab), k: norm([c, nom, lab].join(" ")) }; S.catalogo.push(p); S.catIdx.set(c, p); n++;
     }
     // pedidos de urgencia leídos antes de que llegara este catálogo: completa sus nombres
@@ -180,7 +206,7 @@ $("fLogin").addEventListener("submit", async e => {
 $("salir").addEventListener("click", () => signOut(auth));
 
 onAuthStateChanged(auth, async user => {
-  S.subs.forEach(u => u()); S.subs = []; S.nueSub = false; S.catSub = false; S.bloqueos = new Map(); S.perfil = null; $("avisoGlobal").hidden = true;
+  S.subs.forEach(u => u()); S.subs = []; S.nueSub = false; S.catSub = false; S.karSub = false; S.karAsset = ""; S.bloqueos = new Map(); S.perfil = null; $("avisoGlobal").hidden = true;
   if (!user) { mostrar("vLogin"); $("top").hidden = true; $("ayuda").hidden = $("ladoIzq").hidden = $("ladoDer").hidden = true; document.body.classList.remove("lado-i", "lado-d"); return; }
   try {
     const snap = await getDoc(doc(db, "usuarios", user.uid));
@@ -206,7 +232,7 @@ onAuthStateChanged(auth, async user => {
   await entrar();
 });
 async function entrar() {
-  await cargarCatalogo(); escucharCatVivo();
+  await cargarCatalogo(); escucharKardex(); escucharCatVivo();
   iniciar();
   revisarPerfil();
 }
