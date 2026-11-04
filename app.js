@@ -23,7 +23,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611050000";
+const VERSION_PROY = "202611050100";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -386,8 +386,9 @@ function ir(vista) {
   // módulo de una sucursal: el mismo marco, que pasa a mostrar esa sucursal
   if (vista.startsWith("vSucx:")) {
     const f = vista.slice(6), fr = $("sucxFrame");
+    window.sucxFarm = f;   // el módulo lee de aquí qué sucursal mostrar (aunque todavía esté cargando)
     if (!fr.src) fr.src = "proyeccion.html?solo=sucx&f=" + encodeURIComponent(f) + "&v=" + VERSION_PROY;
-    else try { fr.contentWindow.ponerSucursal?.(f); } catch {}
+    else try { const w = fr.contentWindow; if (w?.ponerSucursal) w.ponerSucursal(f); else if (w?.document?.readyState === "complete") fr.src = "proyeccion.html?solo=sucx&f=" + encodeURIComponent(f) + "&v=" + VERSION_PROY; } catch {}
   }
   if (vista === "vMapa" && !$("mapaFrame").src) $("mapaFrame").src = "proyeccion.html?solo=mapa&v=" + VERSION_PROY;
   if (vista === "vComp" && !$("compFrame").src) $("compFrame").src = "comparativo.html?v=" + VERSION_COMP;

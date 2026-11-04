@@ -1504,7 +1504,7 @@ $('kXls').addEventListener('click', () => {
    Respetan bloqueos (general, droguería y de la sucursal) y reemplazos del kardex. */
 S.xCob = 30; S.xSeg = 15; S.xMostrar = PAGINA; S.xFarm ??= '';
 // la página principal cambia de sucursal sin recargar (un módulo por sucursal en el menú)
-window.ponerSucursal = f => { S.xFarm = f; S.xMostrar = PAGINA; if (S.P) pintarStk(); };
+window.ponerSucursal = f => { S.xFarm = f; S.xMostrar = PAGINA; if (S.P && S.vista === 'stk') pintarStk(); };
 const stDe = (p, f) => Math.max(0, +(window.STOCK_TODOS?.[p.c]?.[f]?.[0] ?? (f === 'DROGUERIA FS' ? p.sd : p.st?.[f]) ?? 0) || 0);
 // prioridad de las sucursales: las que más venden primero (venta de los últimos 3 meses de todos los productos)
 function prioridadSucs() {
@@ -1549,6 +1549,8 @@ function pintarStk() {
     $('xTabla').innerHTML = '<tbody><tr><td class="c1">Leyendo los criterios de Atención a sucursales…</td></tr></tbody>'; return; }
   if (S.xModo === 'sucx' && S.xFarm && S.xDiasDe !== S.xFarm) { const cr = window.criterioSuc?.(S.xFarm) || {}; if (cr.C != null) { S.xCob = cr.C; S.xSeg = cr.Sg; $('xCob').value = S.xCob; $('xSeg').value = S.xSeg; } S.xDiasDe = S.xFarm; }
   const o = S.P, drog = S.xModo === 'drog', mets = o.metodos, conv = (p, v) => soles() ? v * p.k : v;
+  // la sucursal es la del módulo elegido en el menú de la página principal
+  try { const pf = window.parent?.sucxFarm; if (!drog && pf && pf !== S.xFarm) { S.xFarm = pf; S.xMostrar = PAGINA; } } catch {}
   if (!drog) {
     const pr = prioridadSucs(); if (!S.xFarm || !pr.some(([f]) => f === S.xFarm)) S.xFarm = pr[0]?.[0] || o.farmacias[0];
     const n = pr.length;
