@@ -119,6 +119,15 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .x-sucs button[aria-pressed="true"] { background: #1E6B5F; color: #fff; border-color: #1E6B5F } .x-sucs small { opacity: .75 }
 .tag.gest { background: #fff1d6; color: #8a5a00; white-space: normal } .k-acc { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle }
 .k-acc button { border: 1px solid #d0d5dd; background: #fff; border-radius: 6px; padding: 1px 5px; cursor: pointer; font-size: .8rem } .k-acc button:hover { background: #eef2f7 }
+.fx-btn { margin-left: 4px; border: 1px solid #c9d3df; background: #fff; border-radius: 4px; width: 20px; height: 20px; padding: 0; font-size: 11px; line-height: 1; cursor: pointer; color: #475467; vertical-align: middle }
+.fx-btn.activo { background: #1E6B5F; color: #fff; border-color: #1E6B5F }
+.fx-pop { position: absolute; z-index: 1000; background: #fff; border: 1px solid #c9d3df; border-radius: 8px; box-shadow: 0 8px 24px rgba(16,24,40,.18); padding: 8px; display: flex; flex-direction: column; gap: 4px; font-size: .88rem; text-transform: none; letter-spacing: 0; font-weight: 400; color: #1d2939; font-family: system-ui, sans-serif }
+.fx-pop[hidden] { display: none }
+.fx-op { text-align: left; background: none; border: 0; padding: 6px 8px; border-radius: 6px; cursor: pointer; font: inherit; color: inherit } .fx-op:hover:not(:disabled) { background: #eef2f7 } .fx-op:disabled { color: #98a2b3; cursor: default }
+.fx-pop input[type=search] { width: 100%; margin: 4px 0; padding: 6px 8px; border: 1px solid #c9d3df; border-radius: 6px; font: inherit }
+.fx-lista { max-height: 240px; overflow: auto; border: 1px solid #e4e7ec; border-radius: 6px; padding: 4px 6px }
+.fx-lista label { display: flex; align-items: center; gap: 6px; padding: 3px 0; margin: 0; cursor: pointer; white-space: nowrap; font-weight: 400; font-size: .86rem } .fx-lista input { width: 15px; height: 15px; margin: 0; flex: none }
+.fx-todo { font-weight: 600 } .fx-bot { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px }
 .tag.met { background: #eef1f5; color: #475467 }
 .tag.kr { background: #e6f2ee; color: #1E6B5F } .tag.pap { background: #e3e9f6; color: #3d5a99 } .tag.est { background: #f6ead0; color: #9a6a00 } .tag.ped { background: #f1ebe6; color: #74685f }
 .c1 small.sub { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap }
@@ -1456,7 +1465,7 @@ $('kSeg').addEventListener('change', e => { S.kSeg = Math.max(0, +e.target.value
 function pintarKar() {
   llenarLabs(); llenarClas();
   const o = S.P, farms = o.farmacias, conv = (p, v) => soles() ? v * p.k : v, cel = (p, v) => v ? fmtS(p, conv(p, v)) : '<span class="z">0</span>';
-  const filas = filasKar(), vis = filas.slice(0, S.kMostrar);
+  const filas = filasKar(), vis = window.fxActivo?.('kar') ? filas : filas.slice(0, S.kMostrar);
   $('kEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · en ${soles() ? 'soles' : 'cajas y fracciones'} · del último kardex subido`;
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th class="drog">Droguería</th>${farms.map(f => `<th>${esc(nomSuc(f))}</th>`).join('')}<th class="sep">Sucursales</th><th>Total</th><th class="sep" title="Lo que necesita la red para los días elegidos (pronóstico)">Necesita ${S.kCob} + ${S.kSeg} d</th><th title="Necesita − stock total (droguería + sucursales)">Comprar</th></tr></thead><tbody>`;
   for (const r of vis) {
@@ -1472,8 +1481,10 @@ function pintarKar() {
   $('kMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(filas.length)} productos · total ${soles() ? 'S/ ' + nf0.format(sum('tot')) : nf0.format(sum('tot')) + ' cajas'} (droguería ${soles() ? 'S/ ' + nf0.format(sum('drog')) : nf0.format(sum('drog'))}) · <b>a comprar para ${S.kCob} + ${S.kSeg} días: ${nf0.format(tc)} cajas · S/ ${nf0.format(ts)}</b></span>` +
     (filas.length > vis.length ? `<button class="btn" id="kMas">Ver ${Math.min(PAGINA, filas.length - vis.length)} más</button>` : '');
   if ($('kMas')) $('kMas').onclick = () => { S.kMostrar += PAGINA; pintarKar(); };
+  window.fxAplicar?.($('kTabla'), 'kar', [], (v, t) => { if (v < t) $('kMore').querySelector('span')?.insertAdjacentHTML('afterbegin', `<b>${nf0.format(v)} con el filtro</b> · `); });
 }
 $('kq').addEventListener('input', () => { S.kMostrar = PAGINA; pintarKar(); });
+$('kTabla').addEventListener('fx-cambio', () => pintarKar());
 $('kVer').addEventListener('change', () => { S.kMostrar = PAGINA; pintarKar(); });
 $('kTabla').addEventListener('click', e => {
   const r = e.target.closest('[data-kkr]');
@@ -1559,7 +1570,8 @@ function pintarStk() {
     $('xSucs').hidden = document.body.classList.contains('x-una');
     $('xSucs').innerHTML = pr.map(([f], i) => `<button type="button" data-xfarm="${esc(f)}" aria-pressed="${f === S.xFarm}" title="Prioridad ${i + 1} de ${n} (por venta de los últimos 3 meses)">${i + 1}. ${esc(nomSuc(f))}${i === 0 ? ' <small>· prioridad</small>' : i === n - 1 ? ' <small>· final</small>' : ''}</button>`).join('');
   } else $('xSucs').hidden = true;
-  const f = drog ? 'DROGUERIA FS' : S.xFarm, H = S.xCob + S.xSeg, filas = filasStk(), vis = filas.slice(0, S.xMostrar);
+  // con un filtro tipo Excel activo se pintan todas las filas (el filtro trabaja sobre la tabla)
+  const f = drog ? 'DROGUERIA FS' : S.xFarm, H = S.xCob + S.xSeg, filas = filasStk(), fxk = 'stk-' + f, vis = window.fxActivo?.(fxk) ? filas : filas.slice(0, S.xMostrar);
   const prio = drog ? -1 : prioridadSucs().findIndex(([x]) => x === f);
   $('xTit').textContent = drog ? 'Droguería' : nomSuc(f) + (prio >= 0 ? ` · prioridad ${prio + 1} de ${prioridadSucs().length}` : '');
   $('xEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · necesita para ${S.xCob} + ${S.xSeg} días · ${drog ? 'Comprar = necesita de la red − stock de droguería' : 'igual que Atención a sucursales (motor de Estadística Proyx con la venta de la sucursal); con los días de su criterio, Pedir = lo que se le envía'}`;
@@ -1576,12 +1588,14 @@ function pintarStk() {
   }
   if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${(S.verMet ? mets.length : 0) + 6}">Nada que mostrar con estos filtros.</td></tr>`;
   $('xTabla').innerHTML = h + '</tbody>'; ajustarC0($('xTabla'));
+  window.fxAplicar?.($('xTabla'), fxk, [], (v, t) => { if (v < t) $('xMore').querySelector('span')?.insertAdjacentHTML('afterbegin', `<b>${nf0.format(v)} con el filtro</b> · `); });
   let tc = 0, ts = 0; for (const r of filas) { tc += r.cmp; ts += r.cmp * (r.p.k || 0); }
   $('xMore').innerHTML = `<span>Mostrando ${nf0.format(vis.length)} de ${nf0.format(filas.length)} medicamentos · <b>${drog ? 'a comprar' : 'a pedir'} para ${S.xCob} + ${S.xSeg} días: ${nf0.format(tc)} cajas · S/ ${nf0.format(ts)}</b></span>` +
     (filas.length > vis.length ? `<button class="btn" id="xMas">Ver ${Math.min(PAGINA, filas.length - vis.length)} más</button>` : '');
 }
 $('xSucs').addEventListener('click', e => { const b = e.target.closest('[data-xfarm]'); if (b) { S.xFarm = b.dataset.xfarm; S.xMostrar = PAGINA; pintarStk(); } });
 $('xMore').addEventListener('click', e => { if (e.target.closest('#xMas')) { S.xMostrar += PAGINA; pintarStk(); } });
+$('xTabla').addEventListener('fx-cambio', () => pintarStk());
 $('xTabla').addEventListener('click', e => {
   if (e.target.closest('[data-vermet]')) { S.verMet = !S.verMet; return pintarStk(); }
   const a = e.target.closest('[data-abrir]'); if (a) return abrirFichaP(a.dataset.abrir, 'stk');
@@ -2211,6 +2225,7 @@ window.iniciarKardex = iniciar;
 <script src="frepple.js?v=202611042300"></script>
 <script src="sucursales.js?v=202611050000"></script>
 <script src="estadistica.js?v=202611042300"></script>
+<script src="fx.js?v=202611050300"></script>
 <script type="module" src="proyeccion.js?v=202611042300"></script>
 
 </body></html>
