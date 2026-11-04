@@ -8,7 +8,10 @@
   const norm = s => String(s || "").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const FX = {}; let abierto = null;
   if (!$("fxPop")) { const d = document.createElement("div"); d.id = "fxPop"; d.className = "fx-pop"; d.hidden = true; document.body.appendChild(d); }
-  const fxTxt = td => (td?.innerText || td?.textContent || "").replace(/\s+/g, " ").trim() || "(vacías)";
+  // texto de la celda (textContent: no obliga al navegador a recalcular la pantalla, a diferencia de innerText);
+  // se guarda en la celda para no volver a leerlo
+  const fxTxt = td => { if (!td) return "(vacías)"; if (td.fxT != null) return td.fxT;
+    const t = [...td.childNodes].map(n => n.textContent).join(" ").replace(/\s+/g, " ").trim() || "(vacías)"; td.fxT = t; return t; };
   function fxAplicar(tabla, clave, omitir = [], alContar) {
     const st = FX[clave] ??= { f: {}, ord: null };
     tabla.dataset.fx = clave; tabla.fxOmitir = omitir; tabla.fxContar = alContar;
@@ -19,9 +22,13 @@
     });
     const tb = tabla.tBodies[0]; if (!tb) return;
     const filas = [...tb.rows].filter(r => !r.classList.contains("vacia") && r.cells.length > 1);
-    if (st.ord) { const { i, dir } = st.ord; filas.sort((a, b) => dir * fxTxt(a.cells[i]).localeCompare(fxTxt(b.cells[i]), "es", { numeric: true })).forEach(r => tb.appendChild(r)); }
-    let vis = 0;
-    for (const r of filas) { const ok = Object.entries(st.f).every(([i, set]) => set.has(fxTxt(r.cells[i]))); r.hidden = !ok; if (ok) vis++; }
+    if (st.ord) {
+      const { i, dir } = st.ord, col = new Intl.Collator("es", { numeric: true }), k = filas.map(r => [fxTxt(r.cells[i]), r]);
+      k.sort((a, b) => dir * col.compare(a[0], b[0]));
+      const frag = document.createDocumentFragment(); for (const [, r] of k) frag.appendChild(r); tb.appendChild(frag);   // se mueven todas de una vez
+    }
+    let vis = 0; const fil = Object.entries(st.f);
+    for (const r of filas) { const ok = fil.every(([i, set]) => set.has(fxTxt(r.cells[i]))); if (r.hidden !== !ok) r.hidden = !ok; if (ok) vis++; }
     alContar?.(vis, filas.length);
   }
   const fxActivo = clave => !!FX[clave] && (Object.keys(FX[clave].f).length > 0 || !!FX[clave].ord);
@@ -30,14 +37,15 @@
     const tabla = btn.closest("table"), clave = tabla.dataset.fx, st = FX[clave], i = +btn.dataset.fxi;
     const filas = [...tabla.tBodies[0].rows].filter(r => !r.classList.contains("vacia") && r.cells.length > 1);
     const otros = Object.entries(st.f).filter(([k]) => +k !== i);   // como en Excel: lo que queda con los filtros de las otras columnas
-    const vals = [...new Set(filas.filter(r => otros.every(([k, set]) => set.has(fxTxt(r.cells[k])))).map(r => fxTxt(r.cells[i])))].sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
+    const col = new Intl.Collator("es", { numeric: true });
+    const vals = [...new Set(filas.filter(r => otros.every(([k, set]) => set.has(fxTxt(r.cells[k])))).map(r => fxTxt(r.cells[i])))].sort(col.compare);
     const sel = st.f[i] || new Set(vals), pop = $("fxPop");
     abierto = { tabla, clave, i, vals };
     pop.innerHTML = `<button type="button" class="fx-op" data-fxord="1">↑ Ordenar de A a Z</button><button type="button" class="fx-op" data-fxord="-1">↓ Ordenar de Z a A</button>
       <button type="button" class="fx-op" data-fxborrar ${st.f[i] || st.ord?.i === i ? "" : "disabled"}>✕ Borrar filtro de «${esc(fxTxt(tabla.tHead.rows[0].cells[i]).replace(/[▾⏷↑↓]$/, "").trim())}»</button>
       <input type="search" id="fxBus" placeholder="Buscar" autocomplete="off">
       <div class="fx-lista"><label class="fx-todo"><input type="checkbox" id="fxTodo" ${vals.every(v => sel.has(v)) ? "checked" : ""}> (Seleccionar todo)</label>
-        ${vals.map(v => `<label><input type="checkbox" data-fxv="${esc(v)}" ${sel.has(v) ? "checked" : ""}> ${esc(v)}</label>`).join("")}</div>
+        ${vals.map(v => `<label><input type="checkbox" data-fxv="${esc(v)}" ${sel.has(v) ? "checked" : ""}> ${esc(v.length > 80 ? v.slice(0, 80) + "…" : v)}</label>`).join("")}</div>
       <div class="fx-bot"><button type="button" class="btn primario primary sm" id="fxOk">Aceptar</button><button type="button" class="btn sm" id="fxNo">Cancelar</button></div>`;
     pop.hidden = false;
     const r = btn.getBoundingClientRect(), w = Math.min(290, innerWidth - 16);
