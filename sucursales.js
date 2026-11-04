@@ -9,7 +9,7 @@
   /* ---------- criterios: general, por sucursal y por producto (proy_config/atencion_cfg) ----------
      def: el criterio general · suc[SUCURSAL]: el propio de una sucursal · prod[SUCURSAL | '*'][código]: el de un producto
      (en esa sucursal o en todas). Cada nivel pisa al anterior; lo que no se indica se toma del nivel de arriba. */
-  const DEF = { C: 7, Sg: 7, fte: '30', tipos: 'ab' };
+  const DEF = { C: 7, Sg: 7, fte: 'motor', tipos: 'ab' };   // venta diaria: por defecto, el motor de Estadística Proyx
   let CFG = { def: { ...DEF }, suc: {}, prod: {} }, cfgListo = false, cfgCargando = false, cfgVer = 0;
   async function cargarCfg() {
     // Se lee solo cuando ya están tus datos (al abrir, la página muestra un momento datos de ejemplo):
@@ -76,7 +76,7 @@
     const k = p.c + '|' + f; let r = motor.get(k);
     if (r === undefined) {
       const hv = S.P.hfm && p.hf?.[f] ? p.hf[f] : (p.h || []).map(v => v == null ? null : v * (p.s?.[f] || 0));
-      const fp = window.FREPPLE.pronosticar(hv, 12), f3 = fp.f.slice(0, 3);
+      const fp = window.FREPPLE.pronosticar(hv, 12, window.estAjustes?.(p.c)?.metodo || ''), f3 = fp.f.slice(0, 3);   // con el método elegido en Estadística Proyx
       r = { d: Math.max(0, f3.reduce((a, v) => a + v, 0) / 3 / 30), metodo: fp.metodo, hv, f: f3, f12: fp.f, fp };
       motor.set(k, r);
     }

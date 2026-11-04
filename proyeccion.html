@@ -461,7 +461,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
       <div class="controls">
         <label class="field"><span>Tiempo de entrega (días)</span><input id="frLT" type="number" min="1" max="120" value="7" style="width:80px"></label>
         <label class="field"><span>Nivel de servicio</span><select id="frSL"><option value="0.9">90 %</option><option value="0.95" selected>95 %</option><option value="0.98">98 %</option><option value="0.99">99 %</option></select></label>
-        <label class="field"><span>Pronóstico</span><select id="frFte"><option value="frepple">Motor estadístico</option><option value="mio">El elegido en Pronóstico</option></select></label>
+        <label class="field"><span>Pronóstico</span><select id="frFte"><option value="frepple" selected>Motor estadístico</option></select></label>
         <label class="field" title="Cobertura mínima del pedido, en días de venta"><span>Pedido mín. (días)</span><input id="frROQmin" type="number" min="0" max="365" value="15" style="width:72px"></label>
         <label class="field" title="Cobertura máxima del pedido, en días de venta"><span>Pedido máx. (días)</span><input id="frROQmax" type="number" min="1" max="365" value="60" style="width:72px"></label>
         <label class="field" title="Costo fijo de hacer un pedido"><span>Costo por pedido S/</span><input id="frS" type="number" min="0" step="1" value="20" style="width:72px"></label>
@@ -545,7 +545,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
         <div class="field"><span>Atender para (días + seguridad)</span><div class="seg" id="suPres" role="group" aria-label="Días a cubrir"><button type="button" data-d="7" data-s="7">7 + 7</button><button type="button" data-d="15" data-s="15">15 + 15</button><button type="button" data-d="30" data-s="30">30 + 30</button></div></div>
         <label class="field"><span>Días a atender</span><input id="suCob" type="number" min="1" max="180" value="7" style="width:72px"></label>
         <label class="field"><span>Stock de seguridad (días)</span><input id="suSeg" type="number" min="0" max="90" value="7" style="width:72px"></label>
-        <label class="field"><span>Venta diaria según</span><select id="suFte"><option value="15">Ventas de los últimos 15 días</option><option value="30" selected>Ventas de los últimos 30 días</option><option value="60">Ventas de los últimos 60 días</option><option value="90">Ventas de los últimos 3 meses</option><option value="motor">Motor estadístico de la sucursal</option></select></label>
+        <label class="field"><span>Venta diaria según</span><select id="suFte"><option value="15">Ventas de los últimos 15 días</option><option value="30" selected>Ventas de los últimos 30 días</option><option value="60">Ventas de los últimos 60 días</option><option value="90">Ventas de los últimos 3 meses</option><option value="motor">Estadística Proyx (motor de pronóstico)</option></select></label>
         <label class="field"><span>Qué atender</span><select id="suTip"><option value="ab">Tipo A completo, tipo B 1 unidad si no le alcanza</option><option value="todos">Todo lo que se vende en la sucursal</option></select></label>
         <label class="field"><span>Mostrar</span><select id="suVer"><option value="enviar">Enviar</option><option value="urgente">Urgentes</option><option value="comprar">No alcanza lo de droguería</option><option value="exceso">Exceso en la sucursal</option><option value="ajuste">Con ajuste propio</option><option value="">Todos</option></select></label>
         <label class="field"><span>Laboratorio</span><select id="suLab" class="sLab"><option value="">Todos</option></select></label>
@@ -951,6 +951,7 @@ function clasificar(o) {
 function usarPron(o, ejemplo) {
   clasificar(o); pedCache = null;
   S.P = o; S.ejemplo = ejemplo; S.idx = new Map(o.p.map(p => [p.c, p])); S.calc = new Map();
+  S.verMet = false; window.cargarEstAj?.();   // el pronóstico usa los ajustes guardados de Estadística Proyx
   for (const p of o.p) {
     const real = o.bm.map(m => p.h[o.meses.indexOf(m)]);
     const sr = sum(real.map(v => v || 0));
@@ -1036,7 +1037,22 @@ addEventListener('drop', e => {
 /* ---------- elecciones (guardadas en la página) ---------- */
 const elegido = c => { const e = S.elec.get(c), k = S.calc.get(c); return e && k?.met[e] ? e : k?.best; };
 const manual = c => { const e = S.elec.get(c); return !!(e && S.calc.get(c)?.met[e]); };
-const pronDe = (p, k) => { const m = elegido(p.c); return m ? (p.f[m]?.[k] ?? 0) : 0; };
+// MOTOR DE PRONÓSTICO: Estadística Proyx (frePPLe, frepple.js) con los ajustes guardados de cada producto
+// (método elegido y correcciones por mes). Lo usan Proyección, Kardex, Droguería, cada sucursal y lo que hay que comprar.
+// (Los métodos anteriores —SARIMA, Holt, SES…— ya no se usan para pronosticar.)
+const EST_CACHE = new Map(); let estCacheDe = null, estCacheVer = -1;
+function pronEst(p) {
+  if (estCacheDe !== S.P || estCacheVer !== (window.EST_VER || 0)) { EST_CACHE.clear(); estCacheDe = S.P; estCacheVer = window.EST_VER || 0; }
+  let r = EST_CACHE.get(p.c);
+  if (!r) {
+    const a = window.estAjustes?.(p.c) || {}, fm = S.P.fm, fp = window.FREPPLE.pronosticar(p.h || [], fm.length, a.metodo || '');
+    r = { f: fp.f.map((v, i) => a.over?.[fm[i]] ?? v), metodo: fp.metodo + (fp.forzado ? ' (elegido)' : '') };
+    EST_CACHE.set(p.c, r);
+  }
+  return r;
+}
+const pronDe = (p, k) => pronEst(p).f[k] ?? 0;
+const metodoEst = p => pronEst(p).metodo;
 async function elegir(c, m) {
   const k = S.calc.get(c); if (!k) return;
   const auto = m === 'auto';
@@ -1365,21 +1381,21 @@ function pintarPron() {
   const fil = filtroTexto(lista, $('pq').value), vis = fil.slice(0, S.pMostrar), H = S.pCob + S.pSeg;
   const compra = p => compraKR(p, H);
 
-  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th title="Categoría por movimiento (últimos 12 meses)">Tipo</th><th title="Droguería + todas las sucursales y almacenes">Stock actual</th>${S.verMet ? mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="Error del método (WAPE). Clic en una celda para usarlo.">${esc(corto(m))}</th>`).join('') + '<th class="sep">Método usado</th>' : ''}
-    <th class="sep"><button type="button" class="btn sm" data-vermet title="${S.verMet ? 'Ocultar' : 'Ver'} el error de cada modelo y el método usado">${S.verMet ? '◂ Ocultar modelos' : 'Modelos ▸'}</button></th>${o.fm.map(m => `<th class="pj">${et(m)}</th>`).join('')}<th class="sep" title="Pronóstico de los próximos ${H} días (${S.pCob} de stock + ${S.pSeg} de seguridad)">Necesita ${S.pCob} + ${S.pSeg} d</th><th title="Lo que necesita menos el stock actual (droguería + sucursales)">Comprar</th></tr></thead><tbody>`;
+  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th title="Categoría por movimiento (últimos 12 meses)">Tipo</th><th title="Droguería + todas las sucursales y almacenes">Stock actual</th>${false ? mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="Error del método (WAPE). Clic en una celda para usarlo.">${esc(corto(m))}</th>`).join('') + '<th class="sep">Método usado</th>' : ''}
+    <th class="sep" title="Método del motor de Estadística Proyx (se cambia en Estadística Proyx)">Modelo (Estadística Proyx)</th>${o.fm.map(m => `<th class="pj">${et(m)}</th>`).join('')}<th class="sep" title="Pronóstico de los próximos ${H} días (${S.pCob} de stock + ${S.pSeg} de seguridad)">Necesita ${S.pCob} + ${S.pSeg} d</th><th title="Lo que necesita menos el stock actual (droguería + sucursales)">Comprar</th></tr></thead><tbody>`;
   for (const p of vis) {
     const k = S.calc.get(p.c), sel = elegido(p.c), esMan = manual(p.c);
     h += `<tr data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${etiquetas(p)}${(() => { const x = clas(p); return x.g || x.f ? `<small class="sub">${esc([x.g, x.f].filter(Boolean).join(' · '))}</small>` : ''; })()}</td>
       <td style="text-align:center">${catBadge(S.tR && p.catP ? p.catP : p.cat)}</td>
       ${(() => { const s = stockTotal(p); return `<td class="n big" title="Droguería ${fmtS(p, conv(p, s.d))} · sucursales y otros almacenes ${fmtS(p, conv(p, s.t - s.d))}">${s.t ? fmtS(p, conv(p, s.t)) : '<span class="z">0</span>'}</td>`; })()}
-      ${!S.verMet ? '' : mets.map((m, i) => { const x = k.met[m]; const cls = ['w', i === 0 ? 'sep' : '']; if (!x || x.wape == null) return `<td class="${cls.join(' ')} na">–</td>`;
+      ${true ? '' : mets.map((m, i) => { const x = k.met[m]; const cls = ['w', i === 0 ? 'sep' : '']; if (!x || x.wape == null) return `<td class="${cls.join(' ')} na">–</td>`;
         if (m === k.best) cls.push('best'); if (m === sel) cls.push('sel');
         return `<td class="${cls.join(' ')}" data-m="${esc(m)}" title="Usar ${esc(m)}">${pct(x.wape)}</td>`; }).join('') + `
       <td class="sep"><select class="msel" data-sel="${esc(p.c)}" aria-label="Método para ${esc(p.n)}">
         <option value="auto" ${esMan ? '' : 'selected'}>${k.best ? `Automático (${esc(corto(k.best))})` : 'Sin ventas'}</option>
         ${Object.keys(k.met).map(m => `<option value="${esc(m)}" ${esMan && m === sel ? 'selected' : ''}>${esc(corto(m))}</option>`).join('')}
       </select></td>`}
-      <td class="sep z" style="text-align:center">${S.verMet ? '' : esc(corto(sel || '–'))}</td>
+      <td class="sep z" style="text-align:center">${S.verMet ? '' : esc(metodoEst(p))}</td>
       ${(() => { const av = avance(p); return o.fm.map((m, j) => { const v = pronDe(p, j);
         return av && m === av.mes ? `<td class="n pj big">${fmt(conv(p, v))}<small class="av">vendido ${fmt(conv(p, av.v))} al ${av.dia} · falta ${fmt(conv(p, Math.max(0, v - av.v)))}</small></td>` : `<td class="n pj big">${fmt(conv(p, v))}</td>`; }).join(''); })()}
       ${(() => { const x = compra(p); return `<td class="n sep">${fmtE(p, conv(p, x.nec))}</td><td class="n comprar">${x.cmp ? fmt(conv(p, x.cmp)) : '<span class="z">·</span>'}</td>`; })()}</tr>`;
@@ -1400,7 +1416,7 @@ $('pMore').addEventListener('click', e => {
     ...o.fm.map(m => 'Pronóstico ' + et(m)), 'Vendido mes en curso', `Necesita ${S.pCob} + ${S.pSeg} d`, 'Comprar', 'Costo unitario S/', 'Comprar S/']];
   for (const p of S.pFil || []) {
     const s = stockTotal(p), { nec, cmp } = compraKR(p, H), x = clas(p), av = avance(p);
-    t.push([p.c, p.n, labDe(p.c) || '', x.g || '', x.f || '', S.tR && p.catP ? p.catP : p.cat, p.est ? 'sí' : '', num(s.t), num(s.d), corto(elegido(p.c) || ''),
+    t.push([p.c, p.n, labDe(p.c) || '', x.g || '', x.f || '', S.tR && p.catP ? p.catP : p.cat, p.est ? 'sí' : '', num(s.t), num(s.d), metodoEst(p),
       ...o.fm.map((m, j) => num(pronDe(p, j))), av ? num(av.v) : '', num(nec), cmp, num(p.k), num(cmp * (p.k || 0))]);
   }
   const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
@@ -1538,15 +1554,15 @@ function pintarStk() {
   const prio = drog ? -1 : prioridadSucs().findIndex(([x]) => x === f);
   $('xTit').textContent = drog ? 'Droguería' : nomSuc(f) + (prio >= 0 ? ` · prioridad ${prio + 1} de ${prioridadSucs().length}` : '');
   $('xEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · necesita para ${S.xCob} + ${S.xSeg} días · ${drog ? 'Comprar = necesita de la red − stock de droguería' : 'Pedir = necesita de la sucursal (su parte de la venta) − su stock'}`;
-  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th>Tipo</th><th>Stock actual</th>${S.verMet ? mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="Error del método (WAPE). Clic para usarlo.">${esc(corto(m))}</th>`).join('') : ''}
-    <th class="sep"><button type="button" class="btn sm" data-vermet>${S.verMet ? '◂ Ocultar modelos' : 'Modelos ▸'}</button></th><th class="sep">Necesita ${S.xCob} + ${S.xSeg} d</th><th>${drog ? 'Comprar' : 'Pedir'}</th></tr></thead><tbody>`;
+  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th>Tipo</th><th>Stock actual</th>${false ? mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="Error del método (WAPE). Clic para usarlo.">${esc(corto(m))}</th>`).join('') : ''}
+    <th class="sep" title="Método del motor de Estadística Proyx (se cambia en Estadística Proyx)">Modelo (Estadística Proyx)</th><th class="sep">Necesita ${S.xCob} + ${S.xSeg} d</th><th>${drog ? 'Comprar' : 'Pedir'}</th></tr></thead><tbody>`;
   for (const r of vis) {
     const p = r.p, k = S.calc.get(p.c), sel = elegido(p.c);
     h += `<tr data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${etiquetas(p)}<small class="sub">${esc(labDe(p.c))}</small></td>
       <td style="text-align:center">${catBadge(r.cat)}</td><td class="n big">${r.st ? fmtS(p, conv(p, r.st)) : '<span class="z">0</span>'}</td>
-      ${!S.verMet ? '' : mets.map((m, i) => { const x = k?.met[m]; const cls = ['w', i === 0 ? 'sep' : '']; if (!x || x.wape == null) return `<td class="${cls.join(' ')} na">–</td>`;
+      ${true ? '' : mets.map((m, i) => { const x = k?.met[m]; const cls = ['w', i === 0 ? 'sep' : '']; if (!x || x.wape == null) return `<td class="${cls.join(' ')} na">–</td>`;
         if (m === k.best) cls.push('best'); if (m === sel) cls.push('sel'); return `<td class="${cls.join(' ')}" data-m="${esc(m)}" title="Usar ${esc(m)}">${pct(x.wape)}</td>`; }).join('')}
-      <td class="sep z" style="text-align:center">${esc(corto(sel || '–'))}</td>
+      <td class="sep z" style="text-align:center">${esc(metodoEst(p))}</td>
       <td class="n sep">${fmtE(p, conv(p, r.nec))}</td><td class="n comprar">${r.nota ? `<span class="z">${esc(r.nota)}</span>` : r.cmp ? fmt(conv(p, r.cmp)) : '<span class="z">·</span>'}</td></tr>`;
   }
   if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${(S.verMet ? mets.length : 0) + 6}">Nada que mostrar con estos filtros.</td></tr>`;
@@ -1571,7 +1587,7 @@ S.xVer = 'mov';
 $('xXls').addEventListener('click', () => {
   const o = S.P, drog = S.xModo === 'drog', num = v => String(Math.round((+v || 0) * 1000) / 1000).replace('.', ',');
   const t = [['Código', 'Medicamento', 'Laboratorio', 'Tipo', 'Stock actual', 'Modelo', `Necesita ${S.xCob} + ${S.xSeg} d`, drog ? 'Comprar' : 'Pedir', 'Costo S/', (drog ? 'Comprar' : 'Pedir') + ' S/', 'Nota'],
-    ...filasStk().map(r => [r.c, r.n, labDe(r.c), r.cat, num(r.st), corto(elegido(r.c) || ''), num(r.nec), r.cmp, num(r.p.k), num(r.cmp * (r.p.k || 0)), r.nota])];
+    ...filasStk().map(r => [r.c, r.n, labDe(r.c), r.cat, num(r.st), metodoEst(r.p), num(r.nec), r.cmp, num(r.p.k), num(r.cmp * (r.p.k || 0)), r.nota])];
   const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' }));
   a.download = `${drog ? 'drogueria' : 'sucursal_' + nomSuc(S.xFarm)}_${o.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
@@ -2183,9 +2199,9 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
-<script src="frepple.js?v=202610270100"></script>
-<script src="sucursales.js?v=202611042100"></script>
-<script src="estadistica.js?v=202610270100"></script>
-<script type="module" src="proyeccion.js?v=202611042100"></script>
+<script src="frepple.js?v=202611042300"></script>
+<script src="sucursales.js?v=202611042300"></script>
+<script src="estadistica.js?v=202611042300"></script>
+<script type="module" src="proyeccion.js?v=202611042300"></script>
 
 </body></html>

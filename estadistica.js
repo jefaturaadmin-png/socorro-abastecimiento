@@ -19,14 +19,18 @@
     EST.cargando = true;
     try { const d = await S.db.doc('config/estadistica').get(); EST.cfg = d.exists ? d.data() : { p: {} }; EST.cfg.p ??= {}; }
     catch (e) { console.warn(e); EST.cfg = { p: {} }; }
-    EST.cargando = false; cache = new Map(); window.pintarEst();
+    EST.cargando = false; cache = new Map(); window.EST_VER = (window.EST_VER || 0) + 1;
+    if (S.vista === 'fre') window.pintarEst(); else if (S.P) render();
   }
   const ajustes = c => EST.edit[c] || EST.cfg?.p?.[c] || {};
+  // el pronóstico de toda la página sale de este motor: se exponen los ajustes guardados y se cargan al iniciar
+  window.estAjustes = c => EST.cfg?.p?.[c] || {};
+  window.cargarEstAj = () => cargar();
   async function guardar(c) {
     const a = EST.edit[c]; if (!a) return;
     const limpio = Object.fromEntries(Object.entries(a).filter(([, v]) => v !== null && v !== '' && v !== undefined && !(typeof v === 'object' && !Object.keys(v).length)));
     if (Object.keys(limpio).length) EST.cfg.p[c] = limpio; else delete EST.cfg.p[c];
-    delete EST.edit[c];
+    delete EST.edit[c]; window.EST_VER = (window.EST_VER || 0) + 1;
     if (S.db && !S.ejemplo) {
       try { await S.db.doc('config/estadistica').set(EST.cfg); toast('Ajustes guardados'); }
       catch (e) { toast('No se pudo guardar: ' + (e.message || e)); }
