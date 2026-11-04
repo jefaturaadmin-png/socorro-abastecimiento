@@ -1530,10 +1530,12 @@ function filasStk() {
       const viejos = (window.REEMP_NUEVO?.get(p.c) || []).map(c => S.idx.get(c)).filter(Boolean);
       cmp = R.has(p.c) ? 0 : Math.max(0, Math.ceil(nec - st - viejos.reduce((a, q) => a + stDe(q, f), 0) - 1e-9));
     } else {
-      nec = necesidad(p, H) * (p.s?.[f] || 0);
-      const viejos = (window.REEMP_NUEVO?.get(p.c) || []).map(c => S.idx.get(c)).filter(Boolean);
-      if (viejos.length && !(p.s?.[f] > 0)) nec = Math.max(nec, viejos.reduce((a, q) => a + necesidad(q, H) * (q.s?.[f] || 0), 0));
-      cmp = Math.max(0, Math.ceil(nec - st - viejos.reduce((a, q) => a + stDe(q, f), 0) - 1e-9));
+      // igual que Atención a sucursales: venta diaria del motor con la historia de esa sucursal, su criterio, cambios,
+      // reemplazos y bloqueos. Con los días del criterio, «Pedir» es exactamente lo que Atención le envía.
+      const r = window.filaAtencion?.(p.c, f), cr = window.criterioSuc?.(f) || {};
+      nec = r ? r.d * H : 0;
+      cmp = !r ? 0 : H === (cr.C + cr.Sg) ? r.pide : Math.max(0, Math.ceil(nec - st - 1e-9));
+      if (r?.krV) nota = 'se termina (reemplazado)';
     }
     if (bq) { cmp = 0; nota = 'bloqueado'; }
     if (S.xVer === 'mov' && !st && nec < 0.05) continue; if (S.xVer === 'cmp' && !cmp) continue;
@@ -1543,6 +1545,9 @@ function filasStk() {
 }
 function pintarStk() {
   llenarLabs(); llenarClas();
+  if (S.xModo === 'sucx' && !window.atencionListo?.()) { if (!S.xPrep) { S.xPrep = true; window.prepAtencion?.().then(() => { S.xPrep = false; pintarStk(); }); }
+    $('xTabla').innerHTML = '<tbody><tr><td class="c1">Leyendo los criterios de Atención a sucursales…</td></tr></tbody>'; return; }
+  if (S.xModo === 'sucx' && S.xFarm && S.xDiasDe !== S.xFarm) { const cr = window.criterioSuc?.(S.xFarm) || {}; if (cr.C != null) { S.xCob = cr.C; S.xSeg = cr.Sg; $('xCob').value = S.xCob; $('xSeg').value = S.xSeg; } S.xDiasDe = S.xFarm; }
   const o = S.P, drog = S.xModo === 'drog', mets = o.metodos, conv = (p, v) => soles() ? v * p.k : v;
   if (!drog) {
     const pr = prioridadSucs(); if (!S.xFarm || !pr.some(([f]) => f === S.xFarm)) S.xFarm = pr[0]?.[0] || o.farmacias[0];
@@ -1553,7 +1558,7 @@ function pintarStk() {
   const f = drog ? 'DROGUERIA FS' : S.xFarm, H = S.xCob + S.xSeg, filas = filasStk(), vis = filas.slice(0, S.xMostrar);
   const prio = drog ? -1 : prioridadSucs().findIndex(([x]) => x === f);
   $('xTit').textContent = drog ? 'Droguería' : nomSuc(f) + (prio >= 0 ? ` · prioridad ${prio + 1} de ${prioridadSucs().length}` : '');
-  $('xEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · necesita para ${S.xCob} + ${S.xSeg} días · ${drog ? 'Comprar = necesita de la red − stock de droguería' : 'Pedir = necesita de la sucursal (su parte de la venta) − su stock'}`;
+  $('xEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · necesita para ${S.xCob} + ${S.xSeg} días · ${drog ? 'Comprar = necesita de la red − stock de droguería' : 'igual que Atención a sucursales (motor de Estadística Proyx con la venta de la sucursal); con los días de su criterio, Pedir = lo que se le envía'}`;
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th>Tipo</th><th>Stock actual</th>${false ? mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="Error del método (WAPE). Clic para usarlo.">${esc(corto(m))}</th>`).join('') : ''}
     <th class="sep" title="Método del motor de Estadística Proyx (se cambia en Estadística Proyx)">Modelo (Estadística Proyx)</th><th class="sep">Necesita ${S.xCob} + ${S.xSeg} d</th><th>${drog ? 'Comprar' : 'Pedir'}</th></tr></thead><tbody>`;
   for (const r of vis) {
@@ -2200,7 +2205,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611042300"></script>
+<script src="sucursales.js?v=202611050000"></script>
 <script src="estadistica.js?v=202611042300"></script>
 <script type="module" src="proyeccion.js?v=202611042300"></script>
 

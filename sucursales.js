@@ -20,7 +20,7 @@
       if (d.exists) { const x = d.data(); CFG = { def: { ...DEF, ...(x.def || {}) }, suc: x.suc || {}, prod: x.prod || {} }; }
       cfgListo = true;
     } catch (e) { console.warn(e); }
-    cfgCargando = false; cfgVer++; if (cfgListo && S.vista === 'suc') window.pintarSuc();
+    cfgCargando = false; cfgVer++; if (cfgListo && S.vista === 'suc') window.pintarSuc(); else if (cfgListo && S.vista === 'stk') render();
   }
   let tGuardar = null;
   function guardarCfg() {
@@ -398,6 +398,11 @@
     return { errores, hechos, labs, conCompras: S.P.p.filter(p => p.cm).length };
   }
   // para el botón "Calcular compras ahora" (módulo Compras): espera los datos y publica solo los documentos de apoyo
+  // El módulo de cada sucursal usa exactamente este cálculo (mismo motor, mismos criterios, cambios, reemplazos y bloqueos)
+  window.prepAtencion = async () => { await cargarCfg(); for (let i = 0; i < 40 && !cfgListo; i++) await new Promise(r => setTimeout(r, 250)); await cargarRespuestas(); };
+  window.atencionListo = () => cfgListo || S.ejemplo;
+  window.criterioSuc = f => cfgSuc(f);
+  window.filaAtencion = (c, f) => calcular().porProd.get(c)?.red.find(r => r.f === f) || null;
   window.publicarExtras = async () => {
     for (let i = 0; i < 240 && !(S.P && S.db && !S.ejemplo); i++) await new Promise(r => setTimeout(r, 500));
     if (!S.P || S.ejemplo) return { errores: ['los datos de la proyección no terminaron de cargar'], hechos: [] };
