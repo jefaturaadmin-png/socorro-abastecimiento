@@ -110,9 +110,12 @@ async function cargarCatalogo() {
   }
 }
 // Productos que están en el kardex pero no en catalogo.json (se publica en red/catalogo junto con las listas)
-async function cargarCatVivo() {
+// Se vuelve a leer si pasaron más de 5 minutos (las listas se publican durante el día y la página puede estar abierta desde antes).
+async function cargarCatVivo(forzar) {
+  if (!forzar && Date.now() - (S.catVivoT || 0) < 5 * 60000) return 0;
+  S.catVivoT = Date.now();
   try {
-    const d = await getDoc(doc(db, "red", "catalogo")); if (!d.exists()) return;
+    const d = await getDoc(doc(db, "red", "catalogo")); if (!d.exists()) return 0;
     let n = 0;
     for (const [c, [nom, lab = ""]] of Object.entries(d.data().p || {})) {
       if (S.catIdx.has(c)) continue;
@@ -121,7 +124,8 @@ async function cargarCatVivo() {
     // pedidos de urgencia leídos antes de que llegara este catálogo: completa sus nombres
     for (const x of S.ped?.datos || []) if (!x.nom && x.cod) { const pc = prodCat(x.cod); if (pc) { x.cod = pc.c; x.nom = pc.n; x.lab = pc.ln; } }
     if (n && S.vista === "vPed") pintarPedidos();
-  } catch {}   // sin permiso (usuario sin estos módulos) o sin internet: se queda con catalogo.json
+    return n;
+  } catch { return 0; }   // sin permiso (usuario sin estos módulos) o sin internet: se queda con catalogo.json
 }
 function buscarCat(texto) {
   const q = norm(texto).trim(); if (!q) return [];
@@ -1974,7 +1978,7 @@ $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) {
 // ---------- pedir desde la página: se envía al mismo formulario de Google (cae en la misma hoja de Drive) ----------
 S.urgNuevo = []; S.urgBus = "";
 const sucFormDe = f => FORM_URGENCIA.sucursales[f] || corto(f);
-function abrirNuevoUrg() { S.urgNuevo = []; S.urgBus = ""; S.urgSucSel = miFarm() || ""; pintarNuevoUrg(); $("urgDlg").showModal(); $("urgBus").focus(); }
+function abrirNuevoUrg() { cargarCatVivo(); S.urgNuevo = []; S.urgBus = ""; S.urgSucSel = miFarm() || ""; pintarNuevoUrg(); $("urgDlg").showModal(); $("urgBus").focus(); }
 function pintarNuevoUrg() {
   const fija = !!miFarm() && !esAdmin();
   $("urgSucBox").innerHTML = fija ? `<b>${esc(nombreFarm(miFarm()))}</b> <small class="muted">(tu sucursal)</small>`
@@ -1988,6 +1992,7 @@ $("pdNuevoA").addEventListener("click", abrirNuevoUrg);
 $("urgBus").addEventListener("input", e => {
   S.urgBus = e.target.value; const box = $("urgRes");
   const t = S.urgBus.trim(), libre = /^\d{3,6}$/.test(t) && !prodCat(t) && !S.urgNuevo.some(a => a.c === t);
+  if (libre && Date.now() - (S.catVivoT || 0) > 60000) cargarCatVivo(true).then(n => { if (n && $("urgBus").value === e.target.value) $("urgBus").dispatchEvent(new Event("input")); });
   box.innerHTML = resBusqueda({ c: "" }, S.urgBus, p => S.urgNuevo.some(a => a.c === p.c), "data-urg-add")
     + (libre ? `<button type="button" data-urg-cod="${esc(t)}"><b>${esc(t)}</b> Agregar este código tal cual (no está en el catálogo)</button>` : ""); box.hidden = !t;
 });
