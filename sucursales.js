@@ -257,10 +257,9 @@
       const at = await publicarAtencion();
       const rd = await publicarRed(items);
       const ex = await publicarExtras();
-      if (ex.errores.length) $('suPub').textContent += ' · no se pudo publicar: ' + ex.errores.join(' · ');
-      if (!rd.ok) $('suPub').textContent += ' · no se pudo publicar la información de la red: ' + rd.error;
-      if (!at.ok) $('suPub').textContent += ' · no se pudo publicar lo de cada sucursal: ' + at.error;
-      return { ok: true, n: items.length };
+      const avisos = [...ex.errores, ...(rd.ok ? [] : ['información de la red: ' + rd.error]), ...(at.ok ? [] : ['lo de cada sucursal: ' + at.error])];
+      if (avisos.length) $('suPub').textContent += ' · no se pudo publicar: ' + avisos.join(' · ');
+      return { ok: true, n: items.length, avisos };
     } catch (e) {
       const t = e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules) en Firebase.' : e.message;
       $('suPub').textContent = 'No se pudo publicar la lista del equipo: ' + t; S.suAuto = false;
@@ -323,9 +322,12 @@
     const sd = {}; for (const p of S.P.p) { const v = +(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) || 0; if (v > 0) sd[p.c] = [r3(v)]; }
     await guardar('stk_DROGUERIA FS', { p: sd, publicado: hoy });
     // catálogo vivo (todos los productos del kardex: código, nombre, laboratorio) para los buscadores de la página
-    const cat = {}; for (const p of S.P.p) cat[p.c] = [p.n, labDe(p.c) || ''];
-    if (JSON.stringify(cat).length > 900000) for (const c in cat) cat[c] = [cat[c][0]];
-    await guardar('catalogo', { p: cat, publicado: hoy });
+    // va como un solo texto ("código<TAB>nombre<TAB>laboratorio" por renglón): un mapa con miles de campos supera el
+    // límite de Firestore (40 000 entradas de índice por documento) y no se guardaba
+    const limpio = v => String(v || '').replace(/[\t\n]+/g, ' ').trim();
+    let t = S.P.p.map(p => [p.c, limpio(p.n), limpio(labDe(p.c))].join('\t')).join('\n');
+    if (t.length > 900000) t = S.P.p.map(p => [p.c, limpio(p.n)].join('\t')).join('\n');
+    await guardar('catalogo', { t, n: S.P.p.length, publicado: hoy });
     // para Evaluación de sucursales (red/eval): de cada sucursal, la cobertura en días y el valor del stock de cada
     // producto con stock ("dias:soles,dias:soles,…"), los sin rotación (tipo E con stock) y los desabastecidos
     const ev = {};

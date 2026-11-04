@@ -23,7 +23,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202610311200";
+const VERSION_PROY = "202611041100";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -116,8 +116,31 @@ async function cargarCatVivo(forzar) {
   S.catVivoT = Date.now();
   try {
     const d = await getDoc(doc(db, "red", "catalogo")); if (!d.exists()) return 0;
+    return usarCatVivo(d.data());
+  } catch { return 0; }   // sin permiso (usuario sin estos módulos) o sin internet: se queda con catalogo.json
+}
+// En vivo: cuando se publica un kardex nuevo (cambia red/catalogo) la página abierta se actualiza sola:
+// catálogo de los buscadores, compras, evaluación y lo que esté a la vista.
+function escucharCatVivo() {
+  if (S.catSub) return; S.catSub = true;
+  S.subs.push(onSnapshot(doc(db, "red", "catalogo"), sn => {
+    if (!sn.exists()) return;
+    const x = sn.data(), nuevo = S.catPub && x.publicado && x.publicado !== S.catPub;
+    S.catPub = x.publicado; S.catVivoT = Date.now(); usarCatVivo(x);
+    if (nuevo) {
+      S.cp = null; S.evStock = null; S.evR = null; S.ped = null;
+      if (["vCompL", "vEval", "vPed", "vAten", "vNue"].includes(S.vista)) render();
+      toast("Datos actualizados con el kardex nuevo");
+    }
+  }, () => { S.catSub = false; }));
+}
+function usarCatVivo(x) {
+  {
     let n = 0;
-    for (const [c, [nom, lab = ""]] of Object.entries(d.data().p || {})) {
+    // formato nuevo: un texto «código<TAB>nombre<TAB>laboratorio» por renglón; el anterior era un mapa {código: [nombre, lab]}
+    const filas = x.t ? String(x.t).split("\n").map(l => { const [c, nom = "", lab = ""] = l.split("\t"); return [c, [nom, lab]]; }) : Object.entries(x.p || {});
+    for (const [c, [nom, lab = ""]] of filas) {
+      if (!c) continue;
       if (S.catIdx.has(c)) continue;
       const p = { c, n: String(nom), l: "", ln: String(lab), k: norm([c, nom, lab].join(" ")) }; S.catalogo.push(p); S.catIdx.set(c, p); n++;
     }
@@ -125,7 +148,7 @@ async function cargarCatVivo(forzar) {
     for (const x of S.ped?.datos || []) if (!x.nom && x.cod) { const pc = prodCat(x.cod); if (pc) { x.cod = pc.c; x.nom = pc.n; x.lab = pc.ln; } }
     if (n && S.vista === "vPed") pintarPedidos();
     return n;
-  } catch { return 0; }   // sin permiso (usuario sin estos módulos) o sin internet: se queda con catalogo.json
+  }
 }
 function buscarCat(texto) {
   const q = norm(texto).trim(); if (!q) return [];
@@ -157,7 +180,7 @@ $("fLogin").addEventListener("submit", async e => {
 $("salir").addEventListener("click", () => signOut(auth));
 
 onAuthStateChanged(auth, async user => {
-  S.subs.forEach(u => u()); S.subs = []; S.nueSub = false; S.bloqueos = new Map(); S.perfil = null; $("avisoGlobal").hidden = true;
+  S.subs.forEach(u => u()); S.subs = []; S.nueSub = false; S.catSub = false; S.bloqueos = new Map(); S.perfil = null; $("avisoGlobal").hidden = true;
   if (!user) { mostrar("vLogin"); $("top").hidden = true; $("ayuda").hidden = $("ladoIzq").hidden = $("ladoDer").hidden = true; document.body.classList.remove("lado-i", "lado-d"); return; }
   try {
     const snap = await getDoc(doc(db, "usuarios", user.uid));
@@ -183,7 +206,7 @@ onAuthStateChanged(auth, async user => {
   await entrar();
 });
 async function entrar() {
-  await cargarCatalogo(); cargarCatVivo();
+  await cargarCatalogo(); escucharCatVivo();
   iniciar();
   revisarPerfil();
 }

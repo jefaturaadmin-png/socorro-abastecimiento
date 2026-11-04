@@ -235,7 +235,7 @@ window.subirKardex = async function (files) {
     // con el kardex nuevo se actualiza todo: las listas de faltantes y de cada sucursal, y los demás módulos abiertos
     if ((nuevas || diarias || stockCambio) && window.publicarFaltantes && !S.ejemplo) {
       const antes = $("msg").textContent; msg((antes ? antes + " " : "") + "Actualizando las listas de las sucursales y de faltantes…");
-      try { const r = await window.publicarFaltantes(); msg((antes ? antes + " " : "") + (r?.ok ? "Listas de las sucursales y de faltantes actualizadas." : "No se pudieron actualizar las listas: " + (r?.error || ""))); }
+      try { const r = await window.publicarFaltantes(); msg((antes ? antes + " " : "") + (r?.ok ? "Listas de las sucursales y de faltantes actualizadas." + (r.avisos?.length ? " Ojo, no se pudo publicar: " + r.avisos.join(" · ") : "") : "No se pudieron actualizar las listas: " + (r?.error || ""))); }
       catch (e) { console.warn(e); }
       try { window.parent?.recargarModulos?.(window); } catch {}
     }
