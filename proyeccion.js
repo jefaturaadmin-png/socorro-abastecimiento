@@ -559,7 +559,7 @@ window.guardarReemp = (viejo, d) => setDoc(doc(db, "reemplazos", viejo), d);
 /* ---------- «gestionado por droguería»: comunicado por producto (gestion/{código} = { nota, porNombre, fecha }) ---------- */
 window.GEST = new Map();
 function escucharGestion() {
-  onSnapshot(collection(db, "gestion"), s => { window.GEST = new Map(s.docs.map(d => [d.id, d.data()])); window.REEMP_VER++; if (S.P) render(); }, () => setTimeout(escucharGestion, 30000));
+  onSnapshot(collection(db, "gestion"), s => { window.GEST = new Map(s.docs.map(d => [d.id, d.data()])); if (S.P) render(); }   // el comunicado solo se lee: no recalcula nada, () => setTimeout(escucharGestion, 30000));
 }
 window.guardarGest = (c, d) => setDoc(doc(db, "gestion", c), d);
 window.borrarGest = c => deleteDoc(doc(db, "gestion", c));

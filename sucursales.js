@@ -70,6 +70,13 @@
 
   /* ---------- venta diaria de la sucursal ---------- */
   const motor = new Map(); let motorDe = null, motorVer = 0;
+  // el pronóstico del medicamento (Estadística Proyx) se calcula UNA vez por producto; las 18 sucursales lo leen de aquí
+  const pronRed = new Map();
+  function pronRedDe(p) {
+    let r = pronRed.get(p.c);
+    if (!r) { const a = window.estAjustes?.(p.c) || {}; r = { a, fp: window.FREPPLE.pronosticar(p.h || [], 12, a.metodo || '') }; pronRed.set(p.c, r); }
+    return r;
+  }
   // pronóstico estadístico de la venta mensual del producto en una sucursal (se guarda para no repetirlo)
   // participación de la sucursal: la de la ficha (venta de los últimos 3 meses); si nadie vendió en esos 3 meses, la de los últimos 12
   function participa(p, f) {
@@ -78,14 +85,14 @@
     return tot > 0 ? u(p.hf?.[f]) / tot : 0;
   }
   function motorEn(p, f) {
-    if (motorDe !== S.P || motorVer !== (window.EST_VER || 0)) { motor.clear(); motorDe = S.P; motorVer = window.EST_VER || 0; }   // se rehace si cambia algo en Estadística
+    if (motorDe !== S.P || motorVer !== (window.EST_VER || 0)) { motor.clear(); pronRed.clear(); motorDe = S.P; motorVer = window.EST_VER || 0; }   // se rehace si cambia algo en Estadística
     const k = p.c + '|' + f; let r = motor.get(k);
     if (r === undefined) {
       // UN SOLO MOTOR: el pronóstico del medicamento en Estadística Proyx (su método elegido y sus correcciones por mes)
       // × la participación de la sucursal en la venta (la misma que muestra la ficha del Kardex). Así la suma de las
       // sucursales es el pronóstico de Estadística, y la sucursal que ya no vende (0 %) no recibe nada.
       const hv = S.P.hfm && p.hf?.[f] ? p.hf[f] : (p.h || []).map(v => v == null ? null : v * (p.s?.[f] || 0));
-      const a = window.estAjustes?.(p.c) || {}, fm = S.P.fm || [], fp = window.FREPPLE.pronosticar(p.h || [], 12, a.metodo || '');
+      const { a, fp } = pronRedDe(p), fm = S.P.fm || [];
       const sh = participa(p, f), f12 = fp.f.map((v, i) => Math.max(0, (a.over?.[fm[i]] ?? v) * sh)), f3 = f12.slice(0, 3);
       r = { d: Math.max(0, f3.reduce((x, v) => x + v, 0) / 3 / 30), metodo: fp.metodo, hv, f: f3, f12, fp, sh };
       motor.set(k, r);
@@ -166,13 +173,17 @@
   // respuestas de las sucursales (atencion_resp): el producto que dejan de usar y el que usan en su cambio
   let respVer = 0, cambios = new Map(), prodIdx = null;
   function leerRespuestas(docs) {
-    S.suResp = new Map(docs.map(d => [d.id, d.data()])); cambios = new Map(); respVer++;
+    S.suResp = new Map(docs.map(d => [d.id, d.data()])); cambios = new Map();
     // si usa varios en su cambio, la venta del original se reparte entre ellos
     for (const r of S.suResp.values()) if (r.estado === 'otro_medicamento') {
       const al = r.alts?.length ? r.alts.map(a => a.c) : r.altCod ? [r.altCod] : [];
       for (const c of al) cambios.set(r.suc + '__' + c, { r, parte: 1 / al.length });
     }
+    // un comentario («Sí se requiere», «Otro») solo se lee; se recalcula solo si cambia un «existe otro producto en su cambio»
+    const firma = [...cambios].map(([k, x]) => k + '>' + x.r.codpro + '*' + x.parte + '~' + (x.r.alternativa || '')).sort().join('|');
+    if (firma !== leerRespuestas.firma) { leerRespuestas.firma = firma; respVer++; }
   }
+
   const prodDe = c => { if (prodIdx?.de !== S.P) prodIdx = { de: S.P, m: new Map(S.P.p.map(p => [p.c, p])) }; return prodIdx.m.get(c); };
   const enCambio = (p, f) => { const r = S.suResp?.get(f + '__' + p.c); return r?.estado === 'otro_medicamento' && (r.altCod || r.alts?.length) ? r.alternativa || r.altCod : ''; };
   const cambioDe = (p, f) => { const x = cambios.get(f + '__' + p.c), orig = x && prodDe(x.r.codpro); return orig ? { orig, r: x.r, parte: x.parte } : null; };
