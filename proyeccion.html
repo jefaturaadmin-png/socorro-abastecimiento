@@ -125,6 +125,8 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .x-sucs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px } .x-sucs button { border: 1px solid var(--line, #d0d5dd); background: #fff; border-radius: 999px; padding: 5px 12px; cursor: pointer; font: inherit; font-size: .85rem }
 .x-sucs button[aria-pressed="true"] { background: #1E6B5F; color: #fff; border-color: #1E6B5F } .x-sucs small { opacity: .75 }
 .tag.gest { background: #fff1d6; color: #8a5a00; white-space: normal } .k-acc { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle }
+/* el nombre largo se corta con «…» pero los botones 🔁 📢 siempre se ven */
+.k-fila { display: flex; align-items: center; max-width: 100% } .k-fila .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap } .k-fila .k-acc { flex: none }
 .k-acc button { border: 1px solid #d0d5dd; background: #fff; border-radius: 6px; padding: 1px 5px; cursor: pointer; font-size: .8rem } .k-acc button:hover { background: #eef2f7 }
 .fx-btn { margin-left: 4px; border: 1px solid #c9d3df; background: #fff; border-radius: 4px; width: 20px; height: 20px; padding: 0; font-size: 11px; line-height: 1; cursor: pointer; color: #475467; vertical-align: middle }
 .fx-btn.activo { background: #1E6B5F; color: #fff; border-color: #1E6B5F }
@@ -1505,7 +1507,7 @@ function pintarKar() {
   for (const r of vis) {
     const p = r.p, cx = compraKar(p), rq = reqKar(p, r.sf), sob = r.drog - rq.tot;
     const cq = v => v == null ? '<span class="z">…</span>' : v ? fmt(conv(p, v)) : '<span class="z">0</span>';
-    h += `<tr><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a><span class="k-acc"><button type="button" data-kkr="${esc(p.c)}" title="Reemplazar este producto por otro">🔁</button><button type="button" data-kgest="${esc(p.c)}" title="Comunicado: gestionado por droguería">📢</button></span>${tagKR(p.c)}${tagGest(p.c)}<small class="sub">${esc(labDe(p.c))}</small></td>
+    h += `<tr><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><span class="k-fila"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a><span class="k-acc"><button type="button" data-kkr="${esc(p.c)}" title="Reemplazar este producto por otro">🔁</button><button type="button" data-kgest="${esc(p.c)}" title="Comunicado: gestionado por droguería">📢</button></span></span>${tagKR(p.c)}${tagGest(p.c)}<small class="sub">${esc(labDe(p.c))}</small></td>
       <td class="n big drog">${cel(p, r.drog)}</td><td class="n sobra ${!rq.listo ? '' : sob < 0 ? 'falta' : 'ok'}">${rq.listo ? (sob < 0 ? '−' : '') + fmt(conv(p, Math.abs(sob))) : '<span class="z">…</span>'}</td><td class="n req">${rq.listo ? cq(rq.tot) : '<span class="z">…</span>'}</td>${r.sf.map((v, i) => `<td class="n sep">${cel(p, v)}</td><td class="n req">${cq(rq.req[i])}</td>`).join('')}<td class="n sep">${cel(p, r.tot - r.drog)}</td><td class="n big">${cel(p, r.tot)}</td>
       <td class="n sep">${fmtE(p, conv(p, cx.nec))}</td><td class="n comprar">${cx.bloq ? '<span class="z">bloqueado</span>' : cx.cmp ? fmt(conv(p, cx.cmp)) : '<span class="z">·</span>'}</td></tr>`;
   }
