@@ -171,6 +171,8 @@ td.comprar { font-weight: 700; color: var(--accent) }
 .k-scroll { max-height: 640px; overflow: auto }
 #kTabla th, #kTabla td { white-space: nowrap }
 #kTabla td.drog, #kTabla th.drog { background: color-mix(in srgb, var(--accent) 7%, var(--surface)) }
+#kTabla th.req { color: #b4232a; font-style: italic } #kTabla td.req { color: #b4232a; font-weight: 700 }
+#kTabla td.sobra { font-weight: 700 } #kTabla td.sobra.ok { background: #fff6b3 } #kTabla td.sobra.falta { background: #f8c9b0; color: #8a2a12 }
 .fechero { display: flex; flex-wrap: wrap; align-items: center; gap: 8px }
 .fechero .dur { font-family: var(--f-mono); color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; font-size: 13px }
 tr.avance td { background: color-mix(in srgb, var(--s2) 8%, transparent) }
@@ -1484,21 +1486,30 @@ function compraKar(p) {
   if (window.BLOQ?.has('TODAS__' + p.c) || window.BLOQ?.has('DROGUERIA FS__' + p.c)) return { nec: x.nec, cmp: 0, bloq: true };
   return x;
 }
+// lo que requiere cada sucursal para los días elegidos: venta diaria del motor (igual que su módulo y Atención) × días − su stock
+// (0 si está bloqueado en esa sucursal); el total se compara con el stock de droguería: sobra (+) o falta (−)
+function reqKar(p, sf) {
+  const H = S.kCob + S.kSeg, listo = window.atencionListo?.() && !S.ejemplo;
+  const req = S.P.farmacias.map((f, i) => { if (!listo) return null; if (bloqueado(p.c, f)) return 0; const r = window.filaAtencion?.(p.c, f); return r ? Math.max(0, Math.ceil(r.d * H - sf[i] - 1e-9)) : 0; });
+  return { req, tot: req.reduce((a, v) => a + (v || 0), 0), listo };
+}
 $('kCob').addEventListener('change', e => { S.kCob = Math.max(0, +e.target.value || 0); pintarKar(); });
 $('kSeg').addEventListener('change', e => { S.kSeg = Math.max(0, +e.target.value || 0); pintarKar(); });
 function pintarKar() {
   llenarLabs(); llenarClas();
+  if (!S.ejemplo && !window.atencionListo?.() && !S.kPrep) { S.kPrep = true; window.prepAtencion?.().then(() => { S.kPrep = false; if (S.vista === 'kar') pintarKar(); }); }
   const o = S.P, farms = o.farmacias, conv = (p, v) => soles() ? v * p.k : v, cel = (p, v) => v ? fmtS(p, conv(p, v)) : '<span class="z">0</span>';
   const filas = filasKar(), vis = window.fxActivo?.('kar') ? filas : filas.slice(0, S.kMostrar);
   $('kEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · en ${soles() ? 'soles' : 'cajas y fracciones'} · del último kardex subido`;
-  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th class="drog">Droguería</th>${farms.map(f => `<th>${esc(nomSuc(f))}</th>`).join('')}<th class="sep">Sucursales</th><th>Total</th><th class="sep" title="Lo que necesita la red para los días elegidos (pronóstico)">Necesita ${S.kCob} + ${S.kSeg} d</th><th title="Necesita − stock total (droguería + sucursales)">Comprar</th></tr></thead><tbody>`;
+  let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th class="drog">Droguería</th><th class="sobra" title="Droguería − total que requieren las sucursales para ${S.kCob} + ${S.kSeg} días. Negativo: falta">Sobra / falta</th><th class="req" title="Suma de lo que requiere cada sucursal">Total requieren</th>${farms.map(f => `<th class="sep">${esc(nomSuc(f))}</th><th class="req" title="Lo que requiere ${esc(nomSuc(f))} para ${S.kCob} + ${S.kSeg} días (venta diaria × días − su stock)">Requiere</th>`).join('')}<th class="sep">Sucursales</th><th>Total</th><th class="sep" title="Lo que necesita la red para los días elegidos (pronóstico)">Necesita ${S.kCob} + ${S.kSeg} d</th><th title="Necesita − stock total (droguería + sucursales)">Comprar</th></tr></thead><tbody>`;
   for (const r of vis) {
-    const p = r.p, cx = compraKar(p);
+    const p = r.p, cx = compraKar(p), rq = reqKar(p, r.sf), sob = r.drog - rq.tot;
+    const cq = v => v == null ? '<span class="z">…</span>' : v ? fmt(conv(p, v)) : '<span class="z">0</span>';
     h += `<tr><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a><span class="k-acc"><button type="button" data-kkr="${esc(p.c)}" title="Reemplazar este producto por otro">🔁</button><button type="button" data-kgest="${esc(p.c)}" title="Comunicado: gestionado por droguería">📢</button></span>${tagKR(p.c)}${tagGest(p.c)}<small class="sub">${esc(labDe(p.c))}</small></td>
-      <td class="n big drog">${cel(p, r.drog)}</td>${r.sf.map(v => `<td class="n">${cel(p, v)}</td>`).join('')}<td class="n sep">${cel(p, r.tot - r.drog)}</td><td class="n big">${cel(p, r.tot)}</td>
+      <td class="n big drog">${cel(p, r.drog)}</td><td class="n sobra ${!rq.listo ? '' : sob < 0 ? 'falta' : 'ok'}">${rq.listo ? (sob < 0 ? '−' : '') + fmt(conv(p, Math.abs(sob))) : '<span class="z">…</span>'}</td><td class="n req">${rq.listo ? cq(rq.tot) : '<span class="z">…</span>'}</td>${r.sf.map((v, i) => `<td class="n sep">${cel(p, v)}</td><td class="n req">${cq(rq.req[i])}</td>`).join('')}<td class="n sep">${cel(p, r.tot - r.drog)}</td><td class="n big">${cel(p, r.tot)}</td>
       <td class="n sep">${fmtE(p, conv(p, cx.nec))}</td><td class="n comprar">${cx.bloq ? '<span class="z">bloqueado</span>' : cx.cmp ? fmt(conv(p, cx.cmp)) : '<span class="z">·</span>'}</td></tr>`;
   }
-  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${farms.length + 6}">Nada que mostrar con estos filtros.</td></tr>`;
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${farms.length * 2 + 8}">Nada que mostrar con estos filtros.</td></tr>`;
   $('kTabla').innerHTML = h + '</tbody>'; ajustarC0($('kTabla'));
   const sum = (k) => filas.reduce((a, r) => a + (soles() ? r[k] * (r.p.k || 0) : r[k]), 0);
   let tc = 0, ts = 0; for (const r of filas) { const x = compraKar(r.p).cmp; tc += x; ts += x * (r.p.k || 0); }
@@ -1527,8 +1538,8 @@ $('gsDlg').addEventListener('click', async e => {
 });
 $('kXls').addEventListener('click', () => {
   const o = S.P, farms = o.farmacias, filas = filasKar(), num = v => String(Math.round(v * 1000) / 1000).replace('.', ',');
-  const t = [['Código', 'Medicamento', 'Laboratorio', 'Droguería', ...farms.map(nomSuc), 'Sucursales', 'Total', `Necesita ${S.kCob} + ${S.kSeg} d`, 'Comprar', 'Comprar S/'],
-    ...filas.map(r => { const x = compraKar(r.p); return [r.p.c, r.p.n, labDe(r.p.c), num(r.drog), ...r.sf.map(num), num(r.tot - r.drog), num(r.tot), num(x.nec), x.bloq ? 'bloqueado' : x.cmp, num(x.cmp * (r.p.k || 0))]; })];
+  const t = [['Código', 'Medicamento', 'Laboratorio', 'Droguería', `Sobra/falta ${S.kCob}+${S.kSeg}`, 'Total requieren sucursales', ...farms.flatMap(f => [nomSuc(f), 'Requiere ' + nomSuc(f)]), 'Sucursales', 'Total', `Necesita ${S.kCob} + ${S.kSeg} d`, 'Comprar', 'Comprar S/'],
+    ...filas.map(r => { const x = compraKar(r.p), rq = reqKar(r.p, r.sf); return [r.p.c, r.p.n, labDe(r.p.c), num(r.drog), num(r.drog - rq.tot), rq.tot, ...r.sf.flatMap((v, i) => [num(v), rq.req[i] ?? '']), num(r.tot - r.drog), num(r.tot), num(x.nec), x.bloq ? 'bloqueado' : x.cmp, num(x.cmp * (r.p.k || 0))]; })];
   const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' }));
   a.download = `stock_${o.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
