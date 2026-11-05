@@ -1492,11 +1492,11 @@ function compraKar(p) {
   if (window.BLOQ?.has('TODAS__' + p.c) || window.BLOQ?.has('DROGUERIA FS__' + p.c)) return { nec: x.nec, cmp: 0, bloq: true };
   return x;
 }
-// lo que requiere cada sucursal para los días elegidos: venta diaria del motor (igual que su módulo y Atención) × días − su stock
-// (0 si está bloqueado en esa sucursal); el total se compara con el stock de droguería: sobra (+) o falta (−)
+// lo que requiere cada sucursal para los días elegidos, con las mismas reglas de Atención a sucursales: tipo A lo que falta,
+// tipo B 1 caja si no le alcanza, tipo C/D/E a pedido (0), bloqueados 0, cambios y reemplazos; el total se compara con el stock de droguería: sobra (+) o falta (−)
 function reqKar(p, sf) {
   const H = S.kCob + S.kSeg, listo = window.atencionListo?.() && !S.ejemplo;
-  const req = S.P.farmacias.map((f, i) => { if (!listo) return null; if (bloqueado(p.c, f)) return 0; const r = window.filaAtencion?.(p.c, f); return r ? Math.max(0, Math.ceil(r.d * H - sf[i] - 1e-9)) : 0; });
+  const req = S.P.farmacias.map(f => listo ? window.requiereSuc?.(p.c, f, H) ?? 0 : null);
   return { req, tot: req.reduce((a, v) => a + (v || 0), 0), listo };
 }
 $('kCob').addEventListener('change', e => { S.kCob = Math.max(0, +e.target.value || 0); pintarKar(); });
@@ -1596,7 +1596,7 @@ function filasStk() {
       // reemplazos y bloqueos. Con los días del criterio, «Pedir» es exactamente lo que Atención le envía.
       const r = window.filaAtencion?.(p.c, f), cr = window.criterioSuc?.(f) || {};
       nec = r ? r.d * H : 0; vd = r ? r.d : 0; met = r?.metodo || metodoEst(p);
-      cmp = !r ? 0 : H === (cr.C + cr.Sg) ? r.pide : Math.max(0, Math.ceil(nec - st - 1e-9));
+      cmp = !r ? 0 : H === (cr.C + cr.Sg) ? r.pide : (window.requiereSuc?.(p.c, f, H) ?? 0);
       if (r?.krV) nota = 'se termina (reemplazado)';
     }
     if (bq) { cmp = 0; nota = 'bloqueado'; }
@@ -2329,7 +2329,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611051900"></script>
+<script src="sucursales.js?v=202611052100"></script>
 <script src="estadistica.js?v=202611042300"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611051900"></script>

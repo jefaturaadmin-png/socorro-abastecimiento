@@ -111,7 +111,7 @@
     cache = { filas, porProd }; return cache;
   }
   // fila de un producto en una sucursal con su criterio (también para los que no tienen venta ni stock)
-  function filaBase(p, f) {
+  function filaBase(p, f, H) {   // H: días a usar en lugar de los del criterio (el Kardex usa los que se ponen allí)
         const st = +(window.STOCK_TODOS?.[p.c]?.[f]?.[0] ?? p.st?.[f] ?? 0) || 0, c = p.catF?.[f] || 'E';
         const o = cfgDe(f, p.c), aj = ajProd(f, p.c), dv = diaria(p, f, o);
         // "Se tiene otro medicamento en su cambio": el que usa en su lugar se atiende con la venta del original
@@ -129,7 +129,7 @@
         let dV = 0, stV = 0, envV = 0;
         for (const q of viejos) { dV += diaria(q, f, cfgDe(f, q.c)).d; stV += stockEn(q.c, f); envV += S.krEnviado?.get(q.c + '__' + f) || 0; }
         const d = Math.max(dv.d, dOrig) + extra + (viejos.length && !(dv.d > 0) ? dV : 0);
-        const bloq = bloqueado(p.c, f), nec = d * (o.C + o.Sg), seg = d * o.Sg, cob = d > 0 ? st / d : Infinity;
+        const bloq = bloqueado(p.c, f), nec = d * (H ?? (o.C + o.Sg)), seg = d * o.Sg, cob = d > 0 ? st / d : Infinity;
         let pide = 0, nota = '';
         if (usa) return { p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide: 0, nota: 'usa en su cambio ' + usa, bloq, exceso: 0, o, aj, urgente: false, usa };
         if (bloq) nota = 'bloqueado';
@@ -436,6 +436,9 @@
     const alt = r.alternativa || (r.altCod ? String(r.altCod) : ''), fe = r.fecha?.toDate ? r.fecha.toDate().toISOString() : String(r.fecha || '');
     return { estado: r.estado, txt: (RESP_TXT[r.estado] || r.estado) + (alt ? ': ' + alt : '') + (r.comentario ? (alt ? ' · ' : ': ') + r.comentario : ''), por: r.porNombre || '', fecha: fe.slice(0, 10),
       comentario: r.comentario || '', alts: r.alts?.length ? r.alts : r.altCod ? [{ c: String(r.altCod), n: (r.alternativa || '').replace(/^[^-]*- /, '') }] : [] }; };
+  // lo que requiere la sucursal con las mismas reglas de Atención (tipo A, B 1 caja, C/D/E a pedido, bloqueos, cambios,
+  // reemplazos, ajustes por producto) pero para H días; sin limitarlo a lo que hay en droguería
+  window.requiereSuc = (c, f, H) => { const p = prodDe(c); if (!p) return 0; calcular(); const r = filaBase(p, f, H); return r.usa || r.bloq ? 0 : r.pide || 0; };
   window.filaAtencion = (c, f) => calcular().porProd.get(c)?.red.find(r => r.f === f) || null;
   window.publicarExtras = async () => {
     for (let i = 0; i < 240 && !(S.P && S.db && !S.ejemplo); i++) await new Promise(r => setTimeout(r, 500));
