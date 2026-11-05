@@ -124,7 +124,9 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .rs-btn { white-space: nowrap; border-color: var(--accent); color: var(--accent); padding: 3px 10px; font-size: 12px }
 .x-sucs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px } .x-sucs button { border: 1px solid var(--line, #d0d5dd); background: #fff; border-radius: 999px; padding: 5px 12px; cursor: pointer; font: inherit; font-size: .85rem }
 .x-sucs button[aria-pressed="true"] { background: #1E6B5F; color: #fff; border-color: #1E6B5F } .x-sucs small { opacity: .75 }
-.tag.gest { background: #fff1d6; color: #8a5a00; white-space: normal } .k-acc { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle }
+.tag.gest { background: #fff1d6; color: #8a5a00; white-space: normal }
+/* el comunicado general y el reemplazo van en su propia línea bajo el nombre: así no se cortan cuando el nombre es largo */
+.cells .c1 .tag.gest, .cells .c1 .tag.kr { display: block; width: fit-content; max-width: 260px; margin: 3px 0 2px; white-space: normal; line-height: 1.3 } .k-acc { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle }
 /* el nombre largo se corta con «…» pero los botones 🔁 📢 siempre se ven */
 .k-fila { display: flex; align-items: center; max-width: 100% } .k-fila .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap } .k-fila .k-acc { flex: none }
 .k-acc button { border: 1px solid #d0d5dd; background: #fff; border-radius: 6px; padding: 1px 5px; cursor: pointer; font-size: .8rem } .k-acc button:hover { background: #eef2f7 }
