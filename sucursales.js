@@ -69,15 +69,25 @@
   }
 
   /* ---------- venta diaria de la sucursal ---------- */
-  const motor = new Map(); let motorDe = null;
+  const motor = new Map(); let motorDe = null, motorVer = 0;
   // pronóstico estadístico de la venta mensual del producto en una sucursal (se guarda para no repetirlo)
+  // participación de la sucursal: la de la ficha (venta de los últimos 3 meses); si nadie vendió en esos 3 meses, la de los últimos 12
+  function participa(p, f) {
+    const s = p.s || {}, t = Object.values(s).reduce((a, v) => a + (+v || 0), 0); if (t > 0) return +s[f] || 0;
+    const u = h => (h || []).slice(-12).reduce((a, v) => a + (+v || 0), 0), tot = S.P.farmacias.reduce((a, x) => a + u(p.hf?.[x]), 0);
+    return tot > 0 ? u(p.hf?.[f]) / tot : 0;
+  }
   function motorEn(p, f) {
-    if (motorDe !== S.P) { motor.clear(); motorDe = S.P; }
+    if (motorDe !== S.P || motorVer !== (window.EST_VER || 0)) { motor.clear(); motorDe = S.P; motorVer = window.EST_VER || 0; }   // se rehace si cambia algo en Estadística
     const k = p.c + '|' + f; let r = motor.get(k);
     if (r === undefined) {
+      // UN SOLO MOTOR: el pronóstico del medicamento en Estadística Proyx (su método elegido y sus correcciones por mes)
+      // × la participación de la sucursal en la venta (la misma que muestra la ficha del Kardex). Así la suma de las
+      // sucursales es el pronóstico de Estadística, y la sucursal que ya no vende (0 %) no recibe nada.
       const hv = S.P.hfm && p.hf?.[f] ? p.hf[f] : (p.h || []).map(v => v == null ? null : v * (p.s?.[f] || 0));
-      const fp = window.FREPPLE.pronosticar(hv, 12, window.estAjustes?.(p.c)?.metodo || ''), f3 = fp.f.slice(0, 3);   // con el método elegido en Estadística Proyx
-      r = { d: Math.max(0, f3.reduce((a, v) => a + v, 0) / 3 / 30), metodo: fp.metodo, hv, f: f3, f12: fp.f, fp };
+      const a = window.estAjustes?.(p.c) || {}, fm = S.P.fm || [], fp = window.FREPPLE.pronosticar(p.h || [], 12, a.metodo || '');
+      const sh = participa(p, f), f12 = fp.f.map((v, i) => Math.max(0, (a.over?.[fm[i]] ?? v) * sh)), f3 = f12.slice(0, 3);
+      r = { d: Math.max(0, f3.reduce((x, v) => x + v, 0) / 3 / 30), metodo: fp.metodo, hv, f: f3, f12, fp, sh };
       motor.set(k, r);
     }
     return r;
@@ -91,7 +101,7 @@
   /* ---------- cálculo de toda la red (todas las sucursales, para repartir lo de droguería) ---------- */
   let cache = null, cacheClave = '';
   function calcular() {
-    const clave = cfgVer + '|' + respVer + '|' + (window.REEMP_VER || 0) + '|' + (window.BLOQ_VER || 0) + '|' + JSON.stringify(CFG);
+    const clave = cfgVer + '|' + respVer + '|' + (window.EST_VER || 0) + '|' + (window.REEMP_VER || 0) + '|' + (window.BLOQ_VER || 0) + '|' + JSON.stringify(CFG);
     if (cache && cacheDe === S.P && cacheClave === clave) return cache;
     cacheDe = S.P; cacheClave = clave;
     const filas = [], porProd = new Map(), R = window.REEMP || new Map();

@@ -609,7 +609,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
     <details class="metodo">
       <summary>Cómo se calcula</summary>
       <ul>
-        <li><b>Venta diaria de cada sucursal</b>: sus ventas de los últimos días del kardex (los días que el kardex no cubre se completan con su historial), o el motor estadístico aplicado a su venta mensual.</li>
+        <li><b>Venta diaria de cada sucursal</b> (motor): el pronóstico del medicamento en <b>Estadística Proyx</b> (su método y sus correcciones) × la <b>participación</b> de la sucursal en la venta (la misma de la ficha del Kardex). La sucursal con 0 % no recibe nada. Si en el criterio se elige «ventas de N días», se usan sus ventas reales de esos días.</li>
         <li><b>Necesita</b> = venta diaria × (días a atender + días de seguridad). <b>Enviar</b> = lo que necesita − su stock. Por defecto, como en Reposición: tipo A lo que necesite, tipo B 1 caja solo si su stock no alcanza para los días elegidos, C y D a pedido; puedes elegir atender todo lo que se vende.</li>
         <li><b>Cobertura</b>: días que alcanza el stock de la sucursal. Rojo: menos que los días de seguridad (urgente). Amarillo: menos que días + seguridad. Verde: bien. Azul: más del doble (sobra).</li>
         <li><b>Reparto</b>: el stock de droguería se reparte primero a las sucursales con menos cobertura. Lo que no alcanza se toma de otra sucursal que tenga exceso de ese producto (más del doble de lo que necesita, o stock sin venta); si tampoco hay, se marca para comprar.</li>
@@ -2329,7 +2329,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611052100"></script>
+<script src="sucursales.js?v=202611052200"></script>
 <script src="estadistica.js?v=202611042300"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611051900"></script>
