@@ -115,6 +115,10 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .kr-in { padding: 18px 20px } .kr-cab { display: flex; justify-content: space-between; align-items: center } .kr-cab h2 { margin: 0 }
 .kr-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 12px 0 } .kr-form .field { flex: 1 1 200px } .kr-flecha { font-size: 1.4rem; padding-bottom: 22px }
 .kr-msg { min-height: 1.2em; margin-bottom: 8px; font-weight: 600 }
+.rs-dlg { max-width: 620px } .rs-op { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 14px } .rs-op label { display: flex; gap: 8px; align-items: center; font-weight: 600; cursor: pointer }
+.rs-sug { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; max-height: 240px; overflow: auto } .rs-sug button { text-align: left; border: 1px solid #e3ddd3; background: #fff; border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit } .rs-sug button:hover { background: #f4efe6 }
+.rs-sel { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px } .rs-chip { background: #ddf0ec; color: #1e6b5f; border-radius: 999px; padding: 4px 10px; font-size: 13px } .rs-chip button { border: 0; background: none; cursor: pointer; color: inherit }
+.rs-th { min-width: 200px } .rs-td { min-width: 200px; white-space: normal } .rs-td .tag { display: inline-block; margin: 0 6px 4px 0 } .rs-btn { white-space: nowrap }
 .x-sucs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px } .x-sucs button { border: 1px solid var(--line, #d0d5dd); background: #fff; border-radius: 999px; padding: 5px 12px; cursor: pointer; font: inherit; font-size: .85rem }
 .x-sucs button[aria-pressed="true"] { background: #1E6B5F; color: #fff; border-color: #1E6B5F } .x-sucs small { opacity: .75 }
 .tag.gest { background: #fff1d6; color: #8a5a00; white-space: normal } .k-acc { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle }
@@ -603,6 +607,23 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
     </details>
   </section>
 
+  <dialog id="rsDlg" class="kr-dlg rs-dlg"><div class="kr-in">
+    <div class="kr-cab"><h2>💬 Comentario de la sucursal</h2><button type="button" class="btn sm" data-rscerrar>✕</button></div>
+    <p><b id="rsTit"></b></p>
+    <div class="rs-op">
+      <label><input type="radio" name="rsE" value="si_requiere"> Sí se requiere</label>
+      <label><input type="radio" name="rsE" value="otro_medicamento"> Existe otro producto en su cambio</label>
+      <label><input type="radio" name="rsE" value="otros"> Otro</label>
+    </div>
+    <div id="rsAlt" hidden>
+      <label class="field"><span>¿Qué producto existe en su cambio? Búsquelo por nombre o código (hasta 3)</span><input id="rsQ" autocomplete="off" placeholder="p. ej. paracetamol o 17689"></label>
+      <div id="rsSug" class="rs-sug"></div>
+      <div id="rsSel" class="rs-sel"></div>
+    </div>
+    <label class="field"><span id="rsCt">Comentario (opcional)</span><textarea id="rsCom" rows="2" maxlength="300" placeholder="Ej. el cliente lo pide seguido · ya no se vende · usamos el genérico"></textarea></label>
+    <div class="kr-msg z" id="rsMsg"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn primary" id="rsGuardar">Guardar</button><button type="button" class="btn" id="rsQuitar">Quitar comentario</button></div>
+  </div></dialog>
   <dialog id="gsDlg" class="kr-dlg"><div class="kr-in">
     <div class="kr-cab"><h2>📢 Gestionado por droguería</h2><button type="button" class="btn sm" data-gscerrar>✕</button></div>
     <p><b id="gsTit"></b></p>
@@ -1559,6 +1580,53 @@ function filasStk() {
 }
 // administrador de verdad (en «Vista previa» se ve como la sucursal: sin poder cambiar los días)
 const esAdminP = () => { try { if (window.parent?.enPrevia?.()) return false; } catch {} return String(window.PERFIL?.rol || '').trim().toLowerCase() === 'admin'; };
+/* ---------- comentario de la sucursal por producto: Sí se requiere · Existe otro producto en su cambio (cuál) · Otro ---------- */
+// lo comenta la propia sucursal (químicos de esa sucursal) o Abastecimiento; en «Vista previa» no se guarda nada
+const puedeComentar = f => { try { if (window.parent?.enPrevia?.()) return false; } catch {} return !!f && (esAdminP() || window.PERFIL?.farmacia === f); };
+const RS = { c: '', f: '', alts: [] };
+function abrirResp(c) {
+  const f = S.xFarm, r = window.respAtencion?.(f, c); RS.c = c; RS.f = f; RS.alts = (r?.alts || []).map(a => ({ c: String(a.c), n: a.n || nomDe(a.c) }));
+  $('rsTit').textContent = `${c} · ${nomDe(c)} · ${nomSuc(f)}`;
+  document.querySelectorAll('[name=rsE]').forEach(x => x.checked = x.value === r?.estado);
+  $('rsCom').value = r?.comentario || ''; $('rsQ').value = ''; $('rsSug').innerHTML = ''; $('rsMsg').textContent = ''; $('rsQuitar').hidden = !r;
+  pintarRsForm(); $('rsDlg').showModal();
+}
+function pintarRsForm() {
+  const e = document.querySelector('[name=rsE]:checked')?.value;
+  $('rsAlt').hidden = e !== 'otro_medicamento';
+  $('rsCt').textContent = e === 'otros' ? 'Comentario (obligatorio)' : 'Comentario (opcional)';
+  $('rsSel').innerHTML = RS.alts.map((a, i) => `<span class="rs-chip"><b>${esc(a.c)}</b> ${esc(a.n)} <button type="button" data-rsdel="${i}" title="Quitar">✕</button></span>`).join('') || '<small class="z">Aún no eligió el producto.</small>';
+}
+function buscarRs() {
+  const q = $('rsQ').value.trim().toLowerCase(); if (q.length < 2) { $('rsSug').innerHTML = ''; return; }
+  const l = []; for (const p of S.P.p) { if (p.c === RS.c) continue; if (p.c.toLowerCase().startsWith(q) || p.n.toLowerCase().includes(q)) { l.push(p); if (l.length >= 8) break; } }
+  $('rsSug').innerHTML = l.map(p => `<button type="button" data-rsadd="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)} <small class="z">· stock ${nf0.format(stDe(p, RS.f) || 0)}</small></button>`).join('') || '<small class="z">No se encontró. Escriba el código o parte del nombre.</small>';
+}
+async function guardarRs() {
+  const e = document.querySelector('[name=rsE]:checked')?.value, com = $('rsCom').value.trim(), m = t => $('rsMsg').textContent = t;
+  if (!e) return m('Elija una opción.');
+  if (e === 'otro_medicamento' && !RS.alts.length) return m('Busque y elija el producto que existe en su cambio.');
+  if (e === 'otros' && !com) return m('Escriba su comentario.');
+  const P = window.PERFIL || {}, uid = window.parent?.FB?.auth?.currentUser?.uid; if (!uid) return m('Su sesión no está activa. Recargue la página.');
+  const alts = e === 'otro_medicamento' ? RS.alts.slice(0, 3) : [];
+  m('Guardando…');
+  try {
+    await window.guardarResp(RS.f, RS.c, { producto: nomDe(RS.c), laboratorio: labDe(RS.c) || '', estado: e, comentario: com.slice(0, 300),
+      alternativa: alts.map(a => `${a.c} - ${a.n}`).join(' / ').slice(0, 400), altCod: alts[0]?.c || '', alts,
+      porUid: uid, porNombre: P.nombre || P.usuario || '', fecha: new Date().toISOString() });
+    $('rsDlg').close();
+  } catch (x) { m(x?.code === 'permission-denied' ? 'Firebase no lo permitió: falta publicar las reglas nuevas.' : 'No se pudo guardar: ' + (x?.message || x)); }
+}
+$('xTabla').addEventListener('click', e => { const b = e.target.closest('[data-rs]'); if (b) { e.stopPropagation(); abrirResp(b.dataset.rs); } }, true);
+$('rsDlg').addEventListener('click', async e => {
+  if (e.target.closest('[data-rscerrar]') || e.target === $('rsDlg')) return $('rsDlg').close();
+  const a = e.target.closest('[data-rsadd]'); if (a) { const c = a.dataset.rsadd; if (!RS.alts.some(x => x.c === c) && RS.alts.length < 3) RS.alts.push({ c, n: nomDe(c) }); $('rsQ').value = ''; $('rsSug').innerHTML = ''; return pintarRsForm(); }
+  const d = e.target.closest('[data-rsdel]'); if (d) { RS.alts.splice(+d.dataset.rsdel, 1); return pintarRsForm(); }
+  if (e.target.closest('#rsGuardar')) return guardarRs();
+  if (e.target.closest('#rsQuitar')) { if (!confirm('¿Quitar el comentario de este producto?')) return; try { await window.borrarResp(RS.f, RS.c); $('rsDlg').close(); } catch (x) { $('rsMsg').textContent = 'No se pudo quitar: ' + (x?.message || x); } }
+});
+$('rsDlg').addEventListener('change', e => { if (e.target.name === 'rsE') pintarRsForm(); });
+let rsT = 0; $('rsQ').addEventListener('input', () => { clearTimeout(rsT); rsT = setTimeout(buscarRs, 150); });
 function pintarStk() {
   llenarLabs(); llenarClas();
   if (S.xModo === 'sucx' && !window.atencionListo?.()) { if (!S.xPrep) { S.xPrep = true; window.prepAtencion?.().then(() => { S.xPrep = false; pintarStk(); }); }
@@ -1583,17 +1651,18 @@ function pintarStk() {
   $('xTit').textContent = drog ? 'Droguería' : nomSuc(f) + (prio >= 0 ? ` · prioridad ${prio + 1} de ${prioridadSucs().length}` : '');
   $('xEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · necesita para ${S.xCob} + ${S.xSeg} días · ${drog ? 'Comprar = necesita de la red − stock de droguería' : 'igual que Atención a sucursales (motor de Estadística Proyx con la venta de la sucursal); con los días de su criterio, Pedir = lo que se le envía'}`;
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th>Tipo</th><th>Stock actual</th>${false ? mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="Error del método (WAPE). Clic para usarlo.">${esc(corto(m))}</th>`).join('') : ''}
-    <th class="sep" title="Venta por día según el motor de Estadística Proyx">Venta diaria</th><th class="sep">Necesita ${S.xCob} + ${S.xSeg} d</th><th>${drog ? 'Comprar' : 'Pedir'}</th></tr></thead><tbody>`;
+    <th class="sep" title="Venta por día según el motor de Estadística Proyx">Venta diaria</th><th class="sep">Necesita ${S.xCob} + ${S.xSeg} d</th><th>${drog ? 'Comprar' : 'Pedir'}</th>${drog ? '' : '<th class="sep rs-th">Comentario de la sucursal</th>'}</tr></thead><tbody>`;
+  const edita = !drog && puedeComentar(f);
   for (const r of vis) {
     const p = r.p, k = S.calc.get(p.c), sel = elegido(p.c);
-    h += `<tr data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${etiquetas(p)}${r.met ? `<span class="tag met" title="Modelo del motor de Estadística Proyx">${esc(r.met)}</span>` : ''}${r.resp ? `<span class="tag su-resp ${esc(r.resp.estado)}" title="${esc('Comentario de ' + (r.resp.por || 'la sucursal') + (r.resp.fecha ? ' · ' + r.resp.fecha : ''))}">💬 ${esc(r.resp.txt)}${r.resp.por ? ' · ' + esc(r.resp.por) : ''}</span>` : ''}<small class="sub">${esc(labDe(p.c))}</small></td>
+    h += `<tr data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${etiquetas(p)}${r.met ? `<span class="tag met" title="Modelo del motor de Estadística Proyx">${esc(r.met)}</span>` : ''}<small class="sub">${esc(labDe(p.c))}</small></td>
       <td style="text-align:center">${catBadge(r.cat)}</td><td class="n big">${r.st ? fmtS(p, conv(p, r.st)) : '<span class="z">0</span>'}</td>
       ${true ? '' : mets.map((m, i) => { const x = k?.met[m]; const cls = ['w', i === 0 ? 'sep' : '']; if (!x || x.wape == null) return `<td class="${cls.join(' ')} na">–</td>`;
         if (m === k.best) cls.push('best'); if (m === sel) cls.push('sel'); return `<td class="${cls.join(' ')}" data-m="${esc(m)}" title="Usar ${esc(m)}">${pct(x.wape)}</td>`; }).join('')}
       <td class="n sep">${r.vd ? fmtS(p, conv(p, r.vd)) : '<span class="z">0</span>'}</td>
-      <td class="n sep">${fmtE(p, conv(p, r.nec))}</td><td class="n comprar">${r.nota ? `<span class="z">${esc(r.nota)}</span>` : r.cmp ? fmt(conv(p, r.cmp)) : '<span class="z">·</span>'}</td></tr>`;
+      <td class="n sep">${fmtE(p, conv(p, r.nec))}</td><td class="n comprar">${r.nota ? `<span class="z">${esc(r.nota)}</span>` : r.cmp ? fmt(conv(p, r.cmp)) : '<span class="z">·</span>'}</td>${drog ? '' : `<td class="sep rs-td">${r.resp ? `<span class="tag su-resp ${esc(r.resp.estado)}" title="${esc('Comentario de ' + (r.resp.por || 'la sucursal') + (r.resp.fecha ? ' · ' + r.resp.fecha : ''))}">💬 ${esc(r.resp.txt)}${r.resp.por ? ' · ' + esc(r.resp.por) : ''}</span>` : ''}${edita ? `<button type="button" class="btn sm rs-btn" data-rs="${esc(p.c)}">${r.resp ? '✏️ Cambiar' : '＋ Comentar'}</button>` : r.resp ? '' : '<span class="z">·</span>'}</td>`}</tr>`;
   }
-  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${(S.verMet ? mets.length : 0) + 6}">Nada que mostrar con estos filtros.</td></tr>`;
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${(S.verMet ? mets.length : 0) + (drog ? 6 : 7)}">Nada que mostrar con estos filtros.</td></tr>`;
   $('xTabla').innerHTML = h + '</tbody>'; ajustarC0($('xTabla'));
   window.fxAplicar?.($('xTabla'), fxk, [], (v, t) => { if (v < t) $('xMore').querySelector('span')?.insertAdjacentHTML('afterbegin', `<b>${nf0.format(v)} con el filtro</b> · `); });
   let tc = 0, ts = 0; for (const r of filas) { tc += r.cmp; ts += r.cmp * (r.p.k || 0); }
@@ -2232,7 +2301,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611051400"></script>
+<script src="sucursales.js?v=202611051500"></script>
 <script src="estadistica.js?v=202611042300"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611051200"></script>

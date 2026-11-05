@@ -247,7 +247,7 @@
     // lo que responde cada sucursal en "Lo que me van a atender" (atencion_resp/{SUCURSAL}__{codpro})
     FB.onSnapshot(FB.collection(FB.db, 'atencion_resp'), sn => { leerRespuestas(sn.docs); if (S.vista === 'suc') window.pintarSuc(); }, () => {});
   }
-  const RESP_TXT = { si_requiere: 'Sí se requiere', no_requiere: 'No se requiere en esta sucursal', no_se_mueve: 'No se mueve', otro_medicamento: 'Tiene otro en su cambio', otros: 'Otros' };
+  const RESP_TXT = { si_requiere: 'Sí se requiere', no_requiere: 'No se requiere en esta sucursal', no_se_mueve: 'No se mueve', otro_medicamento: 'Existe otro producto en su cambio', otros: 'Otro' };
   const tagResp = (f, c) => { const r = S.suResp?.get(f + '__' + c); if (!r) return '';
     const t = (RESP_TXT[r.estado] || r.estado) + (r.alternativa ? ': ' + r.alternativa : '') + (r.comentario ? (r.alternativa ? ' · ' : ': ') + r.comentario : '');
     return ` · <span class="tag su-resp ${esc(r.estado)}" title="${esc('Respondió ' + (r.porNombre || '') + ': ' + t)}">💬 ${esc(t)}</span>`; };
@@ -413,14 +413,29 @@
   }
   // desde el módulo de la sucursal (solo Abastecimiento): los días de stock y de seguridad pasan a ser el criterio de esa sucursal
   window.guardarCriterioSuc = (f, C, Sg) => { if (!cfgListo || !f) return; CFG.suc[f] = { ...(CFG.suc[f] || {}), C: Math.max(1, +C || 1), Sg: Math.max(0, +Sg || 0) }; guardarCfg(); };
-  window.prepAtencion = async () => { escucharCfg(); await cargarCfg(); for (let i = 0; i < 40 && !cfgListo; i++) await new Promise(r => setTimeout(r, 250)); await cargarRespuestas(); };
+  // comentarios de las sucursales en vivo (Abastecimiento: todos; la sucursal: los suyos)
+  function escucharResp() {
+    if (escucharResp.ok || !FB || S.ejemplo) return; escucharResp.ok = true;
+    const pinta = docs => { leerRespuestas(docs); if (S.vista === 'suc') window.pintarSuc(); else if (S.vista === 'stk') render(); };
+    let parcial = false;
+    const un = FB.onSnapshot(FB.collection(FB.db, 'atencion_resp'), sn => pinta(sn.docs), () => {
+      if (parcial) return; parcial = true; try { un?.(); } catch {}
+      const f = window.parent?.miFarmUsuario?.(); if (!f || !FB.query) return;
+      FB.onSnapshot(FB.query(FB.collection(FB.db, 'atencion_resp'), FB.where('suc', '==', f)), sn => pinta(sn.docs), () => {});
+    });
+  }
+  // guardar o quitar el comentario de una sucursal sobre un producto (atencion_resp/{SUCURSAL}__{código})
+  window.guardarResp = (f, c, d) => FB.setDoc(FB.doc(FB.db, 'atencion_resp', f + '__' + c), window.parent.JSON.parse(JSON.stringify({ ...d, suc: f, codpro: c })));
+  window.borrarResp = (f, c) => FB.deleteDoc(FB.doc(FB.db, 'atencion_resp', f + '__' + c));
+  window.prepAtencion = async () => { escucharCfg(); escucharResp(); await cargarCfg(); for (let i = 0; i < 40 && !cfgListo; i++) await new Promise(r => setTimeout(r, 250)); await cargarRespuestas(); };
   window.atencionListo = () => cfgListo || S.ejemplo;
   window.criterioSuc = f => cfgSuc(f);
   window.criterioVer = () => cfgListo ? 'ok' + cfgVer : '';   // vacío mientras no se lea el criterio guardado
   // lo que respondió la sucursal en «Lo que me van a atender» (ya no se usa ese módulo; se muestra como comentario)
   window.respAtencion = (f, c) => { const r = S.suResp?.get(f + '__' + c); if (!r) return null;
-    const alt = r.alternativa || (r.altCod ? String(r.altCod) : '');
-    return { estado: r.estado, txt: (RESP_TXT[r.estado] || r.estado) + (alt ? ': ' + alt : '') + (r.comentario ? (alt ? ' · ' : ': ') + r.comentario : ''), por: r.porNombre || '', fecha: String(r.fecha || '').slice(0, 10) }; };
+    const alt = r.alternativa || (r.altCod ? String(r.altCod) : ''), fe = r.fecha?.toDate ? r.fecha.toDate().toISOString() : String(r.fecha || '');
+    return { estado: r.estado, txt: (RESP_TXT[r.estado] || r.estado) + (alt ? ': ' + alt : '') + (r.comentario ? (alt ? ' · ' : ': ') + r.comentario : ''), por: r.porNombre || '', fecha: fe.slice(0, 10),
+      comentario: r.comentario || '', alts: r.alts?.length ? r.alts : r.altCod ? [{ c: String(r.altCod), n: (r.alternativa || '').replace(/^[^-]*- /, '') }] : [] }; };
   window.filaAtencion = (c, f) => calcular().porProd.get(c)?.red.find(r => r.f === f) || null;
   window.publicarExtras = async () => {
     for (let i = 0; i < 240 && !(S.P && S.db && !S.ejemplo); i++) await new Promise(r => setTimeout(r, 500));

@@ -133,16 +133,16 @@ service cloud.firestore {
       allow read: if (tieneVista('atencion') && (rol() == 'admin' || perfil().get('farmacia', '') == suc)) || publica();
       allow write: if publica();
     }
-    // respuesta del químico a lo que se le va a atender: id "<SUCURSAL>__<codpro>"
+    // comentario de la sucursal sobre cada producto (en el módulo de cada sucursal): id "<SUCURSAL>__<codpro>"
+    // lo escriben los usuarios de esa sucursal o Abastecimiento; cada sucursal ve los suyos
+    function suSucursal(suc) { return esAdmin() || (conSucursal() && suc == perfil().get('farmacia', '')); }
     match /atencion_resp/{id} {
-      // se lee como comentario en el módulo de cada sucursal (cada sucursal ve las suyas)
-      allow read: if publica() || (conSucursal() && resource.data.suc == perfil().get('farmacia', ''));
-      allow create, update: if tieneVista('atencion')
-        && request.resource.data.suc == perfil().get('farmacia', '')
+      allow read: if publica() || suSucursal(resource.data.suc);
+      allow create, update: if suSucursal(request.resource.data.suc)
         && id == request.resource.data.suc + '__' + request.resource.data.codpro
         && request.resource.data.porUid == request.auth.uid
         && request.resource.data.estado in ['si_requiere', 'no_requiere', 'no_se_mueve', 'otro_medicamento', 'otros'];
-      allow delete: if tieneVista('atencion') && resource.data.suc == perfil().get('farmacia', '');
+      allow delete: if suSucursal(resource.data.suc);
     }
 
     // qué ve cada sucursal en «Lo que me van a atender» (tipos visibles y productos ocultos o mostrados aparte): lo decide el administrador
