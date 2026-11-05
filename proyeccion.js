@@ -553,13 +553,13 @@ function escucharReemplazos() {
     window.REEMP_NUEVO = new Map();
     for (const [v, r] of window.REEMP) { if (!window.REEMP_NUEVO.has(r.nuevo)) window.REEMP_NUEVO.set(r.nuevo, []); window.REEMP_NUEVO.get(r.nuevo).push(v); }
     window.REEMP_VER++; if (S.P) render();
-  }, () => {});
+  }, () => setTimeout(escucharReemplazos, 30000));   // si falla (p. ej. reglas aún no publicadas) se vuelve a intentar
 }
 window.guardarReemp = (viejo, d) => setDoc(doc(db, "reemplazos", viejo), d);
 /* ---------- «gestionado por droguería»: comunicado por producto (gestion/{código} = { nota, porNombre, fecha }) ---------- */
 window.GEST = new Map();
 function escucharGestion() {
-  onSnapshot(collection(db, "gestion"), s => { window.GEST = new Map(s.docs.map(d => [d.id, d.data()])); window.REEMP_VER++; if (S.P) render(); }, () => {});
+  onSnapshot(collection(db, "gestion"), s => { window.GEST = new Map(s.docs.map(d => [d.id, d.data()])); window.REEMP_VER++; if (S.P) render(); }, () => setTimeout(escucharGestion, 30000));
 }
 window.guardarGest = (c, d) => setDoc(doc(db, "gestion", c), d);
 window.borrarGest = c => deleteDoc(doc(db, "gestion", c));

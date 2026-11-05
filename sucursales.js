@@ -416,7 +416,7 @@
   // comentarios de las sucursales en vivo (Abastecimiento: todos; la sucursal: los suyos)
   function escucharResp() {
     if (escucharResp.ok || !FB || S.ejemplo) return; escucharResp.ok = true;
-    const pinta = docs => { leerRespuestas(docs); if (S.vista === 'suc') window.pintarSuc(); else if (S.vista === 'stk') render(); };
+    const pinta = docs => { leerRespuestas(docs); if (S.vista === 'suc') window.pintarSuc(); else if (S.vista === 'stk' || S.vista === 'kar') render(); };
     let parcial = false;
     const un = FB.onSnapshot(FB.collection(FB.db, 'atencion_resp'), sn => pinta(sn.docs), () => {
       if (parcial) return; parcial = true; try { un?.(); } catch {}
