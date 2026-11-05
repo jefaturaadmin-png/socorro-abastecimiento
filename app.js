@@ -14,7 +14,9 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 // La proyección de compras (proyeccion.html, dentro de un marco) usa esta misma conexión y sesión.
-window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc: fsSet, deleteDoc: fsDelete, collection, getDocs, onSnapshot };
+window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc: fsSet, deleteDoc: fsDelete, collection, getDocs, onSnapshot, query, where };
+// sucursal del usuario que entró (o de la vista previa): el módulo de su sucursal solo muestra la suya
+window.miFarmUsuario = () => miFarm();
 // En la vista previa ("ver como la sucursal X") no se guarda nada: todas las escrituras se rechazan.
 const PREVIA = { message: "Vista previa: aquí no se guarda nada. Sal de la vista previa para hacer cambios." };
 const setDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsSet(...a);
@@ -23,7 +25,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611050400";
+const VERSION_PROY = "202611051200";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -80,7 +82,7 @@ const VISTAS = [
   { id: "estadistica", nombre: "Estadística Proyx", vista: "vEst", c: "est", ic: "i-grafico", desc: "Pronóstico estadístico por producto" },
   { id: "sucursales", nombre: "Atención a sucursales", vista: "vSuc", c: "suc", ic: "i-tienda", desc: "Qué enviar a cada sucursal", ayuda: "también publica las listas" },
   { id: "faltantes", nombre: "Faltantes de droguería", vista: "vFalt", ic: "i-buscar", desc: "Productos en 0 en droguería que piden las sucursales" },
-  { id: "atencion", nombre: "Lo que me van a atender", vista: "vAten", ic: "i-ojo", desc: "Lo que Abastecimiento enviará a tu sucursal", ayuda: "solo químicos: ve su sucursal" },
+  // «Lo que me van a atender» ya no se usa: cada sucursal tiene su propio módulo (ver modPropio)
   { id: "pedidos", nombre: "Productos agotados o de extrema urgencia", vista: "vPed", ic: "i-lista", desc: "Lo que cada sucursal pidió de urgencia (desde el formulario)", ayuda: "químicos: ven los de su sucursal" },
   { id: "compras", nombre: "Compras por laboratorio", vista: "vCompL", c: "comp", ic: "i-grafico", desc: "Qué porcentaje de las compras de cada mes fue de cada laboratorio" },
   { id: "evaluacion", nombre: "Evaluación de sucursales", vista: "vEval", c: "est", ic: "i-grafico", desc: "Stock, orden, limpieza, capacidad y BPA de cada sucursal", ayuda: "químicos: ven la de su sucursal" },
@@ -93,7 +95,12 @@ const ordenSucs = () => { let pr = []; try { pr = JSON.parse(localStorage.getIte
   const suc = FARMACIAS.filter(f => /^ALMACEN /.test(f)); return [...pr.filter(f => suc.includes(f)), ...suc.filter(f => !pr.includes(f))]; };
 const expandirSucs = l => l.flatMap(v => !v.porSuc ? [v] : ordenSucs().map((f, i, a) => ({ ...v, nombre: nombreFarm(f), vista: "vSucx:" + f, farm: f,
   desc: `Prioridad ${i + 1} de ${a.length}: stock, lo que necesita y lo que hay que pedir` })));
-const misVistas = () => expandirSucs(esAdmin() ? VISTAS : VISTAS.filter(v => v.todos || ((S.prev || S.perfil)?.vistas || []).includes(v.id)));
+// cada usuario de una sucursal tiene su propio módulo sin activarlo: los de REAL «Real», los de PARRA «Parra»…, y los de droguería «Droguería»
+const modPropio = () => { const f = miFarm(); if (esAdmin() || !f) return [];
+  if (f === "DROGUERIA FS") return VISTAS.filter(v => v.id === "drogueria");
+  const v = VISTAS.find(x => x.porSuc); return /^ALMACEN /.test(f) && v ? [{ ...v, nombre: nombreFarm(f), vista: "vSucx:" + f, farm: f, desc: "Tu sucursal: stock, venta diaria, lo que necesita y lo que se te va a enviar" }] : []; };
+const misVistas = () => { const l = esAdmin() ? expandirSucs(VISTAS) : [...modPropio(), ...expandirSucs(VISTAS.filter(v => v.todos || ((S.prev || S.perfil)?.vistas || []).includes(v.id)))];
+  return l.filter((v, i) => l.findIndex(x => x.vista === v.vista) === i); };
 const NOMBRE_ROL = { admin: "Administrador", quimico: "Químico", colaborador: "Colaborador" };
 const miFarm = () => S.prev ? S.prev.farmacia : S.perfil?.farmacia;
 // modo celular: el enlace ?m=<módulo> abre directo ese módulo; en el celular queda recordado (hasta pulsar «Menú completo»)

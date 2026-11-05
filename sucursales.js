@@ -180,7 +180,9 @@
   // antes de publicar se leen las respuestas aunque no se haya abierto esta vista
   async function cargarRespuestas() {
     if (!FB || S.ejemplo) return;
-    if (!S.suResp) try { leerRespuestas((await FB.getDocs(FB.collection(FB.db, 'atencion_resp'))).docs); } catch {}
+    if (!S.suResp) try { leerRespuestas((await FB.getDocs(FB.collection(FB.db, 'atencion_resp'))).docs); }
+      catch { const f = window.parent?.miFarmUsuario?.();   // el químico solo puede leer las de su sucursal
+        if (f && FB.query) try { leerRespuestas((await FB.getDocs(FB.query(FB.collection(FB.db, 'atencion_resp'), FB.where('suc', '==', f)))).docs); } catch {} }
     if (!S.suEstadosOk) try { leerEstados((await FB.getDocs(FB.collection(FB.db, 'faltantes_estado'))).docs); } catch {}
   }
   function repartir(p, red) {
@@ -402,6 +404,10 @@
   window.prepAtencion = async () => { await cargarCfg(); for (let i = 0; i < 40 && !cfgListo; i++) await new Promise(r => setTimeout(r, 250)); await cargarRespuestas(); };
   window.atencionListo = () => cfgListo || S.ejemplo;
   window.criterioSuc = f => cfgSuc(f);
+  // lo que respondió la sucursal en «Lo que me van a atender» (ya no se usa ese módulo; se muestra como comentario)
+  window.respAtencion = (f, c) => { const r = S.suResp?.get(f + '__' + c); if (!r) return null;
+    const alt = r.alternativa || (r.altCod ? String(r.altCod) : '');
+    return { estado: r.estado, txt: (RESP_TXT[r.estado] || r.estado) + (alt ? ': ' + alt : '') + (r.comentario ? (alt ? ' · ' : ': ') + r.comentario : ''), por: r.porNombre || '', fecha: String(r.fecha || '').slice(0, 10) }; };
   window.filaAtencion = (c, f) => calcular().porProd.get(c)?.red.find(r => r.f === f) || null;
   window.publicarExtras = async () => {
     for (let i = 0; i < 240 && !(S.P && S.db && !S.ejemplo); i++) await new Promise(r => setTimeout(r, 500));

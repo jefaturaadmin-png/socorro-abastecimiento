@@ -11,9 +11,9 @@ else {
     import(V + "firebase-app.js"), import(V + "firebase-auth.js"), import(V + "firebase-firestore.js"), import("./config.js?v=202610161000")]);
   const app = initializeApp(firebaseConfig);
   F = { auth: A.getAuth(app), db: FS.getFirestore(app), onAuthStateChanged: A.onAuthStateChanged,
-    doc: FS.doc, getDoc: FS.getDoc, setDoc: FS.setDoc, deleteDoc: FS.deleteDoc, collection: FS.collection, getDocs: FS.getDocs, onSnapshot: FS.onSnapshot };
+    doc: FS.doc, getDoc: FS.getDoc, setDoc: FS.setDoc, deleteDoc: FS.deleteDoc, collection: FS.collection, getDocs: FS.getDocs, onSnapshot: FS.onSnapshot, query: FS.query, where: FS.where };
 }
-const { auth, db, onAuthStateChanged, doc, getDoc, deleteDoc, collection, getDocs, onSnapshot } = F;
+const { auth, db, onAuthStateChanged, doc, getDoc, deleteDoc, collection, getDocs, onSnapshot, query, where } = F;
 // Firebase solo acepta objetos creados en su propia ventana: los datos se pasan a la ventana principal.
 const setDoc = (ref, v, o) => F.setDoc(ref, PADRE ? PADRE.JSON.parse(JSON.stringify(v)) : v, ...(o ? [PADRE ? PADRE.JSON.parse(JSON.stringify(o)) : o] : []));
 const col = n => "proy_" + n;
@@ -76,8 +76,12 @@ onAuthStateChanged(auth, async u => {
   try {
     const p = (await getDoc(doc(db, "usuarios", u.uid))).data() || {};
     // el administrador, o quien tenga asignado este módulo
-    const modulo = { mapa: "mapa", est: "estadistica", suc: "sucursales", kar: "kardex", drog: "drogueria", sucx: "porsucursal" }[new URLSearchParams(location.search).get("solo")] || "proyeccion";
-    if (String(p.rol || "").trim().toLowerCase() !== "admin" && !(p.vistas || []).includes(modulo)) return bloquear("No tienes acceso a este módulo. Pide a Abastecimiento que te lo habilite.");
+    const qs = new URLSearchParams(location.search), solo = qs.get("solo");
+    const modulo = { mapa: "mapa", est: "estadistica", suc: "sucursales", kar: "kardex", drog: "drogueria", sucx: "porsucursal" }[solo] || "proyeccion";
+    // el módulo propio de cada sucursal (y Droguería para los de droguería) no hace falta activarlo
+    const propio = (solo === "sucx" && p.farmacia && p.farmacia === qs.get("f")) || (solo === "drog" && p.farmacia === "DROGUERIA FS");
+    window.PERFIL = p;
+    if (String(p.rol || "").trim().toLowerCase() !== "admin" && !propio && !(p.vistas || []).includes(modulo)) return bloquear("No tienes acceso a este módulo. Pide a Abastecimiento que te lo habilite.");
   } catch { return bloquear("No se pudo comprobar tu usuario. Recarga la página."); }
   desbloquear();
   if (arrancado) return; arrancado = true;
@@ -561,9 +565,13 @@ window.guardarGest = (c, d) => setDoc(doc(db, "gestion", c), d);
 window.borrarGest = c => deleteDoc(doc(db, "gestion", c));
 window.borrarReemp = viejo => deleteDoc(doc(db, "reemplazos", viejo));
 function escucharBloqueos() {
-  onSnapshot(collection(db, "bloqueos"), s => {
-    window.BLOQ = new Set(s.docs.filter(d => d.data().estado === "bloqueado").map(d => d.id));
-    window.BLOQ_VER = (window.BLOQ_VER || 0) + 1;
-    if (S.P) render();
-  }, () => {});
+  const poner = docs => { window.BLOQ = new Set(docs.filter(d => d.data().estado === "bloqueado").map(d => d.id)); window.BLOQ_VER = (window.BLOQ_VER || 0) + 1; if (S.P) render(); };
+  let parcial = false;
+  const un = onSnapshot(collection(db, "bloqueos"), s => poner(s.docs), () => {
+    // quien no es administrador solo lee los de su sucursal, los generales y los de droguería
+    if (parcial) return; parcial = true; try { un?.(); } catch {}
+    const f = window.PERFIL?.farmacia; if (!f) return;
+    const por = new Map(), farms = [...new Set([f, "TODAS", "DROGUERIA FS"])];
+    farms.forEach(x => onSnapshot(query(collection(db, "bloqueos"), where("farmacia", "==", x)), s => { por.set(x, s.docs); poner([...por.values()].flat()); }, () => {}));
+  });
 }

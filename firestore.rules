@@ -21,6 +21,9 @@ service cloud.firestore {
     function tieneVista(v) { return conPerfil() && (rol() == 'admin' || v in perfil().get('vistas', [])); }
     // Módulos que usan los datos de la proyección (kardex, pronósticos, mapa…): el administrador o quien tenga alguno.
     function verProy() { return tieneVista('proyeccion') || tieneVista('kardex') || tieneVista('estadistica') || tieneVista('sucursales') || tieneVista('mapa') || tieneVista('drogueria') || tieneVista('porsucursal'); }
+    // Usuario de una sucursal o de droguería: tiene su propio módulo (solo lectura de los datos de la proyección).
+    function conSucursal() { return conPerfil() && perfil().get('farmacia', '') != ''; }
+    function leeProy() { return verProy() || conSucursal(); }
     // Quién puede publicar las listas para las sucursales (desde Atención a sucursales o al subir el kardex).
     function publica() { return tieneVista('sucursales') || tieneVista('kardex'); }
     // Cierre del ingreso de información que programa el administrador en el usuario:
@@ -90,16 +93,16 @@ service cloud.firestore {
     // el kardex general (productos y stock) lo leen todos los usuarios: es la base de los buscadores de medicamentos
     function kardexGeneral(id) { return conPerfil() && get(/databases/$(database)/documents/proy_config/maestro).data.asset == id; }
     match /proy_config/{id} {
-      allow read: if verProy() || (id == 'maestro' && conPerfil());
+      allow read: if leeProy() || (id == 'maestro' && conPerfil());
       allow write: if verProy();
     }
-    match /proy_meses/{id} { allow read, write: if verProy(); }
-    match /proy_elecciones/{id} { allow read, write: if verProy(); }
+    match /proy_meses/{id} { allow read: if leeProy(); allow write: if verProy(); }
+    match /proy_elecciones/{id} { allow read: if leeProy(); allow write: if verProy(); }
     match /proy_blobs/{id} {
-      allow read: if verProy() || kardexGeneral(id);
+      allow read: if leeProy() || kardexGeneral(id);
       allow write: if verProy();
       match /partes/{parte} {
-        allow read: if verProy() || kardexGeneral(id);
+        allow read: if leeProy() || kardexGeneral(id);
         allow write: if verProy();
       }
     }
@@ -118,7 +121,7 @@ service cloud.firestore {
     }
     match /faltantes_estado/{cod} {
       // también la ven las sucursales en "Lo que me van a atender" y Atención a sucursales
-      allow read: if tieneVista('faltantes') || tieneVista('atencion') || publica();
+      allow read: if tieneVista('faltantes') || tieneVista('atencion') || conSucursal() || publica();
       allow create, update: if tieneVista('faltantes')
         && request.resource.data.porUid == request.auth.uid
         && request.resource.data.estado in ['descontinuado', 'agotado', 'transito', 'pendiente', 'alternativa'];
@@ -132,7 +135,8 @@ service cloud.firestore {
     }
     // respuesta del químico a lo que se le va a atender: id "<SUCURSAL>__<codpro>"
     match /atencion_resp/{id} {
-      allow read: if publica() || (tieneVista('atencion') && resource.data.suc == perfil().get('farmacia', ''));
+      // se lee como comentario en el módulo de cada sucursal (cada sucursal ve las suyas)
+      allow read: if publica() || (conSucursal() && resource.data.suc == perfil().get('farmacia', ''));
       allow create, update: if tieneVista('atencion')
         && request.resource.data.suc == perfil().get('farmacia', '')
         && id == request.resource.data.suc + '__' + request.resource.data.codpro
@@ -149,7 +153,7 @@ service cloud.firestore {
 
     // ---------- el producto en toda la red (para el ojito de información; lo publica el administrador) ----------
     match /red/{id} {
-      allow read: if tieneVista('atencion') || tieneVista('faltantes') || tieneVista('pedidos') || tieneVista('evaluacion') || tieneVista('compras') || publica();
+      allow read: if conSucursal() || tieneVista('atencion') || tieneVista('faltantes') || tieneVista('pedidos') || tieneVista('evaluacion') || tieneVista('compras') || publica();
       allow write: if publica();
     }
 
