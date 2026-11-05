@@ -401,7 +401,19 @@
   }
   // para el botón "Calcular compras ahora" (módulo Compras): espera los datos y publica solo los documentos de apoyo
   // El módulo de cada sucursal usa exactamente este cálculo (mismo motor, mismos criterios, cambios, reemplazos y bloqueos)
-  window.prepAtencion = async () => { await cargarCfg(); for (let i = 0; i < 40 && !cfgListo; i++) await new Promise(r => setTimeout(r, 250)); await cargarRespuestas(); };
+  // el criterio guardado se escucha en vivo: si Abastecimiento cambia los días, el módulo de la sucursal se actualiza solo
+  function escucharCfg() {
+    if (escucharCfg.ok || !FB || S.ejemplo) return; escucharCfg.ok = true;
+    FB.onSnapshot(FB.doc(FB.db, 'proy_config', 'atencion_cfg'), d => {
+      if (!d.exists()) return; const x = d.data(), nuevo = { def: { ...DEF, ...(x.def || {}) }, suc: x.suc || {}, prod: x.prod || {} };
+      if (cfgListo && JSON.stringify(nuevo) === JSON.stringify(CFG)) return;
+      CFG = nuevo; cfgListo = true; cfgVer++;
+      if (S.vista === 'suc') window.pintarSuc(); else if (S.vista === 'stk') render();
+    }, () => { escucharCfg.ok = false; });
+  }
+  // desde el módulo de la sucursal (solo Abastecimiento): los días de stock y de seguridad pasan a ser el criterio de esa sucursal
+  window.guardarCriterioSuc = (f, C, Sg) => { if (!cfgListo || !f) return; CFG.suc[f] = { ...(CFG.suc[f] || {}), C: Math.max(1, +C || 1), Sg: Math.max(0, +Sg || 0) }; guardarCfg(); };
+  window.prepAtencion = async () => { escucharCfg(); await cargarCfg(); for (let i = 0; i < 40 && !cfgListo; i++) await new Promise(r => setTimeout(r, 250)); await cargarRespuestas(); };
   window.atencionListo = () => cfgListo || S.ejemplo;
   window.criterioSuc = f => cfgSuc(f);
   window.criterioVer = () => cfgListo ? 'ok' + cfgVer : '';   // vacío mientras no se lea el criterio guardado

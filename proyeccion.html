@@ -1611,8 +1611,10 @@ $('xTabla').addEventListener('click', e => {
 let xT = 0; $('xq').addEventListener('input', () => { clearTimeout(xT); xT = setTimeout(() => { S.xMostrar = PAGINA; pintarStk(); }, 200); });
 $('xVer').addEventListener('change', e => { S.xVer = e.target.value; S.xMostrar = PAGINA; pintarStk(); });
 $('xTipo').addEventListener('change', e => { S.xTipo = e.target.value; S.xMostrar = PAGINA; pintarStk(); });
-$('xCob').addEventListener('change', e => { S.xCob = Math.max(0, +e.target.value || 0); pintarStk(); });
-$('xSeg').addEventListener('change', e => { S.xSeg = Math.max(0, +e.target.value || 0); pintarStk(); });
+// en el módulo de una sucursal, Abastecimiento cambia aquí el criterio de esa sucursal (se guarda y la sucursal lo ve al instante)
+const guardarDiasSuc = () => { if (S.xModo === 'sucx' && esAdminP() && S.xFarm) { window.guardarCriterioSuc?.(S.xFarm, S.xCob, S.xSeg); S.xDiasDe = ''; } };
+$('xCob').addEventListener('change', e => { S.xCob = Math.max(S.xModo === 'sucx' ? 1 : 0, +e.target.value || 0); guardarDiasSuc(); pintarStk(); });
+$('xSeg').addEventListener('change', e => { S.xSeg = Math.max(0, +e.target.value || 0); guardarDiasSuc(); pintarStk(); });
 S.xVer = 'mov';
 $('xXls').addEventListener('click', () => {
   const o = S.P, drog = S.xModo === 'drog', num = v => String(Math.round((+v || 0) * 1000) / 1000).replace('.', ',');
@@ -2230,7 +2232,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611051300"></script>
+<script src="sucursales.js?v=202611051400"></script>
 <script src="estadistica.js?v=202611042300"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611051200"></script>
