@@ -404,6 +404,7 @@
   window.prepAtencion = async () => { await cargarCfg(); for (let i = 0; i < 40 && !cfgListo; i++) await new Promise(r => setTimeout(r, 250)); await cargarRespuestas(); };
   window.atencionListo = () => cfgListo || S.ejemplo;
   window.criterioSuc = f => cfgSuc(f);
+  window.criterioVer = () => cfgListo ? 'ok' + cfgVer : '';   // vacío mientras no se lea el criterio guardado
   // lo que respondió la sucursal en «Lo que me van a atender» (ya no se usa ese módulo; se muestra como comentario)
   window.respAtencion = (f, c) => { const r = S.suResp?.get(f + '__' + c); if (!r) return null;
     const alt = r.alternativa || (r.altCod ? String(r.altCod) : '');

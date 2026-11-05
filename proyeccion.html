@@ -1557,11 +1557,17 @@ function filasStk() {
   }
   return filtroTexto(filas, $('xq').value).sort((a, b) => b.nec * (soles() ? b.p.k : 1) - a.nec * (soles() ? a.p.k : 1) || b.st - a.st);
 }
+// administrador de verdad (en «Vista previa» se ve como la sucursal: sin poder cambiar los días)
+const esAdminP = () => { try { if (window.parent?.enPrevia?.()) return false; } catch {} return String(window.PERFIL?.rol || '').trim().toLowerCase() === 'admin'; };
 function pintarStk() {
   llenarLabs(); llenarClas();
   if (S.xModo === 'sucx' && !window.atencionListo?.()) { if (!S.xPrep) { S.xPrep = true; window.prepAtencion?.().then(() => { S.xPrep = false; pintarStk(); }); }
     $('xTabla').innerHTML = '<tbody><tr><td class="c1">Leyendo los criterios de Atención a sucursales…</td></tr></tbody>'; return; }
-  if (S.xModo === 'sucx' && S.xFarm && S.xDiasDe !== S.xFarm) { const cr = window.criterioSuc?.(S.xFarm) || {}; if (cr.C != null) { S.xCob = cr.C; S.xSeg = cr.Sg; $('xCob').value = S.xCob; $('xSeg').value = S.xSeg; } S.xDiasDe = S.xFarm; }
+  // los días de stock y de seguridad son los del criterio que guarda Abastecimiento (la sucursal solo los ve, no los cambia)
+  const soloVer = !esAdminP(), cv = window.criterioVer?.() || '';
+  if (S.xModo === 'sucx' && S.xFarm && cv && (S.xDiasDe !== S.xFarm + cv || soloVer)) { const cr = window.criterioSuc?.(S.xFarm) || {}; if (cr.C != null) { S.xCob = cr.C; S.xSeg = cr.Sg; $('xCob').value = S.xCob; $('xSeg').value = S.xSeg; } S.xDiasDe = S.xFarm + cv; }
+  $('xCob').disabled = $('xSeg').disabled = S.xModo === 'sucx' && soloVer;
+  $('xCob').title = $('xSeg').title = $('xCob').disabled ? 'Lo define Abastecimiento' : '';
   const o = S.P, drog = S.xModo === 'drog', mets = o.metodos, conv = (p, v) => soles() ? v * p.k : v;
   // la sucursal es la del módulo elegido en el menú de la página principal
   try { const pf = window.parent?.sucxFarm; if (!drog && pf && pf !== S.xFarm) { S.xFarm = pf; S.xMostrar = PAGINA; } } catch {}
@@ -2224,7 +2230,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611051200"></script>
+<script src="sucursales.js?v=202611051300"></script>
 <script src="estadistica.js?v=202611042300"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611051200"></script>

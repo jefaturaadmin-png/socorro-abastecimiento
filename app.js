@@ -16,7 +16,7 @@ const db = getFirestore(app);
 // La proyección de compras (proyeccion.html, dentro de un marco) usa esta misma conexión y sesión.
 window.FB = { auth, db, onAuthStateChanged, doc, getDoc, setDoc: fsSet, deleteDoc: fsDelete, collection, getDocs, onSnapshot, query, where };
 // sucursal del usuario que entró (o de la vista previa): el módulo de su sucursal solo muestra la suya
-window.miFarmUsuario = () => miFarm();
+window.miFarmUsuario = () => miFarm(); window.enPrevia = () => !!S.prev;
 // En la vista previa ("ver como la sucursal X") no se guarda nada: todas las escrituras se rechazan.
 const PREVIA = { message: "Vista previa: aquí no se guarda nada. Sal de la vista previa para hacer cambios." };
 const setDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsSet(...a);
@@ -25,7 +25,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611051200";
+const VERSION_PROY = "202611051300";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
