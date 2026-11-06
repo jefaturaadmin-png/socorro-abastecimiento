@@ -350,6 +350,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
       <button data-u="cajas" aria-pressed="true">Cajas</button><button data-u="soles" aria-pressed="false">Soles</button>
     </div>
     <input id="fPron" type="file" accept=".txt,.TXT,.gz,.json" multiple hidden>
+    <input id="fClas" type="file" accept=".txt,.TXT" multiple hidden>
   </div>
 </div>
 
@@ -694,6 +695,8 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
           <input id="iq" type="search" placeholder="Buscar línea o familia…" autocomplete="off" style="max-width:260px">
           <label class="field"><span>Laboratorio</span><select id="iLab" class="sLab"><option value="">Todos</option></select></label>
           <button type="button" class="btn sm" id="iXls">⬇ Descargar Excel</button>
+          <label class="btn sm" for="fClas" title="Reportes de Sunbi «producto por genérico», «producto por familia» (y por línea) en .TXT. Puede elegir varios a la vez.">📋 Actualizar clasificación (Sunbi)</label>
+          <small class="z" id="iMsgClas"></small>
         </div>
       </div>
     </div>
@@ -721,6 +724,8 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
           <label class="field"><span>Días de seguridad</span><input id="kSeg" type="number" min="0" max="180" value="15" style="width:70px"></label>
           <button type="button" class="btn sm" id="kXls">⬇ Descargar Excel</button>
           <button type="button" class="btn sm" id="kReemp" title="Registrar que un código se reemplaza por otro">🔁 Reemplazos</button>
+          <label class="btn sm" for="fClas" title="Reportes de Sunbi «producto por genérico», «producto por familia» (y por línea) en .TXT. Puede elegir varios a la vez.">📋 Actualizar clasificación (Sunbi)</label>
+          <small class="z" id="kMsgClas"></small>
         </div>
       </div>
     </div>
@@ -1141,7 +1146,7 @@ async function iniciar() {
   usarPron(ejemplo(), true);
   if (!window.claude?.use) return;
   const [db, assets] = await Promise.all([claude.use('db'), claude.use('assets')]);
-  S.db = db; S.assets = assets;
+  S.db = db; S.assets = assets; cargarCLAS();
   if (!db) return;
   let t; const repintar = () => { clearTimeout(t); t = setTimeout(render, 120); };
   db.collection('elecciones').onSnapshot(snap => {
@@ -1266,7 +1271,49 @@ document.querySelectorAll('.sLab').forEach(s => s.addEventListener('change', e =
 /* ---------- línea, genérico y familia (clasificacion.json, por nombre del producto) ---------- */
 let CLAS = null;
 const nomN = s => String(s || '').trim().toUpperCase().replace(/\s+/g, ' ');
-fetch('clasificacion.json').then(r => r.json()).then(c => { CLAS = c; clasDe = null; if (S.P) render(); }).catch(() => {});
+const ponerCLAS = c => { if (!c?.p) return; CLAS = c; clasDe = null; clasLlenos = null; if (S.P) render(); };
+// primero la de la página (rápido); ya con sesión, la última subida desde Sunbi (cargarCLAS se llama al tener los datos)
+fetch('clasificacion.json').then(r => r.json()).then(c => { if (!CLAS) ponerCLAS(c); }).catch(() => {});
+function cargarCLAS() { try { window.parent?.cargarClasificacion?.().then(ponerCLAS).catch(() => {}); } catch {} }
+/* ---------- subir la clasificación desde los reportes de Sunbi (.TXT separados por tabulación) ----------
+   «producto por genérico» (despro + desgen), «producto por familia» (despro + desfam) y, si existe, «producto por línea».
+   Solo cambia el dato que trae cada archivo; «NO CLASIFICADOS» o vacío no borra lo que ya había. */
+async function subirClas(files) {
+  const msg = t => { $('kMsgClas').textContent = t; $('iMsgClas').textContent = t; };
+  try {
+    if (!S.assets || !S.db) return msg('Para guardar la clasificación entra con tu usuario.');
+    msg('Leyendo los reportes…');
+    const base = CLAS || await fetch('clasificacion.json').then(r => r.json());
+    const m = new Map(Object.entries(base.p).map(([n, a]) => [n, { t: base.t[a[0]] || '', g: base.g[a[1]] || '', f: base.f[a[2]] || '' }]));
+    const hechos = [], CAMPO = { g: 'genérico', f: 'familia', t: 'línea' };
+    for (const file of files) {
+      const L = new TextDecoder('windows-1252').decode(await file.arrayBuffer()).split(/\r?\n/), h = (L[0] || '').split('\t').map(x => x.trim().toLowerCase());
+      const iN = h.indexOf('despro'), iG = h.indexOf('desgen'), iF = h.indexOf('desfam'), iL = h.findIndex(x => /^des.*lin|^linea$/.test(x));
+      const [campo, iV] = iG >= 0 ? ['g', iG] : iF >= 0 ? ['f', iF] : iL >= 0 ? ['t', iL] : [null, -1];
+      if (iN < 0 || !campo) { hechos.push(`${file.name}: no se reconoce (debe traer las columnas despro y desgen, desfam o línea)`); continue; }
+      let n = 0, nuevos = 0, cambios = 0;
+      for (const l of L.slice(1)) {
+        const c = l.split('\t'), k = nomN(c[iN]); if (!k) continue;
+        let v = String(c[iV] || '').trim(); if (/^NO CLASIFICAD/i.test(v)) v = '';
+        let x = m.get(k); if (!x) { x = { t: '', g: '', f: '' }; m.set(k, x); nuevos++; }
+        if (v && x[campo] !== v) { x[campo] = v; cambios++; } n++;
+      }
+      hechos.push(`${CAMPO[campo]}: ${nf0.format(n)} productos leídos, ${nf0.format(cambios)} actualizados, ${nf0.format(nuevos)} nuevos`);
+    }
+    const out = {}; for (const k of ['t', 'g', 'f']) out[k] = [...new Set([...m.values()].map(x => x[k]).filter(Boolean))].sort();
+    const ix = {}; for (const k of ['t', 'g', 'f']) ix[k] = new Map(out[k].map((v, i) => [v, i]));
+    out.p = {}; for (const [n, x] of m) out.p[n] = [ix.t.get(x.t) ?? -1, ix.g.get(x.g) ?? -1, ix.f.get(x.f) ?? -1];
+    msg('Guardando la clasificación…');
+    const ant = await S.db.doc('config/clasificacion').get();
+    const up = await S.assets.upload(new Blob([JSON.stringify(out)], { type: 'application/json' }));
+    const quien = window.parent?.document?.getElementById('uNombre')?.textContent || '';
+    await S.db.doc('config/clasificacion').set({ asset: up.id, fecha: new Date().toISOString(), porNombre: quien, productos: m.size, resumen: hechos.join(' · ') });
+    if (ant.exists && ant.data()?.asset && ant.data().asset !== up.id) S.assets.delete(ant.data().asset).catch(() => {});
+    try { window.parent?.ponerClasificacion?.(out); } catch {}
+    ponerCLAS(out);
+    msg('✔ Clasificación actualizada · ' + hechos.join(' · '));
+  } catch (e) { msg('No se pudo actualizar la clasificación: ' + (e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules).' : e.message || e)); }
+}
 let clasDe = null;
 // { t: línea, g: genérico, f: familia } del producto ('' si no se conoce)
 function clas(p) {
@@ -1666,6 +1713,7 @@ $('vInd').addEventListener('click', e => {
   pintarInd();
 });
 let iT = 0; $('iq').addEventListener('input', () => { clearTimeout(iT); iT = setTimeout(pintarInd, 200); });
+$('fClas').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) subirClas(f); });
 $('iLab').addEventListener('change', e => { S.iLab = e.target.value; pintarInd(); });
 $('iXls').addEventListener('click', () => {
   const d = datosInd(), por = S.iPor === 't' ? 'Línea' : 'Familia', num = v => String(Math.round(v * 1000) / 1000).replace('.', ',');

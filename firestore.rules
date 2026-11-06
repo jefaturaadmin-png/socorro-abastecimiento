@@ -90,10 +90,12 @@ service cloud.firestore {
     }
 
     // ---------- proyección de compras: el administrador o quien tenga un módulo que la use ----------
-    // el kardex general (productos y stock) lo leen todos los usuarios: es la base de los buscadores de medicamentos
-    function kardexGeneral(id) { return conPerfil() && get(/databases/$(database)/documents/proy_config/maestro).data.asset == id; }
+    // el kardex general (productos y stock) y la clasificación de productos (línea, genérico, familia) los leen todos
+    // los usuarios: son la base de los buscadores de medicamentos
+    function kardexGeneral(id) { return conPerfil() && (get(/databases/$(database)/documents/proy_config/maestro).data.asset == id
+      || (exists(/databases/$(database)/documents/proy_config/clasificacion) && get(/databases/$(database)/documents/proy_config/clasificacion).data.asset == id)); }
     match /proy_config/{id} {
-      allow read: if leeProy() || (id == 'maestro' && conPerfil());
+      allow read: if leeProy() || (id in ['maestro', 'clasificacion'] && conPerfil());
       allow write: if verProy();
     }
     match /proy_meses/{id} { allow read: if leeProy(); allow write: if verProy(); }

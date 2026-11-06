@@ -25,7 +25,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611061000";
+const VERSION_PROY = "202611061600";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1338,11 +1338,28 @@ function pintarFalt() {
   $("fsMas").innerHTML = lista.length > vis.length ? `<button class="btn" type="button" id="fsMasBtn">Ver ${Math.min(100, lista.length - vis.length)} más (de ${nf(lista.length)})</button>` : "";
 }
 const nf = v => Number(v || 0).toLocaleString("es-PE");
-// Genérico de cada producto del catálogo (clasificacion.json, por nombre): para ofrecer primero los del mismo genérico.
+// Clasificación de productos (línea, genérico y familia por nombre): la última que se subió desde los reportes de Sunbi
+// (proy_config/clasificacion → archivo comprimido en proy_blobs); si no hay, la de clasificacion.json de la página.
+window.cargarClasificacion = () => window.cargarClasificacion.p || (async () => {
+  try {
+    const m = await getDoc(doc(db, "proy_config", "clasificacion")), id = m.exists() && m.data().asset;
+    if (id) {
+      const s = await getDocs(collection(db, "proy_blobs", id, "partes")), t = s.docs.sort((a, b) => a.id - b.id).map(d => d.data().d).join("");
+      const bin = Uint8Array.from(atob(t), ch => ch.charCodeAt(0));
+      const c = JSON.parse(await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"))).text());
+      return (window.cargarClasificacion.p = Promise.resolve(c), c);
+    }
+    if (auth.currentUser) window.cargarClasificacion.p = fetch("clasificacion.json").then(r => r.json());
+  } catch {}
+  return fetch("clasificacion.json").then(r => r.json());   // sin sesión o sin permiso: no se guarda, se reintenta después
+})();
+// al subir una clasificación nueva: todos los módulos la usan sin recargar
+window.ponerClasificacion = c => { window.cargarClasificacion.p = Promise.resolve(c); cargarGenericos.p = null; GEN = null; };
+// Genérico de cada producto del catálogo (por nombre): para ofrecer primero los del mismo genérico.
 const MAX_ALT = 4;
 let GEN = null;
 function cargarGenericos() {
-  cargarGenericos.p ??= fetch("clasificacion.json").then(r => r.json()).then(c => {
+  cargarGenericos.p ??= window.cargarClasificacion().then(c => {
     const nomN = x => String(x || "").trim().toUpperCase().replace(/\s+/g, " "), g = { de: new Map(), por: new Map() };
     for (const p of S.catalogo) {
       const a = c.p[nomN(p.n)], ge = a && c.g[a[1]]; if (!ge) continue;
