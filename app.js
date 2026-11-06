@@ -25,7 +25,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611061600";
+const VERSION_PROY = "202611061700";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1338,7 +1338,7 @@ function pintarFalt() {
   $("fsMas").innerHTML = lista.length > vis.length ? `<button class="btn" type="button" id="fsMasBtn">Ver ${Math.min(100, lista.length - vis.length)} más (de ${nf(lista.length)})</button>` : "";
 }
 const nf = v => Number(v || 0).toLocaleString("es-PE");
-// Clasificación de productos (línea, genérico y familia por nombre): la última que se subió desde los reportes de Sunbi
+// Clasificación de productos (línea, genérico y familia por nombre): la última que se subió desde los reportes «producto por genérico / familia / línea»
 // (proy_config/clasificacion → archivo comprimido en proy_blobs); si no hay, la de clasificacion.json de la página.
 window.cargarClasificacion = () => window.cargarClasificacion.p || (async () => {
   try {

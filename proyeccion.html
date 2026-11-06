@@ -695,7 +695,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
           <input id="iq" type="search" placeholder="Buscar línea o familia…" autocomplete="off" style="max-width:260px">
           <label class="field"><span>Laboratorio</span><select id="iLab" class="sLab"><option value="">Todos</option></select></label>
           <button type="button" class="btn sm" id="iXls">⬇ Descargar Excel</button>
-          <label class="btn sm" for="fClas" title="Reportes de Sunbi «producto por genérico», «producto por familia» (y por línea) en .TXT. Puede elegir varios a la vez.">📋 Actualizar clasificación (Sunbi)</label>
+          <label class="btn sm" for="fClas" title="Reportes «producto por genérico», «producto por familia» (y por línea) en .TXT, del mismo sistema del kardex. Puede elegir varios a la vez.">📋 Actualizar clasificación (.TXT)</label>
           <small class="z" id="iMsgClas"></small>
         </div>
       </div>
@@ -724,7 +724,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
           <label class="field"><span>Días de seguridad</span><input id="kSeg" type="number" min="0" max="180" value="15" style="width:70px"></label>
           <button type="button" class="btn sm" id="kXls">⬇ Descargar Excel</button>
           <button type="button" class="btn sm" id="kReemp" title="Registrar que un código se reemplaza por otro">🔁 Reemplazos</button>
-          <label class="btn sm" for="fClas" title="Reportes de Sunbi «producto por genérico», «producto por familia» (y por línea) en .TXT. Puede elegir varios a la vez.">📋 Actualizar clasificación (Sunbi)</label>
+          <label class="btn sm" for="fClas" title="Reportes «producto por genérico», «producto por familia» (y por línea) en .TXT, del mismo sistema del kardex. Puede elegir varios a la vez.">📋 Actualizar clasificación (.TXT)</label>
           <small class="z" id="kMsgClas"></small>
         </div>
       </div>
@@ -1272,10 +1272,10 @@ document.querySelectorAll('.sLab').forEach(s => s.addEventListener('change', e =
 let CLAS = null;
 const nomN = s => String(s || '').trim().toUpperCase().replace(/\s+/g, ' ');
 const ponerCLAS = c => { if (!c?.p) return; CLAS = c; clasDe = null; clasLlenos = null; if (S.P) render(); };
-// primero la de la página (rápido); ya con sesión, la última subida desde Sunbi (cargarCLAS se llama al tener los datos)
+// primero la de la página (rápido); ya con sesión, la última subida desde los reportes (cargarCLAS se llama al tener los datos)
 fetch('clasificacion.json').then(r => r.json()).then(c => { if (!CLAS) ponerCLAS(c); }).catch(() => {});
 function cargarCLAS() { try { window.parent?.cargarClasificacion?.().then(ponerCLAS).catch(() => {}); } catch {} }
-/* ---------- subir la clasificación desde los reportes de Sunbi (.TXT separados por tabulación) ----------
+/* ---------- subir la clasificación desde los reportes «producto por genérico / familia / línea» (.TXT separados por tabulación) ----------
    «producto por genérico» (despro + desgen), «producto por familia» (despro + desfam) y, si existe, «producto por línea».
    Solo cambia el dato que trae cada archivo; «NO CLASIFICADOS» o vacío no borra lo que ya había. */
 async function subirClas(files) {
