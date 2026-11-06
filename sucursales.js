@@ -146,7 +146,7 @@
         let dV = 0, stV = 0, envV = 0;
         for (const q of viejos) { dV += diaria(q, f, cfgDe(f, q.c)).d; stV += stockEn(q.c, f); envV += S.krEnviado?.get(q.c + '__' + f) || 0; }
         const d = Math.max(dv.d, dOrig) + extra + (viejos.length && !(dv.d > 0) ? dV : 0);
-        const bloq = bloqueado(p.c, f), nec = d * (H ?? (o.C + o.Sg)), seg = d * o.Sg, cob = d > 0 ? st / d : Infinity;
+        const bloq = bloqueado(p.c, f) || !!window.BLOQ_ATEN?.has(p.c), nec = d * (H ?? (o.C + o.Sg)), seg = d * o.Sg, cob = d > 0 ? st / d : Infinity;
         let pide = 0, nota = '';
         if (usa) return { p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide: 0, nota: 'usa en su cambio ' + usa, bloq, exceso: 0, o, aj, urgente: false, usa };
         if (bloq) nota = 'bloqueado';

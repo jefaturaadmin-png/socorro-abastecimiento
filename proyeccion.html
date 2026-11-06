@@ -127,7 +127,8 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .tag.gest { background: #fff1d6; color: #8a5a00; white-space: normal }
 /* el comunicado general y el reemplazo van en su propia línea bajo el nombre: así no se cortan cuando el nombre es largo */
 .tag.mov { background: #e8f1fb; color: #2b5d99 } .tag.mov.reciente { background: #e6f4e3; color: #2e7d32 } .tag.mov.parado { background: #eee; color: #666 }
-.cells .c1 .tag.mov, .cells .c1 .tag.gest, .cells .c1 .tag.kr { display: block; width: fit-content; max-width: 260px; margin: 3px 0 2px; white-space: normal; line-height: 1.3 } .k-acc { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle }
+.tag.bat { background: #fde2dd; color: #a33b3b } .k-acc button.on { background: #fde2dd; border-color: #f0b3a8 }
+.cells .c1 .tag.bat, .cells .c1 .tag.mov, .cells .c1 .tag.gest, .cells .c1 .tag.kr { display: block; width: fit-content; max-width: 260px; margin: 3px 0 2px; white-space: normal; line-height: 1.3 } .k-acc { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle }
 /* el nombre largo se corta con «…» pero los botones 🔁 📢 siempre se ven */
 .k-fila { display: flex; align-items: center; max-width: 100% } .k-fila .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap } .k-fila .k-acc { flex: none }
 .k-acc button { border: 1px solid #d0d5dd; background: #fff; border-radius: 6px; padding: 1px 5px; cursor: pointer; font-size: .8rem } .k-acc button:hover { background: #eef2f7 }
@@ -1350,7 +1351,8 @@ const catBadge = c => `<span class="cat ${c}" title="${c} · ${NCAT[c]}">${c}</s
 const tagKR = c => window.REEMP?.has(c) ? `<span class="tag kr" title="Ya no se compra: se reparte lo que queda hasta terminarlo">🔁 reemplazado por ${esc(window.REEMP.get(c).nuevo)}</span>`
   : window.REEMP_NUEVO?.has(c) ? `<span class="tag kr" title="Si no tiene historial, se proyecta con el que reemplaza">🔁 reemplaza a ${esc(window.REEMP_NUEVO.get(c).join(', '))}</span>` : '';
 const tagGest = c => window.GEST?.has(c) ? `<span class="tag gest" title="${esc((window.GEST.get(c).porNombre || '') + ' · ' + String(window.GEST.get(c).fecha || '').slice(0, 10))}">📢 Gestionado por droguería${window.GEST.get(c).nota ? ': ' + esc(window.GEST.get(c).nota) : ''}</span>` : '';
-const etiquetas = p => tagGest(p.c) + (p.pap ? '<span class="tag pap" title="Programa de apoyo al paciente">PAP</span>' : '') + (p.est ? '<span class="tag est" title="Venta por temporadas">Estacional</span>' : '') + tagKR(p.c);
+const tagBAt = c => window.BLOQ_ATEN?.has(c) ? `<span class="tag bat" title="${esc((window.BLOQ_ATEN.get(c).porNombre || '') + ' · ' + String(window.BLOQ_ATEN.get(c).fecha || '').slice(0, 10))}">🚫 Atención bloqueada${window.BLOQ_ATEN.get(c).motivo ? ': ' + esc(window.BLOQ_ATEN.get(c).motivo) : ''}</span>` : '';
+const etiquetas = p => tagBAt(p.c) + tagGest(p.c) + (p.pap ? '<span class="tag pap" title="Programa de apoyo al paciente">PAP</span>' : '') + (p.est ? '<span class="tag est" title="Venta por temporadas">Estacional</span>' : '') + tagKR(p.c);
 // en Reposición por farmacia se usa la categoría de esa farmacia
 const pasaTipo = p => {
   const per = S.vista === 'pron' && S.tR;
@@ -1618,7 +1620,7 @@ function pintarKar() {
     // lo propio de cada sucursal: su bloqueo y su comentario (el general ya sale junto al nombre y en Comprar)
     const marca = (f, v) => { const bq = window.BLOQ?.has(f + '__' + p.c), rs = window.respAtencion?.(f, p.c);
       return (bq ? `<span class="k-bq" title="Bloqueado en ${esc(nomSuc(f))}">🔒 bloq.</span>` : cq(v)) + (rs ? `<button type="button" class="k-com ${esc(rs.estado)}" data-kcom="${esc(f)}|${esc(p.c)}" title="${esc(nomSuc(f) + ': ' + rs.txt + (rs.por ? ' · ' + rs.por : ''))}">💬</button>` : ''); };
-    h += `<tr><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><span class="k-fila"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a><span class="k-acc"><button type="button" data-kkr="${esc(p.c)}" title="Reemplazar este producto por otro">🔁</button><button type="button" data-kgest="${esc(p.c)}" title="Comunicado: gestionado por droguería">📢</button></span></span>${tagKR(p.c)}${tagGest(p.c)}${tagMov(p)}<small class="sub">${esc(labDe(p.c))}</small></td>
+    h += `<tr><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><span class="k-fila"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a><span class="k-acc"><button type="button" data-kkr="${esc(p.c)}" title="Reemplazar este producto por otro">🔁</button><button type="button" data-kgest="${esc(p.c)}" title="Comunicado: gestionado por droguería">📢</button>${esAdminP() ? `<button type="button" data-kbat="${esc(p.c)}" class="${bloqAten(p.c) ? 'on' : ''}" title="${bloqAten(p.c) ? 'Quitar el bloqueo de atención' : 'Bloquear la atención: no se envía a ninguna sucursal'}">🚫</button>` : ''}</span></span>${tagBAt(p.c)}${tagKR(p.c)}${tagGest(p.c)}${tagMov(p)}<small class="sub">${esc(labDe(p.c))}</small></td>
       <td class="n big drog">${cel(p, r.drog)}</td><td class="n sobra ${!rq.listo ? '' : sob < 0 ? 'falta' : 'ok'}">${rq.listo ? (sob < 0 ? '−' : '') + fmt(conv(p, Math.abs(sob))) : '<span class="z">…</span>'}</td><td class="n req">${rq.listo ? cq(rq.tot) : '<span class="z">…</span>'}</td>${r.sf.map((v, i) => `<td class="n sep">${cel(p, v)}</td><td class="n req">${marca(farms[i], rq.req[i])}</td><td class="n ate">${cq(rq.ate[i])}</td>`).join('')}<td class="n sep">${cel(p, r.tot - r.drog)}</td><td class="n big">${cel(p, r.tot)}</td>
       <td class="n sep">${fmtE(p, conv(p, cx.nec))}</td><td class="n comprar">${cx.bloq ? '<span class="z">bloqueado</span>' : cx.cmp ? fmt(conv(p, cx.cmp)) : '<span class="z">·</span>'}</td></tr>`;
   }
@@ -1639,6 +1641,13 @@ $('kTabla').addEventListener('click', e => {
   if (r) { pintarKR(); $('krMsg').textContent = ''; $('krV').value = r.dataset.kkr; $('krVn').textContent = nomDe(r.dataset.kkr); $('krN').value = ''; $('krNn').textContent = ''; $('krDlg').showModal(); $('krN').focus(); return; }
   const g = e.target.closest('[data-kgest]');
   if (g) { const c = g.dataset.kgest, x = window.GEST?.get(c); S.gestCod = c; $('gsTit').textContent = `${c} · ${nomDe(c)}`; $('gsNota').value = x?.nota || ''; $('gsQuitar').hidden = !x; $('gsMsg').textContent = ''; $('gsDlg').showModal(); $('gsNota').focus(); return; }
+  const ba = e.target.closest('[data-kbat]');
+  if (ba) { const c = ba.dataset.kbat, quien = window.parent?.document?.getElementById('uNombre')?.textContent || '';
+    (async () => { try {
+      if (bloqAten(c)) { if (confirm(`¿Quitar el bloqueo de atención de ${c} · ${nomDe(c)}? Volverá a enviarse a las sucursales.`)) await window.borrarBloqAten(c); }
+      else { const m = prompt(`Bloquear la atención de ${c} · ${nomDe(c)}\nNo se enviará a ninguna sucursal (sí se puede comprar).\n\nMotivo (opcional):`, ''); if (m !== null) await window.guardarBloqAten(c, { motivo: m.trim().slice(0, 150), porNombre: quien, fecha: new Date().toISOString() }); }
+    } catch (x) { alert('No se pudo guardar: ' + (x.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules).' : x.message)); } })();
+    return; }
   const k = e.target.closest('[data-kcom]');
   if (k) { const [f, c] = k.dataset.kcom.split('|'), rs = window.respAtencion?.(f, c); if (rs) alert(`💬 ${nomSuc(f)} · ${c} ${nomDe(c)}\n\n${rs.txt}\n\n— ${rs.por || 'la sucursal'}${rs.fecha ? ' · ' + rs.fecha : ''}`); return; }
   const a = e.target.closest('[data-abrir]'); if (a) abrirFichaP(a.dataset.abrir, 'kar');
@@ -1653,10 +1662,10 @@ $('gsDlg').addEventListener('click', async e => {
 });
 $('kXls').addEventListener('click', () => {
   const o = S.P, farms = o.farmacias, filas = filasKar(), num = v => String(Math.round(v * 1000) / 1000).replace('.', ',');
-  const t = [['Código', 'Medicamento', 'Laboratorio', 'Droguería', `Sobra/falta ${S.kCob}+${S.kSeg}`, 'Total requieren sucursales', ...farms.flatMap(f => [nomSuc(f), 'Requiere ' + nomSuc(f), 'Se atenderá ' + nomSuc(f)]), 'Sucursales', 'Total', `Necesita ${S.kCob} + ${S.kSeg} d`, 'Comprar', 'Comprar S/', 'Comunicado general', 'Comentarios de las sucursales', 'Movimiento'],
+  const t = [['Código', 'Medicamento', 'Laboratorio', 'Droguería', `Sobra/falta ${S.kCob}+${S.kSeg}`, 'Total requieren sucursales', ...farms.flatMap(f => [nomSuc(f), 'Requiere ' + nomSuc(f), 'Se atenderá ' + nomSuc(f)]), 'Sucursales', 'Total', `Necesita ${S.kCob} + ${S.kSeg} d`, 'Comprar', 'Comprar S/', 'Comunicado general', 'Comentarios de las sucursales', 'Movimiento', 'Atención bloqueada'],
     ...filas.map(r => { const x = compraKar(r.p), rq = reqKar(r.p, r.sf), g = window.GEST?.get(r.p.c);
       const coms = farms.map(f => { const s = window.respAtencion?.(f, r.p.c); return s ? nomSuc(f) + ': ' + s.txt + (s.por ? ' (' + s.por + ')' : '') : ''; }).filter(Boolean).join(' | ');
-      return [r.p.c, r.p.n, labDe(r.p.c), num(r.drog), num(r.drog - rq.tot), rq.tot, ...r.sf.flatMap((v, i) => [num(v), window.BLOQ?.has(farms[i] + '__' + r.p.c) ? 'bloqueado' : rq.req[i] ?? '', rq.ate[i] ?? '']), num(r.tot - r.drog), num(r.tot), num(x.nec), x.bloq ? 'bloqueado' : x.cmp, num(x.cmp * (r.p.k || 0)), g ? 'Gestionado por droguería' + (g.nota ? ': ' + g.nota : '') : '', coms, (MOV_TXT[movDe(r.p)] || '').replace(/^\S+ /, '')]; })];
+      return [r.p.c, r.p.n, labDe(r.p.c), num(r.drog), num(r.drog - rq.tot), rq.tot, ...r.sf.flatMap((v, i) => [num(v), window.BLOQ?.has(farms[i] + '__' + r.p.c) ? 'bloqueado' : rq.req[i] ?? '', rq.ate[i] ?? '']), num(r.tot - r.drog), num(r.tot), num(x.nec), x.bloq ? 'bloqueado' : x.cmp, num(x.cmp * (r.p.k || 0)), g ? 'Gestionado por droguería' + (g.nota ? ': ' + g.nota : '') : '', coms, (MOV_TXT[movDe(r.p)] || '').replace(/^\S+ /, ''), bloqAten(r.p.c) ? 'sí' + (window.BLOQ_ATEN.get(r.p.c).motivo ? ': ' + window.BLOQ_ATEN.get(r.p.c).motivo : '') : '']; })];
   const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' }));
   a.download = `stock_${o.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
@@ -1766,7 +1775,7 @@ function filasStk() {
     const cat = drog ? p.cat : (p.catF?.[f] || 'E'); if (S.xTipo && cat !== S.xTipo) continue;
     const st = stDe(p, f);
     let nec, cmp, nota = '', vd = 0, met = '';
-    const bq = drog ? (window.BLOQ?.has('TODAS__' + p.c) || window.BLOQ?.has('DROGUERIA FS__' + p.c)) : bloqueado(p.c, f);
+    const bq = drog ? (window.BLOQ?.has('TODAS__' + p.c) || window.BLOQ?.has('DROGUERIA FS__' + p.c)) : bloqueado(p.c, f) || bloqAten(p.c);
     if (drog) {
       // lo que necesita la red; el reemplazado no se compra y al nuevo se le descuenta lo que queda del anterior en droguería
       nec = compraKR(p, H).nec;
@@ -2118,6 +2127,8 @@ function dibujar(id, cfg) { if (S.charts[id]) S.charts[id].destroy(); S.charts[i
 // Lo que una sucursal bloqueó (o Abastecimiento bloqueó para todas) no se compra ni se le reparte.
 // niveles de bloqueo: el general (kardex) y el de droguería bloquean en todas las sucursales; el de una sucursal, solo ahí
 const bloqueado = (c, f) => !!window.BLOQ && (window.BLOQ.has('TODAS__' + c) || window.BLOQ.has('DROGUERIA FS__' + c) || window.BLOQ.has(f + '__' + c));
+// «atención bloqueada» (desde el Kardex, solo el administrador): no se envía a ninguna sucursal; sí se puede comprar
+const bloqAten = c => !!window.BLOQ_ATEN?.has(c);
 function plan(p, f, obj) {
   const o = S.P, sh = p.s?.[f] || 0;
   const pr = m => { const j = o.fm.indexOf(m); return j < 0 ? 0 : pronDe(p, j) * sh; };
@@ -2129,7 +2140,7 @@ function plan(p, f, obj) {
     consumo += m === corteMes ? pr(m) * Math.max(0, diasMes(m) - dia) / diasMes(m) : pr(m);
   }
   const disp = Math.max(0, stock - consumo), pron = pr(obj);
-  const bloq = bloqueado(p.c, f);
+  const bloq = bloqueado(p.c, f) || bloqAten(p.c);
   const entrega = bloq ? 0 : Math.max(0, Math.ceil(pron * (S.cob + S.seg) / diasMes(obj) - disp - 1e-9));
   return { pron, stock, disp, entrega, bloq };
 }
@@ -2171,7 +2182,7 @@ const ventaDias = (p, f, n) => {
   return Math.max(0, t) + (n - reales) * diariaHist(p, f);
 };
 function plan2(p, f) {
-  const n = +S.base, st = p.st?.[f] || 0, c = p.catF?.[f] || 'E', bloq = bloqueado(p.c, f);
+  const n = +S.base, st = p.st?.[f] || 0, c = p.catF?.[f] || 'E', bloq = bloqueado(p.c, f) || bloqAten(p.c);
   let v = ventaDias(p, f, n), aprox = false;
   if (v == null) { v = pronDe(p, 0) * (p.s?.[f] || 0) * n / 30; aprox = true; }
   const diaria = v / n, nec = diaria * (S.cob + S.seg);
@@ -2330,7 +2341,7 @@ function calcPedidos() {
       const c = p.catF?.[f] || 'E', st = p.st?.[f] || 0, vd = ventaDias(p, f, n);
       const v = vd ?? pronDe(p, 0) * (p.s?.[f] || 0) * n / 30; if (vd == null) estimado++;
       const diaria = v ? v / n : 0, nec = diaria * (S.cob + S.seg);
-      if (!['A', 'B'].includes(c) || !diaria || bloqueado(p.c, f)) { if (st >= 1) sobra.push({ f, q: Math.floor(st - nec) }); continue; }
+      if (!['A', 'B'].includes(c) || !diaria || bloqueado(p.c, f) || bloqAten(p.c)) { if (st >= 1) sobra.push({ f, q: Math.floor(st - nec) }); continue; }
       const ent = c === 'A' ? Math.max(0, Math.ceil(nec - st - 1e-9)) : st < 1 ? 1 : 0;
       if (ent > 0 && st < diaria * S.seg) pide.push({ p, f, cat: c, st, diaria, dias: st / diaria, ent });
       else if (st - nec >= 1) sobra.push({ f, q: Math.floor(st - nec) });
@@ -2512,9 +2523,9 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611060100"></script>
+<script src="sucursales.js?v=202611062200"></script>
 <script src="estadistica.js?v=202611042300"></script>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="proyeccion.js?v=202611061000"></script>
+<script type="module" src="proyeccion.js?v=202611062200"></script>
 
 </body></html>

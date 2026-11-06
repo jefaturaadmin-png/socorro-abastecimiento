@@ -211,6 +211,12 @@ service cloud.firestore {
       allow write: if publica();
     }
 
+    // ---------- «atención bloqueada»: el producto no se envía a ninguna sucursal; solo lo pone o quita el administrador (Kardex) ----------
+    match /bloq_aten/{cod} {
+      allow read: if conPerfil();
+      allow write: if esAdmin();
+    }
+
     // ---------- usuario → cuenta con la que entra (cuando el administrador le restablece la contraseña) ----------
     // se lee antes de iniciar sesión (solo dice qué cuenta usar, no contiene contraseñas)
     match /alias/{usuario} {

@@ -87,7 +87,7 @@ onAuthStateChanged(auth, async u => {
   if (arrancado) return; arrancado = true;
   window.claude = { use: async n => n === "db" ? dbShim : n === "assets" ? assetsShim : null };
   window.iniciarKardex();
-  escucharBloqueos(); escucharReemplazos(); escucharGestion();
+  escucharBloqueos(); escucharReemplazos(); escucharGestion(); escucharBloqAten();
 });
 
 /* =====================================================================
@@ -565,6 +565,15 @@ function escucharGestion() {
 window.guardarGest = (c, d) => setDoc(doc(db, "gestion", c), d);
 window.borrarGest = c => deleteDoc(doc(db, "gestion", c));
 window.borrarReemp = viejo => deleteDoc(doc(db, "reemplazos", viejo));
+/* ---------- «atención bloqueada»: bloq_aten/{código} = { motivo, porNombre, fecha }. Lo pone el administrador desde el Kardex:
+   el producto no se envía a ninguna sucursal (Atención, módulo de cada sucursal, Requiere del Kardex); sí se compra. ---------- */
+window.BLOQ_ATEN = new Map();
+function escucharBloqAten() {
+  onSnapshot(collection(db, "bloq_aten"), s => { window.BLOQ_ATEN = new Map(s.docs.map(d => [d.id, d.data()])); window.BLOQ_VER = (window.BLOQ_VER || 0) + 1; if (S.P) render(); },
+    () => setTimeout(escucharBloqAten, 30000));
+}
+window.guardarBloqAten = (c, d) => setDoc(doc(db, "bloq_aten", c), d);
+window.borrarBloqAten = c => deleteDoc(doc(db, "bloq_aten", c));
 function escucharBloqueos() {
   const poner = docs => { window.BLOQ = new Set(docs.filter(d => d.data().estado === "bloqueado").map(d => d.id)); window.BLOQ_VER = (window.BLOQ_VER || 0) + 1; if (S.P) render(); };
   let parcial = false;
