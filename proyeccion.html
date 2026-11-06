@@ -181,7 +181,7 @@ body.solo-ind .wrap { max-width: none } body.solo-ind .bar .seg { display: none 
 #vInd .seg button { padding: 6px 12px } #iTabla td.ip { min-width: 52px } #iTabla tr.tot td { font-weight: 700; border-top: 2px solid var(--fg); background: var(--surface) }
 #iTabla th.isuc { white-space: normal; min-width: 52px; max-width: 80px; line-height: 1.2; vertical-align: bottom } .nota-ind { margin-top: 14px; font-size: 13px; color: var(--muted) }
 #kTabla td.drog, #kTabla th.drog { background: color-mix(in srgb, var(--accent) 7%, var(--surface)) }
-#kTabla th.ate { color: #2e8b3d; font-style: italic } #kTabla td.ate { color: #2e8b3d; font-weight: 700 }
+#kTabla th.ate, #xTabla th.ate { color: #2e8b3d; font-style: italic } #kTabla td.ate, #xTabla td.ate { color: #2e8b3d; font-weight: 700 } #xTabla td.sob { color: #3d5a99 }
 #kTabla th.req { color: #b4232a; font-style: italic } #kTabla td.req { color: #b4232a; font-weight: 700 }
 #kTabla .k-bq { font-size: 11px; color: #8a5a00; font-weight: 700 }
 #kTabla .k-com { border: 1px solid #e6c98f; background: #fff4e0; border-radius: 6px; padding: 0 4px; margin-left: 4px; cursor: pointer; font-size: 12px; line-height: 1.4 } #kTabla .k-com.si_requiere, #kTabla .k-com.otro_medicamento { background: #ddf0ec; border-color: #9fd1c6 } #kTabla .k-com.no_requiere { background: #fde2dd; border-color: #f0b3a8 }
@@ -1589,8 +1589,10 @@ function compraKar(p) {
 }
 // lo que requiere cada sucursal para los días elegidos, con las mismas reglas de Atención a sucursales: tipo A lo que falta,
 // tipo B 1 caja si no le alcanza, tipo C/D/E a pedido (0), bloqueados 0, cambios y reemplazos; el total se compara con el stock de droguería: sobra (+) o falta (−)
-function reqKar(p, sf) {
-  const H = S.kCob + S.kSeg, listo = window.atencionListo?.() && !S.ejemplo;
+// el mismo cálculo para el Kardex (con sus días) y para el módulo de cada sucursal (con los días de su criterio)
+const reqKar = (p, sf) => reqRed(p, S.kCob + S.kSeg, sf);
+function reqRed(p, H, sf) {
+  const listo = window.atencionListo?.() && !S.ejemplo;
   const req = S.P.farmacias.map(f => listo ? window.requiereSuc?.(p.c, f, H) ?? 0 : null);
   const tot = req.reduce((a, v) => a + (v || 0), 0);
   // se atenderá: si droguería alcanza, lo que requiere; si falta, en proporción (requiere ÷ total × droguería),
@@ -1847,6 +1849,13 @@ $('rsDlg').addEventListener('click', async e => {
 });
 $('rsDlg').addEventListener('change', e => { if (e.target.name === 'rsE') pintarRsForm(); });
 let rsT = 0; $('rsQ').addEventListener('input', () => { clearTimeout(rsT); rsT = setTimeout(buscarRs, 150); });
+// lo que sobra en enteros y fracciones (0,965 de una caja de 100 → «96 f»; 2,5 de 10 → «2 / 5 f»); negativo: falta
+function sobraFr(p, v) {
+  if (soles()) return v ? (v < 0 ? '−' : '') + 'S/ ' + nf0.format(Math.abs(v * (p.k || 0))) : '';
+  const fr = +p.fr > 1 ? +p.fr : 1, u = Math.floor(Math.abs(v) * fr + 1e-9), e = Math.trunc(u / fr), f = u % fr, s = v < 0 ? '−' : '';
+  if (!u) return '';
+  return fr === 1 ? s + nf0.format(e) : s + (e ? `${nf0.format(e)} / ${f} f` : `${f} f`);
+}
 function pintarStk() {
   llenarLabs(); llenarClas();
   if (S.xModo === 'sucx' && !window.atencionListo?.()) { if (!S.xPrep) { S.xPrep = true; window.prepAtencion?.().then(() => { S.xPrep = false; pintarStk(); }); }
@@ -1871,7 +1880,9 @@ function pintarStk() {
   $('xTit').textContent = drog ? 'Droguería' : nomSuc(f) + (prio >= 0 ? ` · prioridad ${prio + 1} de ${prioridadSucs().length}` : '');
   $('xEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · necesita para ${S.xCob} + ${S.xSeg} días · ${drog ? 'Comprar = necesita de la red − stock de droguería' : 'igual que Atención a sucursales (motor de Estadística Proyx con la venta de la sucursal); con los días de su criterio, Pedir = lo que se le envía'}`;
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th>Tipo</th><th>Stock actual</th>${false ? mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="Error del método (WAPE). Clic para usarlo.">${esc(corto(m))}</th>`).join('') : ''}
-    <th class="sep" title="Venta por día según el motor de Estadística Proyx">Venta diaria</th><th class="sep">Necesita ${S.xCob} + ${S.xSeg} d</th><th>${drog ? 'Comprar' : 'Pedir'}</th>${drog ? '' : '<th class="rs-th">Comentario</th>'}</tr></thead><tbody>`;
+    <th class="sep" title="Venta por día según el motor de Estadística Proyx">Venta diaria</th><th class="sep">Necesita ${S.xCob} + ${S.xSeg} d</th><th>${drog ? 'Comprar' : 'Pedir'}</th>${drog ? '' : `<th class="sep ate" title="Igual que «Se atenderá» del Kardex con estos días: si droguería alcanza, lo que se pide; si falta, en proporción a lo que pide cada sucursal">Se atenderá</th><th title="Fracciones (unidades) que trae cada entero">Fraccionero</th><th title="Lo que le queda después de cubrir lo que necesita: stock + se atenderá − necesita, en enteros y fracciones">Va a sobrar</th><th class="rs-th">Comentario</th>`}</tr></thead><tbody>`;
+  // «se atenderá» de esta sucursal (el reparto del Kardex) y lo que le va a sobrar
+  const iF = o.farmacias.indexOf(f), ateDe = p => { if (drog || iF < 0) return null; const rq = reqRed(p, H, o.farmacias.map(x => stDe(p, x))); return rq.listo ? rq.ate[iF] : null; };
   const edita = !drog && puedeComentar(f);
   for (const r of vis) {
     const p = r.p, k = S.calc.get(p.c), sel = elegido(p.c);
@@ -1880,9 +1891,10 @@ function pintarStk() {
       ${true ? '' : mets.map((m, i) => { const x = k?.met[m]; const cls = ['w', i === 0 ? 'sep' : '']; if (!x || x.wape == null) return `<td class="${cls.join(' ')} na">–</td>`;
         if (m === k.best) cls.push('best'); if (m === sel) cls.push('sel'); return `<td class="${cls.join(' ')}" data-m="${esc(m)}" title="Usar ${esc(m)}">${pct(x.wape)}</td>`; }).join('')}
       <td class="n sep">${r.vd ? fmtS(p, conv(p, r.vd)) : '<span class="z">0</span>'}</td>
-      <td class="n sep">${fmtE(p, conv(p, r.nec))}</td><td class="n comprar">${r.nota ? `<span class="z">${esc(r.nota)}</span>` : r.cmp ? fmt(conv(p, r.cmp)) : '<span class="z">·</span>'}</td>${drog ? '' : `<td class="rs-td">${r.resp ? `<span class="tag su-resp ${esc(r.resp.estado)}" title="${esc('Comentario de ' + (r.resp.por || 'la sucursal') + (r.resp.fecha ? ' · ' + r.resp.fecha : ''))}">💬 ${esc(r.resp.txt)}${r.resp.por ? ' · ' + esc(r.resp.por) : ''}</span>` : ''}${edita ? `<button type="button" class="btn sm rs-btn" data-rs="${esc(p.c)}">${r.resp ? '✏️ Cambiar' : '💬 Comentar'}</button>` : r.resp ? '' : '<span class="z">·</span>'}</td>`}</tr>`;
+      <td class="n sep">${fmtE(p, conv(p, r.nec))}</td><td class="n comprar">${r.nota ? `<span class="z">${esc(r.nota)}</span>` : r.cmp ? fmt(conv(p, r.cmp)) : '<span class="z">·</span>'}</td>${drog ? '' : (() => { const a = ateDe(p), sob = a ? sobraFr(p, r.st + a - r.nec) : '';
+        return `<td class="n sep ate">${a == null ? '<span class="z">…</span>' : a ? fmt(conv(p, a)) : '<span class="z">0</span>'}</td><td class="n">${+p.fr > 1 ? nf0.format(p.fr) : '1'}</td><td class="n sob">${sob || '<span class="z">·</span>'}</td>`; })()}${drog ? '' : `<td class="rs-td">${r.resp ? `<span class="tag su-resp ${esc(r.resp.estado)}" title="${esc('Comentario de ' + (r.resp.por || 'la sucursal') + (r.resp.fecha ? ' · ' + r.resp.fecha : ''))}">💬 ${esc(r.resp.txt)}${r.resp.por ? ' · ' + esc(r.resp.por) : ''}</span>` : ''}${edita ? `<button type="button" class="btn sm rs-btn" data-rs="${esc(p.c)}">${r.resp ? '✏️ Cambiar' : '💬 Comentar'}</button>` : r.resp ? '' : '<span class="z">·</span>'}</td>`}</tr>`;
   }
-  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${(S.verMet ? mets.length : 0) + (drog ? 6 : 7)}">Nada que mostrar con estos filtros.</td></tr>`;
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${(S.verMet ? mets.length : 0) + (drog ? 6 : 10)}">Nada que mostrar con estos filtros.</td></tr>`;
   $('xTabla').innerHTML = h + '</tbody>'; ajustarC0($('xTabla'));
   window.fxAplicar?.($('xTabla'), fxk, [], (v, t) => { if (v < t) $('xMore').querySelector('span')?.insertAdjacentHTML('afterbegin', `<b>${nf0.format(v)} con el filtro</b> · `); });
   let tc = 0, ts = 0; for (const r of filas) { tc += r.cmp; ts += r.cmp * (r.p.k || 0); }
@@ -1907,8 +1919,10 @@ $('xSeg').addEventListener('change', e => { S.xSeg = Math.max(0, +e.target.value
 S.xVer = 'mov';
 $('xXls').addEventListener('click', () => {
   const o = S.P, drog = S.xModo === 'drog', num = v => String(Math.round((+v || 0) * 1000) / 1000).replace('.', ',');
-  const t = [['Código', 'Medicamento', 'Laboratorio', 'Tipo', 'Stock actual', 'Modelo', 'Venta diaria', `Necesita ${S.xCob} + ${S.xSeg} d`, drog ? 'Comprar' : 'Pedir', 'Costo S/', (drog ? 'Comprar' : 'Pedir') + ' S/', 'Nota', 'Comentario de la sucursal'],
-    ...filasStk().map(r => [r.c, r.n, labDe(r.c), r.cat, num(r.st), r.met, num(r.vd), num(r.nec), r.cmp, num(r.p.k), num(r.cmp * (r.p.k || 0)), r.nota, r.resp ? r.resp.txt + (r.resp.por ? ' · ' + r.resp.por : '') : ''])];
+  const H = S.xCob + S.xSeg, f = S.xFarm, iF = o.farmacias.indexOf(f), ate = p => { if (drog || iF < 0) return ''; const rq = reqRed(p, H, o.farmacias.map(x => stDe(p, x))); return rq.listo ? rq.ate[iF] : ''; };
+  const t = [['Código', 'Medicamento', 'Laboratorio', 'Tipo', 'Stock actual', 'Modelo', 'Venta diaria', `Necesita ${S.xCob} + ${S.xSeg} d`, drog ? 'Comprar' : 'Pedir', ...(drog ? [] : ['Se atenderá', 'Fraccionero', 'Va a sobrar (fracciones)']), 'Costo S/', (drog ? 'Comprar' : 'Pedir') + ' S/', 'Nota', 'Comentario de la sucursal'],
+    ...filasStk().map(r => { const a = ate(r.p), fr = +r.p.fr > 1 ? +r.p.fr : 1;
+      return [r.c, r.n, labDe(r.c), r.cat, num(r.st), r.met, num(r.vd), num(r.nec), r.cmp, ...(drog ? [] : [a, fr, a ? num((r.st + a - r.nec) * fr) : '']), num(r.p.k), num(r.cmp * (r.p.k || 0)), r.nota, r.resp ? r.resp.txt + (r.resp.por ? ' · ' + r.resp.por : '') : '']; })];
   const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' }));
   a.download = `${drog ? 'drogueria' : 'sucursal_' + nomSuc(S.xFarm)}_${o.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
@@ -2523,7 +2537,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611062200"></script>
+<script src="sucursales.js?v=202611071100"></script>
 <script src="estadistica.js?v=202611042300"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611062200"></script>

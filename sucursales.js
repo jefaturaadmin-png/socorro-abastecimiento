@@ -108,7 +108,9 @@
   /* ---------- cálculo de toda la red (todas las sucursales, para repartir lo de droguería) ---------- */
   let cache = null, cacheClave = '';
   function calcular() {
-    const clave = cfgVer + '|' + respVer + '|' + (window.EST_VER || 0) + '|' + (window.REEMP_VER || 0) + '|' + (window.BLOQ_VER || 0) + '|' + JSON.stringify(CFG);
+    // el criterio en texto se arma una vez por versión (antes se convertía en cada consulta: miles de veces por pantalla)
+    if (calcular.cv !== cfgVer) { calcular.cv = cfgVer; calcular.cj = JSON.stringify(CFG); }
+    const clave = cfgVer + '|' + respVer + '|' + (window.EST_VER || 0) + '|' + (window.REEMP_VER || 0) + '|' + (window.BLOQ_VER || 0) + '|' + calcular.cj;
     if (cache && cacheDe === S.P && cacheClave === clave) return cache;
     cacheDe = S.P; cacheClave = clave;
     const filas = [], porProd = new Map(), R = window.REEMP || new Map();
