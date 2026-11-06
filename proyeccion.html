@@ -175,8 +175,10 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 td.comprar { font-weight: 700; color: var(--accent) }
 .k-scroll { max-height: 640px; overflow: auto }
 #kTabla th, #kTabla td { white-space: nowrap }
-#vInd .seg button { padding: 6px 12px } #iTabla td.ip { min-width: 62px } #iTabla tr.tot td { font-weight: 700; border-top: 2px solid var(--fg); background: var(--surface) }
-#iTabla th.isuc { white-space: normal; min-width: 70px; max-width: 90px; line-height: 1.2; vertical-align: bottom } .nota-ind { margin-top: 14px; font-size: 13px; color: var(--muted) }
+body.solo-ind .wrap { max-width: none }   /* indicadores: toda la pantalla, sin deslizar a la derecha */
+#iTabla { width: 100% } #iTabla th, #iTabla td { padding: 6px 5px; font-size: 12.5px } #iTabla .c1 { max-width: 190px }
+#vInd .seg button { padding: 6px 12px } #iTabla td.ip { min-width: 52px } #iTabla tr.tot td { font-weight: 700; border-top: 2px solid var(--fg); background: var(--surface) }
+#iTabla th.isuc { white-space: normal; min-width: 52px; max-width: 80px; line-height: 1.2; vertical-align: bottom } .nota-ind { margin-top: 14px; font-size: 13px; color: var(--muted) }
 #kTabla td.drog, #kTabla th.drog { background: color-mix(in srgb, var(--accent) 7%, var(--surface)) }
 #kTabla th.ate { color: #2e8b3d; font-style: italic } #kTabla td.ate { color: #2e8b3d; font-weight: 700 }
 #kTabla th.req { color: #b4232a; font-style: italic } #kTabla td.req { color: #b4232a; font-weight: 700 }
@@ -695,8 +697,6 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
           <input id="iq" type="search" placeholder="Buscar línea o familia…" autocomplete="off" style="max-width:260px">
           <label class="field"><span>Laboratorio</span><select id="iLab" class="sLab"><option value="">Todos</option></select></label>
           <button type="button" class="btn sm" id="iXls">⬇ Descargar Excel</button>
-          <label class="btn sm" for="fClas" title="Reportes «producto por genérico», «producto por familia» (y por línea) en .TXT, del mismo sistema del kardex. Puede elegir varios a la vez.">📋 Actualizar clasificación (.TXT)</label>
-          <small class="z" id="iMsgClas"></small>
         </div>
       </div>
     </div>
@@ -1228,7 +1228,7 @@ else if (SOLO === 'drog' || SOLO === 'sucx') {
   document.querySelector('.bar .brand').innerHTML = '<i></i>' + (SOLO === 'drog' ? 'Droguería' : 'Por sucursal');
 }
 else if (SOLO === 'ind') {
-  S.tab = S.vista = 'ind'; document.body.classList.add('solo-kar');
+  S.tab = S.vista = 'ind'; document.body.classList.add('solo-kar', 'solo-ind');
   document.querySelector('.bar .brand').innerHTML = '<i></i>Indicadores';
 }
 else if (SOLO === 'kar') {
@@ -1279,7 +1279,7 @@ function cargarCLAS() { try { window.parent?.cargarClasificacion?.().then(ponerC
    «producto por genérico» (despro + desgen), «producto por familia» (despro + desfam) y, si existe, «producto por línea».
    Solo cambia el dato que trae cada archivo; «NO CLASIFICADOS» o vacío no borra lo que ya había. */
 async function subirClas(files) {
-  const msg = t => { $('kMsgClas').textContent = t; $('iMsgClas').textContent = t; };
+  const msg = t => { $('kMsgClas').textContent = t; };
   try {
     if (!S.assets || !S.db) return msg('Para guardar la clasificación entra con tu usuario.');
     msg('Leyendo los reportes…');
@@ -1678,7 +1678,7 @@ function datosInd() {
   const todas = [...m.values()].filter(r => r.t > 0).sort((a, b) => b.t - a.t);
   const tot = { g: 'Total', v: farms.map((_, i) => todas.reduce((a, r) => a + r.v[i], 0)), t: todas.reduce((a, r) => a + r.t, 0), np: todas.reduce((a, r) => a + r.np, 0) };
   // las sucursales de la que más vende a la que menos
-  const orden = farms.map((f, i) => i).sort((a, b) => tot.v[b] - tot.v[a]);
+  const orden = farms.map((f, i) => i).filter(i => tot.v[i] > 0).sort((a, b) => tot.v[b] - tot.v[a]);   // sin las que no venden (cerradas o sin datos)
   const q = $('iq').value.trim().toLowerCase(), filas = q ? todas.filter(r => r.g.toLowerCase().includes(q)) : todas;
   return { farms, orden, filas, tot };
 }
