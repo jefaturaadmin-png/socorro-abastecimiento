@@ -176,7 +176,7 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 td.comprar { font-weight: 700; color: var(--accent) }
 .k-scroll { max-height: 640px; overflow: auto }
 #kTabla th, #kTabla td { white-space: nowrap }
-body.solo-ind .wrap { max-width: none } body.solo-ind .bar .seg { display: none }   /* indicadores: toda la pantalla, sin deslizar a la derecha */
+body.solo-ind .wrap, body.ancho-total .wrap { max-width: none }   /* de esquina a esquina */ body.solo-ind .bar .seg { display: none }   /* indicadores: toda la pantalla, sin deslizar a la derecha */
 #iTabla { width: 100% } #iTabla th, #iTabla td { padding: 6px 5px; font-size: 12.5px } #iTabla .c1 { max-width: 190px }
 #vInd .seg button { padding: 6px 12px } #iTabla td.ip { min-width: 52px } #iTabla tr.tot td { font-weight: 700; border-top: 2px solid var(--fg); background: var(--surface) }
 #iTabla th.isuc { white-space: normal; min-width: 52px; max-width: 80px; line-height: 1.2; vertical-align: bottom } .nota-ind { margin-top: 14px; font-size: 13px; color: var(--muted) }
@@ -1226,7 +1226,7 @@ if (SOLO === 'mapa') {
   document.querySelector('.bar .brand').innerHTML = '<i></i>Estadística Proyx';
 }
 else if (SOLO === 'drog' || SOLO === 'sucx') {
-  S.tab = S.vista = 'stk'; S.xModo = SOLO; document.body.classList.add('solo-mapa');
+  S.tab = S.vista = 'stk'; S.xModo = SOLO; document.body.classList.add('solo-mapa', 'ancho-total');
   if (SOLO === 'sucx') { S.xFarm = new URLSearchParams(location.search).get('f') || ''; document.body.classList.add('x-una'); }
   document.querySelector('.bar .brand').innerHTML = '<i></i>' + (SOLO === 'drog' ? 'Droguería' : 'Por sucursal');
 }
@@ -1235,7 +1235,7 @@ else if (SOLO === 'ind') {
   document.querySelector('.bar .brand').innerHTML = '<i></i>Indicadores';
 }
 else if (SOLO === 'kar') {
-  S.tab = S.vista = 'kar'; document.body.classList.add('solo-kar');
+  S.tab = S.vista = 'kar'; document.body.classList.add('solo-kar', 'ancho-total');
   document.querySelector('.bar .brand').innerHTML = '<i></i>Kardex';
 }
 if (SOLO !== 'mapa') document.querySelector('[data-tab="mapa"]').remove();
