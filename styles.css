@@ -572,6 +572,7 @@ main { padding-bottom: 80px }
 .pd-chip.act { background: var(--brand); color: #fff; border-color: var(--brand) } .pd-chip.act b { color: #fff }
 #pdTabla td { white-space: normal; max-width: 320px }
 /* urgencias: tablero del administrador y tarjetas de las sucursales */
+.pd-filtros { padding: 14px 18px; margin-bottom: 14px; align-items: flex-end }
 .pd-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 14px }
 .pd-kpi { display: grid; gap: 2px; padding: 14px 16px } .pd-kpi small { color: var(--muted); font-size: 12.5px }
 .pd-kpi .n { font-size: 30px; font-weight: 800; line-height: 1.15 } .pd-kpi .n.m { font-size: 22px } .pd-kpi .n.s { font-size: 16px }

@@ -25,7 +25,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611062200";
+const VERSION_PROY = "202611071000";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1982,6 +1982,7 @@ const puedeMarcarUrg = () => esAdmin() || ["sucursales", "kardex"].some(v => (S.
 const ESTADO_U = { "": ["🔴 Pedido recién", "rojo"], viendo: ["🟠 Droguería lo está viendo", "amb"], atendido: ["🟢 Atendido", "verde"] };
 const estU = d => S.urgEst.get(d.id) || {};
 const inicioDia = (n = 0) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - n); return d; };
+const inicioDiaDe = x => { const d = new Date(x); d.setHours(0, 0, 0, 0); return d; };
 const hace = f => { if (!f) return ""; const m = Math.round((Date.now() - f) / 60000); return m < 1 ? "recién" : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : f.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit" }); };
 const nomProd = d => d.nom || (d.cod ? "Código " + d.cod + " (no está en el catálogo ni en el kardex)" : "(sin producto)");
 function pedidosVisibles() {
@@ -2015,37 +2016,53 @@ function pintarTarjetasUrg() {
 }
 // ---------- administrador: tablero ----------
 function pintarTableroUrg(P) {
-  const base = P.datos.filter(d => !S.pdSuc || d.suc === S.pdSuc), hoy = inicioDia(0), ayer = inicioDia(1), sem = inicioDia(6);
-  const deHoy = base.filter(d => d.f && d.f >= hoy), deAyer = base.filter(d => d.f && d.f >= ayer && d.f < hoy), deSem = base.filter(d => d.f && d.f >= sem);
+  // periodo: el de los filtros de arriba (Desde / Hasta); sin fechas, los últimos 7 días
+  const hoy = inicioDia(0), ayer = inicioDia(1), d0 = S.pdDesde ? new Date(S.pdDesde + "T00:00:00") : inicioDia(6), d1 = S.pdHasta ? new Date(S.pdHasta + "T23:59:59") : new Date();
+  const conRango = !!(S.pdDesde || S.pdHasta), fD = x => x.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const per = conRango ? `${fD(d0)} – ${fD(d1)}` : "últimos 7 días";
+  $("pdRango").textContent = "Tablero: " + per + (S.pdSuc ? " · " + corto(S.pdSuc) : " · todas las sucursales");
+  const enRango = d => d.f && d.f >= d0 && d.f <= d1;
+  const base = P.datos.filter(d => !S.pdSuc || d.suc === S.pdSuc);
+  const deHoy = base.filter(d => d.f && d.f >= hoy), deAyer = base.filter(d => d.f && d.f >= ayer && d.f < hoy), deSem = base.filter(enRango);
   const cuenta = (arr, key) => { const m = new Map(); arr.forEach(d => { const k = key(d); if (k) m.set(k, (m.get(k) || 0) + 1); }); return [...m].sort((a, b) => b[1] - a[1]); };
-  const sucTop = cuenta(deHoy.length ? deHoy : deSem, d => d.suc)[0];
+  const sucTop = cuenta(conRango || !deHoy.length ? deSem : deHoy, d => d.suc)[0];
   const porProd = new Map(); deSem.forEach(d => { const k = d.cod || d.nom; if (!k) return; const x = porProd.get(k) || { d, q: 0, n: 0, s: new Set() }; x.q += d.q || 1; x.n++; if (d.suc) x.s.add(d.suc); porProd.set(k, x); });
   const top = [...porProd.values()].sort((a, b) => b.s.size - a.s.size || b.q - a.q).slice(0, 5);
-  const dif = deHoy.length - deAyer.length;
-  $("pdKpi").innerHTML = `
+  const dif = deHoy.length - deAyer.length, pc = conRango ? "periodo" : "semana";
+  $("pdKpi").innerHTML = conRango ? `
+    <div class="card pd-kpi"><small>Pedidos en el periodo</small><b class="n rojo-t">${nf(deSem.length)}</b><small>${per}</small></div>
+    <div class="card pd-kpi"><small>Productos distintos</small><b class="n">${nf(porProd.size)}</b><small>en el periodo</small></div>`
+    : `
     <div class="card pd-kpi"><small>Pedidos hoy</small><b class="n rojo-t">${nf(deHoy.length)}</b><small>${dif > 0 ? `▲ ${dif} más que ayer` : dif < 0 ? `▼ ${-dif} menos que ayer` : "igual que ayer"}</small></div>
-    <div class="card pd-kpi"><small>Productos distintos hoy</small><b class="n">${nf(new Set(deHoy.map(d => d.cod || d.nom)).size)}</b><small>esta semana: ${nf(porProd.size)}</small></div>
-    <div class="card pd-kpi"><small>Sucursal que más pide${deHoy.length ? " hoy" : " (semana)"}</small><b class="n m">${sucTop ? esc(corto(sucTop[0])) : "–"}</b><small>${sucTop ? nf(sucTop[1]) + " pedidos" : ""}</small></div>
-    <div class="card pd-kpi"><small>Producto más pedido (semana)</small><b class="n s">${top[0] ? esc(nomProd(top[0].d)) : "–"}</b><small class="cod">${top[0] ? esc(top[0].d.cod) + " · " + top[0].s.size + " sucursales" : ""}</small></div>`;
-  // barras por sucursal (todas, últimos 7 días)
-  const barras = cuenta(P.datos.filter(d => d.f && d.f >= sem), d => d.suc), mx = Math.max(1, ...barras.map(b => b[1]));
+    <div class="card pd-kpi"><small>Productos distintos hoy</small><b class="n">${nf(new Set(deHoy.map(d => d.cod || d.nom)).size)}</b><small>esta semana: ${nf(porProd.size)}</small></div>`;
+  $("pdKpi").innerHTML += `
+    <div class="card pd-kpi"><small>Sucursal que más pide${conRango ? " (periodo)" : deHoy.length ? " hoy" : " (semana)"}</small><b class="n m">${sucTop ? esc(corto(sucTop[0])) : "–"}</b><small>${sucTop ? nf(sucTop[1]) + " pedidos" : ""}</small></div>
+    <div class="card pd-kpi"><small>Producto más pedido (${pc})</small><b class="n s">${top[0] ? esc(nomProd(top[0].d)) : "–"}</b><small class="cod">${top[0] ? esc(top[0].d.cod) + " · " + top[0].s.size + " sucursales" : ""}</small></div>`;
+  // barras por sucursal (todas, en el periodo)
+  $("pdBarH").textContent = `Pedidos por sucursal (${per})`; $("pdTopH").textContent = `Top 5 productos más pedidos (${per})`;
+  const barras = cuenta(P.datos.filter(enRango), d => d.suc), mx = Math.max(1, ...barras.map(b => b[1]));
   $("pdBarras").innerHTML = barras.length ? `<svg viewBox="0 0 520 ${barras.length * 30 + 6}" class="pd-svg">${barras.map(([f, n], i) => {
     const w = Math.max(4, 370 * n / mx), y = 6 + i * 30, c = ["#14306B", "#14306B", "#3d5a99", "#3d5a99", "#6b84bf", "#6b84bf"][i] || "#9fb1d9";
     return `<g class="pd-bar" data-pdsuc="${esc(f)}"><text x="0" y="${y + 13}">${esc(corto(f))}</text><rect x="100" y="${y}" width="${w}" height="18" rx="4" fill="${S.pdSuc === f ? "#F28C1E" : c}"/><text x="${106 + w}" y="${y + 14}">${n}</text></g>`; }).join("")}</svg>`
-    : '<p class="muted">Sin pedidos en los últimos 7 días.</p>';
-  // línea por día (últimos 7 días)
-  const dias = Array.from({ length: 7 }, (_, i) => inicioDia(6 - i)), vals = dias.map((d0, i) => base.filter(d => d.f && d.f >= d0 && (i === 6 || d.f < dias[i + 1])).length);
-  const mv = Math.max(1, ...vals), X = i => 40 + i * 65, Y = v => 170 - v / mv * 140;
-  $("pdLinH").textContent = "Pedidos por día" + (S.pdSuc ? " · " + corto(S.pdSuc) : "");
+    : `<p class="muted">Sin pedidos en ${conRango ? "ese periodo" : "los últimos 7 días"}.</p>`;
+  // línea: por día (hasta 2 meses) o por mes
+  const nDias = Math.round((inicioDiaDe(d1) - inicioDiaDe(d0)) / 864e5) + 1, porMes = nDias > 62;
+  let pts;
+  if (!porMes) pts = Array.from({ length: nDias }, (_, i) => { const a = new Date(inicioDiaDe(d0).getTime() + i * 864e5), b = new Date(a.getTime() + 864e5);
+    return { a, b, et: nDias <= 7 ? (+a === +hoy ? "hoy" : a.toLocaleDateString("es-PE", { weekday: "short" })) : a.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit" }) }; });
+  else { pts = []; for (let a = new Date(d0.getFullYear(), d0.getMonth(), 1); a <= d1; a = new Date(a.getFullYear(), a.getMonth() + 1, 1)) pts.push({ a: a < d0 ? d0 : a, b: new Date(a.getFullYear(), a.getMonth() + 1, 1), et: a.toLocaleDateString("es-PE", { month: "short", year: "2-digit" }) }); }
+  const vals = pts.map(p => base.filter(d => d.f && d.f >= p.a && d.f < p.b && d.f <= d1).length);
+  const mv = Math.max(1, ...vals), paso = pts.length > 1 ? 410 / (pts.length - 1) : 0, X = i => 40 + i * paso, Y = v => 170 - v / mv * 140, cada = Math.ceil(pts.length / 12);
+  $("pdLinH").textContent = "Pedidos por " + (porMes ? "mes" : "día") + (S.pdSuc ? " · " + corto(S.pdSuc) : "");
   $("pdLinea").innerHTML = `<svg viewBox="0 0 460 200" class="pd-svg"><g stroke="#eceff3"><line x1="30" x2="450" y1="30" y2="30"/><line x1="30" x2="450" y1="100" y2="100"/><line x1="30" x2="450" y1="170" y2="170"/></g>
     <polyline points="${vals.map((v, i) => X(i) + "," + Y(v)).join(" ")}" fill="none" stroke="#F28C1E" stroke-width="3"/>
-    ${vals.map((v, i) => `<circle cx="${X(i)}" cy="${Y(v)}" r="${i === 6 ? 5 : 4}" fill="#F28C1E"><title>${v} pedidos</title></circle><text x="${X(i)}" y="${Y(v) - 10}" text-anchor="middle" class="${i === 6 ? "hoy" : ""}">${v}</text>
-      <text x="${X(i)}" y="192" text-anchor="middle" class="dia">${i === 6 ? "hoy" : dias[i].toLocaleDateString("es-PE", { weekday: "short" })}</text>`).join("")}</svg>`;
+    ${vals.map((v, i) => { const ult = i === vals.length - 1, ver = i % cada === 0 || ult; return `<circle cx="${X(i)}" cy="${Y(v)}" r="${ult ? 5 : 4}" fill="#F28C1E"><title>${pts[i].et}: ${v} pedidos</title></circle>${ver ? `<text x="${X(i)}" y="${Y(v) - 10}" text-anchor="middle" class="${ult ? "hoy" : ""}">${v}</text>
+      <text x="${X(i)}" y="192" text-anchor="middle" class="dia">${pts[i].et}</text>` : ""}`; }).join("")}</svg>`;
   // top 5 con el stock de droguería
   const stDrog = c => { const v = S.drogStk?.[c]?.[0]; return S.drogStk == null ? "" : v > 0 ? `<span class="chip ${v >= 0 ? "verde" : ""}">Hay ${nf(v)}</span>` : '<span class="chip rojo">Sin stock</span>'; };
   $("pdTop").innerHTML = `<thead><tr><th>Producto</th><th>Sucursales que lo pidieron</th><th class="der">Cant.</th><th>En droguería</th></tr></thead><tbody>` +
     (top.length ? top.map(x => `<tr><td class="p"><b>${esc(nomProd(x.d))}</b><code>${esc(x.d.cod)}</code></td><td>${[...x.s].map(f => `<span class="tag">${esc(corto(f))}</span>`).join(" ")} <b>${x.s.size}</b></td><td class="der"><b>${nf(x.q)}</b></td><td>${stDrog(x.d.cod)}</td></tr>`).join("")
-      : '<tr class="vacia"><td colspan="4">Sin pedidos esta semana.</td></tr>') + "</tbody>";
+      : `<tr class="vacia"><td colspan="4">Sin pedidos en ${conRango ? "ese periodo" : "esta semana"}.</td></tr>`) + "</tbody>";
   // resumen por sucursal (filtro) y lista de pedidos para marcarlos
   const res = $("pdRes"); res.hidden = P.cS < 0;
   if (P.cS >= 0) res.innerHTML = cuenta(P.datos, d => d.suc || "?").map(([f, c]) => `<button type="button" class="pd-chip${S.pdSuc === f ? " act" : ""}" data-pdsuc="${esc(f)}">${esc(f === "?" ? "Sin reconocer" : corto(f))} <b>${nf(c)}</b></button>`).join("");
@@ -2074,6 +2091,7 @@ async function marcarUrg(tr) {
 $("pdTabla").addEventListener("change", e => { const tr = e.target.closest("tr[data-uid]"); if (tr && e.target.matches("[data-uest],[data-unota]")) marcarUrg(tr); });
 $("pdAct").addEventListener("click", () => cargarPedidos(true));
 $("pdSuc").addEventListener("change", e => { S.pdSuc = e.target.value; pintarPedidos(); });
+$("pdLimpiar").addEventListener("click", () => { S.pdSuc = S.pdDesde = S.pdHasta = ""; $("pdDesde").value = $("pdHasta").value = $("pdDesde2").value = $("pdHasta2").value = ""; pintarPedidos(); });
 ["pdQ", "pdQ2"].forEach(id => $(id).addEventListener("input", e => { S.pdQ = e.target.value; pintarPedidos(); }));
 ["pdDesde", "pdDesde2"].forEach(id => $(id).addEventListener("change", e => { S.pdDesde = e.target.value; pintarPedidos(); }));
 ["pdHasta", "pdHasta2"].forEach(id => $(id).addEventListener("change", e => { S.pdHasta = e.target.value; pintarPedidos(); }));
