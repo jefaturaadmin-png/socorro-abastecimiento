@@ -349,7 +349,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
       <button role="tab" data-tab="mapa" aria-selected="false">Mapa de calor</button>
     </div>
     <div class="seg" role="group" aria-label="Unidad">
-      <button data-u="cajas" aria-pressed="true">Cajas</button><button data-u="soles" aria-pressed="false">Soles</button>
+      <button data-u="cajas" aria-pressed="true">Enteros y fracciones</button><button data-u="soles" aria-pressed="false">Soles</button>
     </div>
     <input id="fPron" type="file" accept=".txt,.TXT,.gz,.json" multiple hidden>
     <input id="fClas" type="file" accept=".txt,.TXT" multiple hidden>
@@ -691,7 +691,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
         <div class="fila-f">
           <div class="seg" id="iPor" role="group" aria-label="Ver por"><button type="button" data-ipor="t" aria-pressed="true">Por línea</button><button type="button" data-ipor="f" aria-pressed="false">Por familia</button></div>
           <div class="seg" id="iModo" role="group" aria-label="Cómo leer"><button type="button" data-imodo="linea" aria-pressed="true" title="Cada fila suma 100 %: de lo que se vende de esa línea, cuánto vende cada sucursal">% de la línea</button><button type="button" data-imodo="suc" aria-pressed="false" title="Cada columna suma 100 %: de lo que vende la sucursal, cuánto es de cada línea">% de la sucursal</button></div>
-          <div class="seg" role="group" aria-label="Medida"><button type="button" data-u="cajas" aria-pressed="true">Cajas</button><button type="button" data-u="soles" aria-pressed="false">Soles</button></div>
+          <div class="seg" role="group" aria-label="Medida"><button type="button" data-u="cajas" aria-pressed="true">Enteros y fracciones</button><button type="button" data-u="soles" aria-pressed="false">Soles</button></div>
           <label class="field"><span>Desde</span><input type="month" id="iDesde"></label>
           <label class="field"><span>Hasta</span><input type="month" id="iHasta"></label>
         </div>
@@ -704,7 +704,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
     </div>
     <div class="card"><div class="scroll"><table class="cells" id="iTabla"></table></div><div class="more" id="iMore"></div></div>
     <details class="nota-ind"><summary>Cómo se calcula</summary><ul>
-      <li><b>Venta</b>: lo vendido por cada sucursal entre el mes <b>Desde</b> y el mes <b>Hasta</b> (incluidos; la venta por sucursal se guarda por mes), en cajas o en soles (a costo) según el botón de arriba.</li>
+      <li><b>Venta</b>: lo vendido por cada sucursal entre el mes <b>Desde</b> y el mes <b>Hasta</b> (incluidos; la venta por sucursal se guarda por mes), en enteros (las fracciones se suman como parte de un entero: 5 fracciones de una caja de 10 = 0,5) o en soles (a costo), según el botón.</li>
       <li><b>% de la línea</b>: de todo lo que la empresa vende de esa línea (o familia), qué parte vende cada sucursal. Cada fila suma 100 %.</li>
       <li><b>% de la sucursal</b>: de todo lo que vende la sucursal, qué parte es de cada línea (o familia). Cada columna suma 100 %.</li>
       <li><b>Peso</b>: qué parte de la venta total de la empresa es de esa línea. El color más intenso marca la sucursal que más pesa en la fila (o en la columna).</li>
@@ -1610,7 +1610,7 @@ function pintarKar() {
   if (!S.ejemplo && !S.kPrep && (!S.kPrepOk || !window.atencionListo?.())) { S.kPrep = true; window.prepAtencion?.().then(() => { S.kPrep = false; S.kPrepOk = true; if (S.vista === 'kar') pintarKar(); }); }
   const o = S.P, farms = o.farmacias, conv = (p, v) => soles() ? v * p.k : v, cel = (p, v) => v ? fmtS(p, conv(p, v)) : '<span class="z">0</span>';
   const filas = filasKar(), vis = window.fxActivo?.('kar') ? filas : filas.slice(0, S.kMostrar);
-  $('kEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · en ${soles() ? 'soles' : 'cajas y fracciones'} · del último kardex subido`;
+  $('kEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · en ${soles() ? 'soles' : 'enteros y fracciones'} · del último kardex subido`;
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th class="drog">Droguería</th><th class="sobra" title="Droguería − total que requieren las sucursales para ${S.kCob} + ${S.kSeg} días. Negativo: falta">Sobra / falta</th><th class="req" title="Suma de lo que requiere cada sucursal">Total requieren</th>${farms.map(f => `<th class="sep">${esc(nomSuc(f))}</th><th class="req" title="Lo que requiere ${esc(nomSuc(f))} para ${S.kCob} + ${S.kSeg} días (venta diaria × días − su stock)">Requiere</th><th class="ate" title="Si droguería alcanza: lo que requiere. Si falta: requiere ÷ total que requieren × stock de droguería">Se atenderá</th>`).join('')}<th class="sep">Sucursales</th><th>Total</th><th class="sep" title="Lo que necesita la red para los días elegidos (pronóstico)">Necesita ${S.kCob} + ${S.kSeg} d</th><th title="Necesita − stock total (droguería + sucursales)">Comprar</th></tr></thead><tbody>`;
   for (const r of vis) {
     const p = r.p, cx = compraKar(p), rq = reqKar(p, r.sf), sob = r.drog - rq.tot;
@@ -1703,7 +1703,7 @@ function pintarInd() {
   for (const [id, v] of [['iDesde', M[dI]], ['iHasta', M[hI]]]) { const x = $(id); x.min = M[0]; x.max = M[M.length - 1]; x.value = v; }
   const etM = m => { const [y, mm] = m.split('-'); return ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][+mm - 1] + ' ' + y.slice(2); };
   $('iTit').textContent = `Participación de las sucursales por ${porL}`;
-  $('iEyebrow').textContent = `Venta de ${meses.length ? etM(meses[0]) + (meses.length > 1 ? ' a ' + etM(meses[meses.length - 1]) : '') : '—'} · en ${soles() ? 'soles (a costo)' : 'cajas'} · ${S.iModo === 'linea' ? `cada fila suma 100 %` : 'cada columna suma 100 %'}`;
+  $('iEyebrow').textContent = `Venta de ${meses.length ? etM(meses[0]) + (meses.length > 1 ? ' a ' + etM(meses[meses.length - 1]) : '') : '—'} · en ${soles() ? 'soles (a costo)' : 'enteros y fracciones'} · ${S.iModo === 'linea' ? `cada fila suma 100 %` : 'cada columna suma 100 %'}`;
   document.querySelectorAll('[data-imodo="linea"]').forEach(b => b.textContent = `% de la ${porL}`);
   const val = v => soles() ? 'S/ ' + nf0.format(v) : nf0.format(v);
   const parte = (r, i) => S.iModo === 'linea' ? (r.t ? r.v[i] / r.t : 0) : (d.tot.v[i] ? r.v[i] / d.tot.v[i] : 0);
@@ -1711,7 +1711,7 @@ function pintarInd() {
   const maxCol = d.orden.map(i => Math.max(...d.filas.map(r => parte(r, i)), 0));
   const celda = (r, i, j) => { const x = parte(r, i), mx = S.iModo === 'linea' ? Math.max(...d.orden.map(k => parte(r, k))) : maxCol[j], a = mx ? x / mx : 0;
     return `<td class="n ip" style="--hc:rgba(217,95,14,${(a * .55).toFixed(3)})" title="${esc(nomSuc(d.farms[i]))} · ${esc(r.g)}: ${val(r.v[i])}">${pct1(x)}</td>`; };
-  let h = `<thead><tr><th class="c1 solo">${por}</th><th title="Productos de la ${porL} con venta en el periodo">Productos</th><th>Venta ${soles() ? 'S/' : 'cajas'}</th><th title="Parte de la venta total de la empresa">Peso</th>${d.orden.map(i => `<th class="isuc${i === d.orden[0] ? ' sep' : ''}">${esc(nomSuc(d.farms[i]))}</th>`).join('')}</tr></thead><tbody>`;
+  let h = `<thead><tr><th class="c1 solo">${por}</th><th title="Productos de la ${porL} con venta en el periodo">Productos</th><th title="Las fracciones se suman como parte de un entero">Venta ${soles() ? 'S/' : 'enteros'}</th><th title="Parte de la venta total de la empresa">Peso</th>${d.orden.map(i => `<th class="isuc${i === d.orden[0] ? ' sep' : ''}">${esc(nomSuc(d.farms[i]))}</th>`).join('')}</tr></thead><tbody>`;
   for (const r of d.filas) h += `<tr><td class="c1 solo" title="${esc(r.g)}">${esc(r.g)}</td><td class="n">${nf0.format(r.np)}</td><td class="n">${val(r.t)}</td><td class="n">${pct1(d.tot.t ? r.t / d.tot.t : 0)}</td>${d.orden.map((i, j) => celda(r, i, j)).join('')}</tr>`;
   if (!d.filas.length) h += `<tr><td class="c1 solo" colspan="${d.orden.length + 4}">${CLAS ? 'Nada que mostrar con estos filtros.' : 'Cargando la clasificación de productos…'}</td></tr>`;
   // total: participación de cada sucursal en toda la venta (o 100 % por columna)
@@ -1734,7 +1734,7 @@ $('iLab').addEventListener('change', e => { S.iLab = e.target.value; pintarInd()
 $('iXls').addEventListener('click', () => {
   const d = datosInd(), por = S.iPor === 't' ? 'Línea' : 'Familia', num = v => String(Math.round(v * 1000) / 1000).replace('.', ',');
   const parte = (r, i) => S.iModo === 'linea' ? (r.t ? r.v[i] / r.t : 0) : (d.tot.v[i] ? r.v[i] / d.tot.v[i] : 0);
-  const t = [[por, 'Productos', soles() ? 'Venta S/' : 'Venta cajas', 'Peso %', ...d.orden.map(i => nomSuc(d.farms[i]) + ' %'), ...d.orden.map(i => nomSuc(d.farms[i]) + (soles() ? ' S/' : ' cajas'))],
+  const t = [[por, 'Productos', soles() ? 'Venta S/' : 'Venta enteros', 'Peso %', ...d.orden.map(i => nomSuc(d.farms[i]) + ' %'), ...d.orden.map(i => nomSuc(d.farms[i]) + (soles() ? ' S/' : ' enteros'))],
     ...[...d.filas, d.tot].map(r => [r.g, r.np, num(r.t), num(d.tot.t ? r.t / d.tot.t * 100 : 0), ...d.orden.map(i => r === d.tot ? num(S.iModo === 'linea' ? (d.tot.t ? d.tot.v[i] / d.tot.t * 100 : 0) : 100) : num(parte(r, i) * 100)), ...d.orden.map(i => num(r.v[i]))])];
   const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + txt], { type: 'text/csv;charset=utf-8' }));
@@ -2443,7 +2443,7 @@ $('q').addEventListener('input', () => { S.mMostrar = PAGINA; pintarMov(); });
 const rango = () => S.M.months.filter(m => m >= S.desde && m <= S.hasta);
 const valor = (r, m) => { const so = soles(); if (m === 'ventas') return esVenta(r.tipo) ? (so ? r.vs : r.s) : 0; if (m === 'salidas') return so ? r.vs : r.s; return so ? r.vi : r.i; };
 const NOMBRE_M = { ventas: 'Ventas', salidas: 'Salidas', ingresos: 'Ingresos' };
-const uni = () => soles() ? 'en soles (costo con IGV)' : 'en cajas';
+const uni = () => soles() ? 'en soles (costo con IGV)' : 'en enteros y fracciones';
 function pintarMov() {
   $('movVacio').hidden = !!S.M; $('movCont').hidden = !S.M; if (!S.M) return;
   const meses = rango(), mi = new Map(meses.map((m, i) => [m, i]));
