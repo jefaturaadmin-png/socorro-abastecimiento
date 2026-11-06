@@ -175,7 +175,7 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 td.comprar { font-weight: 700; color: var(--accent) }
 .k-scroll { max-height: 640px; overflow: auto }
 #kTabla th, #kTabla td { white-space: nowrap }
-body.solo-ind .wrap { max-width: none }   /* indicadores: toda la pantalla, sin deslizar a la derecha */
+body.solo-ind .wrap { max-width: none } body.solo-ind .bar .seg { display: none }   /* indicadores: toda la pantalla, sin deslizar a la derecha */
 #iTabla { width: 100% } #iTabla th, #iTabla td { padding: 6px 5px; font-size: 12.5px } #iTabla .c1 { max-width: 190px }
 #vInd .seg button { padding: 6px 12px } #iTabla td.ip { min-width: 52px } #iTabla tr.tot td { font-weight: 700; border-top: 2px solid var(--fg); background: var(--surface) }
 #iTabla th.isuc { white-space: normal; min-width: 52px; max-width: 80px; line-height: 1.2; vertical-align: bottom } .nota-ind { margin-top: 14px; font-size: 13px; color: var(--muted) }
@@ -691,7 +691,9 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
         <div class="fila-f">
           <div class="seg" id="iPor" role="group" aria-label="Ver por"><button type="button" data-ipor="t" aria-pressed="true">Por línea</button><button type="button" data-ipor="f" aria-pressed="false">Por familia</button></div>
           <div class="seg" id="iModo" role="group" aria-label="Cómo leer"><button type="button" data-imodo="linea" aria-pressed="true" title="Cada fila suma 100 %: de lo que se vende de esa línea, cuánto vende cada sucursal">% de la línea</button><button type="button" data-imodo="suc" aria-pressed="false" title="Cada columna suma 100 %: de lo que vende la sucursal, cuánto es de cada línea">% de la sucursal</button></div>
-          <div class="seg" id="iPer" role="group" aria-label="Periodo"></div>
+          <div class="seg" role="group" aria-label="Medida"><button type="button" data-u="cajas" aria-pressed="true">Cajas</button><button type="button" data-u="soles" aria-pressed="false">Soles</button></div>
+          <label class="field"><span>Desde</span><input type="month" id="iDesde"></label>
+          <label class="field"><span>Hasta</span><input type="month" id="iHasta"></label>
         </div>
         <div class="fila-f">
           <input id="iq" type="search" placeholder="Buscar línea o familia…" autocomplete="off" style="max-width:260px">
@@ -702,7 +704,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
     </div>
     <div class="card"><div class="scroll"><table class="cells" id="iTabla"></table></div><div class="more" id="iMore"></div></div>
     <details class="nota-ind"><summary>Cómo se calcula</summary><ul>
-      <li><b>Venta</b>: lo vendido por cada sucursal en el periodo elegido (meses completos del kardex), en cajas o en soles (a costo) según el botón de arriba.</li>
+      <li><b>Venta</b>: lo vendido por cada sucursal entre el mes <b>Desde</b> y el mes <b>Hasta</b> (incluidos; la venta por sucursal se guarda por mes), en cajas o en soles (a costo) según el botón de arriba.</li>
       <li><b>% de la línea</b>: de todo lo que la empresa vende de esa línea (o familia), qué parte vende cada sucursal. Cada fila suma 100 %.</li>
       <li><b>% de la sucursal</b>: de todo lo que vende la sucursal, qué parte es de cada línea (o familia). Cada columna suma 100 %.</li>
       <li><b>Peso</b>: qué parte de la venta total de la empresa es de esa línea. El color más intenso marca la sucursal que más pesa en la fila (o en la columna).</li>
@@ -1663,16 +1665,28 @@ $('kXls').addEventListener('click', () => {
 /* ---------- INDICADORES: participación de las sucursales por línea y por familia ----------
    Venta de cada sucursal en los últimos N meses completos (su historial mensual del kardex), agrupada por la línea o
    la familia de la clasificación de productos. «% de la línea»: cada fila suma 100 %; «% de la sucursal»: cada columna. */
-S.iPor = 't'; S.iModo = 'linea'; S.iMeses = 3; S.iLab = '';
-const ventaPer = (p, f, n) => sumH((S.P.hfm && p.hf?.[f] ? p.hf[f] : (p.h || []).map(v => v == null ? null : v * (p.s?.[f] || 0))).slice(-n));
+S.iPor = 't'; S.iModo = 'linea'; S.iDesde = ''; S.iHasta = ''; S.iLab = '';
+// meses con venta por sucursal (los del historial mensual) y el rango elegido (por defecto, los últimos 3)
+const mesesInd = () => S.P.hfm?.length ? S.P.hfm : S.P.meses;
+function rangoInd() {
+  const M = mesesInd(); let d = M.indexOf(S.iDesde), h = M.indexOf(S.iHasta);
+  if (h < 0) h = M.length - 1; if (d < 0) d = Math.max(0, h - 2); if (d > h) [d, h] = [h, d];
+  return [d, h, M];
+}
+// venta de la sucursal entre los meses elegidos (los historiales terminan en el último mes: se alinean por el final)
+function ventaPer(p, f, d, h, M) {
+  const usaHf = S.P.hfm && p.hf?.[f], arr = usaHf ? p.hf[f] : (p.h || []).map(v => v == null ? null : v * (p.s?.[f] || 0));
+  const base = usaHf ? M : S.P.meses, desp = base.length - arr.length, i0 = base.indexOf(M[d]), i1 = base.indexOf(M[h]);
+  let t = 0; for (let i = Math.max(0, i0); i <= i1; i++) t += +arr[i - desp] || 0; return t;
+}
 function datosInd() {
-  const o = S.P, farms = o.farmacias.filter(f => f !== 'DROGUERIA FS'), n = S.iMeses, k = S.iPor, m = new Map();
+  const o = S.P, farms = o.farmacias.filter(f => f !== 'DROGUERIA FS'), [dI, hI, M] = rangoInd(), k = S.iPor, m = new Map();
   for (const p of o.p) {
     if (S.iLab && labDe(p.c) !== S.iLab) continue;
     const g = clas(p)[k] || '(Sin clasificar)';
     let r = m.get(g); if (!r) { r = { g, v: farms.map(() => 0), t: 0, np: 0 }; m.set(g, r); }
     let vende = false;
-    farms.forEach((f, i) => { let v = ventaPer(p, f, n); if (!(v > 0)) return; if (soles()) v *= p.k || 0; r.v[i] += v; r.t += v; vende = true; });
+    farms.forEach((f, i) => { let v = ventaPer(p, f, dI, hI, M); if (!(v > 0)) return; if (soles()) v *= p.k || 0; r.v[i] += v; r.t += v; vende = true; });
     if (vende) r.np++;
   }
   const todas = [...m.values()].filter(r => r.t > 0).sort((a, b) => b.t - a.t);
@@ -1685,9 +1699,9 @@ function datosInd() {
 const pct1 = v => !isFinite(v) || !v ? '<span class="z">·</span>' : (v * 100).toLocaleString('es-PE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' %';
 function pintarInd() {
   llenarLabs();
-  const o = S.P, d = datosInd(), por = S.iPor === 't' ? 'Línea' : 'Familia', porL = por.toLowerCase(), meses = (o.hfm || o.meses).slice(-S.iMeses);
+  const o = S.P, d = datosInd(), por = S.iPor === 't' ? 'Línea' : 'Familia', porL = por.toLowerCase(), [dI, hI, M] = rangoInd(), meses = M.slice(dI, hI + 1);
+  for (const [id, v] of [['iDesde', M[dI]], ['iHasta', M[hI]]]) { const x = $(id); x.min = M[0]; x.max = M[M.length - 1]; x.value = v; }
   const etM = m => { const [y, mm] = m.split('-'); return ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][+mm - 1] + ' ' + y.slice(2); };
-  $('iPer').innerHTML = [[1, 'Último mes'], [3, '3 meses'], [6, '6 meses'], [12, '12 meses']].map(([n, t]) => `<button type="button" data-imes="${n}" aria-pressed="${S.iMeses === n}">${t}</button>`).join('');
   $('iTit').textContent = `Participación de las sucursales por ${porL}`;
   $('iEyebrow').textContent = `Venta de ${meses.length ? etM(meses[0]) + (meses.length > 1 ? ' a ' + etM(meses[meses.length - 1]) : '') : '—'} · en ${soles() ? 'soles (a costo)' : 'cajas'} · ${S.iModo === 'linea' ? `cada fila suma 100 %` : 'cada columna suma 100 %'}`;
   document.querySelectorAll('[data-imodo="linea"]').forEach(b => b.textContent = `% de la ${porL}`);
@@ -1706,14 +1720,16 @@ function pintarInd() {
   $('iMore').innerHTML = `<span>${nf0.format(d.filas.length)} ${S.iPor === 't' ? 'líneas' : 'familias'} · ${d.orden.length} sucursales</span>`;
 }
 $('vInd').addEventListener('click', e => {
-  const a = e.target.closest('[data-ipor]'), b = e.target.closest('[data-imodo]'), c = e.target.closest('[data-imes]');
+  const a = e.target.closest('[data-ipor]'), b = e.target.closest('[data-imodo]');
   if (a) { S.iPor = a.dataset.ipor; document.querySelectorAll('[data-ipor]').forEach(x => x.setAttribute('aria-pressed', x === a)); }
   else if (b) { S.iModo = b.dataset.imodo; document.querySelectorAll('[data-imodo]').forEach(x => x.setAttribute('aria-pressed', x === b)); }
-  else if (c) S.iMeses = +c.dataset.imes; else return;
+  else return;
   pintarInd();
 });
 let iT = 0; $('iq').addEventListener('input', () => { clearTimeout(iT); iT = setTimeout(pintarInd, 200); });
 $('fClas').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) subirClas(f); });
+// fechas: se elige el mes de inicio y el de fin (la venta por sucursal es mensual); fuera del rango se ajusta al más cercano
+for (const id of ['iDesde', 'iHasta']) $(id).addEventListener('change', e => { const M = mesesInd(), v = e.target.value; const c = !v ? '' : v < M[0] ? M[0] : v > M[M.length - 1] ? M[M.length - 1] : v; S[id] = c; pintarInd(); });
 $('iLab').addEventListener('change', e => { S.iLab = e.target.value; pintarInd(); });
 $('iXls').addEventListener('click', () => {
   const d = datosInd(), por = S.iPor === 't' ? 'Línea' : 'Familia', num = v => String(Math.round(v * 1000) / 1000).replace('.', ',');
@@ -1722,7 +1738,7 @@ $('iXls').addEventListener('click', () => {
     ...[...d.filas, d.tot].map(r => [r.g, r.np, num(r.t), num(d.tot.t ? r.t / d.tot.t * 100 : 0), ...d.orden.map(i => r === d.tot ? num(S.iModo === 'linea' ? (d.tot.t ? d.tot.v[i] / d.tot.t * 100 : 0) : 100) : num(parte(r, i) * 100)), ...d.orden.map(i => num(r.v[i]))])];
   const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + txt], { type: 'text/csv;charset=utf-8' }));
-  a.download = `participacion_${S.iPor === 't' ? 'linea' : 'familia'}_${S.iMeses}m_${S.P.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  const [dX, hX, MX] = rangoInd(); a.download = `participacion_${S.iPor === 't' ? 'linea' : 'familia'}_${MX[dX]}_a_${MX[hX]}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 });
 
 /* ---------- DROGUERÍA y POR SUCURSAL ----------
