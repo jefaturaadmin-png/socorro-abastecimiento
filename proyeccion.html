@@ -175,6 +175,8 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 td.comprar { font-weight: 700; color: var(--accent) }
 .k-scroll { max-height: 640px; overflow: auto }
 #kTabla th, #kTabla td { white-space: nowrap }
+#vInd .seg button { padding: 6px 12px } #iTabla td.ip { min-width: 62px } #iTabla tr.tot td { font-weight: 700; border-top: 2px solid var(--fg); background: var(--surface) }
+#iTabla th.isuc { white-space: normal; min-width: 70px; max-width: 90px; line-height: 1.2; vertical-align: bottom } .nota-ind { margin-top: 14px; font-size: 13px; color: var(--muted) }
 #kTabla td.drog, #kTabla th.drog { background: color-mix(in srgb, var(--accent) 7%, var(--surface)) }
 #kTabla th.ate { color: #2e8b3d; font-style: italic } #kTabla td.ate { color: #2e8b3d; font-weight: 700 }
 #kTabla th.req { color: #b4232a; font-style: italic } #kTabla td.req { color: #b4232a; font-weight: 700 }
@@ -678,6 +680,31 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
       <div class="scroll"><table class="cells" id="xTabla"></table></div>
       <div class="more" id="xMore"></div>
     </div>
+  </section>
+  <section id="vInd" hidden>
+    <div class="head">
+      <div><div class="eyebrow" id="iEyebrow"></div><h1 id="iTit">Participación de las sucursales</h1></div>
+      <div class="controls filtros-p">
+        <div class="fila-f">
+          <div class="seg" id="iPor" role="group" aria-label="Ver por"><button type="button" data-ipor="t" aria-pressed="true">Por línea</button><button type="button" data-ipor="f" aria-pressed="false">Por familia</button></div>
+          <div class="seg" id="iModo" role="group" aria-label="Cómo leer"><button type="button" data-imodo="linea" aria-pressed="true" title="Cada fila suma 100 %: de lo que se vende de esa línea, cuánto vende cada sucursal">% de la línea</button><button type="button" data-imodo="suc" aria-pressed="false" title="Cada columna suma 100 %: de lo que vende la sucursal, cuánto es de cada línea">% de la sucursal</button></div>
+          <div class="seg" id="iPer" role="group" aria-label="Periodo"></div>
+        </div>
+        <div class="fila-f">
+          <input id="iq" type="search" placeholder="Buscar línea o familia…" autocomplete="off" style="max-width:260px">
+          <label class="field"><span>Laboratorio</span><select id="iLab" class="sLab"><option value="">Todos</option></select></label>
+          <button type="button" class="btn sm" id="iXls">⬇ Descargar Excel</button>
+        </div>
+      </div>
+    </div>
+    <div class="card"><div class="scroll"><table class="cells" id="iTabla"></table></div><div class="more" id="iMore"></div></div>
+    <details class="nota-ind"><summary>Cómo se calcula</summary><ul>
+      <li><b>Venta</b>: lo vendido por cada sucursal en el periodo elegido (meses completos del kardex), en cajas o en soles (a costo) según el botón de arriba.</li>
+      <li><b>% de la línea</b>: de todo lo que la empresa vende de esa línea (o familia), qué parte vende cada sucursal. Cada fila suma 100 %.</li>
+      <li><b>% de la sucursal</b>: de todo lo que vende la sucursal, qué parte es de cada línea (o familia). Cada columna suma 100 %.</li>
+      <li><b>Peso</b>: qué parte de la venta total de la empresa es de esa línea. El color más intenso marca la sucursal que más pesa en la fila (o en la columna).</li>
+      <li>Línea y familia salen de la clasificación de productos; lo que no está clasificado va como «(Sin clasificar)». No incluye droguería.</li>
+    </ul></details>
   </section>
   <section id="vKar" hidden>
     <div class="head">
@@ -1195,6 +1222,10 @@ else if (SOLO === 'drog' || SOLO === 'sucx') {
   if (SOLO === 'sucx') { S.xFarm = new URLSearchParams(location.search).get('f') || ''; document.body.classList.add('x-una'); }
   document.querySelector('.bar .brand').innerHTML = '<i></i>' + (SOLO === 'drog' ? 'Droguería' : 'Por sucursal');
 }
+else if (SOLO === 'ind') {
+  S.tab = S.vista = 'ind'; document.body.classList.add('solo-kar');
+  document.querySelector('.bar .brand').innerHTML = '<i></i>Indicadores';
+}
 else if (SOLO === 'kar') {
   S.tab = S.vista = 'kar'; document.body.classList.add('solo-kar');
   document.querySelector('.bar .brand').innerHTML = '<i></i>Kardex';
@@ -1207,10 +1238,10 @@ document.querySelectorAll('[data-volver]').forEach(b => b.onclick = () => { S.vi
 function render() {
   const v = S.vista;
   $('vPron').hidden = v !== 'pron'; $('vFichaP').hidden = v !== 'fichaP'; $('vRep').hidden = v !== 'rep';
-  $('vMov').hidden = v !== 'mov'; $('vPed').hidden = v !== 'ped'; $('vFre').hidden = v !== 'fre'; $('vSuc').hidden = v !== 'suc'; $('vKar').hidden = v !== 'kar'; $('vStk').hidden = v !== 'stk'; $('vMapa').hidden = v !== 'mapa'; $('vFichaM').hidden = v !== 'fichaM';
+  $('vMov').hidden = v !== 'mov'; $('vPed').hidden = v !== 'ped'; $('vFre').hidden = v !== 'fre'; $('vSuc').hidden = v !== 'suc'; $('vKar').hidden = v !== 'kar'; $('vStk').hidden = v !== 'stk'; $('vMapa').hidden = v !== 'mapa'; $('vFichaM').hidden = v !== 'fichaM'; $('vInd').hidden = v !== 'ind';
   if (!S.P) return;
   if (v === 'pron') pintarPron(); else if (v === 'fichaP') pintarFichaP(); else if (v === 'rep') pintarRep();
-  else if (v === 'ped') pintarPed(); else if (v === 'fre') window.pintarEst?.(); else if (v === 'kar') pintarKar(); else if (v === 'stk') pintarStk(); else if (v === 'suc') window.pintarSuc?.(); else if (v === 'mapa') window.pintarMapa?.(); else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM();
+  else if (v === 'ped') pintarPed(); else if (v === 'fre') window.pintarEst?.(); else if (v === 'kar') pintarKar(); else if (v === 'stk') pintarStk(); else if (v === 'suc') window.pintarSuc?.(); else if (v === 'mapa') window.pintarMapa?.(); else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM(); else if (v === 'ind') pintarInd();
 }
 function abrirFichaP(c, origen) { S.fpDesde = ''; S.cur = c; S.origen = origen; S.fpFarm = origen === 'rep' ? S.farm : ''; S.vista = 'fichaP'; render(); scrollTo({ top: 0 }); }
 
@@ -1580,6 +1611,70 @@ $('kXls').addEventListener('click', () => {
   const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' }));
   a.download = `stock_${o.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
+
+/* ---------- INDICADORES: participación de las sucursales por línea y por familia ----------
+   Venta de cada sucursal en los últimos N meses completos (su historial mensual del kardex), agrupada por la línea o
+   la familia de la clasificación de productos. «% de la línea»: cada fila suma 100 %; «% de la sucursal»: cada columna. */
+S.iPor = 't'; S.iModo = 'linea'; S.iMeses = 3; S.iLab = '';
+const ventaPer = (p, f, n) => sumH((S.P.hfm && p.hf?.[f] ? p.hf[f] : (p.h || []).map(v => v == null ? null : v * (p.s?.[f] || 0))).slice(-n));
+function datosInd() {
+  const o = S.P, farms = o.farmacias.filter(f => f !== 'DROGUERIA FS'), n = S.iMeses, k = S.iPor, m = new Map();
+  for (const p of o.p) {
+    if (S.iLab && labDe(p.c) !== S.iLab) continue;
+    const g = clas(p)[k] || '(Sin clasificar)';
+    let r = m.get(g); if (!r) { r = { g, v: farms.map(() => 0), t: 0, np: 0 }; m.set(g, r); }
+    let vende = false;
+    farms.forEach((f, i) => { let v = ventaPer(p, f, n); if (!(v > 0)) return; if (soles()) v *= p.k || 0; r.v[i] += v; r.t += v; vende = true; });
+    if (vende) r.np++;
+  }
+  const todas = [...m.values()].filter(r => r.t > 0).sort((a, b) => b.t - a.t);
+  const tot = { g: 'Total', v: farms.map((_, i) => todas.reduce((a, r) => a + r.v[i], 0)), t: todas.reduce((a, r) => a + r.t, 0), np: todas.reduce((a, r) => a + r.np, 0) };
+  // las sucursales de la que más vende a la que menos
+  const orden = farms.map((f, i) => i).sort((a, b) => tot.v[b] - tot.v[a]);
+  const q = $('iq').value.trim().toLowerCase(), filas = q ? todas.filter(r => r.g.toLowerCase().includes(q)) : todas;
+  return { farms, orden, filas, tot };
+}
+const pct1 = v => !isFinite(v) || !v ? '<span class="z">·</span>' : (v * 100).toLocaleString('es-PE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' %';
+function pintarInd() {
+  llenarLabs();
+  const o = S.P, d = datosInd(), por = S.iPor === 't' ? 'Línea' : 'Familia', porL = por.toLowerCase(), meses = (o.hfm || o.meses).slice(-S.iMeses);
+  const etM = m => { const [y, mm] = m.split('-'); return ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][+mm - 1] + ' ' + y.slice(2); };
+  $('iPer').innerHTML = [[1, 'Último mes'], [3, '3 meses'], [6, '6 meses'], [12, '12 meses']].map(([n, t]) => `<button type="button" data-imes="${n}" aria-pressed="${S.iMeses === n}">${t}</button>`).join('');
+  $('iTit').textContent = `Participación de las sucursales por ${porL}`;
+  $('iEyebrow').textContent = `Venta de ${meses.length ? etM(meses[0]) + (meses.length > 1 ? ' a ' + etM(meses[meses.length - 1]) : '') : '—'} · en ${soles() ? 'soles (a costo)' : 'cajas'} · ${S.iModo === 'linea' ? `cada fila suma 100 %` : 'cada columna suma 100 %'}`;
+  document.querySelectorAll('[data-imodo="linea"]').forEach(b => b.textContent = `% de la ${porL}`);
+  const val = v => soles() ? 'S/ ' + nf0.format(v) : nf0.format(v);
+  const parte = (r, i) => S.iModo === 'linea' ? (r.t ? r.v[i] / r.t : 0) : (d.tot.v[i] ? r.v[i] / d.tot.v[i] : 0);
+  // color: más intenso en la sucursal que más pesa de la fila (o de la columna)
+  const maxCol = d.orden.map(i => Math.max(...d.filas.map(r => parte(r, i)), 0));
+  const celda = (r, i, j) => { const x = parte(r, i), mx = S.iModo === 'linea' ? Math.max(...d.orden.map(k => parte(r, k))) : maxCol[j], a = mx ? x / mx : 0;
+    return `<td class="n ip" style="--hc:rgba(217,95,14,${(a * .55).toFixed(3)})" title="${esc(nomSuc(d.farms[i]))} · ${esc(r.g)}: ${val(r.v[i])}">${pct1(x)}</td>`; };
+  let h = `<thead><tr><th class="c1 solo">${por}</th><th title="Productos de la ${porL} con venta en el periodo">Productos</th><th>Venta ${soles() ? 'S/' : 'cajas'}</th><th title="Parte de la venta total de la empresa">Peso</th>${d.orden.map(i => `<th class="isuc${i === d.orden[0] ? ' sep' : ''}">${esc(nomSuc(d.farms[i]))}</th>`).join('')}</tr></thead><tbody>`;
+  for (const r of d.filas) h += `<tr><td class="c1 solo" title="${esc(r.g)}">${esc(r.g)}</td><td class="n">${nf0.format(r.np)}</td><td class="n">${val(r.t)}</td><td class="n">${pct1(d.tot.t ? r.t / d.tot.t : 0)}</td>${d.orden.map((i, j) => celda(r, i, j)).join('')}</tr>`;
+  if (!d.filas.length) h += `<tr><td class="c1 solo" colspan="${d.orden.length + 4}">${CLAS ? 'Nada que mostrar con estos filtros.' : 'Cargando la clasificación de productos…'}</td></tr>`;
+  // total: participación de cada sucursal en toda la venta (o 100 % por columna)
+  h += `</tbody><tfoot><tr class="tot"><td class="c1 solo">Total</td><td class="n">${nf0.format(d.tot.np)}</td><td class="n">${val(d.tot.t)}</td><td class="n">100 %</td>${d.orden.map(i => `<td class="n">${S.iModo === 'linea' ? pct1(d.tot.t ? d.tot.v[i] / d.tot.t : 0) : '100 %'}</td>`).join('')}</tr></tfoot>`;
+  $('iTabla').innerHTML = h;
+  $('iMore').innerHTML = `<span>${nf0.format(d.filas.length)} ${S.iPor === 't' ? 'líneas' : 'familias'} · ${d.orden.length} sucursales</span>`;
+}
+$('vInd').addEventListener('click', e => {
+  const a = e.target.closest('[data-ipor]'), b = e.target.closest('[data-imodo]'), c = e.target.closest('[data-imes]');
+  if (a) { S.iPor = a.dataset.ipor; document.querySelectorAll('[data-ipor]').forEach(x => x.setAttribute('aria-pressed', x === a)); }
+  else if (b) { S.iModo = b.dataset.imodo; document.querySelectorAll('[data-imodo]').forEach(x => x.setAttribute('aria-pressed', x === b)); }
+  else if (c) S.iMeses = +c.dataset.imes; else return;
+  pintarInd();
+});
+let iT = 0; $('iq').addEventListener('input', () => { clearTimeout(iT); iT = setTimeout(pintarInd, 200); });
+$('iLab').addEventListener('change', e => { S.iLab = e.target.value; pintarInd(); });
+$('iXls').addEventListener('click', () => {
+  const d = datosInd(), por = S.iPor === 't' ? 'Línea' : 'Familia', num = v => String(Math.round(v * 1000) / 1000).replace('.', ',');
+  const parte = (r, i) => S.iModo === 'linea' ? (r.t ? r.v[i] / r.t : 0) : (d.tot.v[i] ? r.v[i] / d.tot.v[i] : 0);
+  const t = [[por, 'Productos', soles() ? 'Venta S/' : 'Venta cajas', 'Peso %', ...d.orden.map(i => nomSuc(d.farms[i]) + ' %'), ...d.orden.map(i => nomSuc(d.farms[i]) + (soles() ? ' S/' : ' cajas'))],
+    ...[...d.filas, d.tot].map(r => [r.g, r.np, num(r.t), num(d.tot.t ? r.t / d.tot.t * 100 : 0), ...d.orden.map(i => r === d.tot ? num(S.iModo === 'linea' ? (d.tot.t ? d.tot.v[i] / d.tot.t * 100 : 0) : 100) : num(parte(r, i) * 100)), ...d.orden.map(i => num(r.v[i]))])];
+  const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + txt], { type: 'text/csv;charset=utf-8' }));
+  a.download = `participacion_${S.iPor === 't' ? 'linea' : 'familia'}_${S.iMeses}m_${S.P.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 });
 
 /* ---------- DROGUERÍA y POR SUCURSAL ----------
@@ -2355,6 +2450,6 @@ window.iniciarKardex = iniciar;
 <script src="sucursales.js?v=202611060100"></script>
 <script src="estadistica.js?v=202611042300"></script>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="proyeccion.js?v=202611060200"></script>
+<script type="module" src="proyeccion.js?v=202611061000"></script>
 
 </body></html>

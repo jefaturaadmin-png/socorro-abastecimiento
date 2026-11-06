@@ -77,7 +77,7 @@ onAuthStateChanged(auth, async u => {
     const p = (await getDoc(doc(db, "usuarios", u.uid))).data() || {};
     // el administrador, o quien tenga asignado este módulo
     const qs = new URLSearchParams(location.search), solo = qs.get("solo");
-    const modulo = { mapa: "mapa", est: "estadistica", suc: "sucursales", kar: "kardex", drog: "drogueria", sucx: "porsucursal" }[solo] || "proyeccion";
+    const modulo = { mapa: "mapa", est: "estadistica", suc: "sucursales", kar: "kardex", drog: "drogueria", sucx: "porsucursal", ind: "indicadores" }[solo] || "proyeccion";
     // el módulo propio de cada sucursal (y Droguería para los de droguería) no hace falta activarlo
     const propio = (solo === "sucx" && p.farmacia && p.farmacia === qs.get("f")) || (solo === "drog" && p.farmacia === "DROGUERIA FS");
     window.PERFIL = p;

@@ -20,7 +20,7 @@ service cloud.firestore {
     // Vistas que el administrador le da a un usuario (p. ej. "faltantes"); el administrador las tiene todas.
     function tieneVista(v) { return conPerfil() && (rol() == 'admin' || v in perfil().get('vistas', [])); }
     // Módulos que usan los datos de la proyección (kardex, pronósticos, mapa…): el administrador o quien tenga alguno.
-    function verProy() { return tieneVista('proyeccion') || tieneVista('kardex') || tieneVista('estadistica') || tieneVista('sucursales') || tieneVista('mapa') || tieneVista('drogueria') || tieneVista('porsucursal'); }
+    function verProy() { return tieneVista('proyeccion') || tieneVista('kardex') || tieneVista('estadistica') || tieneVista('sucursales') || tieneVista('mapa') || tieneVista('drogueria') || tieneVista('porsucursal') || tieneVista('indicadores'); }
     // Usuario de una sucursal o de droguería: tiene su propio módulo (solo lectura de los datos de la proyección).
     function conSucursal() { return conPerfil() && perfil().get('farmacia', '') != ''; }
     function leeProy() { return verProy() || conSucursal(); }
