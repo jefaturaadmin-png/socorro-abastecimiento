@@ -1781,6 +1781,7 @@ function filasStk() {
       cmp = !r ? 0 : H === (cr.C + cr.Sg) ? r.pide : (window.requiereSuc?.(p.c, f, H) ?? 0);
       if (r?.krV) nota = 'se termina (reemplazado)';
     }
+    if (bq && !drog) continue;   // en el módulo de cada sucursal no aparecen los bloqueados (en ella, en droguería o en todas)
     if (bq) { cmp = 0; nota = 'bloqueado'; }
     if (S.xVer === 'mov' && !st && nec < 0.05) continue; if (S.xVer === 'cmp' && !cmp) continue;
     const resp = drog ? null : window.respAtencion?.(f, p.c);
