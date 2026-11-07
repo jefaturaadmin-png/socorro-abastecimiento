@@ -423,7 +423,9 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
     <div class="card">
       <div class="ch"><h2>Reparto por farmacia</h2><div class="controls">
         <div class="field"><span>Base para proyectar</span><div class="fechero"><select id="fpDesde" aria-label="Desde"></select><span class="z">→</span><span id="fpHasta"></span><b class="dur" id="fpDur"></b><div class="seg" id="fpRng" role="group" aria-label="Periodo rápido"></div></div></div>
-        <div class="field"><span>Repartir para (días + seguridad)</span><div class="seg" id="fpPres" role="group" aria-label="Días a cubrir"></div></div></div></div>
+        <div class="field"><span>Repartir para (días + seguridad)</span><div class="seg" id="fpPres" role="group" aria-label="Días a cubrir"></div></div>
+        <label class="field"><span>Días de stock</span><input id="fpCob" type="number" min="0" max="365" style="width:72px"></label>
+        <label class="field"><span>Días de seguridad</span><input id="fpSeg" type="number" min="0" max="365" style="width:72px"></label></div></div>
       <div class="scroll"><table class="cells" id="fpFarm"></table></div>
     </div>
     <div class="card" id="fpFCard" hidden>
@@ -2062,6 +2064,7 @@ function pintarFichaP() {
   $('fpHasta').textContent = etL(ult); $('fpDur').textContent = durMeses(nMeses);
   $('fpRng').innerHTML = [[3, '3m'], [6, '6m'], [12, '1A'], [24, '2A'], [0, 'Todo']].map(([n, t]) => `<button type="button" data-n="${n}" aria-pressed="${n ? nMeses === n : ini === o.meses[0]}">${t}</button>`).join('');
   const obj = S.mesObj;
+  $('fpCob').value = S.cob; $('fpSeg').value = S.seg;   // también se pueden escribir a mano
   $('fpPres').innerHTML = [[7, 7], [15, 15], [30, 30]].map(([d, sg]) => `<button type="button" data-d="${d}" data-s="${sg}" aria-pressed="${S.cob === d && S.seg === sg}">${d} + ${sg}</button>`).join('');
   let hf = `<thead><tr><th class="c1 solo">Farmacia</th><th>Participación</th><th>Stock actual</th><th class="pj">Pronóstico ${et(obj)}</th><th class="tot">Entrega</th></tr></thead><tbody>`;
   // todas las farmacias: las que no vendieron en la base ni tienen stock van al final, en gris
@@ -2123,6 +2126,7 @@ $('fpPres').addEventListener('click', e => {
   const b = e.target.closest('[data-d]'); if (!b) return;
   S.cob = +b.dataset.d; S.seg = +b.dataset.s; $('rCob').value = S.cob; $('rSeg').value = S.seg; pintarFichaP();
 });
+for (const [id, k] of [['fpCob', 'cob'], ['fpSeg', 'seg']]) $(id).addEventListener('change', e => { S[k] = Math.max(0, Math.min(365, Math.round(+e.target.value || 0))); $('rCob').value = S.cob; $('rSeg').value = S.seg; pintarFichaP(); });
 $('fpFarm').addEventListener('click', e => elegirFarm(e.target.closest('tr[data-farm]')));
 $('fpFarm').addEventListener('keydown', e => { if (e.key === 'Enter') elegirFarm(e.target.closest('tr[data-farm]')); });
 $('fpTabla').addEventListener('click', e => { if (e.target.closest('[data-fptodos]')) { S.fpTodos = !S.fpTodos; return pintarFichaP(); } const b = e.target.closest('[data-usar]'); if (b) elegir(S.cur, b.dataset.usar); });
