@@ -184,6 +184,8 @@ body.solo-ind .wrap, body.ancho-total .wrap { max-width: none }   /* de esquina 
 #kTabla th.ate, #xTabla th.ate { color: #2e8b3d; font-style: italic } #kTabla td.ate, #xTabla td.ate { color: #2e8b3d; font-weight: 700 } #xTabla td.sob { color: #3d5a99 } #xTabla td.sob.falta { color: #b4232a; font-weight: 700; background: #fde2dd }
 #kTabla th.req { color: #b4232a; font-style: italic } #kTabla td.req { color: #b4232a; font-weight: 700 }
 #kTabla .k-bq { font-size: 11px; color: #8a5a00; font-weight: 700 }
+#kTabla .k-ed { border: 1px solid #cfd6e4; background: #fff; border-radius: 6px; padding: 0 4px; margin-left: 4px; cursor: pointer; font-size: 11px; line-height: 1.4; color: #14306B } #kTabla .k-ed:hover { background: #eef2fa }
+#kTabla .k-fija { font-size: 11px; margin-right: 2px }
 #kTabla .k-com { border: 1px solid #e6c98f; background: #fff4e0; border-radius: 6px; padding: 0 4px; margin-left: 4px; cursor: pointer; font-size: 12px; line-height: 1.4 } #kTabla .k-com.si_requiere, #kTabla .k-com.otro_medicamento { background: #ddf0ec; border-color: #9fd1c6 } #kTabla .k-com.no_requiere { background: #fde2dd; border-color: #f0b3a8 }
 #kTabla td.sobra { font-weight: 700 } #kTabla td.sobra.ok { background: #fff6b3 } #kTabla td.sobra.falta { background: #f8c9b0; color: #8a2a12 }
 .fechero { display: flex; flex-wrap: wrap; align-items: center; gap: 8px }
@@ -1622,10 +1624,14 @@ function pintarKar() {
     const p = r.p, cx = compraKar(p), rq = reqKar(p, r.sf), sob = r.drog - rq.tot;
     const cq = v => v == null ? '<span class="z">…</span>' : v ? fmt(conv(p, v)) : '<span class="z">0</span>';
     // lo propio de cada sucursal: su bloqueo y su comentario (el general ya sale junto al nombre y en Comprar)
+    // «se atenderá»: el administrador puede fijar la cantidad (✎); ✋ = cantidad fija puesta a mano
+    const ateCel = (p, f, v) => { const fx = window.cantFija?.(f, p.c);
+      return (fx != null ? `<span class="k-fija" title="Cantidad fija puesta por Abastecimiento">✋</span>` : '') + cq(v)
+        + (esAdminP() && rq.listo ? `<button type="button" class="k-ed" data-kq="${esc(f)}|${esc(p.c)}" title="Editar lo que se atenderá a ${esc(nomSuc(f))}">✎</button>` : ''); };
     const marca = (f, v) => { const bq = window.BLOQ?.has(f + '__' + p.c), rs = window.respAtencion?.(f, p.c);
       return (bq ? `<span class="k-bq" title="Bloqueado en ${esc(nomSuc(f))}">🔒 bloq.</span>` : cq(v)) + (rs ? `<button type="button" class="k-com ${esc(rs.estado)}" data-kcom="${esc(f)}|${esc(p.c)}" title="${esc(nomSuc(f) + ': ' + rs.txt + (rs.por ? ' · ' + rs.por : ''))}">💬</button>` : ''); };
     h += `<tr><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><span class="k-fila"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a><span class="k-acc"><button type="button" data-kkr="${esc(p.c)}" title="Reemplazar este producto por otro">🔁</button><button type="button" data-kgest="${esc(p.c)}" title="Comunicado: gestionado por droguería">📢</button>${esAdminP() ? `<button type="button" data-kbat="${esc(p.c)}" class="${bloqAten(p.c) ? 'on' : ''}" title="${bloqAten(p.c) ? 'Quitar el bloqueo de atención' : 'Bloquear la atención: no se envía a ninguna sucursal'}">🚫</button>` : ''}</span></span>${tagBAt(p.c)}${tagKR(p.c)}${tagGest(p.c)}${tagMov(p)}<small class="sub">${esc(labDe(p.c))}</small></td>
-      <td class="n big drog">${cel(p, r.drog)}</td><td class="n sobra ${!rq.listo ? '' : sob < 0 ? 'falta' : 'ok'}">${rq.listo ? (sob < 0 ? '−' : '') + fmt(conv(p, Math.abs(sob))) : '<span class="z">…</span>'}</td><td class="n req">${rq.listo ? cq(rq.tot) : '<span class="z">…</span>'}</td>${r.sf.map((v, i) => `<td class="n sep">${cel(p, v)}</td><td class="n req">${marca(farms[i], rq.req[i])}</td><td class="n ate">${cq(rq.ate[i])}</td>`).join('')}<td class="n sep">${cel(p, r.tot - r.drog)}</td><td class="n big">${cel(p, r.tot)}</td>
+      <td class="n big drog">${cel(p, r.drog)}</td><td class="n sobra ${!rq.listo ? '' : sob < 0 ? 'falta' : 'ok'}">${rq.listo ? (sob < 0 ? '−' : '') + fmt(conv(p, Math.abs(sob))) : '<span class="z">…</span>'}</td><td class="n req">${rq.listo ? cq(rq.tot) : '<span class="z">…</span>'}</td>${r.sf.map((v, i) => `<td class="n sep">${cel(p, v)}</td><td class="n req">${marca(farms[i], rq.req[i])}</td><td class="n ate">${ateCel(p, farms[i], rq.ate[i])}</td>`).join('')}<td class="n sep">${cel(p, r.tot - r.drog)}</td><td class="n big">${cel(p, r.tot)}</td>
       <td class="n sep">${fmtE(p, conv(p, cx.nec))}</td><td class="n comprar">${cx.bloq ? '<span class="z">bloqueado</span>' : cx.cmp ? fmt(conv(p, cx.cmp)) : '<span class="z">·</span>'}</td></tr>`;
   }
   if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${farms.length * 3 + 8}">Nada que mostrar con estos filtros.</td></tr>`;
@@ -1652,6 +1658,15 @@ $('kTabla').addEventListener('click', e => {
       else { const m = prompt(`Bloquear la atención de ${c} · ${nomDe(c)}\nNo se enviará a ninguna sucursal (sí se puede comprar).\n\nMotivo (opcional):`, ''); if (m !== null) await window.guardarBloqAten(c, { motivo: m.trim().slice(0, 150), porNombre: quien, fecha: new Date().toISOString() }); }
     } catch (x) { alert('No se pudo guardar: ' + (x.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules).' : x.message)); } })();
     return; }
+  const kq = e.target.closest('[data-kq]');
+  if (kq) { const [f, c] = kq.dataset.kq.split('|'), act = window.cantFija?.(f, c);
+    const t = prompt(`Se atenderá a ${nomSuc(f)}\n${c} · ${nomDe(c)}\n\nCantidad a enviar (cajas). Déjalo vacío para que se calcule solo:`, act ?? '');
+    if (t === null) return;
+    const q = t.trim() === '' ? null : Math.round(+t.replace(',', '.'));
+    if (q != null && !(q >= 0)) return alert('Escribe un número (0 o más) o déjalo vacío.');
+    if (!window.ponerCantFija?.(f, c, q)) return alert('Todavía se están leyendo los criterios de atención; inténtalo en unos segundos.');
+    toast(q == null ? 'Se volverá a calcular solo · publicando a las sucursales…' : `${nomSuc(f)}: se enviarán ${q} · publicando a las sucursales…`);
+    pintarKar(); return; }
   const k = e.target.closest('[data-kcom]');
   if (k) { const [f, c] = k.dataset.kcom.split('|'), rs = window.respAtencion?.(f, c); if (rs) alert(`💬 ${nomSuc(f)} · ${c} ${nomDe(c)}\n\n${rs.txt}\n\n— ${rs.por || 'la sucursal'}${rs.fecha ? ' · ' + rs.fecha : ''}`); return; }
   const a = e.target.closest('[data-abrir]'); if (a) abrirFichaP(a.dataset.abrir, 'kar');
@@ -2541,7 +2556,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611071100"></script>
+<script src="sucursales.js?v=202611091800"></script>
 <script src="estadistica.js?v=202611042300"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611062200"></script>
