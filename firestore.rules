@@ -194,6 +194,11 @@ service cloud.firestore {
       allow delete: if esAdmin() || (tieneVista('nuevos') && resource.data.porUid == request.auth.uid);
     }
 
+    // ---------- rutas de reparto (ubicaciones y grupos): el administrador y quien tenga el módulo ----------
+    match /rutas/{id} {
+      allow read, write: if tieneVista('rutas');
+    }
+
     // ---------- editor de flujogramas: lo usan el administrador y quien tenga el módulo ----------
     match /flujogramas/{id} {
       allow read, write: if tieneVista('flued');

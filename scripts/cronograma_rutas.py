@@ -21,7 +21,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 # ---------------- parámetros ----------------
-DROGUERIA = ("DROGUERÍA", -12.0472941, -75.2192132)   # Julio Sumar 439 (punto de salida de la hoja de rutas)
+DROGUERIA = ("DROGUERÍA", -12.0692611, -75.2095389)   # 12°04'09.34"S 75°12'34.34"W (Jr. Lima 284)
 FACTOR_CALLE = 1.3            # las calles no van en línea recta
 INICIO = date(2026, 11, 11)   # lo anterior ya está en el calendario
 FIN = date(2026, 12, 31)
@@ -421,7 +421,7 @@ def escribir(salida, suc, R, plan, dias1, fijos1, a2, fijos2, seman, quinc, ulti
     wsu.cell(j, 1, DROGUERIA[0]).font = NEG
     wsu.cell(j, 2, DROGUERIA[1])
     wsu.cell(j, 3, DROGUERIA[2])
-    wsu.cell(j, 4, "punto de salida (Julio Sumar 439, de la hoja de rutas) — confirmar")
+    wsu.cell(j, 4, "punto de salida (Jr. Lima 284)")
 
     # 5. distancias
     wd = wb.create_sheet("Distancias (km)")
