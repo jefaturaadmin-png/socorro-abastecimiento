@@ -1895,7 +1895,7 @@ $("qXls").addEventListener("click", () => descargarExcel(bloqueadosAhora().filte
 // La hoja (compartida con "cualquiera con el enlace") se lee directo desde el navegador y se vuelve a leer cada 2 minutos.
 // El administrador ve un tablero (cifras, gráficos, top 5) y marca cada pedido; las sucursales ven tarjetas por estado.
 const HOJA_PEDIDOS = "18-biRg4ySB4By1Q0mYLJT2On3XrYZV7BhdwUyiWlfvI";
-S.ped = null; S.pdSuc = ""; S.pdQ = ""; S.pdDesde = ""; S.pdMostrar = 200; S.pdHasta = ""; S.pdTopN = 5; S.urgEst = new Map();
+S.ped = null; S.pdSuc = ""; S.pdQ = ""; S.pdDesde = ""; S.pdMostrar = 200; S.pdHasta = ""; S.pdTopN = 5; S.pdStk = ""; S.urgEst = new Map();
 function leerCSV(t) {
   const filas = []; let f = [], c = "", q = false;
   for (let i = 0; i < t.length; i++) {
@@ -2029,8 +2029,11 @@ function pintarTableroUrg(P) {
   const deHoy = base.filter(d => d.f && d.f >= hoy), deAyer = base.filter(d => d.f && d.f >= ayer && d.f < hoy), deSem = base.filter(enRango);
   const cuenta = (arr, key) => { const m = new Map(); arr.forEach(d => { const k = key(d); if (k) m.set(k, (m.get(k) || 0) + 1); }); return [...m].sort((a, b) => b[1] - a[1]); };
   const sucTop = cuenta(conRango || !deHoy.length ? deSem : deHoy, d => d.suc)[0];
-  const porProd = new Map(); deSem.forEach(d => { const k = d.cod || d.nom; if (!k) return; const x = porProd.get(k) || { d, q: 0, n: 0, s: new Set() }; x.q += d.q || 1; x.n++; if (d.suc) x.s.add(d.suc); porProd.set(k, x); });
-  const todosTop = [...porProd.values()].sort((a, b) => b.s.size - a.s.size || b.q - a.q), top = S.pdTopN ? todosTop.slice(0, S.pdTopN) : todosTop;
+  const porProd = new Map(); deSem.forEach(d => { const k = d.cod || d.nom; if (!k) return; const x = porProd.get(k) || { d, q: 0, n: 0, s: new Set(), f0: null, f1: null }; x.q += d.q || 1; x.n++; if (d.suc) x.s.add(d.suc); if (d.f) { if (!x.f0 || d.f < x.f0) x.f0 = d.f; if (!x.f1 || d.f > x.f1) x.f1 = d.f; } porProd.set(k, x); });
+  const hayStk = x => S.drogStk?.[x.d.cod]?.[0] > 0;
+  const todosTop = [...porProd.values()].sort((a, b) => b.s.size - a.s.size || b.q - a.q);
+  const filtTop = S.drogStk == null || !S.pdStk ? todosTop : todosTop.filter(x => S.pdStk === "con" ? hayStk(x) : !hayStk(x));
+  const top = S.pdTopN ? filtTop.slice(0, S.pdTopN) : filtTop;
   const dif = deHoy.length - deAyer.length, pc = conRango ? "periodo" : "semana";
   $("pdKpi").innerHTML = conRango ? `
     <div class="card pd-kpi"><small>Pedidos en el periodo</small><b class="n rojo-t">${nf(deSem.length)}</b><small>${per}</small></div>
@@ -2043,7 +2046,7 @@ function pintarTableroUrg(P) {
     <div class="card pd-kpi"><small>Producto más pedido (${pc})</small><b class="n s">${top[0] ? esc(nomProd(top[0].d)) : "–"}</b><small class="cod">${top[0] ? esc(top[0].d.cod) + " · " + top[0].s.size + " sucursales" : ""}</small></div>`;
   // barras por sucursal (todas, en el periodo)
   $("pdBarH").textContent = `Pedidos por sucursal (${per})`;
-  $("pdTopH").innerHTML = `<span>${S.pdTopN ? "Top " + S.pdTopN + " productos" : "Todos los productos"} más pedidos (${per})</span><span class="pd-topn">${[5, 10, 20, 50, 0].map(n => `<button type="button" class="btn sm${(S.pdTopN ?? 5) === n ? " act" : ""}" data-pdtopn="${n}">${n ? n : "Todos"}</button>`).join("")}</span>`;
+  $("pdTopH").innerHTML = `<span>${S.pdTopN ? "Top " + S.pdTopN + " productos" : "Todos los productos"} más pedidos (${per})</span><span class="pd-topn">${[5, 10, 20, 50, 0].map(n => `<button type="button" class="btn sm${(S.pdTopN ?? 5) === n ? " act" : ""}" data-pdtopn="${n}">${n ? n : "Todos"}</button>`).join("")}</span>${S.drogStk != null ? `<span class="pd-topn pd-stk">${[["", "Todos"], ["con", "Con stock"], ["sin", "Sin stock"]].map(([v, t]) => `<button type="button" class="btn sm${S.pdStk === v ? " act" : ""}" data-pdstk="${v}">${t}</button>`).join("")}</span>` : ""}`;
   const barras = cuenta(P.datos.filter(enRango), d => d.suc), mx = Math.max(1, ...barras.map(b => b[1]));
   $("pdBarras").innerHTML = barras.length ? `<svg viewBox="0 0 520 ${barras.length * 30 + 6}" class="pd-svg">${barras.map(([f, n], i) => {
     const w = Math.max(4, 370 * n / mx), y = 6 + i * 30, c = ["#14306B", "#14306B", "#3d5a99", "#3d5a99", "#6b84bf", "#6b84bf"][i] || "#9fb1d9";
@@ -2070,13 +2073,16 @@ function pintarTableroUrg(P) {
       const cob = d > 0 ? st / d : Infinity; if (cob <= 60) continue; l.push({ f, st, d, cob }); }
     return l.sort((a, b) => b.cob - a.cob || b.st - a.st); };
   const stDrog = (c, pidieron) => { const v = S.drogStk?.[c]?.[0]; if (S.drogStk == null) return "";
-    if (v > 0) return `<span class="chip verde">Hay ${nf(v)}</span>`;
+    if (v > 0) return `<span class="chip verde">Con stock: ${nf(v)}</span>`;
     const o = otras(c, pidieron || new Set());
     return '<span class="chip rojo">Sin stock</span>' + (o.length ? `<div class="pd-otras"><small class="muted">Pedir a otra sucursal:</small>${o.slice(0, 5).map(x => `<span class="pd-otra" title="Stock ${fx1(x.st)} · venta diaria ${fx1(x.d)}${x.d > 0 ? " · le dura " + Math.round(x.cob) + " días" : ""}"><b>${esc(corto(x.f))}</b> ${fx1(x.st)} <i>${x.d > 0 ? "lento · " + Math.round(x.cob) + " d" : "sin movimiento"}</i></span>`).join("")}${o.length > 5 ? `<small class="muted">+${o.length - 5} más</small>` : ""}</div>`
       : S.sucStk?.size ? '<div class="pd-otras"><small class="muted">Ninguna sucursal lo tiene sin mover</small></div>' : ""); };
-  $("pdTop").innerHTML = `<thead><tr><th>Producto</th><th>Sucursales que lo pidieron</th><th class="der">Cant.</th><th>En droguería</th></tr></thead><tbody>` +
-    (top.length ? top.map(x => `<tr><td class="p"><b>${esc(nomProd(x.d))}</b><code>${esc(x.d.cod)}</code></td><td>${[...x.s].map(f => `<span class="tag">${esc(corto(f))}</span>`).join(" ")} <b>${x.s.size}</b></td><td class="der"><b>${nf(x.q)}</b></td><td>${stDrog(x.d.cod, x.s)}</td></tr>`).join("")
-      : `<tr class="vacia"><td colspan="4">Sin pedidos en ${conRango ? "ese periodo" : "esta semana"}.</td></tr>`) + "</tbody>";
+  const fDia = f => f.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }), fHora = f => f.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
+  const fSol = x => !x.f1 ? "" : x.n === 1 || +inicioDiaDe(x.f0) === +inicioDiaDe(x.f1) ? `${fDia(x.f1)}<br><small class="muted">${x.n === 1 ? fHora(x.f1) : fHora(x.f0) + " – " + fHora(x.f1)}</small>`
+    : `${fDia(x.f0)} – ${fDia(x.f1)}<br><small class="muted">${nf(x.n)} solicitudes</small>`;
+  $("pdTop").innerHTML = `<thead><tr><th>Producto</th><th>Sucursales que lo pidieron</th><th class="der">Cant.</th><th>Fecha de solicitud</th><th>En droguería</th></tr></thead><tbody>` +
+    (top.length ? top.map(x => `<tr><td class="p"><b>${esc(nomProd(x.d))}</b><code>${esc(x.d.cod)}</code></td><td>${[...x.s].map(f => `<span class="tag">${esc(corto(f))}</span>`).join(" ")} <b>${x.s.size}</b></td><td class="der"><b>${nf(x.q)}</b></td><td class="f">${fSol(x)}</td><td>${stDrog(x.d.cod, x.s)}</td></tr>`).join("")
+      : `<tr class="vacia"><td colspan="5">${S.pdStk && todosTop.length ? `Ningún producto ${S.pdStk === "con" ? "con" : "sin"} stock en droguería en ${conRango ? "ese periodo" : "esta semana"}.` : `Sin pedidos en ${conRango ? "ese periodo" : "esta semana"}.`}</td></tr>`) + "</tbody>";
   // resumen por sucursal (filtro) y lista de pedidos para marcarlos
   const res = $("pdRes"); res.hidden = P.cS < 0;
   if (P.cS >= 0) res.innerHTML = cuenta(P.datos, d => d.suc || "?").map(([f, c]) => `<button type="button" class="pd-chip${S.pdSuc === f ? " act" : ""}" data-pdsuc="${esc(f)}">${esc(f === "?" ? "Sin reconocer" : corto(f))} <b>${nf(c)}</b></button>`).join("");
@@ -2105,7 +2111,7 @@ async function marcarUrg(tr) {
 $("pdTabla").addEventListener("change", e => { const tr = e.target.closest("tr[data-uid]"); if (tr && e.target.matches("[data-uest],[data-unota]")) marcarUrg(tr); });
 $("pdAct").addEventListener("click", () => cargarPedidos(true));
 $("pdSuc").addEventListener("change", e => { S.pdSuc = e.target.value; pintarPedidos(); });
-$("pdTopH").addEventListener("click", e => { const b = e.target.closest("[data-pdtopn]"); if (b) { S.pdTopN = +b.dataset.pdtopn; pintarPedidos(); } });
+$("pdTopH").addEventListener("click", e => { const b = e.target.closest("[data-pdtopn]"); if (b) { S.pdTopN = +b.dataset.pdtopn; pintarPedidos(); return; } const k = e.target.closest("[data-pdstk]"); if (k) { S.pdStk = k.dataset.pdstk; pintarPedidos(); } });
 $("pdLimpiar").addEventListener("click", () => { S.pdSuc = S.pdDesde = S.pdHasta = ""; $("pdDesde").value = $("pdHasta").value = $("pdDesde2").value = $("pdHasta2").value = ""; pintarPedidos(); });
 ["pdQ", "pdQ2"].forEach(id => $(id).addEventListener("input", e => { S.pdQ = e.target.value; pintarPedidos(); }));
 ["pdDesde", "pdDesde2"].forEach(id => $(id).addEventListener("change", e => { S.pdDesde = e.target.value; pintarPedidos(); }));
