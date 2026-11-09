@@ -38,7 +38,7 @@
   const cfgSuc = f => ({ ...CFG.def, ...(f ? CFG.suc[f] || {} : {}) });
   const cfgDe = (f, c) => { const o = { ...cfgSuc(f), ...(CFG.prod['*']?.[c] || {}), ...(CFG.prod[f]?.[c] || {}) }; o.C = Math.max(1, +o.C || 7); o.Sg = Math.max(0, +o.Sg || 0); return o; };
   const fteTxt = fte => fte === 'motor' ? 'motor estadístico' : `ventas de ${fte} días`;
-  const ajTxt = a => !a ? '' : [a.fte ? fteTxt(a.fte) : '', a.C != null || a.Sg != null ? `${a.C ?? '–'} + ${a.Sg ?? '–'} días` : '', a.modo === 'forzar' ? 'atender siempre que le falte' : a.modo === 'excluir' ? 'no atender' : ''].filter(Boolean).join(' · ');
+  const ajTxt = a => !a ? '' : [a.fte ? fteTxt(a.fte) : '', a.C != null || a.Sg != null ? `${a.C ?? '–'} + ${a.Sg ?? '–'} días` : '', a.modo === 'forzar' ? 'atender siempre que le falte' : a.modo === 'excluir' ? 'no atender' : '', a.q != null ? `enviar ${a.q} (cantidad fija)` : ''].filter(Boolean).join(' · ');
   // los controles de arriba muestran y cambian el criterio de la sucursal elegida (o el general con "Todas")
   function pintarControles() {
     const o = cfgSuc(S.suFarm);
@@ -168,6 +168,8 @@
         // descontinuado (sin reemplazo) y sin stock en droguería: tampoco se pide
         const de = S.suEstados.get(p.c);
         if (!reemp && pide > 0 && !cambio && de?.estado === 'descontinuado' && !vencida(de) && !(+(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) > 0)) { pideOrig = pide; pide = 0; nota = 'descontinuado (droguería)'; }
+        // cantidad fija que decide Abastecimiento (p. ej. productos nuevos, sin venta): se envía esa cantidad
+        if (!bloq && aj?.q != null) { pide = Math.max(0, Math.round(+aj.q || 0)); pideOrig = 0; reemp = ''; nota = 'cantidad fija (Abastecimiento)'; }
         const exceso = !bloq && st > 0 && (d === 0 ? st >= 1 : st - nec * 2 >= 1) ? Math.floor(d === 0 ? st : st - nec) : 0;
         return { p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide, nota, bloq, exceso, o, aj, urgente: d > 0 && st < seg && !bloq && o.modo !== 'excluir',
           ...(cambio ? { cambio: cambio.orig.c + ' - ' + cambio.orig.n } : {}), ...(reemp ? { reemp } : {}), ...(pideOrig ? { pideOrig } : {}), ...(enLugar.length && extra ? { enLugar: enLugar.join(', ') } : {}), ...(krN ? { krN } : {}) };
@@ -462,6 +464,16 @@
   // lo que requiere la sucursal con las mismas reglas de Atención (tipo A, B 1 caja, C/D/E a pedido, bloqueos, cambios,
   // reemplazos, ajustes por producto) pero para H días; sin limitarlo a lo que hay en droguería
   window.requiereSuc = (c, f, H) => { const p = prodDe(c); if (!p) return 0; calcular(); const r = filaBase(p, f, H); return r.usa || r.bloq ? 0 : r.pide || 0; };
+  // cantidad fija por producto y sucursal (la pone el administrador desde el Kardex); null = se calcula sola
+  window.cantFija = (f, c) => CFG.prod[f]?.[c]?.q ?? null;
+  window.ponerCantFija = (f, c, q) => {
+    if (!cfgListo) return false;
+    const m = CFG.prod[f] = CFG.prod[f] || {};
+    if (q == null) { if (m[c]) { delete m[c].q; if (!Object.keys(m[c]).length) delete m[c]; } }
+    else m[c] = { ...(m[c] || {}), q: Math.max(0, Math.round(q)) };
+    if (!Object.keys(m).length) delete CFG.prod[f];
+    guardarCfg(); return true;
+  };
   window.filaAtencion = (c, f) => calcular().porProd.get(c)?.red.find(r => r.f === f) || null;
   window.publicarExtras = async () => {
     for (let i = 0; i < 240 && !(S.P && S.db && !S.ejemplo); i++) await new Promise(r => setTimeout(r, 500));
