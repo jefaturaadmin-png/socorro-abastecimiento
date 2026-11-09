@@ -775,3 +775,6 @@ body.nav-abierta .top .nav { display: grid; grid-template-columns: repeat(auto-f
   z-index: 50; background: var(--card); border: 1px solid var(--line); border-radius: 0 0 14px 14px; box-shadow: 0 14px 30px rgba(16,24,40,.18); padding: 10px 14px; max-height: 75vh; overflow: auto }
 body.nav-abierta .top .nav button { text-align: left; justify-content: flex-start }
 @media (min-width: 761px) { body:not(.nav-abierta) .quien, body.nav-abierta .quien { display: flex } }
+
+.pd-pct { display: inline-block; vertical-align: middle; width: 120px; height: 10px; background: #eceff3; border-radius: 5px; overflow: hidden; margin-right: 6px } .pd-pct span { display: block; height: 100%; background: #14306B; border-radius: 5px }
+#pdMov tr.tot td { border-top: 2px solid #d6dbe4 } #pdMovNota { font-size: 12px; margin: 8px 0 0 }

@@ -2083,6 +2083,23 @@ function pintarTableroUrg(P) {
   $("pdTop").innerHTML = `<thead><tr><th>Producto</th><th>Sucursales que lo pidieron</th><th class="der">Cant.</th><th>Fecha de solicitud</th><th>En droguería</th></tr></thead><tbody>` +
     (top.length ? top.map(x => `<tr><td class="p"><b>${esc(nomProd(x.d))}</b><code>${esc(x.d.cod)}</code></td><td>${[...x.s].map(f => `<span class="tag">${esc(corto(f))}</span>`).join(" ")} <b>${x.s.size}</b></td><td class="der"><b>${nf(x.q)}</b></td><td class="f">${fSol(x)}</td><td>${stDrog(x.d.cod, x.s)}</td></tr>`).join("")
       : `<tr class="vacia"><td colspan="5">${S.pdStk && todosTop.length ? `Ningún producto ${S.pdStk === "con" ? "con" : "sin"} stock en droguería en ${conRango ? "ese periodo" : "esta semana"}.` : `Sin pedidos en ${conRango ? "ese periodo" : "esta semana"}.`}</td></tr>`) + "</tbody>";
+  // movimiento de cada sucursal: venta diaria publicada (red/stk_SUCURSAL) y pedidos urgentes del periodo, con su % del total
+  const movBox = $("pdMov") && $("pdMovBox"); if (movBox) {
+    const pedS = new Map(cuenta(P.datos.filter(enRango), d => d.suc)), filas = FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => {
+      const p = S.sucStk?.get(f) || {}; let v = 0, n = 0; for (const c in p) { const d = +p[c][1] || 0; if (d > 0) { v += d; n++; } }
+      return { f, v, n, ped: pedS.get(f) || 0 }; }).filter(x => x.v > 0 || x.ped > 0);
+    const tv = filas.reduce((a, x) => a + x.v, 0), tp = filas.reduce((a, x) => a + x.ped, 0), pc = (a, t) => t ? (a / t * 100).toLocaleString("es-PE", { maximumFractionDigits: 1 }) + " %" : "–";
+    filas.sort((a, b) => b.v - a.v || b.ped - a.ped);
+    movBox.hidden = !admin || !filas.length;
+    if (!movBox.hidden) {
+      const mx = Math.max(...filas.map(x => tv ? x.v / tv : 0), 1e-9);
+      $("pdMov").innerHTML = `<thead><tr><th class="der">#</th><th>Sucursal</th><th class="der">Venta por día</th><th class="der">Productos que se venden</th><th>% del movimiento total</th><th class="der">Pedidos urgentes (${per})</th><th class="der">% de pedidos</th></tr></thead><tbody>` +
+        filas.map((x, i) => `<tr><td class="der">${i + 1}</td><td><b>${esc(corto(x.f))}</b></td><td class="der">${fx1(x.v)}</td><td class="der">${nf(x.n)}</td>
+          <td><span class="pd-pct"><span style="width:${tv ? Math.round(x.v / tv / mx * 100) : 0}%"></span></span> <b>${pc(x.v, tv)}</b></td><td class="der">${nf(x.ped)}</td><td class="der">${pc(x.ped, tp)}</td></tr>`).join("") +
+        `<tr class="tot"><td></td><td><b>Total</b></td><td class="der"><b>${fx1(tv)}</b></td><td></td><td><b>${tv ? "100 %" : "–"}</b></td><td class="der"><b>${nf(tp)}</b></td><td class="der"><b>${tp ? "100 %" : "–"}</b></td></tr></tbody>`;
+      $("pdMovNota").textContent = "Movimiento = suma de la venta diaria promedio de todos los productos de la sucursal (la que se publica con las listas a sucursales). Ordenado de mayor a menor.";
+    }
+  }
   // resumen por sucursal (filtro) y lista de pedidos para marcarlos
   const res = $("pdRes"); res.hidden = P.cS < 0;
   if (P.cS >= 0) res.innerHTML = cuenta(P.datos, d => d.suc || "?").map(([f, c]) => `<button type="button" class="pd-chip${S.pdSuc === f ? " act" : ""}" data-pdsuc="${esc(f)}">${esc(f === "?" ? "Sin reconocer" : corto(f))} <b>${nf(c)}</b></button>`).join("");

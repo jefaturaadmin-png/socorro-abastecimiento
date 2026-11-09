@@ -491,6 +491,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
           <section class="card pd-card"><h3 id="pdBarH">Pedidos por sucursal (últimos 7 días)</h3><div id="pdBarras"></div></section>
           <section class="card pd-card"><h3 id="pdLinH">Pedidos por día</h3><div id="pdLinea"></div></section>
         </div>
+        <section class="card pd-card" id="pdMovBox" hidden><h3 id="pdMovH">¿Qué sucursal tiene más movimiento? (% del total)</h3><div class="tabla-wrap"><table class="tabla" id="pdMov"></table></div><p class="muted" id="pdMovNota"></p></section>
         <section class="card pd-card"><h3 id="pdTopH">Top 5 productos más pedidos (últimos 7 días)</h3><div class="tabla-wrap"><table class="tabla" id="pdTop"></table></div></section>
         <div class="pd-res" id="pdRes" hidden></div>
       </div>
@@ -690,6 +691,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 
 <div class="toast" id="toast" hidden></div>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="app.js?v=202611091200"></script>
+<script type="module" src="app.js?v=202611091500"></script>
 </body>
 </html>
