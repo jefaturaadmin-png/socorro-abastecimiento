@@ -2090,7 +2090,7 @@ function pintarTableroUrg(P) {
       return { f, v, n, ped: pedS.get(f) || 0 }; }).filter(x => x.v > 0 || x.ped > 0);
     const tv = filas.reduce((a, x) => a + x.v, 0), tp = filas.reduce((a, x) => a + x.ped, 0), pc = (a, t) => t ? (a / t * 100).toLocaleString("es-PE", { maximumFractionDigits: 1 }) + " %" : "–";
     filas.sort((a, b) => b.v - a.v || b.ped - a.ped);
-    movBox.hidden = !admin || !filas.length;
+    movBox.hidden = !filas.length;
     if (!movBox.hidden) {
       const mx = Math.max(...filas.map(x => tv ? x.v / tv : 0), 1e-9);
       $("pdMov").innerHTML = `<thead><tr><th class="der">#</th><th>Sucursal</th><th class="der">Venta por día</th><th class="der">Productos que se venden</th><th>% del movimiento total</th><th class="der">Pedidos urgentes (${per})</th><th class="der">% de pedidos</th></tr></thead><tbody>` +
