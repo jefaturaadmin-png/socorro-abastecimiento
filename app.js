@@ -8,6 +8,7 @@ import {
   serverTimestamp, writeBatch as fsBatch, deleteField
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION, FORM_URGENCIA } from "./config.js?v=202610280700";
+import { MODELOS, COLORES_G, PUNTOS_INICIALES, leerUbicacion, fmtDMS, ordenar, linkMaps, matriz, trazo, cargarLeaflet } from "./rutas.js?v=202611091900";
 import { crearEditor, ejemploAbastecimiento, FORMAS, COLORES, svgDe, limites, fmtMin, totalMin, UNIDADES } from "./flued.js?v=202611032300";
 
 const app = initializeApp(firebaseConfig);
@@ -89,6 +90,7 @@ const VISTAS = [
   { id: "evaluacion", nombre: "Evaluación de sucursales", vista: "vEval", c: "est", ic: "i-grafico", desc: "Stock, orden, limpieza, capacidad y BPA de cada sucursal", ayuda: "químicos: ven la de su sucursal" },
   { id: "nuevos", nombre: "Productos que buscan los clientes", vista: "vNue", c: "suc", ic: "i-mas", desc: "Registrar con foto lo que piden y no tenemos; lo ven todas las sucursales", ayuda: "ve lo que reportan todas las sucursales" },
   { id: "flujo", nombre: "Flujograma de abastecimiento", vista: "vFlujo", c: "mapa", ic: "i-lista", desc: "Cómo se trabaja: de la compra al proveedor hasta la atención a sucursales", todos: true },
+  { id: "rutas", nombre: "Rutas de reparto", vista: "vRutas", c: "mapa", ic: "i-grafico", desc: "La ruta más corta para repartir a un grupo de sucursales, en el mapa y en Google Maps" },
   { id: "flued", nombre: "Editor de flujogramas", vista: "vFlued", c: "est", ic: "i-grafico", desc: "Crear y editar flujogramas con figuras, flechas, textos y tiempos" }];
 // v.todos: módulo abierto a todos los usuarios (no hace falta activarlo en Usuarios)
 // «Módulos por sucursal» se abre en un módulo por cada sucursal (ordenadas por prioridad de ventas, la que más vende primero)
@@ -383,7 +385,7 @@ function pintarNav() {
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vCompL", "vNue", "vFlujo", "vFlued", "vDrog", "vSucx", "vInd", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vCompL", "vNue", "vFlujo", "vFlued", "vRutas", "vDrog", "vSucx", "vInd", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
@@ -418,6 +420,7 @@ function render() {
   else if (S.vista === "vNue") { escucharNue(); marcarNueVisto(); pintarNue(); }
   else if (S.vista === "vFlujo") pintarFlujo();
   else if (S.vista === "vFlued") abrirFlued();
+  else if (S.vista === "vRutas") abrirRutas();
   if (S.vista !== "vFlued" && document.body.classList.contains("fe-full")) fePantalla(false);
   pintarSel("bq"); pintarSel("ab"); pintarLados();
   $("ayuda").classList.toggle("mini", S.vista !== "vInicio");   // fuera del inicio solo el ícono, para no tapar botones
@@ -3254,3 +3257,142 @@ $("feImp").addEventListener("click", () => {
 });
 addEventListener("keydown", e => { if (S.vista === "vFlued" && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); clearTimeout(feT); feGuardar(); } });
 addEventListener("beforeunload", e => { if (S.vista === "vFlued" && !S.fe.guardado) { feGuardar(); e.preventDefault(); } });
+
+/* ===================== rutas de reparto ===================== */
+// rutas/config = { puntos: [{ id, n, u (texto), lat, lon, salida }], grupos: [{ id, n, ids: [...], modelo }] }
+S.ru = { listo: false, puntos: [], grupos: [], ver: "", res: new Map() };
+const ruId = () => Math.random().toString(36).slice(2, 9);
+const ruSalida = () => S.ru.puntos.find(p => p.salida && p.lat != null) || S.ru.puntos.find(p => p.lat != null);
+const ruPt = id => S.ru.puntos.find(p => p.id === id);
+const ruColor = g => COLORES_G[S.ru.grupos.indexOf(g) % COLORES_G.length];
+let ruMapa = null, ruCapa = null, ruT = null;
+async function abrirRutas() {
+  if (S.ru.listo) return;
+  S.ru.listo = true;
+  try {
+    const d = await getDoc(doc(db, "rutas", "config"));
+    if (d.exists()) { const x = d.data(); S.ru.puntos = x.puntos || []; S.ru.grupos = x.grupos || []; }
+  } catch (e) { msg("ruMsg", "No se pudieron leer las rutas guardadas (" + textoError(e) + "). Se muestran las ubicaciones iniciales.", true); }
+  if (!S.ru.puntos.length) S.ru.puntos = PUNTOS_INICIALES.map(([n, u, salida]) => { const [lat, lon] = leerUbicacion(u); return { id: ruId(), n, u, lat, lon, salida: !!salida }; });
+  if (!S.ru.grupos.length) {
+    const id = n => S.ru.puntos.find(p => p.n === n)?.id;
+    S.ru.grupos = [{ id: ruId(), n: "Grupo 1", ids: ["PARRA", "PIOPATA", "SUMAR"].map(id).filter(Boolean), modelo: "auto" }];
+  }
+  pintarRuPts(); pintarRuGrupos(); calcRutas();
+  try {
+    const L = await cargarLeaflet();
+    ruMapa = L.map("ruMapa", { scrollWheelZoom: true }).setView([-12.066, -75.21], 13);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(ruMapa);
+    ruCapa = L.layerGroup().addTo(ruMapa);
+    pintarRuMapa(true);
+  } catch (e) { $("ruMapa").innerHTML = `<p class="muted" style="padding:20px">No se pudo cargar el mapa: ${esc(e.message)}. Los enlaces de Google Maps siguen funcionando.</p>`; }
+}
+function ruGuardar() {
+  $("ruEst").textContent = "Guardando…"; clearTimeout(ruT);
+  ruT = setTimeout(async () => {
+    try {
+      await setDoc(doc(db, "rutas", "config"), { puntos: S.ru.puntos, grupos: S.ru.grupos, actualizado: serverTimestamp(), porNombre: S.perfil?.nombre || S.perfil?.usuario || "" });
+      $("ruEst").textContent = "✓ Guardado " + new Date().toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
+    } catch (e) { $("ruEst").textContent = "⚠ No se guardó: " + (e.code === "permission-denied" ? "falta publicar las reglas nuevas (firestore.rules)." : textoError(e)); }
+  }, 700);
+}
+function pintarRuPts() {
+  $("ruPts").innerHTML = `<thead><tr><th title="Punto de salida y regreso">Salida</th><th>Nombre</th><th>Ubicación</th><th></th></tr></thead><tbody>` +
+    S.ru.puntos.map(p => `<tr data-pid="${p.id}"><td style="text-align:center"><input type="radio" name="ruSal" data-rsal ${p.salida ? "checked" : ""} title="Punto de salida y regreso"></td>
+      <td><input type="text" data-rn value="${esc(p.n)}" maxlength="40"></td>
+      <td class="ru-ub"><input type="text" data-ru value="${esc(p.u || (p.lat != null ? fmtDMS(p.lat, p.lon) : ""))}" class="${p.lat == null ? "mal" : ""}" placeholder="12°04'09.34&quot;S 75°12'34.34&quot;W"></td>
+      <td><button class="btn sm peligro" type="button" data-rdel title="Quitar">🗑</button></td></tr>`).join("") + "</tbody>";
+}
+function pintarRuGrupos() {
+  const sal = ruSalida(), usados = new Map(); S.ru.grupos.forEach(g => g.ids.forEach(i => usados.set(i, g)));
+  $("ruGrupos").innerHTML = S.ru.grupos.map(g => `<div class="ru-g${S.ru.ver === g.id ? " sel" : ""}" data-gid="${g.id}" style="--gc:${ruColor(g)}">
+      <div class="ru-g-top"><input type="text" data-gn value="${esc(g.n)}" maxlength="40" aria-label="Nombre del grupo">
+        <select data-gm title="Método para ordenar la ruta">${MODELOS.map(([v, t]) => `<option value="${v}" ${v === (g.modelo || "auto") ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>
+        <button class="btn sm peligro" type="button" data-gdel title="Quitar grupo">🗑</button></div>
+      <div class="ru-chips">${S.ru.puntos.filter(p => p !== sal && p.lat != null).map(p => { const en = g.ids.includes(p.id), otro = !en && usados.get(p.id);
+        return `<button type="button" class="ru-chip${en ? " on" : ""}${otro ? " otro" : ""}" data-gp="${p.id}" title="${otro ? "Está en " + esc(otro.n) : ""}">${esc(p.n)}</button>`; }).join("")}</div>
+      <div class="ru-res" data-gres>${g.ids.length ? "Calculando…" : '<span class="muted">Toque las sucursales de este grupo.</span>'}</div></div>`).join("")
+    || '<p class="muted">No hay grupos. Use «Nuevo grupo».</p>';
+}
+// ruta de cada grupo con su método y, para comparar, lo que darían los demás métodos
+async function calcRutas() {
+  const sal = ruSalida(); if (!sal) return;
+  for (const g of S.ru.grupos) {
+    const pts = g.ids.map(ruPt).filter(p => p && p.lat != null && p !== sal), el = () => document.querySelector(`[data-gid="${g.id}"] [data-gres]`);
+    if (!pts.length) { S.ru.res.delete(g.id); continue; }
+    const firma = [sal, ...pts].map(p => p.lat + "," + p.lon).join(";") + "|" + g.modelo;
+    let r = S.ru.res.get(g.id);
+    if (!r || r.firma !== firma) {
+      const M = await matriz([sal, ...pts]), idx = pts.map((_, i) => i + 1);
+      const largo = (o, T) => { let d = 0, p = 0; for (const x of o) { d += T[p][x]; p = x; } return d + T[p][0]; };
+      const o = ordenar(M.km, idx, g.modelo || "auto");
+      const cmp = MODELOS.filter(([v]) => v !== "auto" && !(v === "exacto" && idx.length > 9)).map(([v, t]) => [v, t, largo(ordenar(M.km, idx, v), M.km)]);
+      r = { firma, orden: o.map(i => pts[i - 1]), km: largo(o, M.km), min: M.min ? largo(o, M.min) : null, fuente: M.fuente, cmp };
+      S.ru.res.set(g.id, r);
+    }
+    const e = el(); if (!e) continue;
+    const mejor = Math.min(...r.cmp.map(c => c[2]));
+    e.innerHTML = `<div class="ru-orden"><span>🏠 ${esc(sal.n)}</span> → ${r.orden.map((p, i) => `<span><i>${i + 1}</i>${esc(p.n)}</span>`).join(" → ")} → <span>🏠</span></div>
+      <b class="km">${r.km.toFixed(1)} km</b>${r.min != null ? ` · ~${Math.round(r.min)} min manejando` : ""} <small class="muted">(${r.fuente === "calles" ? "por calles" : "aprox.: línea recta × 1,3"})</small>
+      <div class="ru-cmp">Otros métodos: ${r.cmp.map(([v, t, d]) => `${esc(t.split(" (")[0].split(":")[0])} ${d <= mejor + 0.05 ? `<b>${d.toFixed(1)}</b>` : d.toFixed(1)}`).join(" · ")} km</div>
+      <div class="ru-acc"><a class="btn sm primario" href="${esc(linkMaps(sal, r.orden))}" target="_blank" rel="noopener">📍 Abrir en Google Maps</a><button class="btn sm" type="button" data-gver>🗺 Ver en el mapa</button></div>`;
+  }
+  pintarRuMapa();
+}
+async function pintarRuMapa(encuadrar) {
+  if (!ruMapa || !window.L) return;
+  const L = window.L, sal = ruSalida(); ruCapa.clearLayers(); const lim = [];
+  const ver = S.ru.ver ? S.ru.grupos.filter(g => g.id === S.ru.ver) : S.ru.grupos;
+  const enRuta = new Set(ver.flatMap(g => g.ids));
+  for (const p of S.ru.puntos) if (p.lat != null && p !== sal && !enRuta.has(p.id))
+    L.circleMarker([p.lat, p.lon], { radius: 6, color: "#fff", weight: 2, fillColor: "#8a94a6", fillOpacity: 1 }).bindTooltip(p.n).addTo(ruCapa);
+  if (sal) { L.marker([sal.lat, sal.lon], { icon: L.divIcon({ className: "", html: '<div class="ru-sal">🏠</div>', iconSize: [30, 30], iconAnchor: [15, 15] }), zIndexOffset: 1000 }).bindTooltip(sal.n, { permanent: false }).addTo(ruCapa); lim.push([sal.lat, sal.lon]); }
+  $("ruLey").innerHTML = (sal ? `<span>🏠 ${esc(sal.n)} (salida)</span>` : "") + ver.map(g => { const r = S.ru.res.get(g.id); return r ? `<span><b style="color:${ruColor(g)}">━</b> ${esc(g.n)}: ${r.km.toFixed(1)} km</span>` : ""; }).join("")
+    + (S.ru.ver ? ` <button class="btn sm" type="button" id="ruLeyTodos">Ver todos</button>` : "");
+  for (const g of ver) {
+    const r = S.ru.res.get(g.id); if (!r || !sal) continue; const c = ruColor(g);
+    r.orden.forEach((p, i) => { lim.push([p.lat, p.lon]);
+      L.marker([p.lat, p.lon], { icon: L.divIcon({ className: "", html: `<div class="ru-num" style="background:${c}">${i + 1}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] }) }).bindTooltip(`${g.n} · ${i + 1}. ${p.n}`).addTo(ruCapa); });
+    const linea = L.polyline([[sal.lat, sal.lon], ...r.orden.map(p => [p.lat, p.lon]), [sal.lat, sal.lon]], { color: c, weight: 4, opacity: .55, dashArray: "6 8" }).addTo(ruCapa);
+    trazo([sal, ...r.orden, sal]).then(t => { if (!ruCapa.hasLayer(linea)) return; ruCapa.removeLayer(linea); L.polyline(t, { color: c, weight: 5, opacity: .85 }).addTo(ruCapa); });
+  }
+  if ((encuadrar || S.ru.ver) && lim.length) ruMapa.fitBounds(lim, { padding: [30, 30], maxZoom: 16 });
+  setTimeout(() => ruMapa.invalidateSize(), 50);
+}
+$("ruPts").addEventListener("change", e => {
+  const tr = e.target.closest("[data-pid]"); if (!tr) return; const p = ruPt(tr.dataset.pid); if (!p) return;
+  if (e.target.matches("[data-rn]")) p.n = e.target.value.trim().slice(0, 40) || "Sin nombre";
+  else if (e.target.matches("[data-ru]")) { const v = leerUbicacion(e.target.value); p.u = e.target.value.trim(); [p.lat, p.lon] = v || [null, null]; e.target.classList.toggle("mal", !v); if (!v) return msg("ruMsg", `No se entiende la ubicación de ${p.n}. Use 12°04'09.34"S 75°12'34.34"W o -12.0692, -75.2095.`, true); msg("ruMsg", ""); }
+  else if (e.target.matches("[data-rsal]")) S.ru.puntos.forEach(x => x.salida = x === p);
+  S.ru.res.clear(); pintarRuGrupos(); calcRutas(); ruGuardar();
+});
+$("ruPts").addEventListener("click", e => {
+  const b = e.target.closest("[data-rdel]"); if (!b) return; const p = ruPt(b.closest("[data-pid]").dataset.pid);
+  if (!p || !confirm(`¿Quitar ${p.n} de las ubicaciones?`)) return;
+  S.ru.puntos = S.ru.puntos.filter(x => x !== p); S.ru.grupos.forEach(g => g.ids = g.ids.filter(i => i !== p.id));
+  if (p.salida && S.ru.puntos[0]) S.ru.puntos[0].salida = true;
+  S.ru.res.clear(); pintarRuPts(); pintarRuGrupos(); calcRutas(); ruGuardar();
+});
+$("ruNuevoP").addEventListener("click", () => {
+  S.ru.puntos.push({ id: ruId(), n: "Nueva sucursal", u: "", lat: null, lon: null, salida: false }); pintarRuPts(); pintarRuGrupos();
+  const ins = $("ruPts").querySelectorAll("[data-rn]"); ins[ins.length - 1]?.select();
+});
+$("ruNuevoG").addEventListener("click", () => {
+  const g = { id: ruId(), n: "Grupo " + (S.ru.grupos.length + 1), ids: [], modelo: "auto" }; S.ru.grupos.push(g); S.ru.ver = g.id; pintarRuGrupos(); pintarRuMapa(); ruGuardar();
+});
+const ruVerTodos = () => { S.ru.ver = ""; pintarRuGrupos(); calcRutas(); pintarRuMapa(true); };
+$("ruTodosG").addEventListener("click", ruVerTodos);
+$("ruLey").addEventListener("click", e => { if (e.target.closest("#ruLeyTodos")) ruVerTodos(); });
+$("ruGrupos").addEventListener("click", e => {
+  const caja = e.target.closest("[data-gid]"); if (!caja) return; const g = S.ru.grupos.find(x => x.id === caja.dataset.gid); if (!g) return;
+  const ch = e.target.closest("[data-gp]");
+  if (ch) { const id = ch.dataset.gp; g.ids = g.ids.includes(id) ? g.ids.filter(i => i !== id) : [...g.ids, id]; S.ru.ver = g.id; pintarRuGrupos(); calcRutas(); ruGuardar(); return; }
+  if (e.target.closest("[data-gdel]")) { if (!confirm(`¿Quitar ${g.n}?`)) return; S.ru.grupos = S.ru.grupos.filter(x => x !== g); S.ru.res.delete(g.id); if (S.ru.ver === g.id) S.ru.ver = ""; pintarRuGrupos(); calcRutas(); ruGuardar(); return; }
+  if (e.target.closest("[data-gver]")) { S.ru.ver = g.id; document.querySelectorAll(".ru-g").forEach(x => x.classList.toggle("sel", x.dataset.gid === g.id)); pintarRuMapa(true); if (innerWidth < 980) $("ruMapa").scrollIntoView({ behavior: "smooth" }); }
+});
+$("ruGrupos").addEventListener("change", e => {
+  const caja = e.target.closest("[data-gid]"); const g = caja && S.ru.grupos.find(x => x.id === caja.dataset.gid); if (!g) return;
+  if (e.target.matches("[data-gn]")) { g.n = e.target.value.trim().slice(0, 40) || "Grupo"; pintarRuMapa(); }
+  else if (e.target.matches("[data-gm]")) { g.modelo = e.target.value; calcRutas(); }
+  ruGuardar();
+});

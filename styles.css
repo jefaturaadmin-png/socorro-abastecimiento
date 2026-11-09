@@ -778,3 +778,35 @@ body.nav-abierta .top .nav button { text-align: left; justify-content: flex-star
 
 .pd-pct { display: inline-block; vertical-align: middle; width: 120px; height: 10px; background: #eceff3; border-radius: 5px; overflow: hidden; margin-right: 6px } .pd-pct span { display: block; height: 100%; background: #14306B; border-radius: 5px }
 #pdMov tr.tot td { border-top: 2px solid #d6dbe4 } #pdMovNota { font-size: 12px; margin: 8px 0 0 }
+
+/* rutas de reparto */
+.ru-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px; align-items: start }
+.ru-der { position: sticky; top: 76px }
+.ru-mapa-card { padding: 0; overflow: hidden }
+.ru-mapa { height: min(72vh, 680px); background: #e8edf3 }
+.ru-ley { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 10px 14px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line) }
+.ru-h { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between }
+.ru-ayuda { font-size: 12.5px; margin: 0 0 10px } .ru-ayuda code { background: var(--soft); padding: 1px 5px; border-radius: 4px }
+.ru-pts td { padding: 6px 8px } .ru-pts th { padding: 8px }
+.ru-pts input[type=text] { width: 100%; min-width: 120px; padding: 6px 8px; border: 1px solid var(--field); border-radius: 6px; font: inherit; font-size: 13px }
+.ru-pts input.mal { border-color: var(--bad); background: var(--bad-soft) }
+.ru-pts .ru-ub { min-width: 210px }
+.ru-g { border: 1px solid var(--line); border-left: 5px solid var(--gc, #999); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; background: #fff }
+.ru-g.sel { box-shadow: 0 0 0 2px var(--gc, #999) inset }
+.ru-g-top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.ru-g-top input { flex: 1 1 140px; font: inherit; font-weight: 700; border: 1px solid transparent; border-radius: 6px; padding: 4px 6px } .ru-g-top input:hover, .ru-g-top input:focus { border-color: var(--field) }
+.ru-g-top select { font: inherit; font-size: 12.5px; padding: 4px 6px; border: 1px solid var(--field); border-radius: 6px; max-width: 100% }
+.ru-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 }
+.ru-chip { border: 1px solid var(--line); background: var(--soft); border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer; color: var(--fg-2) }
+.ru-chip.on { background: var(--gc, #14306B); border-color: var(--gc, #14306B); color: #fff; font-weight: 600 }
+.ru-chip.otro { opacity: .55 }
+.ru-res { font-size: 13px; color: var(--fg-2) } .ru-res b.km { font-size: 15px; color: var(--fg) }
+.ru-orden { margin: 4px 0 6px; line-height: 1.7 } .ru-orden span { white-space: nowrap }
+.ru-orden i { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--gc, #999); color: #fff; font-style: normal; font-size: 11px; font-weight: 700; margin-right: 3px }
+.ru-cmp { font-size: 12px; color: var(--muted); margin-top: 4px } .ru-cmp b { color: var(--ok) }
+.ru-acc { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px }
+.ru-num { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; color: #fff; font: 700 12px/1 Inter, sans-serif; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35) }
+.ru-sal { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: #172033; color: #fff; font-size: 15px; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4) }
+.ru-est { font-size: 12.5px; color: var(--muted) }
+@media (max-width: 980px) { .ru-grid { grid-template-columns: 1fr } .ru-der { position: static; order: -1 } .ru-mapa { height: 52vh } }
+.ru-mapa svg { width: auto; height: auto; fill: initial; stroke: initial; stroke-width: initial; flex: initial; max-width: none }

@@ -16,7 +16,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611071200">
+<link rel="stylesheet" href="styles.css?v=202611091900">
 </head>
 <body>
   <!-- instalar la página como app en el celular -->
@@ -650,6 +650,26 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
   <section id="vSucx" hidden>
     <iframe id="sucxFrame" class="proy-frame" title="Por sucursal"></iframe>
   </section>
+  <!-- ============ RUTAS DE REPARTO ============ -->
+  <section id="vRutas" hidden>
+    <div class="wrap ancho cabeza">
+      <div><h1>Rutas de reparto</h1><p class="muted">Arme grupos de sucursales y vea la ruta más corta de cada uno saliendo y volviendo a droguería, con el método que elija. Las ubicaciones se pueden editar, agregar o quitar.</p></div>
+      <div class="pd-acc"><span class="ru-est" id="ruEst"></span></div>
+    </div>
+    <div class="wrap ancho cuerpo">
+      <div class="msg" id="ruMsg" hidden></div>
+      <div class="ru-grid">
+        <div class="ru-izq">
+          <section class="card pd-card"><h3 class="ru-h"><span>Grupos de reparto</span><span class="pd-acc"><button class="btn sm" type="button" id="ruNuevoG">➕ Nuevo grupo</button><button class="btn sm" type="button" id="ruTodosG" title="Mostrar todos los grupos en el mapa">👁 Ver todos</button></span></h3>
+            <div id="ruGrupos"></div></section>
+          <section class="card pd-card"><h3 class="ru-h"><span>Ubicaciones</span><button class="btn sm" type="button" id="ruNuevoP">➕ Agregar ubicación</button></h3>
+            <p class="muted ru-ayuda">Pegue la ubicación como la da Google Maps: <code>12°04'09.34"S 75°12'34.34"W</code> o <code>-12.0692, -75.2095</code>. ● = punto de salida y regreso.</p>
+            <div class="tabla-wrap"><table class="tabla ru-pts" id="ruPts"></table></div></section>
+        </div>
+        <div class="ru-der"><section class="card ru-mapa-card"><div id="ruMapa" class="ru-mapa"></div><div class="ru-ley" id="ruLey"></div></section></div>
+      </div>
+    </div>
+  </section>
   <section id="vMapa" hidden>
     <iframe id="mapaFrame" class="proy-frame" title="Mapa de calor"></iframe>
   </section>
@@ -691,6 +711,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 
 <div class="toast" id="toast" hidden></div>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="app.js?v=202611091800"></script>
+<script type="module" src="app.js?v=202611091900"></script>
 </body>
 </html>
