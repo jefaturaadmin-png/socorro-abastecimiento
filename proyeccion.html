@@ -675,7 +675,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
         <div class="fila-f"><input id="xq" type="search" placeholder="Buscar nombre, código, genérico o familia…" autocomplete="off"></div>
         <div class="fila-f">
           <label class="field"><span>Laboratorio</span><select class="sLab"><option value="">Todos</option></select></label>
-          <label class="field"><span>Mostrar</span><select id="xVer"><option value="mov">Con stock o con venta</option><option value="cmp">Solo lo que hay que comprar</option><option value="">Todos</option></select></label>
+          <label class="field"><span>Mostrar</span><select id="xVer"><option value="mov">Con stock o con venta</option><option value="cmp">Solo lo que hay que comprar / pedir</option><option value="nuevo">🆕 Nuevos: sin ninguna venta</option><option value="reciente">🌱 Movimiento reciente: empezó a venderse en los últimos 3 meses</option><option value="parado">⏸ Sin movimiento en 6 meses (antes sí vendía)</option><option value="">Todos</option></select></label>
           <label class="field"><span>Tipo</span><select id="xTipo"><option value="">Todos</option><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option></select></label>
           <label class="field"><span>Días de stock</span><input id="xCob" type="number" min="0" max="180" value="30" style="width:70px"></label>
           <label class="field"><span>Días de seguridad</span><input id="xSeg" type="number" min="0" max="180" value="15" style="width:70px"></label>
@@ -1356,7 +1356,8 @@ const tagKR = c => window.REEMP?.has(c) ? `<span class="tag kr" title="Ya no se 
   : window.REEMP_NUEVO?.has(c) ? `<span class="tag kr" title="Si no tiene historial, se proyecta con el que reemplaza">🔁 reemplaza a ${esc(window.REEMP_NUEVO.get(c).join(', '))}</span>` : '';
 const tagGest = c => window.GEST?.has(c) ? `<span class="tag gest" title="${esc((window.GEST.get(c).porNombre || '') + ' · ' + String(window.GEST.get(c).fecha || '').slice(0, 10))}">📢 Gestionado por droguería${window.GEST.get(c).nota ? ': ' + esc(window.GEST.get(c).nota) : ''}</span>` : '';
 const tagBAt = c => window.BLOQ_ATEN?.has(c) ? `<span class="tag bat" title="${esc((window.BLOQ_ATEN.get(c).porNombre || '') + ' · ' + String(window.BLOQ_ATEN.get(c).fecha || '').slice(0, 10))}">🚫 Atención bloqueada${window.BLOQ_ATEN.get(c).motivo ? ': ' + esc(window.BLOQ_ATEN.get(c).motivo) : ''}</span>` : '';
-const etiquetas = p => tagBAt(p.c) + tagGest(p.c) + (p.pap ? '<span class="tag pap" title="Programa de apoyo al paciente">PAP</span>' : '') + (p.est ? '<span class="tag est" title="Venta por temporadas">Estacional</span>' : '') + tagKR(p.c);
+// el movimiento (nuevo, reciente, sin movimiento) es información general: sale también en Droguería y en cada sucursal
+const etiquetas = p => tagBAt(p.c) + tagGest(p.c) + tagMov(p) + (p.pap ? '<span class="tag pap" title="Programa de apoyo al paciente">PAP</span>' : '') + (p.est ? '<span class="tag est" title="Venta por temporadas">Estacional</span>' : '') + tagKR(p.c);
 // en Reposición por farmacia se usa la categoría de esa farmacia
 const pasaTipo = p => {
   const per = S.vista === 'pron' && S.tR;
@@ -1812,6 +1813,7 @@ function filasStk() {
     if (bq && !drog) continue;   // en el módulo de cada sucursal no aparecen los bloqueados (en ella, en droguería o en todas)
     if (bq) { cmp = 0; nota = 'bloqueado'; }
     if (S.xVer === 'mov' && !st && nec < 0.05) continue; if (S.xVer === 'cmp' && !cmp) continue;
+    if (['nuevo', 'reciente', 'parado'].includes(S.xVer) && movDe(p) !== S.xVer) continue;   // mismo criterio que el Kardex (venta de toda la red)
     const resp = drog ? null : window.respAtencion?.(f, p.c);
     filas.push({ p, c: p.c, n: p.n, cat, st, nec, cmp, nota, vd, met, resp });
   }
@@ -1942,8 +1944,8 @@ $('xXls').addEventListener('click', () => {
   const txtGest = c => { const g = window.GEST?.get(c); return g ? 'Gestionado por droguería' + (g.nota ? ': ' + g.nota : '') : ''; };
   const txtBAt = c => { const g = window.BLOQ_ATEN?.get(c); return g ? 'Atención bloqueada' + (g.motivo ? ': ' + g.motivo : '') : ''; };
   const txtOtras = p => [p.pap ? 'PAP' : '', p.est ? 'Estacional (venta por temporadas)' : ''].filter(Boolean).join(' · ');
-  const extra = ['Línea', 'Familia', 'Genérico', 'Comunicado de droguería', 'Reemplazo', 'Atención bloqueada', 'Otras etiquetas'];
-  const datosExtra = p => { const x = clas(p); return [x.t, x.f, x.g, txtGest(p.c), txtKR(p.c), txtBAt(p.c), txtOtras(p)]; };
+  const extra = ['Línea', 'Familia', 'Genérico', 'Comunicado de droguería', 'Reemplazo', 'Atención bloqueada', 'Movimiento', 'Otras etiquetas'];
+  const datosExtra = p => { const x = clas(p); return [x.t, x.f, x.g, txtGest(p.c), txtKR(p.c), txtBAt(p.c), (MOV_TXT[movDe(p)] || '').replace(/^\S+ /, ''), txtOtras(p)]; };
   const t = [['Código', 'Medicamento', 'Laboratorio', 'Tipo', 'Stock actual', 'Modelo', 'Venta diaria', `Necesita ${S.xCob} + ${S.xSeg} d`, drog ? 'Comprar' : 'Pedir', ...(drog ? [] : ['Se atenderá', 'Fraccionero', 'Va a sobrar (+) / faltar (−) (fracciones)']), 'Costo S/', (drog ? 'Comprar' : 'Pedir') + ' S/', 'Nota', 'Comentario de la sucursal', ...extra],
     ...filasStk().map(r => { const a = ate(r.p), fr = +r.p.fr > 1 ? +r.p.fr : 1;
       return [r.c, r.n, labDe(r.c), r.cat, num(r.st), r.met, num(r.vd), num(r.nec), r.cmp, ...(drog ? [] : [a, fr, a ? num((r.st + a - r.nec) * fr) : '']), num(r.p.k), num(r.cmp * (r.p.k || 0)), r.nota, r.resp ? r.resp.txt + (r.resp.por ? ' · ' + r.resp.por : '') : '', ...datosExtra(r.p)]; })];
