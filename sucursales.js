@@ -127,6 +127,14 @@
     cache = { filas, porProd }; return cache;
   }
   // fila de un producto en una sucursal con su criterio (también para los que no tienen venta ni stock)
+  // movimiento de un producto esporádico en una sucursal (sus últimos 12 meses completos)
+  const fmtM = m => { m = Math.max(0, m); if (m < 1) { const d = Math.max(1, Math.round(m * 30)); return d + (d === 1 ? ' día' : ' días'); } return (Math.round(m * 10) / 10).toString().replace('.', ',') + (m < 1.95 ? ' mes' : ' meses'); };
+  function esporadico(p, f) {
+    const h = (p.hf?.[f] || []).slice(-12).map(v => +v || 0); if (!h.length) return null;
+    const con = h.map((v, i) => [v, i]).filter(([v]) => v > 1e-9), k = con.length; if (!k) return { k: 0 };
+    const ult = con[con.length - 1][1], desde = h.length - 1 - ult + 0.5;   // meses desde su última venta (a mitad de mes)
+    return { k, cada: 12 / k, desde, tam: con.reduce((a, [v]) => a + v, 0) / k };
+  }
   function filaBase(p, f, H, fte) {   // fte: «motor» o N días de venta, en lugar del criterio (el Kardex puede elegirlo)   // H: días a usar en lugar de los del criterio (el Kardex usa los que se ponen allí)
         const st = +(window.STOCK_TODOS?.[p.c]?.[f]?.[0] ?? p.st?.[f] ?? 0) || 0, c = p.catF?.[f] || 'E';
         const o = cfgDe(f, p.c), aj = ajProd(f, p.c); if (fte) o.fte = fte; const dv = diaria(p, f, o);
@@ -156,7 +164,17 @@
         else if (o.modo === 'forzar') pide = d > 0 ? ped(nec - st) : 0;
         else if (o.tipos === 'todos' ? d > 0 : c === 'A') pide = ped(nec - st);
         else if (o.tipos !== 'todos' && c === 'B') pide = d > 0 && ped(nec - st) >= 1 ? 1 : 0;   // B: 1 caja si lo que le falta (redondeado) llega a 1, o si está en cero
-        else if (d > 0) nota = c === 'C' ? 'a pedido' : c === 'D' ? 'solo con pedido' : '';
+        else if (c === 'C' || c === 'D') {
+          // ESPORÁDICO: se atiende según cada cuánto se mueve en esta sucursal (no mes a mes). Con sus últimos 12 meses:
+          // se vende en k meses → cada 12/k meses; le toca cuando desde su última venta + los días a cubrir llega a ese intervalo.
+          // Se envía lo que suele vender cuando se mueve (promedio de esos meses), menos su stock; en cero, al menos 1.
+          const e = esporadico(p, f);
+          if (e && e.k >= 2) {
+            const toca = e.desde + (H ?? (o.C + o.Sg)) / 30 >= e.cada - 1e-9;
+            if (toca) { pide = st < e.tam ? ped(e.tam - st) : 0; nota = `esporádico: se vende ~cada ${fmtM(e.cada)} (${e.k} veces al año) · le toca`; }
+            else nota = `esporádico: se vende ~cada ${fmtM(e.cada)} · le toca en ~${fmtM(e.cada - e.desde - (H ?? (o.C + o.Sg)) / 30)}`;
+          } else nota = e?.k === 1 ? 'esporádico: 1 sola venta al año (a pedido)' : '';
+        }
         if (!bloq && extra > 0) { pide = Math.max(pide, ped(nec - st)); nota = 'en lugar de ' + enLugar.join(', ') + ' (droguería)'; }
         // lo que necesita menos su stock, menos lo que le queda del anterior y lo que se le envía del anterior
         const krN = viejos.length && !bloq ? viejos.map(q => q.c + ' - ' + q.n).join(', ') : '';
