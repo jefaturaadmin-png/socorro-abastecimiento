@@ -727,6 +727,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
           <label class="field"><span>Mostrar</span><select id="kVer"><option value="stock">Con stock</option><option value="drog0">En 0 en droguería y con stock en sucursales</option><option value="cero">Sin stock en ningún lado</option><option value="nuevo">🆕 Nuevos: con stock y sin ninguna venta</option><option value="reciente">🌱 Movimiento reciente: empezó a venderse en los últimos 3 meses</option><option value="parado">⏸ Sin movimiento en 6 meses (antes sí vendía)</option><option value="">Todos</option></select></label>
           <label class="field"><span>Línea</span><select class="sLin"><option value="">Todas</option></select></label>
           <label class="field"><span>Familia</span><select class="sFam"><option value="">Todas</option></select></label>
+          <label class="field"><span>Venta diaria según</span><select id="kFte" title="De dónde sale la venta diaria para «Requiere» y «Se atenderá»: el motor (pronóstico) o lo que se vendió en los últimos días del kardex"><option value="">Criterio de cada sucursal</option><option value="motor">Motor (Estadística Proyx)</option><option value="15">Ventas de los últimos 15 días</option><option value="30">Ventas de los últimos 30 días</option><option value="45">Ventas de los últimos 45 días</option><option value="60">Ventas de los últimos 60 días</option><option value="90">Ventas de los últimos 90 días</option></select></label>
           <label class="field"><span>Días de stock</span><input id="kCob" type="number" min="0" max="180" value="30" style="width:70px"></label>
           <label class="field"><span>Días de seguridad</span><input id="kSeg" type="number" min="0" max="180" value="15" style="width:70px"></label>
           <button type="button" class="btn sm" id="kXls">⬇ Descargar Excel</button>
@@ -1595,10 +1596,10 @@ function compraKar(p) {
 // lo que requiere cada sucursal para los días elegidos, con las mismas reglas de Atención a sucursales: tipo A lo que falta,
 // tipo B 1 caja si no le alcanza, tipo C/D/E a pedido (0), bloqueados 0, cambios y reemplazos; el total se compara con el stock de droguería: sobra (+) o falta (−)
 // el mismo cálculo para el Kardex (con sus días) y para el módulo de cada sucursal (con los días de su criterio)
-const reqKar = (p, sf) => reqRed(p, S.kCob + S.kSeg, sf);
-function reqRed(p, H, sf) {
+const reqKar = (p, sf) => reqRed(p, S.kCob + S.kSeg, sf, S.kFte);
+function reqRed(p, H, sf, fte) {
   const listo = window.atencionListo?.() && !S.ejemplo;
-  const req = S.P.farmacias.map(f => listo ? window.requiereSuc?.(p.c, f, H) ?? 0 : null);
+  const req = S.P.farmacias.map(f => listo ? window.requiereSuc?.(p.c, f, H, fte) ?? 0 : null);
   const tot = req.reduce((a, v) => a + (v || 0), 0);
   // se atenderá: si droguería alcanza, lo que requiere; si falta, en proporción (requiere ÷ total × droguería),
   // redondeado sin pasarse de lo que hay (las cajas sobrantes van a los decimales más altos)
@@ -1612,6 +1613,7 @@ function reqRed(p, H, sf) {
   return { req, tot, listo, ate };
 }
 $('kCob').addEventListener('change', e => { S.kCob = Math.max(0, +e.target.value || 0); pintarKar(); });
+S.kFte = ''; $('kFte').addEventListener('change', e => { S.kFte = e.target.value; pintarKar(); });
 $('kSeg').addEventListener('change', e => { S.kSeg = Math.max(0, +e.target.value || 0); pintarKar(); });
 function pintarKar() {
   llenarLabs(); llenarClas();
@@ -1619,7 +1621,8 @@ function pintarKar() {
   if (!S.ejemplo && !S.kPrep && (!S.kPrepOk || !window.atencionListo?.())) { S.kPrep = true; window.prepAtencion?.().then(() => { S.kPrep = false; S.kPrepOk = true; if (S.vista === 'kar') pintarKar(); }); }
   const o = S.P, farms = o.farmacias, conv = (p, v) => soles() ? v * p.k : v, cel = (p, v) => v ? fmtS(p, conv(p, v)) : '<span class="z">0</span>';
   const filas = filasKar(), vis = window.fxActivo?.('kar') ? filas : filas.slice(0, S.kMostrar);
-  $('kEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · en ${soles() ? 'soles' : 'enteros y fracciones'} · del último kardex subido`;
+  const dd = o.dias ? Math.max(0, o.dias.n - (o.dias.primero ?? 0)) : 0;   // días del kardex con venta por día
+  $('kEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · en ${soles() ? 'soles' : 'enteros y fracciones'} · del último kardex subido · venta diaria: ${!S.kFte ? 'criterio de cada sucursal' : S.kFte === 'motor' ? 'motor (Estadística Proyx)' : `ventas de los últimos ${S.kFte} días` + (dd && +S.kFte > dd ? ` (el kardex trae ${dd} días por día; el resto, de su historial mensual)` : '')}`;
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th class="drog">Droguería</th><th class="sobra" title="Droguería − total que requieren las sucursales para ${S.kCob} + ${S.kSeg} días. Negativo: falta">Sobra / falta</th><th class="req" title="Suma de lo que requiere cada sucursal">Total requieren</th>${farms.map(f => `<th class="sep">${esc(nomSuc(f))}</th><th class="req" title="Lo que requiere ${esc(nomSuc(f))} para ${S.kCob} + ${S.kSeg} días (venta diaria × días − su stock)">Requiere</th><th class="ate" title="Si droguería alcanza: lo que requiere. Si falta: requiere ÷ total que requieren × stock de droguería">Se atenderá</th>`).join('')}<th class="sep">Sucursales</th><th>Total</th><th class="sep" title="Lo que necesita la red para los días elegidos (pronóstico)">Necesita ${S.kCob} + ${S.kSeg} d</th><th title="Necesita − stock total (droguería + sucursales)">Comprar</th></tr></thead><tbody>`;
   for (const r of vis) {
     const p = r.p, cx = compraKar(p), rq = reqKar(p, r.sf), sob = r.drog - rq.tot;
@@ -2565,7 +2568,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611101300"></script>
+<script src="sucursales.js?v=202611101400"></script>
 <script src="estadistica.js?v=202611042300"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611062200"></script>

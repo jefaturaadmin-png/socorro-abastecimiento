@@ -127,9 +127,9 @@
     cache = { filas, porProd }; return cache;
   }
   // fila de un producto en una sucursal con su criterio (también para los que no tienen venta ni stock)
-  function filaBase(p, f, H) {   // H: días a usar en lugar de los del criterio (el Kardex usa los que se ponen allí)
+  function filaBase(p, f, H, fte) {   // fte: «motor» o N días de venta, en lugar del criterio (el Kardex puede elegirlo)   // H: días a usar en lugar de los del criterio (el Kardex usa los que se ponen allí)
         const st = +(window.STOCK_TODOS?.[p.c]?.[f]?.[0] ?? p.st?.[f] ?? 0) || 0, c = p.catF?.[f] || 'E';
-        const o = cfgDe(f, p.c), aj = ajProd(f, p.c), dv = diaria(p, f, o);
+        const o = cfgDe(f, p.c), aj = ajProd(f, p.c); if (fte) o.fte = fte; const dv = diaria(p, f, o);
         // "Se tiene otro medicamento en su cambio": el que usa en su lugar se atiende con la venta del original
         const usa = enCambio(p, f), cambio = usa ? null : cambioDe(p, f), dOrig = cambio ? diaria(cambio.orig, f, cfgDe(f, cambio.orig.c)).d * cambio.parte : 0;
         // lo que droguería dice que reemplaza a otro (Faltantes: "existe otro medicamento" o "descontinuado" con reemplazo):
@@ -462,7 +462,7 @@
       comentario: r.comentario || '', alts: r.alts?.length ? r.alts : r.altCod ? [{ c: String(r.altCod), n: (r.alternativa || '').replace(/^[^-]*- /, '') }] : [] }; };
   // lo que requiere la sucursal con las mismas reglas de Atención (tipo A, B 1 caja, C/D/E a pedido, bloqueos, cambios,
   // reemplazos, ajustes por producto) pero para H días; sin limitarlo a lo que hay en droguería
-  window.requiereSuc = (c, f, H) => { const p = prodDe(c); if (!p) return 0; calcular(); const r = filaBase(p, f, H); return r.usa || r.bloq ? 0 : r.pide || 0; };
+  window.requiereSuc = (c, f, H, fte) => { const p = prodDe(c); if (!p) return 0; calcular(); const r = filaBase(p, f, H, fte); return r.usa || r.bloq ? 0 : r.pide || 0; };
   // cantidad fija por producto y sucursal (la pone el administrador desde el Kardex); null = se calcula sola
   window.cantFija = (f, c) => CFG.prod[f]?.[c]?.q ?? null;
   window.ponerCantFija = (f, c, q) => {
