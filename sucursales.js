@@ -107,7 +107,8 @@
   function calcular() {
     // el criterio en texto se arma una vez por versión (antes se convertía en cada consulta: miles de veces por pantalla)
     if (calcular.cv !== cfgVer) { calcular.cv = cfgVer; calcular.cj = JSON.stringify(CFG); }
-    const clave = cfgVer + '|' + respVer + '|' + (window.EST_VER || 0) + '|' + (window.REEMP_VER || 0) + '|' + (window.BLOQ_VER || 0) + '|' + calcular.cj;
+    // incluye la venta día por día del kardex (llega unos segundos después de abrir): al llegar, se recalcula todo
+    const clave = (S.P?.dias ? S.P.dias.hasta + ':' + S.P.dias.n : 'sin-dias') + '|' + cfgVer + '|' + respVer + '|' + (window.EST_VER || 0) + '|' + (window.REEMP_VER || 0) + '|' + (window.BLOQ_VER || 0) + '|' + calcular.cj;
     if (cache && cacheDe === S.P && cacheClave === clave) return cache;
     cacheDe = S.P; cacheClave = clave;
     const filas = [], porProd = new Map(), R = window.REEMP || new Map();
@@ -154,15 +155,15 @@
         else if (cambio) { pide = d > 0 ? ped(nec - st) : 0; nota = 'en cambio de ' + cambio.orig.c; }
         else if (o.modo === 'excluir') nota = 'no atender (ajuste)';
         else if (o.modo === 'forzar') pide = d > 0 ? ped(nec - st) : 0;
-        else if (o.tipos === 'todos' ? d > 0 : c === 'A') pide = ped(nec - st);
-        else if (o.tipos !== 'todos' && c === 'B') pide = d > 0 && ped(nec - st) >= 1 ? 1 : 0;   // B: 1 caja si lo que le falta (redondeado) llega a 1, o si está en cero
-        else if (c === 'C' || c === 'D') {
+        else if (c === 'C' || c === 'D') {   // (vale también con «atender todo lo que se vende»)
           // C y D: se atienden SOLO si se vendieron en esta sucursal dentro de los días elegidos (ventas de los últimos N días;
           // con el motor, los días a cubrir). Si no se vendieron en ese tiempo, quedan a pedido.
           const N = +o.fte > 0 ? +o.fte : (H ?? (o.C + o.Sg));
           if (d > 0 && window.vendioEn?.(p, f, N)) { pide = ped(nec - st); nota = `tipo ${c}: se vendió en los últimos ${N} días`; }
           else nota = `a pedido (tipo ${c}: sin venta en los últimos ${N} días)`;
         }
+        else if (o.tipos === 'todos' ? d > 0 : c === 'A') pide = ped(nec - st);
+        else if (o.tipos !== 'todos' && c === 'B') pide = d > 0 && ped(nec - st) >= 1 ? 1 : 0;   // B: 1 caja si lo que le falta (redondeado) llega a 1, o si está en cero
         if (!bloq && extra > 0) { pide = Math.max(pide, ped(nec - st)); nota = 'en lugar de ' + enLugar.join(', ') + ' (droguería)'; }
         // lo que necesita menos su stock, menos lo que le queda del anterior y lo que se le envía del anterior
         const krN = viejos.length && !bloq ? viejos.map(q => q.c + ' - ' + q.n).join(', ') : '';
