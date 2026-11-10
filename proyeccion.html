@@ -1661,7 +1661,7 @@ $('kTabla').addEventListener('click', e => {
     return; }
   const kq = e.target.closest('[data-kq]');
   if (kq) { const [f, c] = kq.dataset.kq.split('|'), act = window.cantFija?.(f, c);
-    const t = prompt(`Se atenderá a ${nomSuc(f)}\n${c} · ${nomDe(c)}\n\nCantidad a enviar (cajas). Déjalo vacío para que se calcule solo:`, act ?? '');
+    const t = prompt(`Se atenderá a ${nomSuc(f)}\n${c} · ${nomDe(c)}\n\nCantidad a enviar (cajas). Lo que la sucursal reciba después se descuenta solo (si ya le llegó, baja a 0).\nDéjalo vacío para que se calcule solo:`, act ?? '');
     if (t === null) return;
     const q = t.trim() === '' ? null : Math.round(+t.replace(',', '.'));
     if (q != null && !(q >= 0)) return alert('Escribe un número (0 o más) o déjalo vacío.');
@@ -2565,7 +2565,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611091800"></script>
+<script src="sucursales.js?v=202611101300"></script>
 <script src="estadistica.js?v=202611042300"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611062200"></script>

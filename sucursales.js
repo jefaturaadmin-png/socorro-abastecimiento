@@ -78,12 +78,9 @@
     return r;
   }
   // pronóstico estadístico de la venta mensual del producto en una sucursal (se guarda para no repetirlo)
-  // participación de la sucursal: la de la ficha (venta de los últimos 3 meses); si nadie vendió en esos 3 meses, la de los últimos 12
-  function participa(p, f) {
-    const s = p.s || {}, t = Object.values(s).reduce((a, v) => a + (+v || 0), 0); if (t > 0) return +s[f] || 0;
-    const u = h => (h || []).slice(-12).reduce((a, v) => a + (+v || 0), 0), tot = S.P.farmacias.reduce((a, x) => a + u(p.hf?.[x]), 0);
-    return tot > 0 ? u(p.hf?.[f]) / tot : 0;
-  }
+  // participación de la sucursal: exactamente la de la ficha del Kardex (su venta de los últimos 3 meses). Si nadie lo vendió
+  // en esos 3 meses, es 0 % para todas (como en la ficha): no se reparte por un pronóstico que la ficha no muestra.
+  function participa(p, f) { return +(p.s || {})[f] || 0; }
   function motorEn(p, f) {
     if (motorDe !== S.P || motorVer !== (window.EST_VER || 0)) { motor.clear(); pronRed.clear(); motorDe = S.P; motorVer = window.EST_VER || 0; }   // se rehace si cambia algo en Estadística
     const k = p.c + '|' + f; let r = motor.get(k);
@@ -169,7 +166,9 @@
         const de = S.suEstados.get(p.c);
         if (!reemp && pide > 0 && !cambio && de?.estado === 'descontinuado' && !vencida(de) && !(+(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) > 0)) { pideOrig = pide; pide = 0; nota = 'descontinuado (droguería)'; }
         // cantidad fija que decide Abastecimiento (p. ej. productos nuevos, sin venta): se envía esa cantidad
-        if (!bloq && aj?.q != null) { pide = Math.max(0, Math.round(+aj.q || 0)); pideOrig = 0; reemp = ''; nota = 'cantidad fija (Abastecimiento)'; }
+        // se descuenta lo que la sucursal ya recibió desde que se fijó (su stock de entonces es st0): si ya llegó, baja a 0
+        if (!bloq && aj?.q != null) { const q = Math.max(0, Math.round(+aj.q || 0)), rec = Math.max(0, Math.floor(st - (+aj.st0 || 0) + 1e-9));
+          pide = Math.max(0, q - rec); pideOrig = 0; reemp = ''; nota = 'cantidad fija (Abastecimiento)' + (rec ? ` · ya recibió ${Math.min(rec, q)} de ${q}` : ''); }
         const exceso = !bloq && st > 0 && (d === 0 ? st >= 1 : st - nec * 2 >= 1) ? Math.floor(d === 0 ? st : st - nec) : 0;
         return { p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide, nota, bloq, exceso, o, aj, urgente: d > 0 && st < seg && !bloq && o.modo !== 'excluir',
           ...(cambio ? { cambio: cambio.orig.c + ' - ' + cambio.orig.n } : {}), ...(reemp ? { reemp } : {}), ...(pideOrig ? { pideOrig } : {}), ...(enLugar.length && extra ? { enLugar: enLugar.join(', ') } : {}), ...(krN ? { krN } : {}) };
@@ -470,7 +469,7 @@
     if (!cfgListo) return false;
     const m = CFG.prod[f] = CFG.prod[f] || {};
     if (q == null) { if (m[c]) { delete m[c].q; if (!Object.keys(m[c]).length) delete m[c]; } }
-    else m[c] = { ...(m[c] || {}), q: Math.max(0, Math.round(q)) };
+    else { const p = prodDe(c); m[c] = { ...(m[c] || {}), q: Math.max(0, Math.round(q)), st0: p ? Math.round(stockEn(c, f) * 1000) / 1000 : 0, fecha: S.P?.corte || '' }; }   // stock de la sucursal al fijarla
     if (!Object.keys(m).length) delete CFG.prod[f];
     guardarCfg(); return true;
   };
