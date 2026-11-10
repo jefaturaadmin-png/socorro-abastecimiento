@@ -1666,10 +1666,10 @@ $('gsDlg').addEventListener('click', async e => {
 });
 $('kXls').addEventListener('click', () => {
   const o = S.P, farms = o.farmacias, filas = filasKar(), num = v => String(Math.round(v * 1000) / 1000).replace('.', ',');
-  const t = [['Código', 'Medicamento', 'Laboratorio', 'Droguería', `Sobra/falta ${S.kCob}+${S.kSeg}`, 'Total requieren sucursales', ...farms.flatMap(f => [nomSuc(f), 'Requiere ' + nomSuc(f), 'Se atenderá ' + nomSuc(f)]), 'Sucursales', 'Total', `Necesita ${S.kCob} + ${S.kSeg} d`, 'Comprar', 'Comprar S/', 'Comunicado general', 'Comentarios de las sucursales', 'Movimiento', 'Atención bloqueada'],
+  const t = [['Código', 'Medicamento', 'Laboratorio', 'Droguería', `Sobra/falta ${S.kCob}+${S.kSeg}`, 'Total requieren sucursales', ...farms.flatMap(f => [nomSuc(f), 'Requiere ' + nomSuc(f), 'Se atenderá ' + nomSuc(f)]), 'Sucursales', 'Total', `Necesita ${S.kCob} + ${S.kSeg} d`, 'Comprar', 'Comprar S/', 'Comunicado general', 'Comentarios de las sucursales', 'Movimiento', 'Atención bloqueada', 'Línea', 'Familia', 'Genérico', 'Reemplazo'],
     ...filas.map(r => { const x = compraKar(r.p), rq = reqKar(r.p, r.sf), g = window.GEST?.get(r.p.c);
       const coms = farms.map(f => { const s = window.respAtencion?.(f, r.p.c); return s ? nomSuc(f) + ': ' + s.txt + (s.por ? ' (' + s.por + ')' : '') : ''; }).filter(Boolean).join(' | ');
-      return [r.p.c, r.p.n, labDe(r.p.c), num(r.drog), num(r.drog - rq.tot), rq.tot, ...r.sf.flatMap((v, i) => [num(v), window.BLOQ?.has(farms[i] + '__' + r.p.c) ? 'bloqueado' : rq.req[i] ?? '', rq.ate[i] ?? '']), num(r.tot - r.drog), num(r.tot), num(x.nec), x.bloq ? 'bloqueado' : x.cmp, num(x.cmp * (r.p.k || 0)), g ? 'Gestionado por droguería' + (g.nota ? ': ' + g.nota : '') : '', coms, (MOV_TXT[movDe(r.p)] || '').replace(/^\S+ /, ''), bloqAten(r.p.c) ? 'sí' + (window.BLOQ_ATEN.get(r.p.c).motivo ? ': ' + window.BLOQ_ATEN.get(r.p.c).motivo : '') : '']; })];
+      return [r.p.c, r.p.n, labDe(r.p.c), num(r.drog), num(r.drog - rq.tot), rq.tot, ...r.sf.flatMap((v, i) => [num(v), window.BLOQ?.has(farms[i] + '__' + r.p.c) ? 'bloqueado' : rq.req[i] ?? '', rq.ate[i] ?? '']), num(r.tot - r.drog), num(r.tot), num(x.nec), x.bloq ? 'bloqueado' : x.cmp, num(x.cmp * (r.p.k || 0)), g ? 'Gestionado por droguería' + (g.nota ? ': ' + g.nota : '') : '', coms, (MOV_TXT[movDe(r.p)] || '').replace(/^\S+ /, ''), bloqAten(r.p.c) ? 'sí' + (window.BLOQ_ATEN.get(r.p.c).motivo ? ': ' + window.BLOQ_ATEN.get(r.p.c).motivo : '') : '', clas(r.p).t, clas(r.p).f, clas(r.p).g, window.REEMP?.has(r.p.c) ? 'Reemplazado por ' + window.REEMP.get(r.p.c).nuevo : window.REEMP_NUEVO?.has(r.p.c) ? 'Reemplaza a ' + window.REEMP_NUEVO.get(r.p.c).join(', ') : '']; })];
   const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' }));
   a.download = `stock_${o.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
@@ -1922,9 +1922,16 @@ S.xVer = 'mov';
 $('xXls').addEventListener('click', () => {
   const o = S.P, drog = S.xModo === 'drog', num = v => String(Math.round((+v || 0) * 1000) / 1000).replace('.', ',');
   const H = S.xCob + S.xSeg, f = S.xFarm, iF = o.farmacias.indexOf(f), ate = p => { if (drog || iF < 0) return ''; const rq = reqRed(p, H, o.farmacias.map(x => stDe(p, x))); return rq.listo ? rq.ate[iF] : ''; };
-  const t = [['Código', 'Medicamento', 'Laboratorio', 'Tipo', 'Stock actual', 'Modelo', 'Venta diaria', `Necesita ${S.xCob} + ${S.xSeg} d`, drog ? 'Comprar' : 'Pedir', ...(drog ? [] : ['Se atenderá', 'Fraccionero', 'Va a sobrar (+) / faltar (−) (fracciones)']), 'Costo S/', (drog ? 'Comprar' : 'Pedir') + ' S/', 'Nota', 'Comentario de la sucursal'],
+  // comentarios que se ven junto al nombre (comunicado, reemplazo, atención bloqueada, PAP, estacional) y la clasificación
+  const txtKR = c => window.REEMP?.has(c) ? 'Reemplazado por ' + window.REEMP.get(c).nuevo : window.REEMP_NUEVO?.has(c) ? 'Reemplaza a ' + window.REEMP_NUEVO.get(c).join(', ') : '';
+  const txtGest = c => { const g = window.GEST?.get(c); return g ? 'Gestionado por droguería' + (g.nota ? ': ' + g.nota : '') : ''; };
+  const txtBAt = c => { const g = window.BLOQ_ATEN?.get(c); return g ? 'Atención bloqueada' + (g.motivo ? ': ' + g.motivo : '') : ''; };
+  const txtOtras = p => [p.pap ? 'PAP' : '', p.est ? 'Estacional (venta por temporadas)' : ''].filter(Boolean).join(' · ');
+  const extra = ['Línea', 'Familia', 'Genérico', 'Comunicado de droguería', 'Reemplazo', 'Atención bloqueada', 'Otras etiquetas'];
+  const datosExtra = p => { const x = clas(p); return [x.t, x.f, x.g, txtGest(p.c), txtKR(p.c), txtBAt(p.c), txtOtras(p)]; };
+  const t = [['Código', 'Medicamento', 'Laboratorio', 'Tipo', 'Stock actual', 'Modelo', 'Venta diaria', `Necesita ${S.xCob} + ${S.xSeg} d`, drog ? 'Comprar' : 'Pedir', ...(drog ? [] : ['Se atenderá', 'Fraccionero', 'Va a sobrar (+) / faltar (−) (fracciones)']), 'Costo S/', (drog ? 'Comprar' : 'Pedir') + ' S/', 'Nota', 'Comentario de la sucursal', ...extra],
     ...filasStk().map(r => { const a = ate(r.p), fr = +r.p.fr > 1 ? +r.p.fr : 1;
-      return [r.c, r.n, labDe(r.c), r.cat, num(r.st), r.met, num(r.vd), num(r.nec), r.cmp, ...(drog ? [] : [a, fr, a ? num((r.st + a - r.nec) * fr) : '']), num(r.p.k), num(r.cmp * (r.p.k || 0)), r.nota, r.resp ? r.resp.txt + (r.resp.por ? ' · ' + r.resp.por : '') : '']; })];
+      return [r.c, r.n, labDe(r.c), r.cat, num(r.st), r.met, num(r.vd), num(r.nec), r.cmp, ...(drog ? [] : [a, fr, a ? num((r.st + a - r.nec) * fr) : '']), num(r.p.k), num(r.cmp * (r.p.k || 0)), r.nota, r.resp ? r.resp.txt + (r.resp.por ? ' · ' + r.resp.por : '') : '', ...datosExtra(r.p)]; })];
   const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' }));
   a.download = `${drog ? 'drogueria' : 'sucursal_' + nomSuc(S.xFarm)}_${o.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
