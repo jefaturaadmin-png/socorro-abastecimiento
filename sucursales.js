@@ -147,18 +147,20 @@
         const d = Math.max(dv.d, dOrig) + extra + (viejos.length && !(dv.d > 0) ? dV : 0);
         const bloq = bloqueado(p.c, f) || !!window.BLOQ_ATEN?.has(p.c), nec = d * (H ?? (o.C + o.Sg)), seg = d * o.Sg, cob = d > 0 ? st / d : Infinity;
         let pide = 0, nota = '';
+        // redondeo (,75 abajo / ,76 arriba) pero si la sucursal está en CERO y sí se mueve, se le atiende al menos 1
+        const sinStock = st <= 1e-9, ped = x => { const q = Math.max(0, redPed(x)); return !q && sinStock && x > 1e-9 ? 1 : q; };
         if (usa) return { p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide: 0, nota: 'usa en su cambio ' + usa, bloq, exceso: 0, o, aj, urgente: false, usa };
         if (bloq) nota = 'bloqueado';
-        else if (cambio) { pide = d > 0 ? Math.max(0, redPed(nec - st)) : 0; nota = 'en cambio de ' + cambio.orig.c; }
+        else if (cambio) { pide = d > 0 ? ped(nec - st) : 0; nota = 'en cambio de ' + cambio.orig.c; }
         else if (o.modo === 'excluir') nota = 'no atender (ajuste)';
-        else if (o.modo === 'forzar') pide = d > 0 ? Math.max(0, redPed(nec - st)) : 0;
-        else if (o.tipos === 'todos' ? d > 0 : c === 'A') pide = Math.max(0, redPed(nec - st));
-        else if (o.tipos !== 'todos' && c === 'B') pide = d > 0 && redPed(nec - st) >= 1 ? 1 : 0;   // B: 1 caja si lo que le falta (redondeado) llega a 1   // B: 1 caja solo si su stock no cubre los días elegidos
+        else if (o.modo === 'forzar') pide = d > 0 ? ped(nec - st) : 0;
+        else if (o.tipos === 'todos' ? d > 0 : c === 'A') pide = ped(nec - st);
+        else if (o.tipos !== 'todos' && c === 'B') pide = d > 0 && ped(nec - st) >= 1 ? 1 : 0;   // B: 1 caja si lo que le falta (redondeado) llega a 1, o si está en cero
         else if (d > 0) nota = c === 'C' ? 'a pedido' : c === 'D' ? 'solo con pedido' : '';
-        if (!bloq && extra > 0) { pide = Math.max(pide, redPed(nec - st)); nota = 'en lugar de ' + enLugar.join(', ') + ' (droguería)'; }
+        if (!bloq && extra > 0) { pide = Math.max(pide, ped(nec - st)); nota = 'en lugar de ' + enLugar.join(', ') + ' (droguería)'; }
         // lo que necesita menos su stock, menos lo que le queda del anterior y lo que se le envía del anterior
         const krN = viejos.length && !bloq ? viejos.map(q => q.c + ' - ' + q.n).join(', ') : '';
-        if (krN && o.modo !== 'excluir') { pide = d > 0 ? Math.max(0, redPed(nec - st - stV - envV)) : 0; nota = 'reemplaza a ' + viejos.map(q => q.c).join(', ') + ' (kardex)' + (stV + envV ? ` · ya tiene/recibe ${Math.round((stV + envV) * 10) / 10} del anterior` : ''); }
+        if (krN && o.modo !== 'excluir') { pide = d > 0 ? (stV + envV > 1e-9 ? Math.max(0, redPed(nec - st - stV - envV)) : ped(nec - st)) : 0; nota = 'reemplaza a ' + viejos.map(q => q.c).join(', ') + ' (kardex)' + (stV + envV ? ` · ya tiene/recibe ${Math.round((stV + envV) * 10) / 10} del anterior` : ''); }
         // el original sin stock en droguería y con reemplazo: no se pide (se atiende el reemplazo)
         const rd = reempDe.get(p.c); let reemp = '', pideOrig = 0;
         if (rd && pide > 0 && !cambio && !(+(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) > 0)) { pideOrig = pide; pide = 0; reemp = rd.c + ' - ' + rd.n; nota = 'droguería lo reemplaza por ' + rd.c; }
