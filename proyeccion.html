@@ -1831,7 +1831,7 @@ function filasStk() {
       // por qué se le atiende con la venta de OTRO producto (o por qué no): se muestra junto al nombre
       motivo = r?.enLugar ? `🔄 Se atiende en lugar de ${r.enLugar} (droguería, en Faltantes): usa la venta de ese producto`
         : r?.cambio ? `🔄 La sucursal lo usa en cambio de ${r.cambio}: usa la venta de ese producto`
-        : r?.krN ? `🔁 Reemplaza a ${r.krN}` : /esporádico|cantidad fija/.test(r?.nota || '') ? r.nota : '';
+        : r?.krN ? `🔁 Reemplaza a ${r.krN}` : /tipo [CD]: se vendió|a pedido \(tipo|cantidad fija/.test(r?.nota || '') ? r.nota : '';
     }
     if (bq && !drog) continue;   // en el módulo de cada sucursal no aparecen los bloqueados (en ella, en droguería o en todas)
     if (bq) { cmp = 0; nota = 'bloqueado'; }
@@ -2248,6 +2248,15 @@ const ventaDias = (p, f, n) => {
   for (const [i, q] of (p.dv?.[f] || [])) if (i >= desde) t += q;
   return Math.max(0, t) + (n - reales) * diariaHist(p, f);
 };
+// ¿se vendió en la sucursal en los últimos n días? Con lo vendido día por día del kardex; si n pasa de los días que trae
+// el kardex, también mira los meses anteriores de su historial mensual
+window.vendioEn = (p, f, n) => {
+  const o = S.P, reales = diasReales(n);
+  if (reales && o.dias) { const desde = o.dias.n - n; for (const [i, q] of (p.dv?.[f] || [])) if (i >= desde && q > 0) return true; }
+  if (n <= reales) return false;
+  const m = Math.ceil((n - reales) / 30), h = S.P.hfm && p.hf?.[f] ? p.hf[f] : [];
+  return h.slice(-m).some(v => v > 1e-9);
+};
 function plan2(p, f) {
   const n = +S.base, st = p.st?.[f] || 0, c = p.catF?.[f] || 'E', bloq = bloqueado(p.c, f) || bloqAten(p.c);
   let v = ventaDias(p, f, n), aprox = false;
@@ -2590,7 +2599,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611101900"></script>
+<script src="sucursales.js?v=202611102100"></script>
 <script src="estadistica.js?v=202611101700"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611062200"></script>
