@@ -677,6 +677,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
           <label class="field"><span>Laboratorio</span><select class="sLab"><option value="">Todos</option></select></label>
           <label class="field"><span>Mostrar</span><select id="xVer"><option value="mov">Con stock o con venta</option><option value="cmp">Solo lo que hay que comprar / pedir</option><option value="nuevo">🆕 Nuevos: sin ninguna venta</option><option value="reciente">🌱 Movimiento reciente: empezó a venderse en los últimos 3 meses</option><option value="parado">⏸ Sin movimiento en 6 meses (antes sí vendía)</option><option value="">Todos</option></select></label>
           <label class="field"><span>Tipo</span><select id="xTipo"><option value="">Todos</option><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option></select></label>
+          <label class="field" id="xFteF"><span>Venta diaria según</span><select id="xFte" title="De dónde sale la venta diaria de esta sucursal: el motor (pronóstico de Estadística Proyx) o lo que vendió en sus últimos días. Es su criterio: también lo usa Atención a sucursales."><option value="motor">Motor (Estadística Proyx)</option><option value="15">Ventas de los últimos 15 días</option><option value="30">Ventas de los últimos 30 días</option><option value="45">Ventas de los últimos 45 días</option><option value="60">Ventas de los últimos 60 días</option><option value="90">Ventas de los últimos 90 días</option></select></label>
           <label class="field"><span>Días de stock</span><input id="xCob" type="number" min="0" max="180" value="30" style="width:70px"></label>
           <label class="field"><span>Días de seguridad</span><input id="xSeg" type="number" min="0" max="180" value="15" style="width:70px"></label>
           <button type="button" class="btn sm" id="xXls">⬇ Descargar Excel</button>
@@ -1885,7 +1886,10 @@ function pintarStk() {
   // los días de stock y de seguridad son los del criterio que guarda Abastecimiento (la sucursal solo los ve, no los cambia)
   const soloVer = !esAdminP(), cv = window.criterioVer?.() || '';
   if (S.xModo === 'sucx' && S.xFarm && cv && (S.xDiasDe !== S.xFarm + cv || soloVer)) { const cr = window.criterioSuc?.(S.xFarm) || {}; if (cr.C != null) { S.xCob = cr.C; S.xSeg = cr.Sg; $('xCob').value = S.xCob; $('xSeg').value = S.xSeg; } S.xDiasDe = S.xFarm + cv; }
-  $('xCob').disabled = $('xSeg').disabled = S.xModo === 'sucx' && soloVer;
+  // de dónde toma la venta diaria esta sucursal (su criterio): motor o sus ventas de los últimos N días
+  $('xFteF').hidden = S.xModo !== 'sucx';
+  if (S.xModo === 'sucx' && S.xFarm && cv) { const fte = String(window.criterioSuc?.(S.xFarm)?.fte || 'motor'); if (![...$('xFte').options].some(x => x.value === fte)) $('xFte').add(new Option(`Ventas de los últimos ${fte} días`, fte)); $('xFte').value = fte; }
+  $('xCob').disabled = $('xSeg').disabled = $('xFte').disabled = S.xModo === 'sucx' && soloVer;
   $('xCob').title = $('xSeg').title = $('xCob').disabled ? 'Lo define Abastecimiento' : '';
   const o = S.P, drog = S.xModo === 'drog', mets = o.metodos, conv = (p, v) => soles() ? v * p.k : v;
   // la sucursal es la del módulo elegido en el menú de la página principal
@@ -1900,9 +1904,9 @@ function pintarStk() {
   const f = drog ? 'DROGUERIA FS' : S.xFarm, H = S.xCob + S.xSeg, filas = filasStk(), fxk = 'stk-' + f, vis = window.fxActivo?.(fxk) ? filas : filas.slice(0, S.xMostrar);
   const prio = drog ? -1 : prioridadSucs().findIndex(([x]) => x === f);
   $('xTit').textContent = drog ? 'Droguería' : nomSuc(f) + (prio >= 0 ? ` · prioridad ${prio + 1} de ${prioridadSucs().length}` : '');
-  $('xEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · necesita para ${S.xCob} + ${S.xSeg} días · ${drog ? 'Comprar = necesita de la red − stock de droguería' : 'igual que Atención a sucursales (motor de Estadística Proyx con la venta de la sucursal); con los días de su criterio, Pedir = lo que se le envía'}`;
+  $('xEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · necesita para ${S.xCob} + ${S.xSeg} días · ${drog ? 'Comprar = necesita de la red − stock de droguería' : `venta diaria: ${$('xFte').value === 'motor' ? 'motor de Estadística Proyx' : 'sus ventas de los últimos ' + $('xFte').value + ' días'} · igual que Atención a sucursales; con su criterio, Pedir = lo que se le envía`}`;
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th>Tipo</th><th>Stock actual</th>${false ? mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="Error del método (WAPE). Clic para usarlo.">${esc(corto(m))}</th>`).join('') : ''}
-    <th class="sep" title="Venta por día según el motor de Estadística Proyx">Venta diaria</th><th class="sep">Necesita ${S.xCob} + ${S.xSeg} d</th><th>${drog ? 'Comprar' : 'Pedir'}</th>${drog ? '' : `<th class="sep ate" title="Igual que «Se atenderá» del Kardex con estos días: si droguería alcanza, lo que se pide; si falta, en proporción a lo que pide cada sucursal">Se atenderá</th><th title="Fracciones (unidades) que trae cada entero">Fraccionero</th><th title="Lo que le queda después de cubrir lo que necesita: stock + se atenderá − necesita, en enteros y fracciones. En rojo: lo que le va a faltar">Va a sobrar / faltar</th><th class="rs-th">Comentario</th>`}</tr></thead><tbody>`;
+    <th class="sep" title="Venta por día según ${!drog && $('xFte').value !== 'motor' ? 'las ventas de la sucursal en los últimos ' + $('xFte').value + ' días' : 'el motor de Estadística Proyx'}">Venta diaria${!drog && $('xFte').value !== 'motor' ? ` (${$('xFte').value} d)` : ''}</th><th class="sep">Necesita ${S.xCob} + ${S.xSeg} d</th><th>${drog ? 'Comprar' : 'Pedir'}</th>${drog ? '' : `<th class="sep ate" title="Igual que «Se atenderá» del Kardex con estos días: si droguería alcanza, lo que se pide; si falta, en proporción a lo que pide cada sucursal">Se atenderá</th><th title="Fracciones (unidades) que trae cada entero">Fraccionero</th><th title="Lo que le queda después de cubrir lo que necesita: stock + se atenderá − necesita, en enteros y fracciones. En rojo: lo que le va a faltar">Va a sobrar / faltar</th><th class="rs-th">Comentario</th>`}</tr></thead><tbody>`;
   // «se atenderá» de esta sucursal (el reparto del Kardex) y lo que le va a sobrar
   const iF = o.farmacias.indexOf(f), ateDe = p => { if (drog || iF < 0) return null; const rq = reqRed(p, H, o.farmacias.map(x => stDe(p, x))); return rq.listo ? rq.ate[iF] : null; };
   const edita = !drog && puedeComentar(f);
@@ -1935,7 +1939,8 @@ let xT = 0; $('xq').addEventListener('input', () => { clearTimeout(xT); xT = set
 $('xVer').addEventListener('change', e => { S.xVer = e.target.value; S.xMostrar = PAGINA; pintarStk(); });
 $('xTipo').addEventListener('change', e => { S.xTipo = e.target.value; S.xMostrar = PAGINA; pintarStk(); });
 // en el módulo de una sucursal, Abastecimiento cambia aquí el criterio de esa sucursal (se guarda y la sucursal lo ve al instante)
-const guardarDiasSuc = () => { if (S.xModo === 'sucx' && esAdminP() && S.xFarm) { window.guardarCriterioSuc?.(S.xFarm, S.xCob, S.xSeg); S.xDiasDe = ''; } };
+const guardarDiasSuc = () => { if (S.xModo === 'sucx' && esAdminP() && S.xFarm) { window.guardarCriterioSuc?.(S.xFarm, S.xCob, S.xSeg, $('xFte').value); S.xDiasDe = ''; } };
+$('xFte').addEventListener('change', () => { guardarDiasSuc(); pintarStk(); });
 $('xCob').addEventListener('change', e => { S.xCob = Math.max(S.xModo === 'sucx' ? 1 : 0, +e.target.value || 0); guardarDiasSuc(); pintarStk(); });
 $('xSeg').addEventListener('change', e => { S.xSeg = Math.max(0, +e.target.value || 0); guardarDiasSuc(); pintarStk(); });
 S.xVer = 'mov';
@@ -2568,7 +2573,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611101400"></script>
+<script src="sucursales.js?v=202611101500"></script>
 <script src="estadistica.js?v=202611042300"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611062200"></script>

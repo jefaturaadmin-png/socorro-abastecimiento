@@ -436,7 +436,7 @@
     }, () => { escucharCfg.ok = false; });
   }
   // desde el módulo de la sucursal (solo Abastecimiento): los días de stock y de seguridad pasan a ser el criterio de esa sucursal
-  window.guardarCriterioSuc = (f, C, Sg) => { if (!cfgListo || !f) return; CFG.suc[f] = { ...(CFG.suc[f] || {}), C: Math.max(1, +C || 1), Sg: Math.max(0, +Sg || 0) }; guardarCfg(); };
+  window.guardarCriterioSuc = (f, C, Sg, fte) => { if (!cfgListo || !f) return; CFG.suc[f] = { ...cfgSuc(f), ...(CFG.suc[f] || {}), C: Math.max(1, +C || 1), Sg: Math.max(0, +Sg || 0), ...(fte ? { fte } : {}) }; guardarCfg(); };
   // comentarios de las sucursales en vivo (Abastecimiento: todos; la sucursal: los suyos)
   function escucharResp() {
     if (escucharResp.ok || !FB || S.ejemplo) return; escucharResp.ok = true;
