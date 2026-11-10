@@ -127,7 +127,7 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .tag.gest { background: #fff1d6; color: #8a5a00; white-space: normal }
 /* el comunicado general y el reemplazo van en su propia línea bajo el nombre: así no se cortan cuando el nombre es largo */
 .tag.mov { background: #e8f1fb; color: #2b5d99 } .tag.mov.reciente { background: #e6f4e3; color: #2e7d32 } .tag.mov.parado { background: #eee; color: #666 }
-.tag.bat { background: #fde2dd; color: #a33b3b } .k-acc button.on { background: #fde2dd; border-color: #f0b3a8 }
+.tag.bat { background: #fde2dd; color: #a33b3b } .tag.motivo { background: #ede7f6; color: #4a2c82 } .cells .c1 .tag.motivo { display: block; width: fit-content; max-width: 300px; white-space: normal; margin: 3px 0 2px; line-height: 1.3 } .k-acc button.on { background: #fde2dd; border-color: #f0b3a8 }
 .cells .c1 .tag.bat, .cells .c1 .tag.mov, .cells .c1 .tag.gest, .cells .c1 .tag.kr { display: block; width: fit-content; max-width: 260px; margin: 3px 0 2px; white-space: normal; line-height: 1.3 } .k-acc { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle }
 /* el nombre largo se corta con «…» pero los botones 🔁 📢 siempre se ven */
 .k-fila { display: flex; align-items: center; max-width: 100% } .k-fila .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap } .k-fila .k-acc { flex: none }
@@ -1813,7 +1813,7 @@ function filasStk() {
     if (S.lab && labDe(p.c) !== S.lab) continue; if (!pasaClas(p)) continue;
     const cat = drog ? p.cat : (p.catF?.[f] || 'E'); if (S.xTipo && cat !== S.xTipo) continue;
     const st = stDe(p, f);
-    let nec, cmp, nota = '', vd = 0, met = '';
+    let nec, cmp, nota = '', vd = 0, met = '', motivo = '';
     const bq = drog ? (window.BLOQ?.has('TODAS__' + p.c) || window.BLOQ?.has('DROGUERIA FS__' + p.c)) : bloqueado(p.c, f) || bloqAten(p.c);
     if (drog) {
       // lo que necesita la red; el reemplazado no se compra y al nuevo se le descuenta lo que queda del anterior en droguería
@@ -1828,13 +1828,17 @@ function filasStk() {
       nec = r ? r.d * H : 0; vd = r ? r.d : 0; met = r?.metodo || metodoEst(p);
       cmp = !r ? 0 : H === (cr.C + cr.Sg) ? r.pide : (window.requiereSuc?.(p.c, f, H) ?? 0);
       if (r?.krV) nota = 'se termina (reemplazado)';
+      // por qué se le atiende con la venta de OTRO producto (o por qué no): se muestra junto al nombre
+      motivo = r?.enLugar ? `🔄 Se atiende en lugar de ${r.enLugar} (droguería, en Faltantes): usa la venta de ese producto`
+        : r?.cambio ? `🔄 La sucursal lo usa en cambio de ${r.cambio}: usa la venta de ese producto`
+        : r?.krN ? `🔁 Reemplaza a ${r.krN}` : /esporádico|cantidad fija/.test(r?.nota || '') ? r.nota : '';
     }
     if (bq && !drog) continue;   // en el módulo de cada sucursal no aparecen los bloqueados (en ella, en droguería o en todas)
     if (bq) { cmp = 0; nota = 'bloqueado'; }
     if (S.xVer === 'mov' && !st && nec < 0.05) continue; if (S.xVer === 'cmp' && !cmp) continue;
     if (['nuevo', 'reciente', 'parado'].includes(S.xVer) && movDe(p) !== S.xVer) continue;   // mismo criterio que el Kardex (venta de toda la red)
     const resp = drog ? null : window.respAtencion?.(f, p.c);
-    filas.push({ p, c: p.c, n: p.n, cat, st, nec, cmp, nota, vd, met, resp });
+    filas.push({ p, c: p.c, n: p.n, cat, st, nec, cmp, nota, vd, met, resp, motivo });
   }
   return filtroTexto(filas, $('xq').value).sort((a, b) => b.nec * (soles() ? b.p.k : 1) - a.nec * (soles() ? a.p.k : 1) || b.st - a.st);
 }
@@ -1927,7 +1931,7 @@ function pintarStk() {
   const edita = !drog && puedeComentar(f);
   for (const r of vis) {
     const p = r.p, k = S.calc.get(p.c), sel = elegido(p.c);
-    h += `<tr data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${etiquetas(p)}${r.met ? `<span class="tag met" title="Modelo del motor de Estadística Proyx">${esc(r.met)}</span>` : ''}<small class="sub">${esc(labDe(p.c))}</small></td>
+    h += `<tr data-cod="${esc(p.c)}"><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a>${etiquetas(p)}${r.motivo ? `<span class="tag motivo" title="${esc(r.motivo)}">${esc(r.motivo)}</span>` : ''}${r.met ? `<span class="tag met" title="Modelo del motor de Estadística Proyx">${esc(r.met)}</span>` : ''}<small class="sub">${esc(labDe(p.c))}</small></td>
       <td style="text-align:center">${catBadge(r.cat)}</td><td class="n big">${r.st ? fmtS(p, conv(p, r.st)) : '<span class="z">0</span>'}</td>
       ${true ? '' : mets.map((m, i) => { const x = k?.met[m]; const cls = ['w', i === 0 ? 'sep' : '']; if (!x || x.wape == null) return `<td class="${cls.join(' ')} na">–</td>`;
         if (m === k.best) cls.push('best'); if (m === sel) cls.push('sel'); return `<td class="${cls.join(' ')}" data-m="${esc(m)}" title="Usar ${esc(m)}">${pct(x.wape)}</td>`; }).join('')}
@@ -1967,11 +1971,11 @@ $('xXls').addEventListener('click', () => {
   const txtGest = c => { const g = window.GEST?.get(c); return g ? 'Gestionado por droguería' + (g.nota ? ': ' + g.nota : '') : ''; };
   const txtBAt = c => { const g = window.BLOQ_ATEN?.get(c); return g ? 'Atención bloqueada' + (g.motivo ? ': ' + g.motivo : '') : ''; };
   const txtOtras = p => [p.pap ? 'PAP' : '', p.est ? 'Estacional (venta por temporadas)' : ''].filter(Boolean).join(' · ');
-  const extra = ['Línea', 'Familia', 'Genérico', 'Comunicado de droguería', 'Reemplazo', 'Atención bloqueada', 'Movimiento', 'Otras etiquetas'];
+  const extra = ['Motivo de la atención', 'Línea', 'Familia', 'Genérico', 'Comunicado de droguería', 'Reemplazo', 'Atención bloqueada', 'Movimiento', 'Otras etiquetas'];
   const datosExtra = p => { const x = clas(p); return [x.t, x.f, x.g, txtGest(p.c), txtKR(p.c), txtBAt(p.c), (MOV_TXT[movDe(p)] || '').replace(/^\S+ /, ''), txtOtras(p)]; };
   const t = [['Código', 'Medicamento', 'Laboratorio', 'Tipo', 'Stock actual', 'Le dura (días)', 'Modelo', 'Venta diaria', `Necesita ${S.xCob} + ${S.xSeg} d`, drog ? 'Comprar' : 'Pedir', ...(drog ? [] : ['Se atenderá', 'Fraccionero', 'Va a sobrar (+) / faltar (−) (fracciones)']), 'Costo S/', (drog ? 'Comprar' : 'Pedir') + ' S/', 'Nota', 'Comentario de la sucursal', ...extra],
     ...filasStk().map(r => { const a = ate(r.p), fr = +r.p.fr > 1 ? +r.p.fr : 1;
-      return [r.c, r.n, labDe(r.c), r.cat, num(r.st), r.vd > 0 ? Math.round(r.st / r.vd * 10) / 10 : r.st > 0 ? 'sin venta' : '', r.met, num(r.vd), num(r.nec), r.cmp, ...(drog ? [] : [a, fr, a ? num((r.st + a - r.nec) * fr) : '']), num(r.p.k), num(r.cmp * (r.p.k || 0)), r.nota, r.resp ? r.resp.txt + (r.resp.por ? ' · ' + r.resp.por : '') : '', ...datosExtra(r.p)]; })];
+      return [r.c, r.n, labDe(r.c), r.cat, num(r.st), r.vd > 0 ? Math.round(r.st / r.vd * 10) / 10 : r.st > 0 ? 'sin venta' : '', r.met, num(r.vd), num(r.nec), r.cmp, ...(drog ? [] : [a, fr, a ? num((r.st + a - r.nec) * fr) : '']), num(r.p.k), num(r.cmp * (r.p.k || 0)), r.nota, r.resp ? r.resp.txt + (r.resp.por ? ' · ' + r.resp.por : '') : '', r.motivo || '', ...datosExtra(r.p)]; })];
   bajarTabla(`${drog ? 'drogueria' : 'sucursal_' + nomSuc(S.xFarm)}_${o.corte}`, t);
 });
 
