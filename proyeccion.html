@@ -181,7 +181,7 @@ body.solo-ind .wrap, body.ancho-total .wrap { max-width: none }   /* de esquina 
 #vInd .seg button { padding: 6px 12px } #iTabla td.ip { min-width: 52px } #iTabla tr.tot td { font-weight: 700; border-top: 2px solid var(--fg); background: var(--surface) }
 #iTabla th.isuc { white-space: normal; min-width: 52px; max-width: 80px; line-height: 1.2; vertical-align: bottom } .nota-ind { margin-top: 14px; font-size: 13px; color: var(--muted) }
 #kTabla td.drog, #kTabla th.drog { background: color-mix(in srgb, var(--accent) 7%, var(--surface)) }
-#kTabla th.ate, #xTabla th.ate { color: #2e8b3d; font-style: italic } #kTabla td.ate, #xTabla td.ate { color: #2e8b3d; font-weight: 700 } #xTabla td.sob { color: #3d5a99 } #xTabla td.sob.falta { color: #b4232a; font-weight: 700; background: #fde2dd }
+#kTabla th.ate, #xTabla th.ate { color: #2e8b3d; font-style: italic } #kTabla td.ate, #xTabla td.ate { color: #2e8b3d; font-weight: 700 } #xTabla td.sob { color: #3d5a99 } #xTabla td.dura.corta { color: #b4232a; font-weight: 700 } #xTabla td.sob.falta { color: #b4232a; font-weight: 700; background: #fde2dd }
 #kTabla th.req { color: #b4232a; font-style: italic } #kTabla td.req { color: #b4232a; font-weight: 700 }
 #kTabla .k-bq { font-size: 11px; color: #8a5a00; font-weight: 700 }
 #kTabla .k-ed { border: 1px solid #cfd6e4; background: #fff; border-radius: 6px; padding: 0 4px; margin-left: 4px; cursor: pointer; font-size: 11px; line-height: 1.4; color: #14306B } #kTabla .k-ed:hover { background: #eef2fa }
@@ -1552,9 +1552,7 @@ $('pMore').addEventListener('click', e => {
     t.push([p.c, p.n, labDe(p.c) || '', x.g || '', x.f || '', S.tR && p.catP ? p.catP : p.cat, p.est ? 'sí' : '', num(s.t), num(s.d), metodoEst(p),
       ...o.fm.map((m, j) => num(pronDe(p, j))), av ? num(av.v) : '', num(nec), cmp, num(p.k), num(cmp * (p.k || 0))]);
   }
-  const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' }));
-  a.download = `proyeccion_compras_${o.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  bajarTabla(`proyeccion_compras_${o.corte}`, t);
 });
 $('pTabla').addEventListener('click', e => {
   if (e.target.closest('[data-vermet]')) { S.verMet = !S.verMet; return pintarPron(); }
@@ -1563,6 +1561,24 @@ $('pTabla').addEventListener('click', e => {
 });
 $('pTabla').addEventListener('change', e => { const s = e.target.closest('select[data-sel]'); if (s) elegir(s.dataset.sel, s.value); });
 
+/* ---------- descargas en Excel de verdad (.xlsx): números como números, sin depender de si su Excel usa coma o punto ---------- */
+async function bajarTabla(nombre, t) {
+  try {
+    const X = await (bajarTabla.lib ??= import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm'));
+    // los textos con forma de número («1,5», «12») pasan a número; la 1.ª columna (código) queda como texto (conserva ceros: 01692)
+    const filas = t.map((f, i) => i === 0 ? f : f.map((v, j) => { if (j === 0) return v == null ? '' : String(v); if (typeof v !== 'string') return v ?? '';
+      const x = v.trim(); return /^-?\d+(,\d+)?$/.test(x) && !/^-?0\d/.test(x) ? +x.replace(',', '.') : v; }));
+    const ws = X.utils.aoa_to_sheet(filas);
+    ws['!cols'] = t[0].map((h, j) => ({ wch: Math.max(9, Math.min(j === 1 ? 42 : 24, Math.max(String(h).length, ...filas.slice(1, 200).map(f => String(f[j] ?? '').length)) + 2)) }));
+    ws['!autofilter'] = { ref: ws['!ref'] }; ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+    const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Datos'); X.writeFile(wb, nombre + '.xlsx');
+  } catch {
+    // sin conexión a la librería: como antes, en texto separado por punto y coma
+    const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + txt], { type: 'text/csv;charset=utf-8' }));
+    a.download = nombre + '.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+}
 /* ---------- KARDEX: stock actual de cada producto en droguería y en cada sucursal ---------- */
 S.kMostrar = PAGINA;
 // movimiento del producto en toda la red según su historial mensual de ventas
@@ -1690,9 +1706,7 @@ $('kXls').addEventListener('click', () => {
     ...filas.map(r => { const x = compraKar(r.p), rq = reqKar(r.p, r.sf), g = window.GEST?.get(r.p.c);
       const coms = farms.map(f => { const s = window.respAtencion?.(f, r.p.c); return s ? nomSuc(f) + ': ' + s.txt + (s.por ? ' (' + s.por + ')' : '') : ''; }).filter(Boolean).join(' | ');
       return [r.p.c, r.p.n, labDe(r.p.c), num(r.drog), num(r.drog - rq.tot), rq.tot, ...r.sf.flatMap((v, i) => [num(v), window.BLOQ?.has(farms[i] + '__' + r.p.c) ? 'bloqueado' : rq.req[i] ?? '', rq.ate[i] ?? '']), num(r.tot - r.drog), num(r.tot), num(x.nec), x.bloq ? 'bloqueado' : x.cmp, num(x.cmp * (r.p.k || 0)), g ? 'Gestionado por droguería' + (g.nota ? ': ' + g.nota : '') : '', coms, (MOV_TXT[movDe(r.p)] || '').replace(/^\S+ /, ''), bloqAten(r.p.c) ? 'sí' + (window.BLOQ_ATEN.get(r.p.c).motivo ? ': ' + window.BLOQ_ATEN.get(r.p.c).motivo : '') : '', clas(r.p).t, clas(r.p).f, clas(r.p).g, window.REEMP?.has(r.p.c) ? 'Reemplazado por ' + window.REEMP.get(r.p.c).nuevo : window.REEMP_NUEVO?.has(r.p.c) ? 'Reemplaza a ' + window.REEMP_NUEVO.get(r.p.c).join(', ') : '']; })];
-  const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' }));
-  a.download = `stock_${o.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  bajarTabla(`stock_${o.corte}`, t);
 });
 
 /* ---------- INDICADORES: participación de las sucursales por línea y por familia ----------
@@ -1769,9 +1783,7 @@ $('iXls').addEventListener('click', () => {
   const parte = (r, i) => S.iModo === 'linea' ? (r.t ? r.v[i] / r.t : 0) : (d.tot.v[i] ? r.v[i] / d.tot.v[i] : 0);
   const t = [[por, 'Productos', soles() ? 'Venta S/' : 'Venta enteros', 'Peso %', ...d.orden.map(i => nomSuc(d.farms[i]) + ' %'), ...d.orden.map(i => nomSuc(d.farms[i]) + (soles() ? ' S/' : ' enteros'))],
     ...[...d.filas, d.tot].map(r => [r.g, r.np, num(r.t), num(d.tot.t ? r.t / d.tot.t * 100 : 0), ...d.orden.map(i => r === d.tot ? num(S.iModo === 'linea' ? (d.tot.t ? d.tot.v[i] / d.tot.t * 100 : 0) : 100) : num(parte(r, i) * 100)), ...d.orden.map(i => num(r.v[i]))])];
-  const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + txt], { type: 'text/csv;charset=utf-8' }));
-  const [dX, hX, MX] = rangoInd(); a.download = `participacion_${S.iPor === 't' ? 'linea' : 'familia'}_${MX[dX]}_a_${MX[hX]}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  const [dX, hX, MX] = rangoInd(); bajarTabla(`participacion_${S.iPor === 't' ? 'linea' : 'familia'}_${MX[dX]}_a_${MX[hX]}`, t);
 });
 
 /* ---------- DROGUERÍA y POR SUCURSAL ----------
@@ -1906,7 +1918,7 @@ function pintarStk() {
   $('xTit').textContent = drog ? 'Droguería' : nomSuc(f) + (prio >= 0 ? ` · prioridad ${prio + 1} de ${prioridadSucs().length}` : '');
   $('xEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · necesita para ${S.xCob} + ${S.xSeg} días · ${drog ? 'Comprar = necesita de la red − stock de droguería' : `venta diaria: ${$('xFte').value === 'motor' ? 'motor de Estadística Proyx' : 'sus ventas de los últimos ' + $('xFte').value + ' días'} · igual que Atención a sucursales; con su criterio, Pedir = lo que se le envía`}`;
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th>Tipo</th><th>Stock actual</th>${false ? mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="Error del método (WAPE). Clic para usarlo.">${esc(corto(m))}</th>`).join('') : ''}
-    <th class="sep" title="Venta por día según ${!drog && $('xFte').value !== 'motor' ? 'las ventas de la sucursal en los últimos ' + $('xFte').value + ' días' : 'el motor de Estadística Proyx'}">Venta diaria${!drog && $('xFte').value !== 'motor' ? ` (${$('xFte').value} d)` : ''}</th><th class="sep">Necesita ${S.xCob} + ${S.xSeg} d</th><th>${drog ? 'Comprar' : 'Pedir'}</th>${drog ? '' : `<th class="sep ate" title="Igual que «Se atenderá» del Kardex con estos días: si droguería alcanza, lo que se pide; si falta, en proporción a lo que pide cada sucursal">Se atenderá</th><th title="Fracciones (unidades) que trae cada entero">Fraccionero</th><th title="Lo que le queda después de cubrir lo que necesita: stock + se atenderá − necesita, en enteros y fracciones. En rojo: lo que le va a faltar">Va a sobrar / faltar</th><th class="rs-th">Comentario</th>`}</tr></thead><tbody>`;
+    <th class="sep" title="Venta por día según ${!drog && $('xFte').value !== 'motor' ? 'las ventas de la sucursal en los últimos ' + $('xFte').value + ' días' : 'el motor de Estadística Proyx'}">Venta diaria${!drog && $('xFte').value !== 'motor' ? ` (${$('xFte').value} d)` : ''}</th><th title="Para cuántos días le alcanza el stock que tiene: stock actual ÷ venta diaria">Le dura</th><th class="sep">Necesita ${S.xCob} + ${S.xSeg} d</th><th>${drog ? 'Comprar' : 'Pedir'}</th>${drog ? '' : `<th class="sep ate" title="Igual que «Se atenderá» del Kardex con estos días: si droguería alcanza, lo que se pide; si falta, en proporción a lo que pide cada sucursal">Se atenderá</th><th title="Fracciones (unidades) que trae cada entero">Fraccionero</th><th title="Lo que le queda después de cubrir lo que necesita: stock + se atenderá − necesita, en enteros y fracciones. En rojo: lo que le va a faltar">Va a sobrar / faltar</th><th class="rs-th">Comentario</th>`}</tr></thead><tbody>`;
   // «se atenderá» de esta sucursal (el reparto del Kardex) y lo que le va a sobrar
   const iF = o.farmacias.indexOf(f), ateDe = p => { if (drog || iF < 0) return null; const rq = reqRed(p, H, o.farmacias.map(x => stDe(p, x))); return rq.listo ? rq.ate[iF] : null; };
   const edita = !drog && puedeComentar(f);
@@ -1916,11 +1928,11 @@ function pintarStk() {
       <td style="text-align:center">${catBadge(r.cat)}</td><td class="n big">${r.st ? fmtS(p, conv(p, r.st)) : '<span class="z">0</span>'}</td>
       ${true ? '' : mets.map((m, i) => { const x = k?.met[m]; const cls = ['w', i === 0 ? 'sep' : '']; if (!x || x.wape == null) return `<td class="${cls.join(' ')} na">–</td>`;
         if (m === k.best) cls.push('best'); if (m === sel) cls.push('sel'); return `<td class="${cls.join(' ')}" data-m="${esc(m)}" title="Usar ${esc(m)}">${pct(x.wape)}</td>`; }).join('')}
-      <td class="n sep">${r.vd ? fmtS(p, conv(p, r.vd)) : '<span class="z">0</span>'}</td>
+      <td class="n sep">${r.vd ? fmtS(p, conv(p, r.vd)) : '<span class="z">0</span>'}</td><td class="n dura${r.vd > 0 && r.st / r.vd < S.xSeg ? ' corta' : ''}">${r.vd > 0 ? nf0.format(Math.round(r.st / r.vd)) + ' d' : r.st > 0 ? '<span class="z">sin venta</span>' : '<span class="z">·</span>'}</td>
       <td class="n sep">${fmtE(p, conv(p, r.nec))}</td><td class="n comprar">${r.nota ? `<span class="z">${esc(r.nota)}</span>` : r.cmp ? fmt(conv(p, r.cmp)) : '<span class="z">·</span>'}</td>${drog ? '' : (() => { const a = ateDe(p), sv = r.st + (a || 0) - r.nec, sob = a ? sobraFr(p, sv) : '', falta = a && sob && sv < 0;
         return `<td class="n sep ate">${a == null ? '<span class="z">…</span>' : a ? fmt(conv(p, a)) : '<span class="z">0</span>'}</td><td class="n">${+p.fr > 1 ? nf0.format(p.fr) : '1'}</td><td class="n sob${falta ? ' falta' : ''}" ${falta ? 'title="No le alcanza: esto le va a faltar para cubrir los días"' : ''}>${sob ? (falta ? 'falta ' + sob.replace('−', '') : sob) : '<span class="z">·</span>'}</td>`; })()}${drog ? '' : `<td class="rs-td">${r.resp ? `<span class="tag su-resp ${esc(r.resp.estado)}" title="${esc('Comentario de ' + (r.resp.por || 'la sucursal') + (r.resp.fecha ? ' · ' + r.resp.fecha : ''))}">💬 ${esc(r.resp.txt)}${r.resp.por ? ' · ' + esc(r.resp.por) : ''}</span>` : ''}${edita ? `<button type="button" class="btn sm rs-btn" data-rs="${esc(p.c)}">${r.resp ? '✏️ Cambiar' : '💬 Comentar'}</button>` : r.resp ? '' : '<span class="z">·</span>'}</td>`}</tr>`;
   }
-  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${(S.verMet ? mets.length : 0) + (drog ? 6 : 10)}">Nada que mostrar con estos filtros.</td></tr>`;
+  if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${(S.verMet ? mets.length : 0) + (drog ? 7 : 11)}">Nada que mostrar con estos filtros.</td></tr>`;
   $('xTabla').innerHTML = h + '</tbody>'; ajustarC0($('xTabla'));
   window.fxAplicar?.($('xTabla'), fxk, [], (v, t) => { if (v < t) $('xMore').querySelector('span')?.insertAdjacentHTML('afterbegin', `<b>${nf0.format(v)} con el filtro</b> · `); });
   let tc = 0, ts = 0; for (const r of filas) { tc += r.cmp; ts += r.cmp * (r.p.k || 0); }
@@ -1954,12 +1966,10 @@ $('xXls').addEventListener('click', () => {
   const txtOtras = p => [p.pap ? 'PAP' : '', p.est ? 'Estacional (venta por temporadas)' : ''].filter(Boolean).join(' · ');
   const extra = ['Línea', 'Familia', 'Genérico', 'Comunicado de droguería', 'Reemplazo', 'Atención bloqueada', 'Movimiento', 'Otras etiquetas'];
   const datosExtra = p => { const x = clas(p); return [x.t, x.f, x.g, txtGest(p.c), txtKR(p.c), txtBAt(p.c), (MOV_TXT[movDe(p)] || '').replace(/^\S+ /, ''), txtOtras(p)]; };
-  const t = [['Código', 'Medicamento', 'Laboratorio', 'Tipo', 'Stock actual', 'Modelo', 'Venta diaria', `Necesita ${S.xCob} + ${S.xSeg} d`, drog ? 'Comprar' : 'Pedir', ...(drog ? [] : ['Se atenderá', 'Fraccionero', 'Va a sobrar (+) / faltar (−) (fracciones)']), 'Costo S/', (drog ? 'Comprar' : 'Pedir') + ' S/', 'Nota', 'Comentario de la sucursal', ...extra],
+  const t = [['Código', 'Medicamento', 'Laboratorio', 'Tipo', 'Stock actual', 'Le dura (días)', 'Modelo', 'Venta diaria', `Necesita ${S.xCob} + ${S.xSeg} d`, drog ? 'Comprar' : 'Pedir', ...(drog ? [] : ['Se atenderá', 'Fraccionero', 'Va a sobrar (+) / faltar (−) (fracciones)']), 'Costo S/', (drog ? 'Comprar' : 'Pedir') + ' S/', 'Nota', 'Comentario de la sucursal', ...extra],
     ...filasStk().map(r => { const a = ate(r.p), fr = +r.p.fr > 1 ? +r.p.fr : 1;
-      return [r.c, r.n, labDe(r.c), r.cat, num(r.st), r.met, num(r.vd), num(r.nec), r.cmp, ...(drog ? [] : [a, fr, a ? num((r.st + a - r.nec) * fr) : '']), num(r.p.k), num(r.cmp * (r.p.k || 0)), r.nota, r.resp ? r.resp.txt + (r.resp.por ? ' · ' + r.resp.por : '') : '', ...datosExtra(r.p)]; })];
-  const txt = t.map(f => f.map(v => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + txt], { type: 'text/csv;charset=utf-8' }));
-  a.download = `${drog ? 'drogueria' : 'sucursal_' + nomSuc(S.xFarm)}_${o.corte}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      return [r.c, r.n, labDe(r.c), r.cat, num(r.st), r.vd > 0 ? Math.round(r.st / r.vd * 10) / 10 : r.st > 0 ? 'sin venta' : '', r.met, num(r.vd), num(r.nec), r.cmp, ...(drog ? [] : [a, fr, a ? num((r.st + a - r.nec) * fr) : '']), num(r.p.k), num(r.cmp * (r.p.k || 0)), r.nota, r.resp ? r.resp.txt + (r.resp.por ? ' · ' + r.resp.por : '') : '', ...datosExtra(r.p)]; })];
+  bajarTabla(`${drog ? 'drogueria' : 'sucursal_' + nomSuc(S.xFarm)}_${o.corte}`, t);
 });
 
 /* ---------- REEMPLAZOS (desde el kardex) ---------- */
