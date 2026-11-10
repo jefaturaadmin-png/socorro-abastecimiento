@@ -886,6 +886,9 @@ const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov'
 const MESESL = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const nf1 = new Intl.NumberFormat('es-PE', { maximumFractionDigits: 1 });
 const nf0 = new Intl.NumberFormat('es-PE', { maximumFractionDigits: 0 });
+// Redondeo de lo que se pide, se atiende y se compra (en todos los módulos): hasta ,75 hacia abajo; desde ,76 hacia arriba.
+// 3,2 → 3 · 3,75 → 3 · 3,76 → 4 · 0,5 → 0
+function redPed(x) { if (!(x > 0)) return 0; const e = Math.floor(x + 1e-9); return x - e > 0.75 + 1e-9 ? e + 1 : e; }
 const PAGINA = 100;
 const CORTO = { 'Media 3 meses': 'Media 3m', 'Media 6 meses': 'Media 6m', 'Media 3m × estac.': 'Media×estac.',
   'SES': 'SES', 'Holt amortiguado': 'Holt', 'SARIMA AR estacional': 'SARIMA AR', 'SARIMA aerolínea': 'SARIMA aero' };
@@ -1503,7 +1506,7 @@ function compraKR(p, H) {
     if (!conHistorial(p)) nec = Math.max(nec, viejos.reduce((a, q) => a + necesidad(q, H), 0));
     resta = viejos.reduce((a, q) => a + stockTotal(q).t, 0);
   }
-  return { nec, cmp: Math.max(0, Math.ceil(nec - stockTotal(p).t - resta - 1e-9)) };
+  return { nec, cmp: Math.max(0, redPed(nec - stockTotal(p).t - resta)) };
 }
 function pintarPron() {
   const o = S.P, mets = o.metodos, conv = (p, v) => soles() ? v * p.k : v;
@@ -1816,7 +1819,7 @@ function filasStk() {
       // lo que necesita la red; el reemplazado no se compra y al nuevo se le descuenta lo que queda del anterior en droguería
       nec = compraKR(p, H).nec;
       const viejos = (window.REEMP_NUEVO?.get(p.c) || []).map(c => S.idx.get(c)).filter(Boolean);
-      cmp = R.has(p.c) ? 0 : Math.max(0, Math.ceil(nec - st - viejos.reduce((a, q) => a + stDe(q, f), 0) - 1e-9));
+      cmp = R.has(p.c) ? 0 : redPed(nec - st - viejos.reduce((a, q) => a + stDe(q, f), 0));
       vd = H ? nec / H : 0; met = metodoEst(p);
     } else {
       // igual que Atención a sucursales: venta diaria del motor con la historia de esa sucursal, su criterio, cambios,
@@ -2201,7 +2204,7 @@ function plan(p, f, obj) {
   }
   const disp = Math.max(0, stock - consumo), pron = pr(obj);
   const bloq = bloqueado(p.c, f) || bloqAten(p.c);
-  const entrega = bloq ? 0 : Math.max(0, Math.ceil(pron * (S.cob + S.seg) / diasMes(obj) - disp - 1e-9));
+  const entrega = bloq ? 0 : Math.max(0, redPed(pron * (S.cob + S.seg) / diasMes(obj) - disp));
   return { pron, stock, disp, entrega, bloq };
 }
 $('rFarm').addEventListener('change', e => { S.farm = e.target.value; S.rMostrar = PAGINA; pintarRep(); });
@@ -2248,7 +2251,7 @@ function plan2(p, f) {
   const diaria = v / n, nec = diaria * (S.cob + S.seg);
   let ent = 0, nota = '';
   if (bloq) nota = '';
-  else if (c === 'A') ent = Math.max(0, Math.ceil(nec - st - 1e-9));
+  else if (c === 'A') ent = Math.max(0, redPed(nec - st));
   else if (c === 'B') ent = st < nec || st <= 0 ? 1 : 0;   // B: 1 caja solo si su stock no cubre días + seguridad
   else nota = c === 'C' ? 'a pedido' : c === 'D' ? 'solo con pedido' : (st > 0 ? 'liquidar' : 'sin mov.');
   return { v, diaria, nec, st, ent, nota, c, bloq, aprox };
@@ -2288,7 +2291,7 @@ function pintarRep() {
       const general = bloqueado(p.c, 'TODAS'), sd = p.sd || 0;
       const nota = ['C', 'D', 'E'].includes(p.cat) ? (p.cat === 'C' ? 'a pedido' : p.cat === 'D' ? 'solo con pedido' : (st + sd > 0 ? 'liquidar' : 'sin mov.')) : '';
       r = { v, diaria: v / n, nec, st, sd, ent, nb, general, nota, aprox, cat: p.cat,
-        final: general || nota ? 0 : Math.max(0, Math.ceil(ent - sd - 1e-9)), h: p.h.slice(-6) };
+        final: general || nota ? 0 : Math.max(0, redPed(ent - sd)), h: p.h.slice(-6) };
     }
     r.p = p; lista.push(r);
   }
@@ -2352,7 +2355,7 @@ function pintarRepMes() {
       for (const f of o.farmacias) { const x = plan(p, f, obj); pron += x.pron; stock += x.stock; ent += x.entrega; if (x.bloq) nb++; }
       if (!pron && !stock && !busca) continue;
       const general = bloqueado(p.c, 'TODAS');
-      r = { pron, stock, entrega: ent, sd: p.sd || 0, final: general ? 0 : Math.max(0, Math.ceil(ent - (p.sd || 0))), h: p.h.slice(-6), nb, general };
+      r = { pron, stock, entrega: ent, sd: p.sd || 0, final: general ? 0 : Math.max(0, redPed(ent - (p.sd || 0))), h: p.h.slice(-6), nb, general };
     }
     r.p = p; lista.push(r);
   }
@@ -2402,7 +2405,7 @@ function calcPedidos() {
       const v = vd ?? pronDe(p, 0) * (p.s?.[f] || 0) * n / 30; if (vd == null) estimado++;
       const diaria = v ? v / n : 0, nec = diaria * (S.cob + S.seg);
       if (!['A', 'B'].includes(c) || !diaria || bloqueado(p.c, f) || bloqAten(p.c)) { if (st >= 1) sobra.push({ f, q: Math.floor(st - nec) }); continue; }
-      const ent = c === 'A' ? Math.max(0, Math.ceil(nec - st - 1e-9)) : st < 1 ? 1 : 0;
+      const ent = c === 'A' ? Math.max(0, redPed(nec - st)) : st < 1 ? 1 : 0;
       if (ent > 0 && st < diaria * S.seg) pide.push({ p, f, cat: c, st, diaria, dias: st / diaria, ent });
       else if (st - nec >= 1) sobra.push({ f, q: Math.floor(st - nec) });
     }
@@ -2583,8 +2586,8 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611101500"></script>
-<script src="estadistica.js?v=202611042300"></script>
+<script src="sucursales.js?v=202611101700"></script>
+<script src="estadistica.js?v=202611101700"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611062200"></script>
 

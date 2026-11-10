@@ -149,16 +149,16 @@
         let pide = 0, nota = '';
         if (usa) return { p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide: 0, nota: 'usa en su cambio ' + usa, bloq, exceso: 0, o, aj, urgente: false, usa };
         if (bloq) nota = 'bloqueado';
-        else if (cambio) { pide = d > 0 ? Math.max(0, Math.ceil(nec - st - 1e-9)) : 0; nota = 'en cambio de ' + cambio.orig.c; }
+        else if (cambio) { pide = d > 0 ? Math.max(0, redPed(nec - st)) : 0; nota = 'en cambio de ' + cambio.orig.c; }
         else if (o.modo === 'excluir') nota = 'no atender (ajuste)';
-        else if (o.modo === 'forzar') pide = d > 0 ? Math.max(0, Math.ceil(nec - st - 1e-9)) : 0;
-        else if (o.tipos === 'todos' ? d > 0 : c === 'A') pide = Math.max(0, Math.ceil(nec - st - 1e-9));
-        else if (o.tipos !== 'todos' && c === 'B') pide = d > 0 && st < nec ? 1 : 0;   // B: 1 caja solo si su stock no cubre los días elegidos
+        else if (o.modo === 'forzar') pide = d > 0 ? Math.max(0, redPed(nec - st)) : 0;
+        else if (o.tipos === 'todos' ? d > 0 : c === 'A') pide = Math.max(0, redPed(nec - st));
+        else if (o.tipos !== 'todos' && c === 'B') pide = d > 0 && redPed(nec - st) >= 1 ? 1 : 0;   // B: 1 caja si lo que le falta (redondeado) llega a 1   // B: 1 caja solo si su stock no cubre los días elegidos
         else if (d > 0) nota = c === 'C' ? 'a pedido' : c === 'D' ? 'solo con pedido' : '';
-        if (!bloq && extra > 0) { pide = Math.max(pide, Math.ceil(nec - st - 1e-9)); nota = 'en lugar de ' + enLugar.join(', ') + ' (droguería)'; }
+        if (!bloq && extra > 0) { pide = Math.max(pide, redPed(nec - st)); nota = 'en lugar de ' + enLugar.join(', ') + ' (droguería)'; }
         // lo que necesita menos su stock, menos lo que le queda del anterior y lo que se le envía del anterior
         const krN = viejos.length && !bloq ? viejos.map(q => q.c + ' - ' + q.n).join(', ') : '';
-        if (krN && o.modo !== 'excluir') { pide = d > 0 ? Math.max(0, Math.ceil(nec - st - stV - envV - 1e-9)) : 0; nota = 'reemplaza a ' + viejos.map(q => q.c).join(', ') + ' (kardex)' + (stV + envV ? ` · ya tiene/recibe ${Math.round((stV + envV) * 10) / 10} del anterior` : ''); }
+        if (krN && o.modo !== 'excluir') { pide = d > 0 ? Math.max(0, redPed(nec - st - stV - envV)) : 0; nota = 'reemplaza a ' + viejos.map(q => q.c).join(', ') + ' (kardex)' + (stV + envV ? ` · ya tiene/recibe ${Math.round((stV + envV) * 10) / 10} del anterior` : ''); }
         // el original sin stock en droguería y con reemplazo: no se pide (se atiende el reemplazo)
         const rd = reempDe.get(p.c); let reemp = '', pideOrig = 0;
         if (rd && pide > 0 && !cambio && !(+(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) > 0)) { pideOrig = pide; pide = 0; reemp = rd.c + ' - ' + rd.n; nota = 'droguería lo reemplaza por ' + rd.c; }
@@ -221,8 +221,8 @@
         const quieren = red.filter(r => !r.bloq && !r.usa && r.d > 0 && r.nec - r.st > 0), sd = quieren.reduce((a, r) => a + r.d, 0);
         for (const r of red) { r.krV = nuevo; r.krPide = r.pide; r.drog = 0; r.falta = 0; r.comprar = 0; r.desde = []; }
         let resto = Math.floor(disp);
-        for (const r of quieren) { r.drog = Math.min(Math.ceil(r.nec - r.st - 1e-9), Math.floor(disp * r.d / sd)); resto -= r.drog; }
-        for (const r of [...quieren].sort((a, b) => b.d - a.d)) { if (resto <= 0) break; if (r.drog < Math.ceil(r.nec - r.st - 1e-9)) { r.drog++; resto--; } }
+        for (const r of quieren) { r.drog = Math.min(redPed(r.nec - r.st), Math.floor(disp * r.d / sd)); resto -= r.drog; }
+        for (const r of [...quieren].sort((a, b) => b.d - a.d)) { if (resto <= 0) break; if (r.drog < redPed(r.nec - r.st)) { r.drog++; resto--; } }
         for (const r of red) {
           r.pide = r.drog; r.nota = r.bloq ? 'bloqueado' : `se termina: lo reemplaza ${kr.nuevo} (kardex)`;
           S.krEnviado?.set(p.c + '__' + r.f, r.drog);

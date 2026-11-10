@@ -99,7 +99,7 @@
     roq = Math.max(1, roq);
     if (a.noStock) { ss = 0; roq = 1; }
     const rop = mu + ss, riesgo = dist.cola(pos * u);
-    const pedir = pos <= rop ? Math.ceil(rop + roq - pos - 1e-9) : 0, enDias = pos > rop ? (pos - rop) / diaria : 0;
+    const pedir = pos <= rop ? redPed(rop + roq - pos) : 0, enDias = pos > rop ? (pos - rop) / diaria : 0;
     // estado del inventario (como frePPLe): el menor entre el stock de hoy y el esperado al llegar un pedido, frente a seguridad + pedido
     const posLT = pos - mu, estado = Math.max(0, Math.min(1, Math.min(pos, posLT) / (ss + roq)));
     return Object.assign(r, { mu, sd: Math.sqrt(v), dist: dist.tipo, ss, eoq, roq, rop, riesgo, pedir, enDias, posLT, estado,
@@ -113,7 +113,7 @@
       const desde = i === 0 ? corte.getDate() : 1, diasMes = dim - desde + 1, demMes = i === 0 ? dem * diasMes / dim : dem;
       let sum = 0, fecha = null;
       if (rop > 0 && ini - demMes < rop) {
-        sum = Math.ceil(rop + roq - (ini - demMes) - 1e-9);
+        sum = redPed(rop + roq - (ini - demMes));
         const diaria = demMes / diasMes || 1e-9, dPed = Math.max(0, Math.min(diasMes - 1, Math.floor((ini - rop) / diaria)));
         fecha = new Date(y, mo - 1, desde + dPed);
       }

@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611101600";
+const VERSION_PROY = "202611101700";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1340,6 +1340,9 @@ function pintarFalt() {
     const e = estVig(i.c) || S.fEst.get(i.c); return `<h2>${esc(i.c)} - ${esc(i.n)}</h2><p class="muted">${esc(i.l || "")} · le falta a ${i.s.length} sucursales (${nf(i.t)} cajas)</p>` + formResp(i, e); })());
   $("fsMas").innerHTML = lista.length > vis.length ? `<button class="btn" type="button" id="fsMasBtn">Ver ${Math.min(100, lista.length - vis.length)} más (de ${nf(lista.length)})</button>` : "";
 }
+// Redondeo de lo que se pide, se atiende y se compra (en todos los módulos): hasta ,75 hacia abajo; desde ,76 hacia arriba.
+// Redondeo de lo que se pide y se atiende (igual en todos los módulos): hasta ,75 hacia abajo; desde ,76 hacia arriba (3,75 → 3 · 3,76 → 4)
+const redPed = x => { if (!(x > 0)) return 0; const e = Math.floor(x + 1e-9); return x - e > 0.75 + 1e-9 ? e + 1 : e; };
 const nf = v => Number(v || 0).toLocaleString("es-PE");
 // Clasificación de productos (línea, genérico y familia por nombre): la última que se subió desde los reportes «producto por genérico / familia / línea»
 // (proy_config/clasificacion → archivo comprimido en proy_blobs); si no hay, la de clasificacion.json de la página.
@@ -1544,7 +1547,7 @@ function stockCambio(i, c, n = 1) {
   // el de cambio pasa a cubrir también la venta del original: su venta diaria es la mayor de las dos
   const [st = 0, dA = 0] = rx ? [rx.s || 0, rx.d || 0] : S.atStk[c] || [], d = Math.max(dA, (i?.d || 0) / n), cob = d > 0 ? Math.floor(st / d) : null;
   if (st > 0 && (d <= 0 || st >= d * dias)) return { cls: "t-ok", txt: `✓ Tienes ${fCaja(st)}${cob != null ? ` · te cubre ${nf(cob)} días` : ""} · no necesitas que te envíen` };
-  const env = d > 0 ? Math.max(1, Math.ceil(d * dias - st - 1e-9)) : 0;
+  const env = d > 0 ? Math.max(1, redPed(d * dias - st)) : 0;
   return { cls: "t-pend", txt: `${st > 0 ? `Tienes ${fCaja(st)} (te cubre ${nf(cob)} días)` : "✗ No tienes"}${env ? ` · se te enviarán ${nf(env)} para ${A.C} + ${A.Sg} días` : ""}` };
 }
 const tagStock = (i, c, pre = "", n = 1) => { const x = stockCambio(i, c, n); return `<span class="tag ${x.cls} at-drog">${pre}${esc(x.txt)}</span>`; };
@@ -1706,7 +1709,7 @@ function planLocal(i, A) {
     const dm = diasDelMes(m), dia = k === 0 && A.avDia ? A.avDia : 0, pron = i.pr?.[k] || 0;
     const dem = k === 0 ? Math.max(0, pron - (i.av || 0)) : pron, diaria = pron / dm;
     const seg = diaria * A.Sg, obj = diaria * (A.C + A.Sg);
-    let env = 0; if (diaria > 0 && ini - dem < seg) env = Math.ceil(obj - (ini - dem) - 1e-9);
+    let env = 0; if (diaria > 0 && ini - dem < seg) env = redPed(obj - (ini - dem));
     const fin = Math.max(0, ini - dem + env);
     filas.push({ m, obj, seg, ini, dem, env, fin }); ini = fin;
   });
