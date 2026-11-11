@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611111500";
+const VERSION_PROY = "202611111600";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -119,9 +119,10 @@ async function cargarCatalogo() {
   try {
     const r = await fetch("catalogo.json", { cache: "no-cache" });
     if (!r.ok) throw new Error();
-    // HERSIL ahora es MEDIFARMA HUMANOVA: se lee con el laboratorio nuevo
-    const alias = l => /^HERS(IL)?\b/i.test(l) ? "MEDIFARMA HUMANOVA S.A." : l;
-    S.catalogo = (await r.json()).map(p => { const ln = alias(String(p.ln || "")), l = /^HERS$/i.test(p.l || "") ? "MEDI" : String(p.l || ""); return { c: String(p.c), n: String(p.n), l, ln, k: norm([p.c, p.n, l, ln].join(" ")) }; });
+    // laboratorios que pasaron a otro: se leen con el nombre y el código nuevos (HERSIL → MEDIFARMA HUMANOVA, VHH PHARMA → MH PHARMA)
+    const alias = l => /^HERS(IL)?\b/i.test(l) ? "MEDIFARMA HUMANOVA S.A." : /^VHH\b/i.test(l) ? "MH PHARMA" : l;
+    const aliasCod = l => /^HERS$/i.test(l) ? "MEDI" : /^VHH$/i.test(l) ? "MHPH" : l;
+    S.catalogo = (await r.json()).map(p => { const ln = alias(String(p.ln || "")), l = aliasCod(String(p.l || "")); return { c: String(p.c), n: String(p.n), l, ln, k: norm([p.c, p.n, l, ln].join(" ")) }; });
     S.catIdx = new Map(S.catalogo.map(p => [p.c, p]));
   } catch {
     const a = $("avisoGlobal"); a.hidden = false;

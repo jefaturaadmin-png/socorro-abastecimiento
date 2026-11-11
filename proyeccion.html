@@ -1279,8 +1279,8 @@ function abrirFichaP(c, origen) { S.fpDesde = ''; S.cur = c; S.origen = origen; 
 
 /* ---------- filtro por laboratorio (del catálogo de productos de la página) ---------- */
 const LAB = new Map();
-// laboratorios que pasaron a otro (HERSIL ahora es MEDIFARMA HUMANOVA): se leen siempre con el nombre nuevo
-const LAB_ALIAS = { 'HERSIL S.A.': 'MEDIFARMA HUMANOVA S.A.', 'HERSIL': 'MEDIFARMA HUMANOVA S.A.', 'HERS': 'MEDIFARMA HUMANOVA S.A.' };
+// laboratorios que pasaron a otro: se leen siempre con el nombre nuevo (HERSIL → MEDIFARMA HUMANOVA, VHH PHARMA → MH PHARMA)
+const LAB_ALIAS = { 'HERSIL S.A.': 'MEDIFARMA HUMANOVA S.A.', 'HERSIL': 'MEDIFARMA HUMANOVA S.A.', 'HERS': 'MEDIFARMA HUMANOVA S.A.', 'VHH PHARMA': 'MH PHARMA', 'VHH': 'MH PHARMA' };
 fetch('catalogo.json').then(r => r.json()).then(cat => { for (const x of cat) { const l = String(x.ln || x.l || '').trim(); LAB.set(String(x.c), LAB_ALIAS[l.toUpperCase()] || l); } if (S.P) render(); }).catch(() => {});
 const labDe = c => LAB.get(c) || '';
 let labsDe = null;
