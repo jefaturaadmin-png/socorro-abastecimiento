@@ -87,7 +87,7 @@ onAuthStateChanged(auth, async u => {
   if (arrancado) return; arrancado = true;
   window.claude = { use: async n => n === "db" ? dbShim : n === "assets" ? assetsShim : null };
   window.iniciarKardex();
-  escucharBloqueos(); escucharReemplazos(); escucharGestion(); escucharBloqAten();
+  escucharBloqueos(); escucharReemplazos(); escucharGestion(); escucharBloqAten(); escucharNuevoRef();
 });
 
 /* =====================================================================
@@ -573,6 +573,14 @@ function escucharBloqAten() {
     () => setTimeout(escucharBloqAten, 30000));
 }
 window.guardarBloqAten = (c, d) => setDoc(doc(db, "bloq_aten", c), d);
+/* ---------- productos nuevos «se reparten como» otro: nuevo_ref/{códigoNuevo} = { ref, nRef, porNombre, fecha } ---------- */
+window.NUEVO_REF = new Map();
+function escucharNuevoRef() {
+  onSnapshot(collection(db, "nuevo_ref"), s => { window.NUEVO_REF = new Map(s.docs.map(d => [d.id, d.data()])); window.BLOQ_VER = (window.BLOQ_VER || 0) + 1; if (S.P) render(); },
+    () => setTimeout(escucharNuevoRef, 30000));
+}
+window.guardarNuevoRef = (c, d) => setDoc(doc(db, "nuevo_ref", c), d);
+window.borrarNuevoRef = c => deleteDoc(doc(db, "nuevo_ref", c));
 window.borrarBloqAten = c => deleteDoc(doc(db, "bloq_aten", c));
 function escucharBloqueos() {
   const poner = docs => { window.BLOQ = new Set(docs.filter(d => d.data().estado === "bloqueado").map(d => d.id)); window.BLOQ_VER = (window.BLOQ_VER || 0) + 1; if (S.P) render(); };

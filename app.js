@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611102200";
+const VERSION_PROY = "202611111000";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1937,6 +1937,12 @@ const fechaDe = v => { // "27/10/2026 14:05:10" o "2026-10-27"
 const idFila = x => { let h = 5381; for (const ch of x.join("\u0001")) h = ((h * 33) ^ ch.charCodeAt(0)) >>> 0; return "u" + h.toString(36) + "_" + x.length; };
 // el código que escribieron, en el catálogo (también si le faltan los ceros de adelante)
 const prodCat = c => { c = String(c || "").trim(); return c ? S.catIdx.get(c) || (/^\d+$/.test(c) ? S.catIdx.get(c.padStart(5, "0")) : null) : null; };
+// pedidos de urgencia de los últimos N días (para que Atención y el módulo de cada sucursal los consideren)
+window.urgenciasRecientes = async (dias = 14) => {
+  if (!S.ped) { try { await cargarPedidos(); } catch {} }
+  const desde = Date.now() - dias * 864e5;
+  return (S.ped?.datos || []).filter(d => d.cod && d.suc && d.f && +d.f >= desde).map(d => ({ suc: d.suc, cod: String(d.cod), q: +d.q || 1, f: d.f.toISOString().slice(0, 10) }));
+};
 async function cargarPedidos(forzar) {
   escucharUrg(); cargarDrogStk();
   if (S.pdCargando || (!forzar && S.ped && Date.now() - S.ped.t < 120000)) return;

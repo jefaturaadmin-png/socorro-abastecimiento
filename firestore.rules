@@ -222,6 +222,12 @@ service cloud.firestore {
       allow write: if esAdmin();
     }
 
+    // ---------- productos nuevos: con qué producto se reparten (lo elige el administrador en el Kardex) ----------
+    match /nuevo_ref/{cod} {
+      allow read: if conPerfil();
+      allow write: if esAdmin();
+    }
+
     // ---------- usuario → cuenta con la que entra (cuando el administrador le restablece la contraseña) ----------
     // se lee antes de iniciar sesión (solo dice qué cuenta usar, no contiene contraseñas)
     match /alias/{usuario} {

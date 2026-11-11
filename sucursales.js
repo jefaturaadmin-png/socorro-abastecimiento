@@ -11,6 +11,7 @@
      (en esa sucursal o en todas). Cada nivel pisa al anterior; lo que no se indica se toma del nivel de arriba. */
   const DEF = { C: 7, Sg: 7, fte: 'motor', tipos: 'ab' };   // venta diaria: por defecto, el motor de Estadística Proyx
   let CFG = { def: { ...DEF }, suc: {}, prod: {} }, cfgListo = false, cfgCargando = false, cfgVer = 0;
+  let URG = new Map(), urgVer = 0;   // pedidos de urgencia recientes (sucursal__código → { q, f })
   async function cargarCfg() {
     // Se lee solo cuando ya están tus datos (al abrir, la página muestra un momento datos de ejemplo):
     // así no se trabaja con el criterio por defecto ni se pisa lo guardado.
@@ -108,7 +109,7 @@
     // el criterio en texto se arma una vez por versión (antes se convertía en cada consulta: miles de veces por pantalla)
     if (calcular.cv !== cfgVer) { calcular.cv = cfgVer; calcular.cj = JSON.stringify(CFG); }
     // incluye la venta día por día del kardex (llega unos segundos después de abrir): al llegar, se recalcula todo
-    const clave = (S.P?.dias ? S.P.dias.hasta + ':' + S.P.dias.n : 'sin-dias') + '|' + cfgVer + '|' + respVer + '|' + (window.EST_VER || 0) + '|' + (window.REEMP_VER || 0) + '|' + (window.BLOQ_VER || 0) + '|' + calcular.cj;
+    const clave = (S.P?.dias ? S.P.dias.hasta + ':' + S.P.dias.n : 'sin-dias') + '|u' + urgVer + '|' + cfgVer + '|' + respVer + '|' + (window.EST_VER || 0) + '|' + (window.REEMP_VER || 0) + '|' + (window.BLOQ_VER || 0) + '|' + calcular.cj;
     if (cache && cacheDe === S.P && cacheClave === clave) return cache;
     cacheDe = S.P; cacheClave = clave;
     const filas = [], porProd = new Map(), R = window.REEMP || new Map();
@@ -129,8 +130,14 @@
   }
   // fila de un producto en una sucursal con su criterio (también para los que no tienen venta ni stock)
   function filaBase(p, f, H, fte) {   // fte: «motor» o N días de venta, en lugar del criterio (el Kardex puede elegirlo)   // H: días a usar en lugar de los del criterio (el Kardex usa los que se ponen allí)
-        const st = +(window.STOCK_TODOS?.[p.c]?.[f]?.[0] ?? p.st?.[f] ?? 0) || 0, c = p.catF?.[f] || 'E';
-        const o = cfgDe(f, p.c), aj = ajProd(f, p.c); if (fte) o.fte = fte; const dv = diaria(p, f, o);
+        const st = +(window.STOCK_TODOS?.[p.c]?.[f]?.[0] ?? p.st?.[f] ?? 0) || 0;
+        const o = cfgDe(f, p.c), aj = ajProd(f, p.c); if (fte) o.fte = fte; let dv = diaria(p, f, o);
+        // PRODUCTO NUEVO «se reparte como» otro (lo elige Abastecimiento en el Kardex): mientras en esta sucursal no tenga
+        // venta propia, toma la venta y el tipo de ese producto en esta sucursal
+        const nr = window.NUEVO_REF?.get(p.c), refP = nr && nr.ref !== p.c ? prodDe(nr.ref) : null;
+        const usaRef = !!refP && !(dv.d > 0) && !(p.hf?.[f] || []).some(v => v > 1e-9);
+        if (usaRef) dv = diaria(refP, f, { ...cfgDe(f, refP.c), ...(fte ? { fte } : {}) });
+        const base = usaRef ? refP : p, c = base.catF?.[f] || 'E';
         // "Se tiene otro medicamento en su cambio": el que usa en su lugar se atiende con la venta del original
         const usa = enCambio(p, f), cambio = usa ? null : cambioDe(p, f), dOrig = cambio ? diaria(cambio.orig, f, cfgDe(f, cambio.orig.c)).d * cambio.parte : 0;
         // lo que droguería dice que reemplaza a otro (Faltantes: "existe otro medicamento" o "descontinuado" con reemplazo):
@@ -159,7 +166,7 @@
           // C y D: se atienden SOLO si se vendieron en esta sucursal dentro de los días elegidos (ventas de los últimos N días;
           // con el motor, los días a cubrir). Si no se vendieron en ese tiempo, quedan a pedido.
           const N = +o.fte > 0 ? +o.fte : (H ?? (o.C + o.Sg));
-          if (d > 0 && window.vendioEn?.(p, f, N)) { pide = ped(nec - st); nota = `tipo ${c}: se vendió en los últimos ${N} días`; }
+          if (d > 0 && window.vendioEn?.(base, f, N)) { pide = ped(nec - st); nota = `tipo ${c}: se vendió en los últimos ${N} días`; }
           else nota = `a pedido (tipo ${c}: sin venta en los últimos ${N} días)`;
         }
         else if (o.tipos === 'todos' ? d > 0 : c === 'A') pide = ped(nec - st);
@@ -174,6 +181,13 @@
         // descontinuado (sin reemplazo) y sin stock en droguería: tampoco se pide
         const de = S.suEstados.get(p.c);
         if (!reemp && pide > 0 && !cambio && de?.estado === 'descontinuado' && !vencida(de) && !(+(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) > 0)) { pideOrig = pide; pide = 0; nota = 'descontinuado (droguería)'; }
+        if (usaRef && !bloq) nota = `🆕 nuevo: se reparte como ${refP.c} – ${refP.n}` + (nota ? ' · ' + nota : '');
+        // pedido de URGENCIA de las últimas 2 semanas: si sigue en cero se manda (al menos lo que pidió); si ya tiene, se abasteció
+        const ur = URG.get(f + '__' + p.c);
+        if (ur && !bloq && !usa) {
+          if (sinStock) { pide = Math.max(pide, Math.round(ur.q) || 1); pideOrig = 0; reemp = ''; nota = `⚡ urgencia del ${ur.f.split('-').reverse().join('/')}: sigue en cero, se manda`; }
+          else if (!pide) nota = `urgencia del ${ur.f.split('-').reverse().join('/')}: ya se abasteció (tiene stock)`;
+        }
         // cantidad fija que decide Abastecimiento (p. ej. productos nuevos, sin venta): se envía esa cantidad
         // se descuenta lo que la sucursal ya recibió desde que se fijó (su stock de entonces es st0): si ya llegó, baja a 0
         if (!bloq && aj?.q != null) { const q = Math.max(0, Math.round(+aj.q || 0)), rec = Math.max(0, Math.floor(st - (+aj.st0 || 0) + 1e-9));
@@ -460,7 +474,16 @@
   // guardar o quitar el comentario de una sucursal sobre un producto (atencion_resp/{SUCURSAL}__{código})
   window.guardarResp = (f, c, d) => FB.setDoc(FB.doc(FB.db, 'atencion_resp', f + '__' + c), window.parent.JSON.parse(JSON.stringify({ ...d, suc: f, codpro: c })));
   window.borrarResp = (f, c) => FB.deleteDoc(FB.doc(FB.db, 'atencion_resp', f + '__' + c));
-  window.prepAtencion = async () => { escucharCfg(); escucharResp(); await cargarCfg(); for (let i = 0; i < 40 && !cfgListo; i++) await new Promise(r => setTimeout(r, 250)); await cargarRespuestas(); };
+  // pedidos de urgencia de las últimas 2 semanas (módulo de urgencias): si la sucursal lo pidió y sigue en cero, se le manda
+  async function cargarUrgencias() {
+    if (cargarUrgencias.ok || S.ejemplo) return; cargarUrgencias.ok = true;
+    try { const l = await window.parent?.urgenciasRecientes?.(14) || []; const m = new Map();
+      for (const u of l) { const k = u.suc + '__' + u.cod, x = m.get(k); m.set(k, x ? { q: Math.max(x.q, u.q), f: u.f > x.f ? u.f : x.f } : u); }
+      URG = m; urgVer++; if (S.vista === 'suc') window.pintarSuc(); else if (S.vista === 'stk' || S.vista === 'kar') render();
+    } catch { cargarUrgencias.ok = false; }
+  }
+  window.urgenciaDe = (f, c) => URG.get(f + '__' + c) || null;
+  window.prepAtencion = async () => { escucharCfg(); escucharResp(); cargarUrgencias(); await cargarCfg(); for (let i = 0; i < 40 && !cfgListo; i++) await new Promise(r => setTimeout(r, 250)); await cargarRespuestas(); };
   window.atencionListo = () => cfgListo || S.ejemplo;
   window.criterioSuc = f => cfgSuc(f);
   window.criterioVer = () => cfgListo ? 'ok' + cfgVer : '';   // vacío mientras no se lea el criterio guardado

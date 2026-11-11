@@ -127,7 +127,7 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .tag.gest { background: #fff1d6; color: #8a5a00; white-space: normal }
 /* el comunicado general y el reemplazo van en su propia línea bajo el nombre: así no se cortan cuando el nombre es largo */
 .tag.mov { background: #e8f1fb; color: #2b5d99 } .tag.mov.reciente { background: #e6f4e3; color: #2e7d32 } .tag.mov.parado { background: #eee; color: #666 }
-.tag.bat { background: #fde2dd; color: #a33b3b } .tag.motivo { background: #ede7f6; color: #4a2c82 } .cells .c1 .tag.motivo { display: block; width: fit-content; max-width: 300px; white-space: normal; margin: 3px 0 2px; line-height: 1.3 } .k-acc button.on { background: #fde2dd; border-color: #f0b3a8 }
+.tag.bat { background: #fde2dd; color: #a33b3b } .tag.ref { background: #e3f2fd; color: #0d47a1 } .cells .c1 .tag.ref { display: block; width: fit-content; max-width: 300px; white-space: normal; margin: 3px 0 2px; line-height: 1.3 } .tag.motivo { background: #ede7f6; color: #4a2c82 } .cells .c1 .tag.motivo { display: block; width: fit-content; max-width: 300px; white-space: normal; margin: 3px 0 2px; line-height: 1.3 } .k-acc button.on { background: #fde2dd; border-color: #f0b3a8 }
 .cells .c1 .tag.bat, .cells .c1 .tag.mov, .cells .c1 .tag.gest, .cells .c1 .tag.kr { display: block; width: fit-content; max-width: 260px; margin: 3px 0 2px; white-space: normal; line-height: 1.3 } .k-acc { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle }
 /* el nombre largo se corta con «…» pero los botones 🔁 📢 siempre se ven */
 .k-fila { display: flex; align-items: center; max-width: 100% } .k-fila .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap } .k-fila .k-acc { flex: none }
@@ -630,6 +630,18 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
     </details>
   </section>
 
+  <dialog id="nrDlg" class="kr-dlg rs-dlg"><div class="kr-in">
+    <div class="kr-cab"><h2>📐 Producto nuevo: ¿cómo se reparte?</h2><button type="button" class="btn sm" data-nrcerrar>✕</button></div>
+    <p><b id="nrTit"></b></p>
+    <p class="z">Elija el producto cuya venta se usará para repartirlo: a cada sucursal se le atiende como si vendiera lo que vende ese producto allí (con su tipo, sus días y el redondeo de siempre). Cuando el nuevo empiece a venderse en una sucursal, se usa su propia venta.</p>
+    <p class="z" id="nrActual"></p>
+    <h3 style="margin:10px 0 6px;font-size:14px">Del mismo genérico: <span id="nrGen"></span></h3>
+    <div id="nrLista" class="rs-sug"></div>
+    <label class="field"><span>O busque otro producto (nombre o código)</span><input id="nrQ" autocomplete="off" placeholder="p. ej. ketoprofeno o 16888"></label>
+    <div id="nrSug" class="rs-sug"></div>
+    <div class="kr-msg z" id="nrMsg"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn" id="nrQuitar">Quitar (repartir solo con su propia venta)</button></div>
+  </div></dialog>
   <dialog id="rsDlg" class="kr-dlg rs-dlg"><div class="kr-in">
     <div class="kr-cab"><h2>💬 Comentario de la sucursal</h2><button type="button" class="btn sm" data-rscerrar>✕</button></div>
     <p><b id="rsTit"></b></p>
@@ -725,7 +737,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
           <label class="btn primary" for="fPron" id="btnPron" title="Uno o varios archivos .TXT del kardex de LolFar. Lo repetido se descarta solo.">Subir kardex (.TXT)</label></div>
         <div class="fila-f">
           <label class="field"><span>Laboratorio</span><select id="kLab" class="sLab"><option value="">Todos</option></select></label>
-          <label class="field"><span>Mostrar</span><select id="kVer"><option value="stock">Con stock</option><option value="drog0">En 0 en droguería y con stock en sucursales</option><option value="cero">Sin stock en ningún lado</option><option value="nuevo">🆕 Nuevos: con stock y sin ninguna venta</option><option value="reciente">🌱 Movimiento reciente: empezó a venderse en los últimos 3 meses</option><option value="parado">⏸ Sin movimiento en 6 meses (antes sí vendía)</option><option value="">Todos</option></select></label>
+          <label class="field"><span>Mostrar</span><select id="kVer"><option value="stock">Con stock</option><option value="drog0">En 0 en droguería y con stock en sucursales</option><option value="cero">Sin stock en ningún lado</option><option value="nuevorep">🆕 Nuevos por repartir (sin venta, o código desde 26000 sin venta en 3 meses)</option><option value="nuevo">🆕 Nuevos: con stock y sin ninguna venta</option><option value="reciente">🌱 Movimiento reciente: empezó a venderse en los últimos 3 meses</option><option value="parado">⏸ Sin movimiento en 6 meses (antes sí vendía)</option><option value="">Todos</option></select></label>
           <label class="field"><span>Línea</span><select class="sLin"><option value="">Todas</option></select></label>
           <label class="field"><span>Familia</span><select class="sFam"><option value="">Todas</option></select></label>
           <label class="field"><span>Venta diaria según</span><select id="kFte" title="De dónde sale la venta diaria para «Requiere» y «Se atenderá»: el motor (pronóstico) o lo que se vendió en los últimos días del kardex"><option value="">Criterio de cada sucursal</option><option value="motor">Motor (Estadística Proyx)</option><option value="15">Ventas de los últimos 15 días</option><option value="30">Ventas de los últimos 30 días</option><option value="45">Ventas de los últimos 45 días</option><option value="60">Ventas de los últimos 60 días</option><option value="90">Ventas de los últimos 90 días</option></select></label>
@@ -1362,7 +1374,7 @@ const tagKR = c => window.REEMP?.has(c) ? `<span class="tag kr" title="Ya no se 
 const tagGest = c => window.GEST?.has(c) ? `<span class="tag gest" title="${esc((window.GEST.get(c).porNombre || '') + ' · ' + String(window.GEST.get(c).fecha || '').slice(0, 10))}">📢 Gestionado por droguería${window.GEST.get(c).nota ? ': ' + esc(window.GEST.get(c).nota) : ''}</span>` : '';
 const tagBAt = c => window.BLOQ_ATEN?.has(c) ? `<span class="tag bat" title="${esc((window.BLOQ_ATEN.get(c).porNombre || '') + ' · ' + String(window.BLOQ_ATEN.get(c).fecha || '').slice(0, 10))}">🚫 Atención bloqueada${window.BLOQ_ATEN.get(c).motivo ? ': ' + esc(window.BLOQ_ATEN.get(c).motivo) : ''}</span>` : '';
 // el movimiento (nuevo, reciente, sin movimiento) es información general: sale también en Droguería y en cada sucursal
-const etiquetas = p => tagBAt(p.c) + tagGest(p.c) + tagMov(p) + (p.pap ? '<span class="tag pap" title="Programa de apoyo al paciente">PAP</span>' : '') + (p.est ? '<span class="tag est" title="Venta por temporadas">Estacional</span>' : '') + tagKR(p.c);
+const etiquetas = p => tagBAt(p.c) + tagRef(p.c) + tagGest(p.c) + tagMov(p) + (p.pap ? '<span class="tag pap" title="Programa de apoyo al paciente">PAP</span>' : '') + (p.est ? '<span class="tag est" title="Venta por temporadas">Estacional</span>' : '') + tagKR(p.c);
 // en Reposición por farmacia se usa la categoría de esa farmacia
 const pasaTipo = p => {
   const per = S.vista === 'pron' && S.tR;
@@ -1592,6 +1604,9 @@ function movDe(p) {
   if (!(sumH(h.slice(-6)) > 0)) return 'parado';
   return '';
 }
+// NUEVO POR REPARTIR: con stock en droguería y sin ninguna venta, o código desde 26000 sin venta en los últimos 3 meses
+const esNuevoRep = p => stDe(p, 'DROGUERIA FS') > 0 && (movDe(p) === 'nuevo' || (+p.c >= 26000 && !(sumH((p.h || []).slice(-3)) > 0)));
+const tagRef = c => { const r = window.NUEVO_REF?.get(c); return r ? `<span class="tag ref" title="${esc((r.porNombre || '') + ' · ' + String(r.fecha || '').slice(0, 10))}">📐 Se reparte como ${esc(r.ref)} ${esc(r.nRef || nomDe(r.ref))}</span>` : ''; };
 const MOV_TXT = { nuevo: '🆕 Nuevo: sin ventas', reciente: '🌱 Movimiento reciente', parado: '⏸ Sin movimiento 6 meses' };
 const tagMov = p => { const m = movDe(p); return m ? `<span class="tag mov ${m}" title="${m === 'nuevo' ? 'No tiene ninguna venta en el historial' : m === 'reciente' ? 'Sus ventas empezaron en los últimos 3 meses' : 'No vende hace 6 meses'}">${MOV_TXT[m]}</span>` : ''; };
 function filasKar() {
@@ -1602,6 +1617,7 @@ function filasKar() {
     const st = window.STOCK_TODOS?.[p.c] || {}, v = f => Math.max(0, +(st[f]?.[0] ?? (f === 'DROGUERIA FS' ? p.sd : p.st?.[f]) ?? 0) || 0);
     const drog = v('DROGUERIA FS'), sf = farms.map(v), suc = sf.reduce((a, b) => a + b, 0), tot = drog + suc;
     if (ver === 'stock' && !tot) continue; if (ver === 'drog0' && (drog > 0 || !suc)) continue; if (ver === 'cero' && tot) continue;
+    if (ver === 'nuevorep' && !esNuevoRep(p)) continue;
     if (ver === 'nuevo' && (movDe(p) !== 'nuevo' || !tot)) continue; if (ver === 'reciente' && movDe(p) !== 'reciente') continue; if (ver === 'parado' && (movDe(p) !== 'parado' || !tot)) continue;
     filas.push({ p, c: p.c, n: p.n, drog, sf, tot });
   }
@@ -1654,7 +1670,7 @@ function pintarKar() {
         + (esAdminP() && rq.listo ? `<button type="button" class="k-ed" data-kq="${esc(f)}|${esc(p.c)}" title="Editar lo que se atenderá a ${esc(nomSuc(f))}">✎</button>` : ''); };
     const marca = (f, v) => { const bq = window.BLOQ?.has(f + '__' + p.c), rs = window.respAtencion?.(f, p.c);
       return (bq ? `<span class="k-bq" title="Bloqueado en ${esc(nomSuc(f))}">🔒 bloq.</span>` : cq(v)) + (rs ? `<button type="button" class="k-com ${esc(rs.estado)}" data-kcom="${esc(f)}|${esc(p.c)}" title="${esc(nomSuc(f) + ': ' + rs.txt + (rs.por ? ' · ' + rs.por : ''))}">💬</button>` : ''); };
-    h += `<tr><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><span class="k-fila"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a><span class="k-acc"><button type="button" data-kkr="${esc(p.c)}" title="Reemplazar este producto por otro">🔁</button><button type="button" data-kgest="${esc(p.c)}" title="Comunicado: gestionado por droguería">📢</button>${esAdminP() ? `<button type="button" data-kbat="${esc(p.c)}" class="${bloqAten(p.c) ? 'on' : ''}" title="${bloqAten(p.c) ? 'Quitar el bloqueo de atención' : 'Bloquear la atención: no se envía a ninguna sucursal'}">🚫</button>` : ''}</span></span>${tagBAt(p.c)}${tagKR(p.c)}${tagGest(p.c)}${tagMov(p)}<small class="sub">${esc(labDe(p.c))}</small></td>
+    h += `<tr><td class="c0">${esc(p.c)}</td><td class="c1" title="${esc(p.n)}"><span class="k-fila"><a class="nm" data-abrir="${esc(p.c)}">${esc(p.n)}</a><span class="k-acc"><button type="button" data-kkr="${esc(p.c)}" title="Reemplazar este producto por otro">🔁</button><button type="button" data-kgest="${esc(p.c)}" title="Comunicado: gestionado por droguería">📢</button>${esAdminP() ? `<button type="button" data-kbat="${esc(p.c)}" class="${bloqAten(p.c) ? 'on' : ''}" title="${bloqAten(p.c) ? 'Quitar el bloqueo de atención' : 'Bloquear la atención: no se envía a ninguna sucursal'}">🚫</button>` : ''}${esAdminP() && (esNuevoRep(p) || window.NUEVO_REF?.has(p.c)) ? `<button type="button" data-knr="${esc(p.c)}" class="${window.NUEVO_REF?.has(p.c) ? 'on' : ''}" title="Producto nuevo: elegir con qué producto se reparte">📐</button>` : ''}</span></span>${tagBAt(p.c)}${tagRef(p.c)}${tagKR(p.c)}${tagGest(p.c)}${tagMov(p)}<small class="sub">${esc(labDe(p.c))}</small></td>
       <td class="n big drog">${cel(p, r.drog)}</td><td class="n sobra ${!rq.listo ? '' : sob < 0 ? 'falta' : 'ok'}">${rq.listo ? (sob < 0 ? '−' : '') + fmt(conv(p, Math.abs(sob))) : '<span class="z">…</span>'}</td><td class="n req">${rq.listo ? cq(rq.tot) : '<span class="z">…</span>'}</td>${r.sf.map((v, i) => `<td class="n sep">${cel(p, v)}</td><td class="n req">${marca(farms[i], rq.req[i])}</td><td class="n ate">${ateCel(p, farms[i], rq.ate[i])}</td>`).join('')}<td class="n sep">${cel(p, r.tot - r.drog)}</td><td class="n big">${cel(p, r.tot)}</td>
       <td class="n sep">${fmtE(p, conv(p, cx.nec))}</td><td class="n comprar">${cx.bloq ? '<span class="z">bloqueado</span>' : cx.cmp ? fmt(conv(p, cx.cmp)) : '<span class="z">·</span>'}</td></tr>`;
   }
@@ -1691,6 +1707,7 @@ $('kTabla').addEventListener('click', e => {
     if (!window.ponerCantFija?.(f, c, q)) return alert('Todavía se están leyendo los criterios de atención; inténtalo en unos segundos.');
     toast(q == null ? 'Se volverá a calcular solo · publicando a las sucursales…' : `${nomSuc(f)}: se enviarán ${q} · publicando a las sucursales…`);
     pintarKar(); return; }
+  const nb = e.target.closest('[data-knr]'); if (nb) return abrirNR(nb.dataset.knr);
   const k = e.target.closest('[data-kcom]');
   if (k) { const [f, c] = k.dataset.kcom.split('|'), rs = window.respAtencion?.(f, c); if (rs) alert(`💬 ${nomSuc(f)} · ${c} ${nomDe(c)}\n\n${rs.txt}\n\n— ${rs.por || 'la sucursal'}${rs.fecha ? ' · ' + rs.fecha : ''}`); return; }
   const a = e.target.closest('[data-abrir]'); if (a) abrirFichaP(a.dataset.abrir, 'kar');
@@ -1705,10 +1722,10 @@ $('gsDlg').addEventListener('click', async e => {
 });
 $('kXls').addEventListener('click', () => {
   const o = S.P, farms = o.farmacias, filas = filasKar(), num = v => String(Math.round(v * 1000) / 1000).replace('.', ',');
-  const t = [['Código', 'Medicamento', 'Laboratorio', 'Droguería', `Sobra/falta ${S.kCob}+${S.kSeg}`, 'Total requieren sucursales', ...farms.flatMap(f => [nomSuc(f), 'Requiere ' + nomSuc(f), 'Se atenderá ' + nomSuc(f)]), 'Sucursales', 'Total', `Necesita ${S.kCob} + ${S.kSeg} d`, 'Comprar', 'Comprar S/', 'Comunicado general', 'Comentarios de las sucursales', 'Movimiento', 'Atención bloqueada', 'Línea', 'Familia', 'Genérico', 'Reemplazo'],
+  const t = [['Código', 'Medicamento', 'Laboratorio', 'Droguería', `Sobra/falta ${S.kCob}+${S.kSeg}`, 'Total requieren sucursales', ...farms.flatMap(f => [nomSuc(f), 'Requiere ' + nomSuc(f), 'Se atenderá ' + nomSuc(f)]), 'Sucursales', 'Total', `Necesita ${S.kCob} + ${S.kSeg} d`, 'Comprar', 'Comprar S/', 'Comunicado general', 'Comentarios de las sucursales', 'Movimiento', 'Atención bloqueada', 'Línea', 'Familia', 'Genérico', 'Reemplazo', 'Nuevo: se reparte como'],
     ...filas.map(r => { const x = compraKar(r.p), rq = reqKar(r.p, r.sf), g = window.GEST?.get(r.p.c);
       const coms = farms.map(f => { const s = window.respAtencion?.(f, r.p.c); return s ? nomSuc(f) + ': ' + s.txt + (s.por ? ' (' + s.por + ')' : '') : ''; }).filter(Boolean).join(' | ');
-      return [r.p.c, r.p.n, labDe(r.p.c), num(r.drog), num(r.drog - rq.tot), rq.tot, ...r.sf.flatMap((v, i) => [num(v), window.BLOQ?.has(farms[i] + '__' + r.p.c) ? 'bloqueado' : rq.req[i] ?? '', rq.ate[i] ?? '']), num(r.tot - r.drog), num(r.tot), num(x.nec), x.bloq ? 'bloqueado' : x.cmp, num(x.cmp * (r.p.k || 0)), g ? 'Gestionado por droguería' + (g.nota ? ': ' + g.nota : '') : '', coms, (MOV_TXT[movDe(r.p)] || '').replace(/^\S+ /, ''), bloqAten(r.p.c) ? 'sí' + (window.BLOQ_ATEN.get(r.p.c).motivo ? ': ' + window.BLOQ_ATEN.get(r.p.c).motivo : '') : '', clas(r.p).t, clas(r.p).f, clas(r.p).g, window.REEMP?.has(r.p.c) ? 'Reemplazado por ' + window.REEMP.get(r.p.c).nuevo : window.REEMP_NUEVO?.has(r.p.c) ? 'Reemplaza a ' + window.REEMP_NUEVO.get(r.p.c).join(', ') : '']; })];
+      return [r.p.c, r.p.n, labDe(r.p.c), num(r.drog), num(r.drog - rq.tot), rq.tot, ...r.sf.flatMap((v, i) => [num(v), window.BLOQ?.has(farms[i] + '__' + r.p.c) ? 'bloqueado' : rq.req[i] ?? '', rq.ate[i] ?? '']), num(r.tot - r.drog), num(r.tot), num(x.nec), x.bloq ? 'bloqueado' : x.cmp, num(x.cmp * (r.p.k || 0)), g ? 'Gestionado por droguería' + (g.nota ? ': ' + g.nota : '') : '', coms, (MOV_TXT[movDe(r.p)] || '').replace(/^\S+ /, ''), bloqAten(r.p.c) ? 'sí' + (window.BLOQ_ATEN.get(r.p.c).motivo ? ': ' + window.BLOQ_ATEN.get(r.p.c).motivo : '') : '', clas(r.p).t, clas(r.p).f, clas(r.p).g, window.REEMP?.has(r.p.c) ? 'Reemplazado por ' + window.REEMP.get(r.p.c).nuevo : window.REEMP_NUEVO?.has(r.p.c) ? 'Reemplaza a ' + window.REEMP_NUEVO.get(r.p.c).join(', ') : '', window.NUEVO_REF?.has(r.p.c) ? window.NUEVO_REF.get(r.p.c).ref + ' ' + (window.NUEVO_REF.get(r.p.c).nRef || '') : (esNuevoRep(r.p) ? 'nuevo sin referencia' : '')]; })];
   bajarTabla(`stock_${o.corte}`, t);
 });
 
@@ -1789,6 +1806,32 @@ $('iXls').addEventListener('click', () => {
   const [dX, hX, MX] = rangoInd(); bajarTabla(`participacion_${S.iPor === 't' ? 'linea' : 'familia'}_${MX[dX]}_a_${MX[hX]}`, t);
 });
 
+/* ---------- productos nuevos: elegir con qué producto se reparten ---------- */
+const NR = { c: '' };
+const ventaInfo = x => { const v = sumH((x.h || []).slice(-12)), n = Object.values(x.s || {}).filter(s => s > 0).length; return `${nf0.format(v)} vendidos en 12 meses · vende en ${n} sucursales`; };
+const filaNR = x => `<button type="button" data-nrusar="${esc(x.c)}"><b>${esc(x.c)}</b> ${esc(x.n)} <small class="z">· ${esc(labDe(x.c))} · ${ventaInfo(x)}</small></button>`;
+function abrirNR(c) {
+  const p = S.idx.get(c); if (!p) return; NR.c = c; const g = clas(p).g, act = window.NUEVO_REF?.get(c);
+  $('nrTit').textContent = `${c} · ${p.n} · droguería ${fmtS(p, stDe(p, 'DROGUERIA FS'))}`; $('nrGen').textContent = g || '(sin genérico en la clasificación)';
+  $('nrActual').innerHTML = act ? `Ahora se reparte como <b>${esc(act.ref)} ${esc(act.nRef || nomDe(act.ref))}</b>.` : 'Todavía no tiene un producto de referencia.';
+  const mismos = g && !/^SIN GENERICO$/i.test(g) ? S.P.p.filter(x => x !== p && clas(x).g === g).sort((a, b) => sumH((b.h || []).slice(-12)) - sumH((a.h || []).slice(-12))).slice(0, 20) : [];
+  $('nrLista').innerHTML = mismos.map(filaNR).join('') || '<small class="z">No hay otros productos del mismo genérico; búsquelo abajo.</small>';
+  $('nrQ').value = ''; $('nrSug').innerHTML = ''; $('nrMsg').textContent = ''; $('nrQuitar').hidden = !act; $('nrDlg').showModal();
+}
+let nrT = 0; $('nrQ').addEventListener('input', () => { clearTimeout(nrT); nrT = setTimeout(() => {
+  const q = $('nrQ').value.trim().toLowerCase(); if (q.length < 2) { $('nrSug').innerHTML = ''; return; }
+  const l = []; for (const x of S.P.p) { if (x.c === NR.c) continue; if (x.c.toLowerCase().startsWith(q) || x.n.toLowerCase().includes(q)) { l.push(x); if (l.length >= 10) break; } }
+  $('nrSug').innerHTML = l.map(filaNR).join('') || '<small class="z">No se encontró.</small>'; }, 150); });
+$('nrDlg').addEventListener('click', async e => {
+  if (e.target.closest('[data-nrcerrar]') || e.target === $('nrDlg')) return $('nrDlg').close();
+  const quien = window.parent?.document?.getElementById('uNombre')?.textContent || '';
+  try {
+    const u = e.target.closest('[data-nrusar]');
+    if (u) { $('nrMsg').textContent = 'Guardando…'; await window.guardarNuevoRef(NR.c, { ref: u.dataset.nrusar, nRef: nomDe(u.dataset.nrusar), porNombre: quien, fecha: new Date().toISOString() }); $('nrDlg').close(); toast('Se repartirá como ' + u.dataset.nrusar); return; }
+    if (e.target.closest('#nrQuitar')) { await window.borrarNuevoRef(NR.c); $('nrDlg').close(); }
+  } catch (x) { $('nrMsg').textContent = 'No se pudo guardar: ' + (x.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules).' : x.message); }
+});
+
 /* ---------- DROGUERÍA y POR SUCURSAL ----------
    Droguería: stock de droguería, el modelo de pronóstico, lo que necesita la red para los días elegidos y Comprar = necesita − stock.
    Por sucursal: lo mismo para una sucursal (su parte de la venta) y Pedir = necesita − su stock.
@@ -1831,7 +1874,7 @@ function filasStk() {
       // por qué se le atiende con la venta de OTRO producto (o por qué no): se muestra junto al nombre
       motivo = r?.enLugar ? `🔄 Se atiende en lugar de ${r.enLugar} (droguería, en Faltantes): usa la venta de ese producto`
         : r?.cambio ? `🔄 La sucursal lo usa en cambio de ${r.cambio}: usa la venta de ese producto`
-        : r?.krN ? `🔁 Reemplaza a ${r.krN}` : /tipo [CD]: se vendió|a pedido \(tipo|cantidad fija/.test(r?.nota || '') ? r.nota : '';
+        : r?.krN ? `🔁 Reemplaza a ${r.krN}` : /tipo [CD]: se vendió|a pedido \(tipo|cantidad fija|urgencia del|🆕 nuevo: se reparte/.test(r?.nota || '') ? r.nota : '';
     }
     if (bq && !drog) continue;   // en el módulo de cada sucursal no aparecen los bloqueados (en ella, en droguería o en todas)
     if (bq) { cmp = 0; nota = 'bloqueado'; }
@@ -2599,9 +2642,9 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611102200"></script>
+<script src="sucursales.js?v=202611111000"></script>
 <script src="estadistica.js?v=202611101700"></script>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="proyeccion.js?v=202611062200"></script>
+<script type="module" src="proyeccion.js?v=202611111000"></script>
 
 </body></html>
