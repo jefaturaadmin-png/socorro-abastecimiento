@@ -119,7 +119,7 @@
       const red = [];
       for (const f of S.P.farmacias) {
         const r = filaBase(p, f);
-        if (r.d || r.st || r.aj) red.push(r);   // los productos con ajuste se listan siempre
+        if (r.d || r.st || r.aj || r.pide > 0) red.push(r);   // con ajuste, o con algo que pedir (urgencia, nuevo…) se listan siempre
       }
       if (!red.length) continue;
       repartir(p, red);
