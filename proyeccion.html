@@ -1281,8 +1281,14 @@ function abrirFichaP(c, origen) { S.fpDesde = ''; S.cur = c; S.origen = origen; 
 const LAB = new Map();
 // laboratorios que pasaron a otro: se leen siempre con el nombre nuevo (HERSIL → MEDIFARMA HUMANOVA, VHH PHARMA → MH PHARMA)
 const LAB_ALIAS = { 'HERSIL S.A.': 'MEDIFARMA HUMANOVA S.A.', 'HERSIL': 'MEDIFARMA HUMANOVA S.A.', 'HERS': 'MEDIFARMA HUMANOVA S.A.', 'VHH PHARMA': 'MH PHARMA', 'VHH': 'MH PHARMA' };
-fetch('catalogo.json').then(r => r.json()).then(cat => { for (const x of cat) { const l = String(x.ln || x.l || '').trim(); LAB.set(String(x.c), LAB_ALIAS[l.toUpperCase()] || l); } if (S.P) render(); }).catch(() => {});
-const labDe = c => LAB.get(c) || '';
+fetch('catalogo.json').then(r => r.json()).then(cat => { for (const x of cat) { const l = String(x.ln || x.l || '').trim(), sg = String(x.l || '').trim().toUpperCase();
+  LAB.set(String(x.c), LAB_ALIAS[l.toUpperCase()] || l); if (sg) { LABSIG.set(String(x.c), sg); if (x.ln && !LABNOM.has(sg)) LABNOM.set(sg, String(x.ln).trim()); } } if (S.P) render(); }).catch(() => {});
+const LABSIG = new Map();   // código de producto → sigla del laboratorio (del catálogo)
+// sigla → nombre completo: del catálogo y de los reportes subidos (clasificación); los que cambiaron de laboratorio, con el nombre nuevo
+const nomLab = sig => { sig = String(sig || '').trim().toUpperCase(); if (!sig) return ''; const n = CLAS?.labs?.[sig] || LABNOM.get(sig) || ''; return LAB_ALIAS[n.toUpperCase()] || LAB_ALIAS[sig] || n; };
+const LABNOM = new Map();
+const labSig = c => { const p = S.idx?.get(String(c)); return (p && clas(p).l) || LABSIG.get(c) || ''; };
+const labDe = c => LAB.get(c) || nomLab(labSig(c)) || labSig(c);
 let labsDe = null;
 function llenarLabs() {
   if (labsDe === S.P && document.querySelector('.sLab').options.length > 1) return;
@@ -1318,27 +1324,39 @@ async function subirClas(files) {
     if (!S.assets || !S.db) return msg('Para guardar la clasificación entra con tu usuario.');
     msg('Leyendo los reportes…');
     const base = CLAS || await fetch('clasificacion.json').then(r => r.json());
-    const m = new Map(Object.entries(base.p).map(([n, a]) => [n, { t: base.t[a[0]] || '', g: base.g[a[1]] || '', f: base.f[a[2]] || '' }]));
-    const hechos = [], CAMPO = { g: 'genérico', f: 'familia', t: 'línea' };
+    // por producto: t línea, g genérico, f familia, l sigla del laboratorio; y aparte, nombre de cada sigla de laboratorio
+    const m = new Map(Object.entries(base.p).map(([n, a]) => [n, { t: base.t[a[0]] || '', g: base.g[a[1]] || '', f: base.f[a[2]] || '', l: (base.l || [])[a[3]] || '' }]));
+    const labs = { ...(base.labs || {}) };
+    const hechos = [], CAMPO = { g: 'genérico', f: 'familia', t: 'línea', l: 'laboratorio' };
     for (const file of files) {
       const L = new TextDecoder('windows-1252').decode(await file.arrayBuffer()).split(/\r?\n/), h = (L[0] || '').split('\t').map(x => x.trim().toLowerCase());
-      const iN = h.indexOf('despro'), iG = h.indexOf('desgen'), iF = h.indexOf('desfam'), iL = h.findIndex(x => /^des.*lin|^linea$|^destip$/.test(x));   // destip: «producto gestión de ventas» (FARMACOS, PERFUMERIA…)
-      const [campo, iV] = iG >= 0 ? ['g', iG] : iF >= 0 ? ['f', iF] : iL >= 0 ? ['t', iL] : [null, -1];
-      if (iN < 0 || !campo) { hechos.push(`${file.name}: no se reconoce (debe traer la columna despro y desgen, desfam o destip)`); continue; }
-      let n = 0, nuevos = 0, cambios = 0;
+      // columnas que se reconocen (un mismo reporte puede traer varias): desgen, desfam, destip/línea (gestión de ventas), codlab (+ deslab)
+      const iN = h.indexOf('despro'), cols = [['g', h.indexOf('desgen')], ['f', h.indexOf('desfam')], ['t', h.findIndex(x => /^des.*lin|^linea$|^destip$/.test(x))], ['l', h.indexOf('codlab')]].filter(([, i]) => i >= 0);
+      const iLN = h.findIndex(x => /^deslab|^nomlab|^laboratorio$/.test(x));
+      // lista de laboratorios (codlab + deslab, sin productos): solo nombres de las siglas
+      const iC = h.indexOf('codlab');
+      if (iN < 0 && iC >= 0 && iLN >= 0) { let k = 0; for (const l of L.slice(1)) { const c = l.split('\t'), sg = String(c[iC] || '').trim().toUpperCase(), nm = String(c[iLN] || '').trim(); if (sg && nm) { labs[sg] = nm; k++; } }
+        hechos.push(`${file.name.replace(/^[0-9a-f]{8}-/, '')}: ${nf0.format(k)} laboratorios con su nombre`); continue; }
+      if (iN < 0 || !cols.length) { hechos.push(`${file.name}: no se reconoce (debe traer la columna despro y desgen, desfam, destip o codlab; o codlab y deslab)`); continue; }
+      const cuenta = Object.fromEntries(cols.map(([k]) => [k, 0])); let n = 0, nuevos = 0;
       for (const l of L.slice(1)) {
         const c = l.split('\t'), k = nomN(c[iN]); if (!k) continue;
-        let v = String(c[iV] || '').trim(); if (/^NO CLASIFICAD|^NO ESPECIFICA/i.test(v)) v = '';
-        // la línea se guarda con el mismo nombre que ya existe (FARMACOS → Farmacos); si es nueva, en Tipo Título
-        if (v && campo === 't') v = lineaNom(v);
-        let x = m.get(k); if (!x) { x = { t: '', g: '', f: '' }; m.set(k, x); nuevos++; }
-        if (v && x[campo] !== v) { x[campo] = v; cambios++; } n++;
+        let x = m.get(k); if (!x) { x = { t: '', g: '', f: '', l: '' }; m.set(k, x); nuevos++; }
+        for (const [campo, iV] of cols) {
+          let v = String(c[iV] || '').trim(); if (/^NO CLASIFICAD|^NO ESPECIFICA/i.test(v)) v = '';
+          if (v && campo === 't') v = lineaNom(v);   // FARMACOS → Farmacos (el nombre que ya existe)
+          if (v && campo === 'l') v = v.toUpperCase();
+          if (v && x[campo] !== v) { x[campo] = v; cuenta[campo]++; }
+        }
+        if (iLN >= 0 && x.l) { const nm = String(c[iLN] || '').trim(); if (nm) labs[x.l] = nm; }
+        n++;
       }
-      hechos.push(`${CAMPO[campo]}: ${nf0.format(n)} productos leídos, ${nf0.format(cambios)} actualizados, ${nf0.format(nuevos)} nuevos`);
+      hechos.push(`${file.name.replace(/^[0-9a-f]{8}-/, '')}: ${nf0.format(n)} leídos · ` + cols.map(([k]) => `${CAMPO[k]} ${nf0.format(cuenta[k])} actualizados`).join(', ') + ` · ${nf0.format(nuevos)} nuevos`);
     }
-    const out = {}; for (const k of ['t', 'g', 'f']) out[k] = [...new Set([...m.values()].map(x => x[k]).filter(Boolean))].sort();
-    const ix = {}; for (const k of ['t', 'g', 'f']) ix[k] = new Map(out[k].map((v, i) => [v, i]));
-    out.p = {}; for (const [n, x] of m) out.p[n] = [ix.t.get(x.t) ?? -1, ix.g.get(x.g) ?? -1, ix.f.get(x.f) ?? -1];
+    const out = {}; for (const k of ['t', 'g', 'f', 'l']) out[k] = [...new Set([...m.values()].map(x => x[k]).filter(Boolean))].sort();
+    const ix = {}; for (const k of ['t', 'g', 'f', 'l']) ix[k] = new Map(out[k].map((v, i) => [v, i]));
+    out.p = {}; for (const [n, x] of m) out.p[n] = [ix.t.get(x.t) ?? -1, ix.g.get(x.g) ?? -1, ix.f.get(x.f) ?? -1, ix.l.get(x.l) ?? -1];
+    out.labs = labs;
     msg('Guardando la clasificación…');
     const ant = await S.db.doc('config/clasificacion').get();
     const up = await S.assets.upload(new Blob([JSON.stringify(out)], { type: 'application/json' }));
@@ -1353,10 +1371,10 @@ async function subirClas(files) {
 let clasDe = null;
 // { t: línea, g: genérico, f: familia } del producto ('' si no se conoce)
 function clas(p) {
-  if (!CLAS) return { t: '', g: '', f: '' };
+  if (!CLAS) return { t: '', g: '', f: '', l: '' };
   if (clasDe !== CLAS) { clasDe = CLAS; CLAS.cache = new Map(); }
   let x = CLAS.cache.get(p.c);
-  if (!x) { const a = CLAS.p[nomN(p.n)] || [-1, -1, -1]; x = { t: CLAS.t[a[0]] || '', g: CLAS.g[a[1]] || '', f: CLAS.f[a[2]] || '' }; CLAS.cache.set(p.c, x); }
+  if (!x) { const a = CLAS.p[nomN(p.n)] || [-1, -1, -1, -1]; x = { t: CLAS.t[a[0]] || '', g: CLAS.g[a[1]] || '', f: CLAS.f[a[2]] || '', l: (CLAS.l || [])[a[3]] || '' }; CLAS.cache.set(p.c, x); }
   return x;
 }
 const textoClas = p => { const x = clas(p); return x.t + ' ' + x.g + ' ' + x.f; };
@@ -1734,10 +1752,10 @@ $('gsDlg').addEventListener('click', async e => {
 });
 $('kXls').addEventListener('click', () => {
   const o = S.P, farms = o.farmacias, filas = filasKar(), num = v => String(Math.round(v * 1000) / 1000).replace('.', ',');
-  const t = [['Código', 'Medicamento', 'Laboratorio', 'Droguería', `Sobra/falta ${S.kCob}+${S.kSeg}`, 'Sucursales (stock)', 'Total (droguería + sucursales)', 'Total requieren sucursales', ...farms.flatMap(f => [nomSuc(f), 'Requiere ' + nomSuc(f), 'Se atenderá ' + nomSuc(f)]), `Necesita ${S.kCob} + ${S.kSeg} d`, 'Comprar', 'Comprar S/', 'Comunicado general', 'Comentarios de las sucursales', 'Movimiento', 'Atención bloqueada', 'Línea', 'Familia', 'Genérico', 'Reemplazo', 'Nuevo: se reparte como'],
+  const t = [['Código', 'Medicamento', 'Laboratorio', 'Sigla lab.', 'Droguería', `Sobra/falta ${S.kCob}+${S.kSeg}`, 'Sucursales (stock)', 'Total (droguería + sucursales)', 'Total requieren sucursales', ...farms.flatMap(f => [nomSuc(f), 'Requiere ' + nomSuc(f), 'Se atenderá ' + nomSuc(f)]), `Necesita ${S.kCob} + ${S.kSeg} d`, 'Comprar', 'Comprar S/', 'Comunicado general', 'Comentarios de las sucursales', 'Movimiento', 'Atención bloqueada', 'Línea', 'Familia', 'Genérico', 'Reemplazo', 'Nuevo: se reparte como'],
     ...filas.map(r => { const x = compraKar(r.p), rq = reqKar(r.p, r.sf), g = window.GEST?.get(r.p.c);
       const coms = farms.map(f => { const s = window.respAtencion?.(f, r.p.c); return s ? nomSuc(f) + ': ' + s.txt + (s.por ? ' (' + s.por + ')' : '') : ''; }).filter(Boolean).join(' | ');
-      return [r.p.c, r.p.n, labDe(r.p.c), num(r.drog), num(r.drog - rq.tot), num(r.tot - r.drog), num(r.tot), rq.tot, ...r.sf.flatMap((v, i) => [num(v), window.BLOQ?.has(farms[i] + '__' + r.p.c) ? 'bloqueado' : rq.req[i] ?? '', rq.ate[i] ?? '']), num(x.nec), x.bloq ? 'bloqueado' : x.cmp, num(x.cmp * (r.p.k || 0)), g ? 'Gestionado por droguería' + (g.nota ? ': ' + g.nota : '') : '', coms, (MOV_TXT[movDe(r.p)] || '').replace(/^\S+ /, ''), bloqAten(r.p.c) ? 'sí' + (window.BLOQ_ATEN.get(r.p.c).motivo ? ': ' + window.BLOQ_ATEN.get(r.p.c).motivo : '') : '', clas(r.p).t, clas(r.p).f, clas(r.p).g, window.REEMP?.has(r.p.c) ? 'Reemplazado por ' + window.REEMP.get(r.p.c).nuevo : window.REEMP_NUEVO?.has(r.p.c) ? 'Reemplaza a ' + window.REEMP_NUEVO.get(r.p.c).join(', ') : '', window.NUEVO_REF?.has(r.p.c) ? window.NUEVO_REF.get(r.p.c).ref + ' ' + (window.NUEVO_REF.get(r.p.c).nRef || '') : (esNuevoRep(r.p) ? 'nuevo sin referencia' : '')]; })];
+      return [r.p.c, r.p.n, labDe(r.p.c), labSig(r.p.c), num(r.drog), num(r.drog - rq.tot), num(r.tot - r.drog), num(r.tot), rq.tot, ...r.sf.flatMap((v, i) => [num(v), window.BLOQ?.has(farms[i] + '__' + r.p.c) ? 'bloqueado' : rq.req[i] ?? '', rq.ate[i] ?? '']), num(x.nec), x.bloq ? 'bloqueado' : x.cmp, num(x.cmp * (r.p.k || 0)), g ? 'Gestionado por droguería' + (g.nota ? ': ' + g.nota : '') : '', coms, (MOV_TXT[movDe(r.p)] || '').replace(/^\S+ /, ''), bloqAten(r.p.c) ? 'sí' + (window.BLOQ_ATEN.get(r.p.c).motivo ? ': ' + window.BLOQ_ATEN.get(r.p.c).motivo : '') : '', clas(r.p).t, clas(r.p).f, clas(r.p).g, window.REEMP?.has(r.p.c) ? 'Reemplazado por ' + window.REEMP.get(r.p.c).nuevo : window.REEMP_NUEVO?.has(r.p.c) ? 'Reemplaza a ' + window.REEMP_NUEVO.get(r.p.c).join(', ') : '', window.NUEVO_REF?.has(r.p.c) ? window.NUEVO_REF.get(r.p.c).ref + ' ' + (window.NUEVO_REF.get(r.p.c).nRef || '') : (esNuevoRep(r.p) ? 'nuevo sin referencia' : '')]; })];
   bajarTabla(`stock_${o.corte}`, t);
 });
 
@@ -2028,9 +2046,9 @@ $('xXls').addEventListener('click', () => {
   const txtOtras = p => [p.pap ? 'PAP' : '', p.est ? 'Estacional (venta por temporadas)' : ''].filter(Boolean).join(' · ');
   const extra = ['Motivo de la atención', 'Línea', 'Familia', 'Genérico', 'Comunicado de droguería', 'Reemplazo', 'Atención bloqueada', 'Movimiento', 'Otras etiquetas'];
   const datosExtra = p => { const x = clas(p); return [x.t, x.f, x.g, txtGest(p.c), txtKR(p.c), txtBAt(p.c), (MOV_TXT[movDe(p)] || '').replace(/^\S+ /, ''), txtOtras(p)]; };
-  const t = [['Código', 'Medicamento', 'Laboratorio', 'Tipo', 'Stock actual', 'Le dura (días)', 'Modelo', 'Venta diaria', `Necesita ${S.xCob} + ${S.xSeg} d`, drog ? 'Comprar' : 'Pedir', ...(drog ? [] : ['Se atenderá', 'Fraccionero', 'Va a sobrar (+) / faltar (−) (fracciones)']), 'Costo S/', (drog ? 'Comprar' : 'Pedir') + ' S/', 'Nota', 'Comentario de la sucursal', ...extra],
+  const t = [['Código', 'Medicamento', 'Laboratorio', 'Sigla lab.', 'Tipo', 'Stock actual', 'Le dura (días)', 'Modelo', 'Venta diaria', `Necesita ${S.xCob} + ${S.xSeg} d`, drog ? 'Comprar' : 'Pedir', ...(drog ? [] : ['Se atenderá', 'Fraccionero', 'Va a sobrar (+) / faltar (−) (fracciones)']), 'Costo S/', (drog ? 'Comprar' : 'Pedir') + ' S/', 'Nota', 'Comentario de la sucursal', ...extra],
     ...filasStk().map(r => { const a = ate(r.p), fr = +r.p.fr > 1 ? +r.p.fr : 1;
-      return [r.c, r.n, labDe(r.c), r.cat, num(r.st), r.vd > 0 ? Math.round(r.st / r.vd * 10) / 10 : r.st > 0 ? 'sin venta' : '', r.met, num(r.vd), num(r.nec), r.cmp, ...(drog ? [] : [a, fr, a ? num((r.st + a - r.nec) * fr) : '']), num(r.p.k), num(r.cmp * (r.p.k || 0)), r.nota, r.resp ? r.resp.txt + (r.resp.por ? ' · ' + r.resp.por : '') : '', r.motivo || '', ...datosExtra(r.p)]; })];
+      return [r.c, r.n, labDe(r.c), labSig(r.c), r.cat, num(r.st), r.vd > 0 ? Math.round(r.st / r.vd * 10) / 10 : r.st > 0 ? 'sin venta' : '', r.met, num(r.vd), num(r.nec), r.cmp, ...(drog ? [] : [a, fr, a ? num((r.st + a - r.nec) * fr) : '']), num(r.p.k), num(r.cmp * (r.p.k || 0)), r.nota, r.resp ? r.resp.txt + (r.resp.por ? ' · ' + r.resp.por : '') : '', r.motivo || '', ...datosExtra(r.p)]; })];
   bajarTabla(`${drog ? 'drogueria' : 'sucursal_' + nomSuc(S.xFarm)}_${o.corte}`, t);
 });
 
