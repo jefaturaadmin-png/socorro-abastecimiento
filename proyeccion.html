@@ -973,7 +973,9 @@ function porQueNo(q) {
   if (mp) return `El código ${c} (${mp[0]}) está en el kardex pero todavía no en los cálculos: recarga la página para que se recalcule.`;
   return `El código ${c} no está en nada de lo guardado: ni en el historial de Colab ni en los kardex subidos (no tuvo ningún movimiento en esos archivos). Aparecerá cuando suba un kardex donde tenga movimientos.`;
 }
-const filtroTexto = (lista, q) => { q = q.trim().toUpperCase(); if (!q) return lista; const ws = q.split(/\s+/); return lista.filter(p => { const t = (p.c + ' ' + p.n + ' ' + textoClas(p.p || p)).toUpperCase(); return ws.every(w => t.includes(w)); }); };
+// buscador: si se pega una LISTA de códigos (de un Excel: «24758 DOLIF…», uno por fila), muestra exactamente esos productos
+const codigosPegados = q => { const m = q.match(/(?:^|\s)(\d{5})(?=\s|$)/g); return m && m.length >= 3 ? new Set(m.map(x => x.trim())) : null; };
+const filtroTexto = (lista, q) => { q = q.trim().toUpperCase(); if (!q) return lista; const cs = codigosPegados(q); if (cs) return lista.filter(p => cs.has(p.c)); const ws = q.split(/\s+/); return lista.filter(p => { const t = (p.c + ' ' + p.n + ' ' + textoClas(p.p || p)).toUpperCase(); return ws.every(w => t.includes(w)); }); };
 
 /* ---------- datos de ejemplo (formato del archivo de pronósticos) ---------- */
 function ejemplo() {
