@@ -574,6 +574,7 @@ main { padding-bottom: 80px }
 /* urgencias: tablero del administrador y tarjetas de las sucursales */
 #pdTopH { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between } .pd-topn { display: inline-flex; gap: 4px } .pd-topn .btn.act { background: #14306B; color: #fff; border-color: #14306B }
 .pd-otras { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 6px; max-width: 360px } .pd-otra { font-size: 12px; background: #eef2fb; color: #14306B; border-radius: 999px; padding: 2px 8px; white-space: nowrap } .pd-otra i { color: #8a5a00; font-style: normal }
+.urg-it { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px } .urg-q { display: inline-flex; align-items: center; gap: 4px; font-size: 13px } .urg-q input { width: 64px; padding: 4px 6px }
 .pd-filtros { padding: 14px 18px; margin-bottom: 14px; align-items: flex-end }
 .pd-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 14px }
 .pd-kpi { display: grid; gap: 2px; padding: 14px 16px } .pd-kpi small { color: var(--muted); font-size: 12.5px }

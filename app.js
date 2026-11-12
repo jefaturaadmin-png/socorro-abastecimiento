@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611121200";
+const VERSION_PROY = "202611121300";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1967,12 +1967,15 @@ async function cargarPedidos(forzar) {
     const orden = [cC, cP, ...otras].filter((i, j, a) => i >= 0 && a.indexOf(i) === j);
     const datos = filas.flatMap((x, k) => {
       const crudo = String(x[orden.find(i => String(x[i] || "").trim())] ?? "").trim();
-      const cods = crudo.match(/\b\d{3,6}\b/g), partes = cods && cods.length && crudo.replace(/[\d\s,;\/.\-y]+/gi, "") === "" ? cods : [crudo];
+      // pedidos desde la página: «21648 x3, 00052 x2» = código y cantidad
+      const itRe = /^(\d{3,6})\s*[x×*]\s*(\d+(?:[.,]\d+)?)$/i, items = crudo.split(/[,;]/).map(t => t.trim()).filter(Boolean);
+      const conQ = items.length && items.every(t => itRe.test(t) || /^\d{3,6}$/.test(t)) && items.some(t => itRe.test(t)) ? items.map(t => { const m = t.match(itRe); return m ? [m[1], parseFloat(m[2].replace(",", "."))] : [t, 0]; }) : null;
+      const cods = conQ ? conQ.map(z => z[0]) : crudo.match(/\b\d{3,6}\b/g), partes = conQ ? cods : cods && cods.length && crudo.replace(/[\d\s,;\/.\-y]+/gi, "") === "" ? cods : [crudo];
       return partes.map(p => p.trim()).filter(p => p && !/^[-–.\s]*$/.test(p)).map((pz, j) => {
         const pc = prodCat(pz) || (cods?.length === 1 ? prodCat(cods[0]) : null);
         return { k: k + j / 100, x, id: idFila(x) + (partes.length > 1 ? "_" + j : ""), suc: cS >= 0 ? sucDe(x[cS]) : "", f: cF >= 0 ? fechaDe(x[cF]) : null,
           cod: pc?.c || (/^\d+$/.test(pz) ? pz : ""), nom: pc?.n || (/^\d+$/.test(pz) ? "" : pz), lab: pc?.ln || "",
-          q: cQ >= 0 ? parseFloat(String(x[cQ]).replace(",", ".")) || 0 : 0, mot: cM >= 0 ? x[cM].trim() : "", quien: cU >= 0 ? x[cU].trim() : "" };
+          q: conQ?.[j]?.[1] || (cQ >= 0 ? parseFloat(String(x[cQ]).replace(",", ".")) || 0 : 0), mot: cM >= 0 ? x[cM].trim() : "", quien: cU >= 0 ? x[cU].trim() : "" };
       });
     });
     S.ped = { t: Date.now(), cab, cS, cF, datos: datos.filter(d => d.cod || d.nom) }; S.pdErr = "";
@@ -2173,7 +2176,7 @@ function pintarNuevoUrg() {
   const fija = !!miFarm() && !esAdmin();
   $("urgSucBox").innerHTML = fija ? `<b>${esc(nombreFarm(miFarm()))}</b> <small class="muted">(tu sucursal)</small>`
     : `<select id="urgSuc"><option value="">Elige la sucursal…</option>${Object.keys(FORM_URGENCIA.sucursales).map(f => `<option value="${esc(f)}" ${S.urgSucSel === f ? "selected" : ""}>${esc(corto(f))}</option>`).join("")}</select>`;
-  $("urgSel").innerHTML = S.urgNuevo.length ? S.urgNuevo.map((p, k) => `<span class="fs-alt"><b>${esc(p.c)}</b> ${esc(p.n)} <button type="button" class="enlace" data-urg-quitar="${k}">Quitar</button></span>`).join("")
+  $("urgSel").innerHTML = S.urgNuevo.length ? S.urgNuevo.map((p, k) => `<span class="fs-alt urg-it"><b>${esc(p.c)}</b> ${esc(p.n)} <label class="urg-q">Cantidad <input type="number" min="1" step="1" value="${p.q || 1}" data-urg-q="${k}" inputmode="numeric"></label> <button type="button" class="enlace" data-urg-quitar="${k}">Quitar</button></span>`).join("")
     : '<small class="muted">Busca y agrega los productos que necesitas (puedes agregar varios).</small>';
   $("urgEnviar").textContent = S.urgNuevo.length > 1 ? `Enviar pedido (${S.urgNuevo.length} productos)` : "Enviar pedido";
 }
@@ -2187,12 +2190,13 @@ $("urgBus").addEventListener("input", e => {
     + (libre ? `<button type="button" data-urg-cod="${esc(t)}"><b>${esc(t)}</b> Agregar este código tal cual (no está en el catálogo)</button>` : ""); box.hidden = !t;
 });
 $("urgDlg").addEventListener("change", e => { if (e.target.id === "urgSuc") S.urgSucSel = e.target.value; });
+$("urgDlg").addEventListener("input", e => { const q = e.target.closest("[data-urg-q]"); if (q) { const p = S.urgNuevo[+q.dataset.urgQ]; if (p) p.q = Math.max(1, Math.round(+q.value || 1)); } });
 $("urgDlg").addEventListener("click", async e => {
   if (e.target.closest("[data-cerrar-dlg]") || e.target === $("urgDlg")) return $("urgDlg").close();
   const a = e.target.closest("[data-urg-add]");
-  if (a) { const p = S.catIdx.get(a.dataset.urgAdd); if (p) S.urgNuevo.push({ c: p.c, n: p.n }); $("urgBus").value = S.urgBus = ""; $("urgRes").hidden = true; pintarNuevoUrg(); $("urgBus").focus(); return; }
+  if (a) { const p = S.catIdx.get(a.dataset.urgAdd); if (p) S.urgNuevo.push({ c: p.c, n: p.n, q: 1 }); $("urgBus").value = S.urgBus = ""; $("urgRes").hidden = true; pintarNuevoUrg(); $("urgBus").focus(); return; }
   const lc = e.target.closest("[data-urg-cod]");
-  if (lc) { S.urgNuevo.push({ c: lc.dataset.urgCod, n: "(código sin nombre en el catálogo)" }); $("urgBus").value = S.urgBus = ""; $("urgRes").hidden = true; pintarNuevoUrg(); $("urgBus").focus(); return; }
+  if (lc) { S.urgNuevo.push({ c: lc.dataset.urgCod, n: "(código sin nombre en el catálogo)", q: 1 }); $("urgBus").value = S.urgBus = ""; $("urgRes").hidden = true; pintarNuevoUrg(); $("urgBus").focus(); return; }
   const q = e.target.closest("[data-urg-quitar]"); if (q) { S.urgNuevo.splice(+q.dataset.urgQuitar, 1); return pintarNuevoUrg(); }
   if (!e.target.closest("#urgEnviar")) return;
   if (S.prev) return msg("urgMsg", PREVIA.message, true);
@@ -2202,8 +2206,8 @@ $("urgDlg").addEventListener("click", async e => {
   const b = $("urgEnviar"); b.disabled = true; msg("urgMsg", "Enviando…");
   try {
     // Google no deja leer la respuesta desde otra página (no-cors): se envía y luego se confirma al releer la hoja
-    // como en el formulario: todos los códigos en una sola respuesta, separados por coma ("21648, 00052, 52147")
-    const datos = new URLSearchParams({ [FORM_URGENCIA.campoSucursal]: sucFormDe(suc), [FORM_URGENCIA.campoProducto]: S.urgNuevo.map(p => p.c).join(", ") });
+    // como en el formulario: todos los códigos en una sola respuesta, separados por coma, cada uno con su cantidad ("21648 x3, 00052 x1")
+    const datos = new URLSearchParams({ [FORM_URGENCIA.campoSucursal]: sucFormDe(suc), [FORM_URGENCIA.campoProducto]: S.urgNuevo.map(p => `${p.c} x${Math.max(1, Math.round(+p.q || 1))}`).join(", ") });   // con la cantidad: «21648 x3»
     await fetch(FORM_URGENCIA.url, { method: "POST", mode: "no-cors", body: datos });
     const n = S.urgNuevo.length; $("urgDlg").close(); toast(`Pedido enviado al formulario (${n} producto${n === 1 ? "" : "s"}). Aparecerá en unos segundos.`);
     S.urgNuevo = []; setTimeout(() => cargarPedidos(true), 4000); setTimeout(() => cargarPedidos(true), 15000);
