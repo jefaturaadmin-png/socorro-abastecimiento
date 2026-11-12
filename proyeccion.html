@@ -748,7 +748,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
           <label class="field"><span>Días de seguridad</span><input id="kSeg" type="number" min="0" max="180" value="15" style="width:70px"></label>
           <button type="button" class="btn sm" id="kXls">⬇ Descargar Excel</button>
           <button type="button" class="btn sm" id="kReemp" title="Registrar que un código se reemplaza por otro">🔁 Reemplazos</button>
-          <label class="btn sm" for="fClas" title="Reportes «producto por genérico», «producto por familia» y «producto gestión de ventas» (línea) en .TXT, del mismo sistema del kardex. Puede elegir varios a la vez.">📋 Actualizar clasificación (.TXT)</label>
+          <label class="btn sm" for="fClas" title="Reportes en .TXT del mismo sistema del kardex: «producto por genérico», «producto por familia», «producto gestión de ventas» (línea y laboratorio) y «stock productos por laboratorio» (laboratorio por código y control de stock). Puede elegir varios a la vez.">📋 Actualizar clasificación (.TXT)</label>
           <small class="z" id="kMsgClas"></small>
         </div>
       </div>
@@ -1287,7 +1287,7 @@ const LABSIG = new Map();   // código de producto → sigla del laboratorio (de
 // sigla → nombre completo: del catálogo y de los reportes subidos (clasificación); los que cambiaron de laboratorio, con el nombre nuevo
 const nomLab = sig => { sig = String(sig || '').trim().toUpperCase(); if (!sig) return ''; const n = CLAS?.labs?.[sig] || LABNOM.get(sig) || ''; return LAB_ALIAS[n.toUpperCase()] || LAB_ALIAS[sig] || n; };
 const LABNOM = new Map();
-const labSig = c => { const p = S.idx?.get(String(c)); return (p && clas(p).l) || LABSIG.get(c) || ''; };
+const labSig = c => { c = String(c); const p = S.idx?.get(c); return CLAS?.pc?.[c] || (p && clas(p).l) || LABSIG.get(c) || ''; };
 const labDe = c => LAB.get(c) || nomLab(labSig(c)) || labSig(c);
 let labsDe = null;
 function llenarLabs() {
@@ -1318,6 +1318,24 @@ function lineaNom(v) {
   const ya = (CLAS?.t || []).find(x => x.toUpperCase() === v.toUpperCase()); if (ya) return ya;
   return v.toLowerCase().replace(/(^|[\s.])([a-zñáéíóú])/g, (m, a, b) => a + b.toUpperCase());
 }
+// CONTROL DE STOCK: el stock del reporte «stock productos por laboratorio» contra el del kardex (droguería + sucursales)
+function compararStock(rep) {
+  if (!S.P || S.ejemplo) return;
+  const o = S.P, todos = [...o.farmacias.filter(f => f !== 'DROGUERIA FS'), 'DROGUERIA FS'], filas = [], r3 = v => Math.round(v * 1000) / 1000;
+  const vistos = new Set();
+  for (const [c, x] of rep) {
+    const p = S.idx.get(c); vistos.add(c);
+    const drog = p ? stDe(p, 'DROGUERIA FS') : 0, suc = p ? o.farmacias.filter(f => f !== 'DROGUERIA FS').reduce((a, f) => a + stDe(p, f), 0) : 0, kar = drog + suc;
+    const dif = r3(x.v - kar); if (Math.abs(dif) * x.fr < 0.5) continue;   // menos de media fracción: igual
+    filas.push([c, x.n, nomLab(x.sg) || x.sg, x.sg, r3(x.v), r3(kar), r3(drog), r3(suc), dif, p ? '' : 'no está en el kardex']);
+  }
+  for (const p of o.p) if (!vistos.has(p.c)) { const kar = todos.reduce((a, f) => a + stDe(p, f), 0); if (kar >= 0.5) filas.push([p.c, p.n, labDe(p.c), labSig(p.c), 0, r3(kar), r3(stDe(p, 'DROGUERIA FS')), r3(kar - stDe(p, 'DROGUERIA FS')), r3(-kar), 'no está en el reporte']); }
+  filas.sort((a, b) => Math.abs(b[8]) - Math.abs(a[8]));
+  S.difStock = filas;
+  $('kMsgClas').insertAdjacentHTML('beforeend', ` · <b>Control de stock: ${nf0.format(filas.length)} productos con diferencia</b> <button type="button" class="btn sm" id="kDifXls">⬇ Descargar diferencias</button>`);
+}
+$('kMsgClas').addEventListener('click', e => { if (!e.target.closest('#kDifXls') || !S.difStock) return;
+  bajarTabla(`control_stock_${S.P.corte}`, [['Código', 'Medicamento', 'Laboratorio', 'Sigla lab.', 'Stock del reporte', 'Stock del kardex (total)', 'Droguería (kardex)', 'Sucursales (kardex)', 'Diferencia (reporte − kardex)', 'Observación'], ...S.difStock]); });
 async function subirClas(files) {
   const msg = t => { $('kMsgClas').textContent = t; };
   try {
@@ -1326,13 +1344,13 @@ async function subirClas(files) {
     const base = CLAS || await fetch('clasificacion.json').then(r => r.json());
     // por producto: t línea, g genérico, f familia, l sigla del laboratorio; y aparte, nombre de cada sigla de laboratorio
     const m = new Map(Object.entries(base.p).map(([n, a]) => [n, { t: base.t[a[0]] || '', g: base.g[a[1]] || '', f: base.f[a[2]] || '', l: (base.l || [])[a[3]] || '' }]));
-    const labs = { ...(base.labs || {}) };
+    const labs = { ...(base.labs || {}) }, pc = { ...(base.pc || {}) }, stockRep = new Map();   // pc: código de producto → sigla del laboratorio
     const hechos = [], CAMPO = { g: 'genérico', f: 'familia', t: 'línea', l: 'laboratorio' };
     for (const file of files) {
       const L = new TextDecoder('windows-1252').decode(await file.arrayBuffer()).split(/\r?\n/), h = (L[0] || '').split('\t').map(x => x.trim().toLowerCase());
       // columnas que se reconocen (un mismo reporte puede traer varias): desgen, desfam, destip/línea (gestión de ventas), codlab (+ deslab)
       const iN = h.indexOf('despro'), cols = [['g', h.indexOf('desgen')], ['f', h.indexOf('desfam')], ['t', h.findIndex(x => /^des.*lin|^linea$|^destip$/.test(x))], ['l', h.indexOf('codlab')]].filter(([, i]) => i >= 0);
-      const iLN = h.findIndex(x => /^deslab|^nomlab|^laboratorio$/.test(x));
+      const iLN = h.findIndex(x => /^deslab|^nomlab|^laboratorio$/.test(x)), iP = h.indexOf('codpro'), iSE = h.indexOf('stk_e'), iSM = h.indexOf('stk_m'), iFr = h.indexOf('stkfra');
       // lista de laboratorios (codlab + deslab, sin productos): solo nombres de las siglas
       const iC = h.indexOf('codlab');
       if (iN < 0 && iC >= 0 && iLN >= 0) { let k = 0; for (const l of L.slice(1)) { const c = l.split('\t'), sg = String(c[iC] || '').trim().toUpperCase(), nm = String(c[iLN] || '').trim(); if (sg && nm) { labs[sg] = nm; k++; } }
@@ -1349,6 +1367,10 @@ async function subirClas(files) {
           if (v && x[campo] !== v) { x[campo] = v; cuenta[campo]++; }
         }
         if (iLN >= 0 && x.l) { const nm = String(c[iLN] || '').trim(); if (nm) labs[x.l] = nm; }
+        // con código de producto: el laboratorio también por código (no depende del nombre) y, si trae stock, para compararlo
+        const cp = iP >= 0 ? String(c[iP] || '').trim() : '';
+        if (cp && x.l) pc[cp] = x.l;
+        if (cp && iSE >= 0) { const fr = Math.max(1, +String(c[iFr] || '1').replace(',', '.') || 1); stockRep.set(cp, { n: String(c[iN] || '').trim(), sg: x.l, v: (+String(c[iSE] || 0).replace(',', '.') || 0) + (+String(c[iSM] || 0).replace(',', '.') || 0) / fr, fr }); }
         n++;
       }
       hechos.push(`${file.name.replace(/^[0-9a-f]{8}-/, '')}: ${nf0.format(n)} leídos · ` + cols.map(([k]) => `${CAMPO[k]} ${nf0.format(cuenta[k])} actualizados`).join(', ') + ` · ${nf0.format(nuevos)} nuevos`);
@@ -1356,7 +1378,7 @@ async function subirClas(files) {
     const out = {}; for (const k of ['t', 'g', 'f', 'l']) out[k] = [...new Set([...m.values()].map(x => x[k]).filter(Boolean))].sort();
     const ix = {}; for (const k of ['t', 'g', 'f', 'l']) ix[k] = new Map(out[k].map((v, i) => [v, i]));
     out.p = {}; for (const [n, x] of m) out.p[n] = [ix.t.get(x.t) ?? -1, ix.g.get(x.g) ?? -1, ix.f.get(x.f) ?? -1, ix.l.get(x.l) ?? -1];
-    out.labs = labs;
+    out.labs = labs; out.pc = pc;
     msg('Guardando la clasificación…');
     const ant = await S.db.doc('config/clasificacion').get();
     const up = await S.assets.upload(new Blob([JSON.stringify(out)], { type: 'application/json' }));
@@ -1366,6 +1388,7 @@ async function subirClas(files) {
     try { window.parent?.ponerClasificacion?.(out); } catch {}
     ponerCLAS(out);
     msg('✔ Clasificación actualizada · ' + hechos.join(' · '));
+    if (stockRep.size) compararStock(stockRep);
   } catch (e) { msg('No se pudo actualizar la clasificación: ' + (e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules).' : e.message || e)); }
 }
 let clasDe = null;

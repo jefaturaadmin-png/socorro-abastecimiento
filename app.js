@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611121100";
+const VERSION_PROY = "202611121200";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1372,7 +1372,7 @@ function cargarGenericos() {
     const nomN = x => String(x || "").trim().toUpperCase().replace(/\s+/g, " "), g = { de: new Map(), por: new Map() };
     for (const p of S.catalogo) {
       // laboratorio de los productos que no lo traen en el catálogo: la sigla de la clasificación y su nombre
-      if (!p.ln) { const x = c.p[nomN(p.n)], sg = x && (c.l || [])[x[3]]; if (sg) { p.l = sg; p.ln = (c.labs || {})[sg] || sg; p.k = norm([p.c, p.n, p.l, p.ln].join(" ")); } }
+      if (!p.ln) { const x = c.p[nomN(p.n)], sg = (c.pc || {})[p.c] || (x && (c.l || [])[x[3]]); if (sg) { p.l = sg; p.ln = (c.labs || {})[sg] || sg; p.k = norm([p.c, p.n, p.l, p.ln].join(" ")); } }
       const a = c.p[nomN(p.n)], ge = a && c.g[a[1]]; if (!ge) continue;
       g.de.set(p.c, ge); if (!g.por.has(ge)) g.por.set(ge, []); g.por.get(ge).push(p);
     }
