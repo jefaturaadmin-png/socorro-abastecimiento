@@ -454,7 +454,7 @@
     FB.onSnapshot(FB.doc(FB.db, 'proy_config', 'atencion_cfg'), d => {
       if (!d.exists()) return; const x = d.data(), nuevo = { def: { ...DEF, ...(x.def || {}) }, suc: x.suc || {}, prod: x.prod || {} };
       if (cfgListo && JSON.stringify(nuevo) === JSON.stringify(CFG)) return;
-      CFG = nuevo; cfgListo = true; cfgVer++;
+      CFG = nuevo; cfgListo = true; cfgVer++; cargarUrgencias();
       if (S.vista === 'suc') window.pintarSuc(); else if (S.vista === 'stk') render();
     }, () => { escucharCfg.ok = false; });
   }
@@ -475,9 +475,13 @@
   window.guardarResp = (f, c, d) => FB.setDoc(FB.doc(FB.db, 'atencion_resp', f + '__' + c), window.parent.JSON.parse(JSON.stringify({ ...d, suc: f, codpro: c })));
   window.borrarResp = (f, c) => FB.deleteDoc(FB.doc(FB.db, 'atencion_resp', f + '__' + c));
   // pedidos de urgencia de las últimas 2 semanas (módulo de urgencias): si la sucursal lo pidió y sigue en cero, se le manda
+  // cuántos días hacia atrás se consideran los pedidos de urgencia (lo decide Abastecimiento; por defecto 14), en el criterio general
+  const urgDias = () => Math.max(1, Math.round(+CFG.def.urgDias || 14));
+  window.urgDias = urgDias;
+  window.ponerUrgDias = n => { if (!cfgListo) return false; CFG.def = { ...CFG.def, urgDias: Math.max(1, Math.min(120, Math.round(+n || 14))) }; guardarCfg(); cargarUrgencias(); return true; };
   async function cargarUrgencias() {
-    if (cargarUrgencias.ok || S.ejemplo) return; cargarUrgencias.ok = true;
-    try { const l = await window.parent?.urgenciasRecientes?.(14) || []; const m = new Map();
+    if (S.ejemplo || (cargarUrgencias.ok && cargarUrgencias.dias === urgDias())) return; cargarUrgencias.ok = true; cargarUrgencias.dias = urgDias();
+    try { const l = await window.parent?.urgenciasRecientes?.(urgDias()) || []; const m = new Map();
       for (const u of l) { const k = u.suc + '__' + u.cod, x = m.get(k); m.set(k, x ? { q: Math.max(x.q, u.q), f: u.f > x.f ? u.f : x.f } : u); }
       URG = m; urgVer++; if (S.vista === 'suc') window.pintarSuc(); else if (S.vista === 'stk' || S.vista === 'kar') render();
     } catch { cargarUrgencias.ok = false; }

@@ -693,6 +693,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
           <label class="field"><span>Mostrar</span><select id="xVer"><option value="mov">Con stock o con venta</option><option value="cmp">Solo lo que hay que comprar / pedir</option><option value="nuevo">🆕 Nuevos: sin ninguna venta</option><option value="reciente">🌱 Movimiento reciente: empezó a venderse en los últimos 3 meses</option><option value="parado">⏸ Sin movimiento en 6 meses (antes sí vendía)</option><option value="">Todos</option></select></label>
           <label class="field"><span>Tipo</span><select id="xTipo"><option value="">Todos</option><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option></select></label>
           <label class="field" id="xFteF"><span>Venta diaria según</span><select id="xFte" title="De dónde sale la venta diaria de esta sucursal: el motor (pronóstico de Estadística Proyx) o lo que vendió en sus últimos días. Es su criterio: también lo usa Atención a sucursales."><option value="motor">Motor (Estadística Proyx)</option><option value="15">Ventas de los últimos 15 días</option><option value="30">Ventas de los últimos 30 días</option><option value="45">Ventas de los últimos 45 días</option><option value="60">Ventas de los últimos 60 días</option><option value="90">Ventas de los últimos 90 días</option></select></label>
+          <label class="field" id="xUrgF" title="Pedidos del módulo de urgencias que se consideran: si la sucursal lo pidió en esos días y sigue en cero, se le manda. Vale para todas las sucursales."><span>Urgencias de los últimos</span><span style="display:flex;align-items:center;gap:4px"><input id="xUrg" type="number" min="1" max="120" style="width:64px"> días</span></label>
           <label class="field"><span>Días de stock</span><input id="xCob" type="number" min="0" max="180" value="30" style="width:70px"></label>
           <label class="field"><span>Días de seguridad</span><input id="xSeg" type="number" min="0" max="180" value="15" style="width:70px"></label>
           <button type="button" class="btn sm" id="xXls">⬇ Descargar Excel</button>
@@ -2004,7 +2005,8 @@ function pintarStk() {
   // de dónde toma la venta diaria esta sucursal (su criterio): motor o sus ventas de los últimos N días
   $('xFteF').hidden = S.xModo !== 'sucx';
   if (S.xModo === 'sucx' && S.xFarm && cv) { const fte = String(window.criterioSuc?.(S.xFarm)?.fte || 'motor'); if (![...$('xFte').options].some(x => x.value === fte)) $('xFte').add(new Option(`Ventas de los últimos ${fte} días`, fte)); $('xFte').value = fte; }
-  $('xCob').disabled = $('xSeg').disabled = $('xFte').disabled = S.xModo === 'sucx' && soloVer;
+  $('xUrgF').hidden = S.xModo !== 'sucx'; if (document.activeElement !== $('xUrg')) $('xUrg').value = window.urgDias?.() ?? 14;
+  $('xCob').disabled = $('xSeg').disabled = $('xFte').disabled = $('xUrg').disabled = S.xModo === 'sucx' && soloVer;
   $('xCob').title = $('xSeg').title = $('xCob').disabled ? 'Lo define Abastecimiento' : '';
   const o = S.P, drog = S.xModo === 'drog', mets = o.metodos, conv = (p, v) => soles() ? v * p.k : v;
   // la sucursal es la del módulo elegido en el menú de la página principal
@@ -2056,6 +2058,7 @@ $('xTipo').addEventListener('change', e => { S.xTipo = e.target.value; S.xMostra
 // en el módulo de una sucursal, Abastecimiento cambia aquí el criterio de esa sucursal (se guarda y la sucursal lo ve al instante)
 const guardarDiasSuc = () => { if (S.xModo === 'sucx' && esAdminP() && S.xFarm) { window.guardarCriterioSuc?.(S.xFarm, S.xCob, S.xSeg, $('xFte').value); S.xDiasDe = ''; } };
 $('xFte').addEventListener('change', () => { guardarDiasSuc(); pintarStk(); });
+$('xUrg').addEventListener('change', e => { if (!esAdminP()) return; if (!window.ponerUrgDias?.(e.target.value)) return toast('Todavía se están leyendo los criterios; inténtalo en unos segundos.'); toast(`Urgencias de los últimos ${window.urgDias()} días · se recalcula y se publica`); pintarStk(); });
 $('xCob').addEventListener('change', e => { S.xCob = Math.max(S.xModo === 'sucx' ? 1 : 0, +e.target.value || 0); guardarDiasSuc(); pintarStk(); });
 $('xSeg').addEventListener('change', e => { S.xSeg = Math.max(0, +e.target.value || 0); guardarDiasSuc(); pintarStk(); });
 S.xVer = 'mov';
@@ -2695,7 +2698,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611111500"></script>
+<script src="sucursales.js?v=202611121400"></script>
 <script src="estadistica.js?v=202611101700"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611111000"></script>
