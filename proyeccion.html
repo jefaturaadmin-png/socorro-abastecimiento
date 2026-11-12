@@ -748,7 +748,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
           <label class="field"><span>Días de seguridad</span><input id="kSeg" type="number" min="0" max="180" value="15" style="width:70px"></label>
           <button type="button" class="btn sm" id="kXls">⬇ Descargar Excel</button>
           <button type="button" class="btn sm" id="kReemp" title="Registrar que un código se reemplaza por otro">🔁 Reemplazos</button>
-          <label class="btn sm" for="fClas" title="Reportes «producto por genérico», «producto por familia» (y por línea) en .TXT, del mismo sistema del kardex. Puede elegir varios a la vez.">📋 Actualizar clasificación (.TXT)</label>
+          <label class="btn sm" for="fClas" title="Reportes «producto por genérico», «producto por familia» y «producto gestión de ventas» (línea) en .TXT, del mismo sistema del kardex. Puede elegir varios a la vez.">📋 Actualizar clasificación (.TXT)</label>
           <small class="z" id="kMsgClas"></small>
         </div>
       </div>
@@ -1307,6 +1307,11 @@ function cargarCLAS() { try { window.parent?.cargarClasificacion?.().then(ponerC
 /* ---------- subir la clasificación desde los reportes «producto por genérico / familia / línea» (.TXT separados por tabulación) ----------
    «producto por genérico» (despro + desgen), «producto por familia» (despro + desfam) y, si existe, «producto por línea».
    Solo cambia el dato que trae cada archivo; «NO CLASIFICADOS» o vacío no borra lo que ya había. */
+// nombre de línea igual al que ya existe en la clasificación (sin importar mayúsculas); si es nueva, Tipo Título
+function lineaNom(v) {
+  const ya = (CLAS?.t || []).find(x => x.toUpperCase() === v.toUpperCase()); if (ya) return ya;
+  return v.toLowerCase().replace(/(^|[\s.])([a-zñáéíóú])/g, (m, a, b) => a + b.toUpperCase());
+}
 async function subirClas(files) {
   const msg = t => { $('kMsgClas').textContent = t; };
   try {
@@ -1317,13 +1322,15 @@ async function subirClas(files) {
     const hechos = [], CAMPO = { g: 'genérico', f: 'familia', t: 'línea' };
     for (const file of files) {
       const L = new TextDecoder('windows-1252').decode(await file.arrayBuffer()).split(/\r?\n/), h = (L[0] || '').split('\t').map(x => x.trim().toLowerCase());
-      const iN = h.indexOf('despro'), iG = h.indexOf('desgen'), iF = h.indexOf('desfam'), iL = h.findIndex(x => /^des.*lin|^linea$/.test(x));
+      const iN = h.indexOf('despro'), iG = h.indexOf('desgen'), iF = h.indexOf('desfam'), iL = h.findIndex(x => /^des.*lin|^linea$|^destip$/.test(x));   // destip: «producto gestión de ventas» (FARMACOS, PERFUMERIA…)
       const [campo, iV] = iG >= 0 ? ['g', iG] : iF >= 0 ? ['f', iF] : iL >= 0 ? ['t', iL] : [null, -1];
-      if (iN < 0 || !campo) { hechos.push(`${file.name}: no se reconoce (debe traer las columnas despro y desgen, desfam o línea)`); continue; }
+      if (iN < 0 || !campo) { hechos.push(`${file.name}: no se reconoce (debe traer la columna despro y desgen, desfam o destip)`); continue; }
       let n = 0, nuevos = 0, cambios = 0;
       for (const l of L.slice(1)) {
         const c = l.split('\t'), k = nomN(c[iN]); if (!k) continue;
-        let v = String(c[iV] || '').trim(); if (/^NO CLASIFICAD/i.test(v)) v = '';
+        let v = String(c[iV] || '').trim(); if (/^NO CLASIFICAD|^NO ESPECIFICA/i.test(v)) v = '';
+        // la línea se guarda con el mismo nombre que ya existe (FARMACOS → Farmacos); si es nueva, en Tipo Título
+        if (v && campo === 't') v = lineaNom(v);
         let x = m.get(k); if (!x) { x = { t: '', g: '', f: '' }; m.set(k, x); nuevos++; }
         if (v && x[campo] !== v) { x[campo] = v; cambios++; } n++;
       }
