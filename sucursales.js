@@ -494,7 +494,7 @@
   // lo que respondió la sucursal en «Lo que me van a atender» (ya no se usa ese módulo; se muestra como comentario)
   window.respAtencion = (f, c) => { const r = S.suResp?.get(f + '__' + c); if (!r) return null;
     const alt = r.alternativa || (r.altCod ? String(r.altCod) : ''), fe = r.fecha?.toDate ? r.fecha.toDate().toISOString() : String(r.fecha || '');
-    return { estado: r.estado, txt: (RESP_TXT[r.estado] || r.estado) + (alt ? ': ' + alt : '') + (r.comentario ? (alt ? ' · ' : ': ') + r.comentario : ''), por: r.porNombre || '', fecha: fe.slice(0, 10),
+    return { estado: r.estado, txt: (RESP_TXT[r.estado] || r.estado) + (alt ? ': ' + alt : '') + (r.comentario ? (alt ? ' · ' : ': ') + r.comentario : ''), por: r.porNombre || '', fecha: fe.slice(0, 10), fh: fe,
       comentario: r.comentario || '', alts: r.alts?.length ? r.alts : r.altCod ? [{ c: String(r.altCod), n: (r.alternativa || '').replace(/^[^-]*- /, '') }] : [] }; };
   // lo que requiere la sucursal con las mismas reglas de Atención (tipo A, B 1 caja, C/D/E a pedido, bloqueos, cambios,
   // reemplazos, ajustes por producto) pero para H días; sin limitarlo a lo que hay en droguería
