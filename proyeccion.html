@@ -2066,7 +2066,7 @@ $('xFte').addEventListener('change', () => { guardarDiasSuc(); pintarStk(); });
 $('xUrg').addEventListener('change', e => { if (!esAdminP()) return; if (!window.ponerUrgDias?.(e.target.value)) return toast('Todavía se están leyendo los criterios; inténtalo en unos segundos.'); toast(`Urgencias de los últimos ${window.urgDias()} días · se recalcula y se publica`); pintarStk(); });
 $('xCob').addEventListener('change', e => { S.xCob = Math.max(S.xModo === 'sucx' ? 1 : 0, +e.target.value || 0); guardarDiasSuc(); pintarStk(); });
 $('xSeg').addEventListener('change', e => { S.xSeg = Math.max(0, +e.target.value || 0); guardarDiasSuc(); pintarStk(); });
-S.xVer = 'mov';
+S.xVer = ''; $('xVer').value = '';   // al abrir el módulo de cada sucursal (y Droguería): «Todos»
 $('xXls').addEventListener('click', () => {
   const o = S.P, drog = S.xModo === 'drog', num = v => String(Math.round((+v || 0) * 1000) / 1000).replace('.', ',');
   const H = S.xCob + S.xSeg, f = S.xFarm, iF = o.farmacias.indexOf(f), ate = p => { if (drog || iF < 0) return ''; const rq = reqRed(p, H, o.farmacias.map(x => stDe(p, x))); return rq.listo ? rq.ate[iF] : ''; };
