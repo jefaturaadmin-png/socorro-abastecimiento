@@ -169,8 +169,7 @@
           if (d > 0 && window.vendioEn?.(base, f, N)) { pide = ped(nec - st); nota = `tipo ${c}: se vendió en los últimos ${N} días`; }
           else nota = `a pedido (tipo ${c}: sin venta en los últimos ${N} días)`;
         }
-        else if (o.tipos === 'todos' ? d > 0 : c === 'A') pide = ped(nec - st);
-        else if (o.tipos !== 'todos' && c === 'B') pide = d > 0 && ped(nec - st) >= 1 ? 1 : 0;   // B: 1 caja si lo que le falta (redondeado) llega a 1, o si está en cero
+        else if (o.tipos === 'todos' ? d > 0 : (c === 'A' || c === 'B')) pide = ped(nec - st);   // A y B: lo que necesita (B es el nivel siguiente a A)
         if (!bloq && extra > 0) { pide = Math.max(pide, ped(nec - st)); nota = 'en lugar de ' + enLugar.join(', ') + ' (droguería)'; }
         // lo que necesita menos su stock, menos lo que le queda del anterior y lo que se le envía del anterior
         const krN = viejos.length && !bloq ? viejos.map(q => q.c + ' - ' + q.n).join(', ') : '';
@@ -496,7 +495,7 @@
     const alt = r.alternativa || (r.altCod ? String(r.altCod) : ''), fe = r.fecha?.toDate ? r.fecha.toDate().toISOString() : String(r.fecha || '');
     return { estado: r.estado, txt: (RESP_TXT[r.estado] || r.estado) + (alt ? ': ' + alt : '') + (r.comentario ? (alt ? ' · ' : ': ') + r.comentario : ''), por: r.porNombre || '', fecha: fe.slice(0, 10), fh: fe,
       comentario: r.comentario || '', alts: r.alts?.length ? r.alts : r.altCod ? [{ c: String(r.altCod), n: (r.alternativa || '').replace(/^[^-]*- /, '') }] : [] }; };
-  // lo que requiere la sucursal con las mismas reglas de Atención (tipo A, B 1 caja, C/D/E a pedido, bloqueos, cambios,
+  // lo que requiere la sucursal con las mismas reglas de Atención (tipo A y B lo que necesitan, C/D según su venta reciente, bloqueos, cambios,
   // reemplazos, ajustes por producto) pero para H días; sin limitarlo a lo que hay en droguería
   window.requiereSuc = (c, f, H, fte) => { const p = prodDe(c); if (!p) return 0; calcular(); const r = filaBase(p, f, H, fte); return r.usa || r.bloq ? 0 : r.pide || 0; };
   // cantidad fija por producto y sucursal (la pone el administrador desde el Kardex); null = se calcula sola

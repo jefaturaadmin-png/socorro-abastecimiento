@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611130400";
+const VERSION_PROY = "202611130500";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1679,7 +1679,7 @@ function pintarAten() {
   const fte = A.fte === "motor" ? "pronóstico estadístico de tu sucursal" : `ventas de los últimos ${A.fte} días`;
   $("atFiltro").innerHTML = `<b>Criterio usado por Abastecimiento${A.propio ? " para tu sucursal" : ""}:</b> atender para <b>${A.C} días</b> de venta + <b>${A.Sg} días</b> de seguridad
     · cubre hasta el <b>${hasta.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" })}</b>
-    · venta diaria según ${esc(fte)} · ${A.tipos === "todos" ? "todo lo que se vende en la sucursal" : "productos de venta frecuente (tipo A lo necesario; tipo B 1 unidad si no le alcanza)"}
+    · venta diaria según ${esc(fte)} · ${A.tipos === "todos" ? "todo lo que se vende en la sucursal" : "productos de venta frecuente (tipo A y B lo necesario)"}
     ${(A.items || []).some(i => i.aj) ? "<br>Algunos productos tienen un criterio propio (se indica en la columna Nota)." : ""}
     <br><small class="muted">Datos al ${fmtF(A.corte)} · publicado el ${fFecha(A.publicado)}</small>`;
   const q = norm(S.atQ).trim(), admin = esAdmin(), todos = A.items || [];
@@ -1785,7 +1785,7 @@ function pintarInfo() {
     else {
       const x = S.red.get(i.c), mia = falt ? "" : (A.nombre || "");
       const crit = falt ? `Para ${A.C} días + ${A.Sg} de seguridad (criterio general de Abastecimiento).`
-        : `Tu sucursal: ${A.C} días + ${A.Sg} de seguridad · venta diaria según ${A.fte === "motor" ? "pronóstico estadístico" : `ventas de los últimos ${A.fte} días`} · ${A.tipos === "todos" ? "todo lo que se vende" : "tipo A lo necesario, tipo B 1 unidad si no le alcanza"}${i.aj ? `<br><b>Este producto tiene criterio propio:</b> ${esc(i.aj)}` : ""}`;
+        : `Tu sucursal: ${A.C} días + ${A.Sg} de seguridad · venta diaria según ${A.fte === "motor" ? "pronóstico estadístico" : `ventas de los últimos ${A.fte} días`} · ${A.tipos === "todos" ? "todo lo que se vende" : "tipo A y B lo necesario"}${i.aj ? `<br><b>Este producto tiene criterio propio:</b> ${esc(i.aj)}` : ""}`;
       const cob = r => r.d <= 0 ? '<span class="at-cob" style="background:#9e9e9e">sin venta</span>' : `<span class="at-cob" style="background:${r.s / r.d < (falt ? A.Sg : A.Sg) ? "#d9302c" : r.s / r.d < A.C + A.Sg ? "#e0a030" : r.s / r.d <= (A.C + A.Sg) * 2 ? "#43a047" : "#1e6bb8"}">${r.s / r.d > 999 ? "> 999" : nf(Math.floor(r.s / r.d))} días</span>`;
       cuerpo = `<section class="at-box"><h3>Criterio que se aplica</h3><p class="at-nota" style="color:inherit">${crit}</p></section>` + (!x ? `<p class="at-nota">${esc(S.redErr || "Este producto no tiene información de la red.")}</p>` :
         `<section class="at-box"><h3>El producto en toda la red</h3><div class="at-scroll" style="border:0;border-radius:0"><table class="at-mes"><thead><tr><th>Sucursal</th><th>Tipo</th><th>Venta diaria</th><th>Stock</th><th>Cobertura</th><th>Necesita</th><th>Enviar</th><th>De droguería</th><th>Sobra</th></tr></thead><tbody>

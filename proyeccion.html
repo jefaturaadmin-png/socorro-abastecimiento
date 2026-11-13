@@ -586,7 +586,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
         <label class="field"><span>Días a atender</span><input id="suCob" type="number" min="1" max="180" value="7" style="width:72px"></label>
         <label class="field"><span>Stock de seguridad (días)</span><input id="suSeg" type="number" min="0" max="90" value="7" style="width:72px"></label>
         <label class="field"><span>Venta diaria según</span><select id="suFte"><option value="15">Ventas de los últimos 15 días</option><option value="30" selected>Ventas de los últimos 30 días</option><option value="60">Ventas de los últimos 60 días</option><option value="90">Ventas de los últimos 3 meses</option><option value="motor">Estadística Proyx (motor de pronóstico)</option></select></label>
-        <label class="field"><span>Qué atender</span><select id="suTip"><option value="ab">Tipo A completo, tipo B 1 unidad si no le alcanza</option><option value="todos">Todo lo que se vende en la sucursal</option></select></label>
+        <label class="field"><span>Qué atender</span><select id="suTip"><option value="ab">Tipo A y B lo que necesitan; C y D si se vendieron en los últimos días</option><option value="todos">Todo lo que se vende en la sucursal</option></select></label>
         <label class="field"><span>Mostrar</span><select id="suVer"><option value="enviar">Enviar</option><option value="urgente">Urgentes</option><option value="comprar">No alcanza lo de droguería</option><option value="exceso">Exceso en la sucursal</option><option value="ajuste">Con ajuste propio</option><option value="">Todos</option></select></label>
         <label class="field"><span>Laboratorio</span><select id="suLab" class="sLab"><option value="">Todos</option></select></label>
         <label class="field"><span>Línea</span><select class="sLin"><option value="">Todas</option></select></label>
@@ -625,7 +625,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
       <summary>Cómo se calcula</summary>
       <ul>
         <li><b>Venta diaria de cada sucursal</b> (motor): el pronóstico del medicamento en <b>Estadística Proyx</b> (su método y sus correcciones) × la <b>participación</b> de la sucursal en la venta (la misma de la ficha del Kardex). La sucursal con 0 % no recibe nada. Si en el criterio se elige «ventas de N días», se usan sus ventas reales de esos días.</li>
-        <li><b>Necesita</b> = venta diaria × (días a atender + días de seguridad). <b>Enviar</b> = lo que necesita − su stock. Por defecto, como en Reposición: tipo A lo que necesite, tipo B 1 caja solo si su stock no alcanza para los días elegidos, C y D a pedido; puedes elegir atender todo lo que se vende.</li>
+        <li><b>Necesita</b> = venta diaria × (días a atender + días de seguridad). <b>Enviar</b> = lo que necesita − su stock. Por defecto: tipo A y tipo B lo que necesiten; C y D solo si se vendieron en la sucursal en los últimos días elegidos (si no, a pedido); puedes elegir atender todo lo que se vende.</li>
         <li><b>Cobertura</b>: días que alcanza el stock de la sucursal. Rojo: menos que los días de seguridad (urgente). Amarillo: menos que días + seguridad. Verde: bien. Azul: más del doble (sobra).</li>
         <li><b>Reparto</b>: el stock de droguería se reparte primero a las sucursales con menos cobertura. Lo que no alcanza se toma de otra sucursal que tenga exceso de ese producto (más del doble de lo que necesita, o stock sin venta); si tampoco hay, se marca para comprar.</li>
         <li>No se envían productos bloqueados en esa sucursal ni en todas.</li>
@@ -1689,7 +1689,7 @@ function compraKar(p) {
   return x;
 }
 // lo que requiere cada sucursal para los días elegidos, con las mismas reglas de Atención a sucursales: tipo A lo que falta,
-// tipo B 1 caja si no le alcanza, tipo C/D/E a pedido (0), bloqueados 0, cambios y reemplazos; el total se compara con el stock de droguería: sobra (+) o falta (−)
+// tipo B también lo que falta, tipo C/D si se vendieron en los días elegidos, bloqueados 0, cambios y reemplazos; el total se compara con el stock de droguería: sobra (+) o falta (−)
 // el mismo cálculo para el Kardex (con sus días) y para el módulo de cada sucursal (con los días de su criterio)
 const reqKar = (p, sf) => reqRed(p, S.kCob + S.kSeg, sf, S.kFte);
 function reqRed(p, H, sf, fte) {
@@ -2368,8 +2368,7 @@ function plan2(p, f) {
   const diaria = v / n, nec = diaria * (S.cob + S.seg);
   let ent = 0, nota = '';
   if (bloq) nota = '';
-  else if (c === 'A') ent = Math.max(0, redPed(nec - st));
-  else if (c === 'B') ent = st < nec || st <= 0 ? 1 : 0;   // B: 1 caja solo si su stock no cubre días + seguridad
+  else if (c === 'A' || c === 'B') ent = Math.max(0, redPed(nec - st));   // A y B: lo que necesita
   else nota = c === 'C' ? 'a pedido' : c === 'D' ? 'solo con pedido' : (st > 0 ? 'liquidar' : 'sin mov.');
   return { v, diaria, nec, st, ent, nota, c, bloq, aprox };
 }
@@ -2703,7 +2702,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611121500"></script>
+<script src="sucursales.js?v=202611130500"></script>
 <script src="estadistica.js?v=202611101700"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611111000"></script>
