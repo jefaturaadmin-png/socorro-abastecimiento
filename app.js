@@ -7,7 +7,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc as fsSet, updateDoc as fsUpdate, deleteDoc as fsDelete, onSnapshot, query, where,
   serverTimestamp, writeBatch as fsBatch, deleteField
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION, FORM_URGENCIA } from "./config.js?v=202610280700";
+import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION, FORM_URGENCIA } from "./config.js?v=202611130300";
 import { MODELOS, COLORES_G, PUNTOS_INICIALES, leerUbicacion, fmtDMS, ordenar, linkMaps, matriz, trazo, cargarLeaflet } from "./rutas.js?v=202611091900";
 import { crearEditor, ejemploAbastecimiento, FORMAS, COLORES, svgDe, limites, fmtMin, totalMin, UNIDADES } from "./flued.js?v=202611032300";
 
@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611130200";
+const VERSION_PROY = "202611130300";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1977,7 +1977,11 @@ async function cargarPedidos(forzar) {
   if (S.pdCargando || (!forzar && S.ped && Date.now() - S.ped.t < 120000)) return;
   S.pdCargando = true;
   try {
-    const r = await fetch(`https://docs.google.com/spreadsheets/d/${HOJA_PEDIDOS}/gviz/tq?tqx=out:csv&_=${Date.now()}`, { cache: "no-store" });
+    // la hoja «publicada en la web» (CSV) trae las celdas tal cual; la exportación gviz deja VACÍAS las celdas con varios códigos
+    // («25843, 26456») porque toma la columna como numérica. Se usa la publicada si está configurada (config.js: FORM_URGENCIA.csvPublicado).
+    let r = null;
+    if (FORM_URGENCIA.csvPublicado) try { r = await fetch(FORM_URGENCIA.csvPublicado + (FORM_URGENCIA.csvPublicado.includes("?") ? "&" : "?") + "_=" + Date.now(), { cache: "no-store" }); if (!r.ok) r = null; } catch { r = null; }
+    r ??= await fetch(`https://docs.google.com/spreadsheets/d/${HOJA_PEDIDOS}/gviz/tq?tqx=out:csv&_=${Date.now()}`, { cache: "no-store" });
     if (!r.ok) throw new Error("HTTP " + r.status);
     const filas = leerCSV(await r.text());
     const cab = (filas.shift() || []).map(x => x.trim());
@@ -2237,15 +2241,19 @@ $("urgDlg").addEventListener("click", async e => {
     // como en el formulario: SOLO los códigos, separados por coma ("21648, 00052"). El formulario no acepta otra cosa en ese campo
     // (si se manda texto, Google rechaza la respuesta sin avisar). La cantidad se guarda aparte, en la página (urgencia_cant).
     const items = S.urgNuevo.map(p => ({ c: p.c, q: Math.max(1, Math.round(+p.q || 1)) })), hoy = new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
-    const datos = new URLSearchParams({ [FORM_URGENCIA.campoSucursal]: sucFormDe(suc), [FORM_URGENCIA.campoProducto]: items.map(p => p.c).join(", ") });
-    const ctl = new AbortController(), tope = setTimeout(() => ctl.abort(), 20000);
-    await fetch(FORM_URGENCIA.url, { method: "POST", mode: "no-cors", body: datos, signal: ctl.signal }); clearTimeout(tope);
+    // UN ENVÍO POR CÓDIGO: si una celda trae varios códigos («25843, 26456»), Google la exporta vacía a la página
+    for (let i = 0; i < items.length; i++) {
+      msg("urgMsg", items.length > 1 ? `Enviando ${i + 1} de ${items.length}…` : "Enviando…");
+      const datos = new URLSearchParams({ [FORM_URGENCIA.campoSucursal]: sucFormDe(suc), [FORM_URGENCIA.campoProducto]: items[i].c });
+      const ctl = new AbortController(), tope = setTimeout(() => ctl.abort(), 20000);
+      await fetch(FORM_URGENCIA.url, { method: "POST", mode: "no-cors", body: datos, signal: ctl.signal }); clearTimeout(tope);
+    }
     // cantidades (si no son 1): por sucursal, código y día
     for (const p of items) if (p.q > 1) try { await setDoc(doc(db, "urgencia_cant", `${suc}__${p.c}__${hoy}`), { suc, cod: p.c, q: p.q, dia: hoy, porUid: S.perfil.uid, fecha: new Date().toISOString() }); S.urgCant?.set(`${suc}__${p.c}__${hoy}`, p.q); } catch {}
     const n = items.length; $("urgDlg").close(); toast(`Enviando ${n} producto${n === 1 ? "" : "s"}… se confirma en unos segundos.`);
     S.urgNuevo = [];
     // confirmación: se relee la hoja hasta ver el pedido; si no aparece, se avisa (nunca más un «enviado» que no llegó)
-    const llego = () => (S.ped?.datos || []).some(d => d.suc === suc && items.some(p => p.c === d.cod) && d.f && Date.now() - d.f < 10 * 60000);
+    const llego = () => items.every(p => (S.ped?.datos || []).some(d => d.suc === suc && (d.cod === p.c || d.cod === p.c.replace(/^0+/, '')) && d.f && Date.now() - d.f < 10 * 60000));
     let ok = false; for (const espera of [4000, 8000, 15000]) { await new Promise(r => setTimeout(r, espera)); await cargarPedidos(true); if (llego()) { ok = true; break; } }
     if (ok) toast(`✔ Pedido registrado en la hoja (${n} producto${n === 1 ? "" : "s"}).`);
     else alert(`⚠ El pedido NO aparece en la hoja de Drive todavía.\n\nProductos: ${items.map(p => p.c).join(", ")}\n\nVuelva a intentarlo en un momento o regístrelo en el formulario de Google. Si sigue igual, avise a Abastecimiento.`);

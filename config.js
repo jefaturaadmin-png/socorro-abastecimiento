@@ -72,6 +72,9 @@ export const FORM_URGENCIA = {
   url: "https://docs.google.com/forms/d/e/1FAIpQLSf5J0UyLA58p9VJtHQR1qs936zqlWqic-Fj-75MoMTr8bjUtA/formResponse",
   campoSucursal: "entry.568217798",
   campoProducto: "entry.459218140",
+  // enlace de la hoja de respuestas «Publicada en la web» como CSV (Archivo → Compartir → Publicar en la Web → CSV).
+  // Con él la página lee también las celdas con varios códigos. Vacío = se usa la exportación normal.
+  csvPublicado: "",
   sucursales: {
     "ALMACEN PRINCIPAL": "Real",
     "ALMACEN MERCADO": "Mercado",
