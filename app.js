@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611130800";
+const VERSION_PROY = "202611130900";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1426,8 +1426,8 @@ function formResp(i, e) {
   return `<div class="fs-form" data-c="${esc(i.c)}">
     <fieldset><legend>¿Qué pasa con este producto?</legend><div class="pills fs-pills">${ESTADOS_F.map(x => `<label class="${x.id}"><input type="radio" name="fsEstado" value="${x.id}" ${est === x.id ? "checked" : ""}>${x.letra}. ${esc(x.txt)}</label>`).join("")}</div></fieldset>
     ${est === "agotado" ? `<div class="campo"><span class="lbl">¿Hasta cuándo?</span><div class="pills verde fs-plazos">${PLAZOS.map(([id, t]) => `<label><input type="radio" name="fsPlazo" value="${id}" ${plazo === id ? "checked" : ""}>${t}</label>`).join("")}</div>
-      ${plazo === "otra" ? `<input type="date" id="fsHasta" value="${esc(st.hasta ?? e?.hasta ?? "")}" min="${hoyISO()}">` : `<small class="ayuda">Hasta el ${fDia(sumarDias(PLAZOS.find(p => p[0] === plazo)?.[2] || 30))}</small>`}</div>` : ""}
-    ${est === "transito" ? `<div class="campo"><label for="fsLlega">Fecha estimada de llegada (opcional)</label><input type="date" id="fsLlega" value="${esc(st.llega ?? e?.llega ?? "")}"></div>` : ""}
+      ${plazo === "otra" ? `<input type="date" id="fsHasta" value="${esc(st.hasta ?? e?.hasta ?? "")}" min="${hoyISO()}" max="2100-12-31">` : `<small class="ayuda">Hasta el ${fDia(sumarDias(PLAZOS.find(p => p[0] === plazo)?.[2] || 30))}</small>`}</div>` : ""}
+    ${est === "transito" ? `<div class="campo"><label for="fsLlega">Fecha estimada de llegada (opcional)</label><input type="date" id="fsLlega" value="${esc(st.llega ?? e?.llega ?? "")}" min="2020-01-01" max="2100-12-31"></div>` : ""}
     ${est === "alternativa" ? formAlt(i, alts) : est === "descontinuado" ? formAlt(i, alts, true) : ""}
     <div class="campo"><label for="fsCom">Comentario (opcional)</label><input id="fsCom" maxlength="200" value="${esc(st.comentario ?? e?.comentario ?? "")}" placeholder="Ej. proveedor confirma reposición"></div>
     <div class="msg" id="fsMsg" hidden></div>
@@ -2422,7 +2422,7 @@ function abrirSR(f, tab, lab) {
   let h = `<h2>${esc(nombreFarm(f))}</h2>
     <div class="pd-per sr-tabs"><button type="button" class="pd-chip" data-srtab="disp" aria-pressed="${!sr}">Disponibilidad</button><button type="button" class="pd-chip" data-srtab="sr" aria-pressed="${sr}">Sin rotación</button></div>
     <div class="sr-cab"><span class="sr-bola ${sr ? "sr-r" : "sr-d"}" title="${sr ? "% de productos sin rotación" : "Disponibilidad"}">${p1(sr ? st?.p.sr : st?.disp)}</span>
-      ${sr ? `<fieldset class="sr-per"><legend>Periodo</legend><input type="date" id="srDesde" value="${desdeSR()}" max="${corteEv()}"> <span>a</span> <input type="date" value="${corteEv()}" disabled title="Fecha del kardex (el stock es de ese día)"></fieldset>
+      ${sr ? `<fieldset class="sr-per"><legend>Periodo</legend><input type="date" id="srDesde" value="${desdeSR()}" min="2020-01-01" max="${corteEv()}"> <span>a</span> <input type="date" value="${corteEv()}" disabled title="Fecha del kardex (el stock es de ese día)"></fieldset>
       <span class="sr-bola sr-dias">${nf(S.evDias)}<small>días</small></span>` : `<p class="muted">Productos que se venden en la sucursal y tienen stock 0 · kardex al ${fmtF(corteEv())}.</p>`}</div>`;
   if (!S.srLab) {
     const g = new Map(); for (const x of todas) { const a = g.get(x.lab) || { n: 0, v: 0, w: 0 }; a.n++; a.v += x.v; a.w += peso(x); g.set(x.lab, a); }

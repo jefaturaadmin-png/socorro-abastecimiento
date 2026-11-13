@@ -280,7 +280,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
           <fieldset class="col"><legend>Motivo</legend><div class="pills" id="abMot"></div></fieldset>
           <div class="col">
             <div class="campo"><label for="abCom">Comentario (opcional)</label><textarea id="abCom" rows="3" placeholder="Escribe una nota breve…"></textarea></div>
-            <div class="campo"><label for="abRev">Revisar de nuevo el (opcional)</label><input id="abRev" type="date"></div>
+            <div class="campo"><label for="abRev">Revisar de nuevo el (opcional)</label><input id="abRev" type="date" min="2020-01-01" max="2100-12-31"></div>
             <div class="msg" id="abMsg" hidden></div>
             <button class="btn primario mas" type="submit" id="abBtn" disabled>Bloquear</button>
           </div>
@@ -374,7 +374,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
           <div class="filtros">
             <label class="filtro ev-adm" title="Por debajo de estos días de cobertura es substock">Substock: menos de <input id="evMin" type="number" min="1" style="width:80px"> días</label>
             <label class="filtro ev-adm" title="Por encima de estos días de cobertura es sobrestock">Sobrestock: más de <input id="evMax" type="number" min="2" style="width:80px"> días</label>
-            <label class="filtro" title="Tiene stock y no se vendió desde esta fecha hasta la fecha del kardex">Sin rotación: sin venta desde <input id="evSRd" type="date" style="width:auto"> <b id="evSRn"></b></label>
+            <label class="filtro" title="Tiene stock y no se vendió desde esta fecha hasta la fecha del kardex">Sin rotación: sin venta desde <input id="evSRd" type="date" min="2020-01-01" max="2100-12-31" style="width:auto"> <b id="evSRn"></b></label>
             <button class="btn" id="evXls" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button>
           </div></div>
         <div class="tabla-wrap"><table class="tabla" id="evTabla"></table></div>
@@ -481,8 +481,8 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
         <!-- filtros arriba: mandan en el tablero y en la lista de abajo -->
         <div class="card pd-filtros filtros">
           <label class="filtro" id="pdSucF" hidden>Sucursal <select id="pdSuc"></select></label>
-          <label class="filtro">Desde <input id="pdDesde" type="date"></label>
-          <label class="filtro">Hasta <input id="pdHasta" type="date"></label>
+          <label class="filtro">Desde <input id="pdDesde" type="date" min="2020-01-01" max="2100-12-31"></label>
+          <label class="filtro">Hasta <input id="pdHasta" type="date" min="2020-01-01" max="2100-12-31"></label>
           <button class="btn sm" type="button" id="pdLimpiar" title="Volver a los últimos 7 días y todas las sucursales">✕ Limpiar</button>
           <small class="muted" id="pdRango"></small>
         </div>
@@ -501,8 +501,8 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
           <div class="lh">
             <button class="btn primario" type="button" id="pdNuevo">➕ Nuevo pedido de urgencia</button>
             <div class="filtros">
-              <label class="filtro">Desde <input id="pdDesde2" type="date"></label>
-              <label class="filtro">Hasta <input id="pdHasta2" type="date"></label>
+              <label class="filtro">Desde <input id="pdDesde2" type="date" min="2020-01-01" max="2100-12-31"></label>
+              <label class="filtro">Hasta <input id="pdHasta2" type="date" min="2020-01-01" max="2100-12-31"></label>
               <label class="filtro">Buscar <input id="pdQ2" type="search" placeholder="Producto o código"></label>
               <button class="btn" id="pdXls2" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Excel</button>
             </div>
@@ -712,6 +712,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 
 <div class="toast" id="toast" hidden></div>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="app.js?v=202611130800"></script>
+<script type="module" src="app.js?v=202611130900"></script>
 </body>
 </html>
