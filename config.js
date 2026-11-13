@@ -74,7 +74,7 @@ export const FORM_URGENCIA = {
   campoProducto: "entry.459218140",
   // enlace de la hoja de respuestas «Publicada en la web» como CSV (Archivo → Compartir → Publicar en la Web → CSV).
   // Con él la página lee también las celdas con varios códigos. Vacío = se usa la exportación normal.
-  csvPublicado: "",
+  csvPublicado: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQj_I2MOc3YD7PuNm3QXsoDAisOaD6tm3GLI6ILVVNumfAu-yAgbp2V0Ae15K-fDoLk3FDSSHpN6G3h/pub?output=csv",
   sucursales: {
     "ALMACEN PRINCIPAL": "Real",
     "ALMACEN MERCADO": "Mercado",

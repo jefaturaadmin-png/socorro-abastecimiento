@@ -7,7 +7,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc as fsSet, updateDoc as fsUpdate, deleteDoc as fsDelete, onSnapshot, query, where,
   serverTimestamp, writeBatch as fsBatch, deleteField
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION, FORM_URGENCIA } from "./config.js?v=202611130300";
+import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION, FORM_URGENCIA } from "./config.js?v=202611130400";
 import { MODELOS, COLORES_G, PUNTOS_INICIALES, leerUbicacion, fmtDMS, ordenar, linkMaps, matriz, trazo, cargarLeaflet } from "./rutas.js?v=202611091900";
 import { crearEditor, ejemploAbastecimiento, FORMAS, COLORES, svgDe, limites, fmtMin, totalMin, UNIDADES } from "./flued.js?v=202611032300";
 
@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611130300";
+const VERSION_PROY = "202611130400";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1977,13 +1977,17 @@ async function cargarPedidos(forzar) {
   if (S.pdCargando || (!forzar && S.ped && Date.now() - S.ped.t < 120000)) return;
   S.pdCargando = true;
   try {
-    // la hoja «publicada en la web» (CSV) trae las celdas tal cual; la exportación gviz deja VACÍAS las celdas con varios códigos
-    // («25843, 26456») porque toma la columna como numérica. Se usa la publicada si está configurada (config.js: FORM_URGENCIA.csvPublicado).
-    let r = null;
-    if (FORM_URGENCIA.csvPublicado) try { r = await fetch(FORM_URGENCIA.csvPublicado + (FORM_URGENCIA.csvPublicado.includes("?") ? "&" : "?") + "_=" + Date.now(), { cache: "no-store" }); if (!r.ok) r = null; } catch { r = null; }
-    r ??= await fetch(`https://docs.google.com/spreadsheets/d/${HOJA_PEDIDOS}/gviz/tq?tqx=out:csv&_=${Date.now()}`, { cache: "no-store" });
+    // dos lecturas de la misma hoja: gviz (al instante, pero deja VACÍAS las celdas con varios códigos «25843, 26456» porque toma
+    // la columna como numérica) y la «publicada en la web» como CSV (trae todo tal cual, pero Google la actualiza cada ~5 minutos).
+    // Se usa gviz y sus celdas vacías se completan con la publicada (misma marca temporal y sucursal).
+    const pub = FORM_URGENCIA.csvPublicado ? fetch(FORM_URGENCIA.csvPublicado + (FORM_URGENCIA.csvPublicado.includes("?") ? "&" : "?") + "_=" + Date.now(), { cache: "no-store" }).then(x => x.ok ? x.text() : null).catch(() => null) : null;
+    const r = await fetch(`https://docs.google.com/spreadsheets/d/${HOJA_PEDIDOS}/gviz/tq?tqx=out:csv&_=${Date.now()}`, { cache: "no-store" });
     if (!r.ok) throw new Error("HTTP " + r.status);
     const filas = leerCSV(await r.text());
+    const tp = await pub;
+    if (tp) { const pf = leerCSV(tp), clave = x => String(x[0] || "").trim() + "|" + String(x[1] || "").trim().toUpperCase(), m = new Map(pf.slice(1).map(x => [clave(x), x]));
+      let n = 0; for (const x of filas.slice(1)) { const y = m.get(clave(x)); if (y) for (let i = 2; i < x.length; i++) if (!String(x[i] ?? "").trim() && String(y[i] ?? "").trim()) { x[i] = y[i]; n++; } }
+      S.pedCompletadas = n; }
     const cab = (filas.shift() || []).map(x => x.trim());
     const col = (re, sin = []) => cab.findIndex((h, i) => re.test(norm(h)) && !sin.includes(i));
     const cS = col(/SUCURSAL|ALMACEN|FARMACIA|LOCAL|BOTICA/), cF = col(/MARCA TEMPORAL|FECHA|TIMESTAMP/);
