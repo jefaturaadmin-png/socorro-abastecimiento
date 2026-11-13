@@ -16,7 +16,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611131000">
+<link rel="stylesheet" href="styles.css?v=202611131200">
 </head>
 <body>
   <!-- instalar la página como app en el celular -->
@@ -389,7 +389,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
   </section>
   <!-- ============ PRODUCTOS QUE BUSCAN LOS CLIENTES (lo registra cada sucursal, con foto; lo ven todas) ============ -->
   <section id="vEnt" hidden>
-    <div class="wrap ancho cabeza">
+    <div class="wrap ancho cabeza" id="entCabeza">
       <div><h1>Recepción de pedidos</h1><p class="muted" id="entSub">Lo que droguería le entrega a cada sucursal. Revise cada producto al recibirlo y márquelo.</p></div>
       <div class="pd-acc" id="entAcc" hidden><label class="btn primario" for="entArch">⬆ Subir listas (Excel)</label><input id="entArch" type="file" accept=".xlsx,.xls" multiple hidden></div>
     </div>
@@ -729,6 +729,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 
 <div class="toast" id="toast" hidden></div>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="app.js?v=202611131100"></script>
+<script type="module" src="app.js?v=202611131200"></script>
 </body>
 </html>

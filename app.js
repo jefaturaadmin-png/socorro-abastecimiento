@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611131100";
+const VERSION_PROY = "202611131200";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2300,7 +2300,7 @@ const respEnt = (e, c) => S.entResp.get(e.id + "__" + c);
 function resumenEnt(e) { let rev = 0, prob = 0; for (const it of e.items || []) { const r = respEnt(e, it.c); if (r) { rev++; if (r.estado !== "ok") prob++; } } return { rev, prob, n: (e.items || []).length }; }
 function pintarEnt() {
   const admin = esAdmin();
-  $("entAcc").hidden = !admin; $("entFil").hidden = !admin;
+  $("entAcc").hidden = !admin; $("entFil").hidden = !admin; $("entCabeza").hidden = !admin;
   $("entSub").textContent = admin ? "Suba la lista de cada sucursal; ellas revisan cada producto al recibirlo y usted ve lo que llegó bien y lo que no."
     : `Lo que droguería le entrega a ${nombreFarm(miFarm())}. Revise cada producto al recibirlo y márquelo: ✔ si está correcto o el problema que encontró.`;
   msg("entMsg", S.entErr || "", true);
@@ -2319,17 +2319,32 @@ function pintarEnt() {
 }
 function pintarEntDet(e) {
   const box = $("entDet"); box.hidden = !e; if (!e) return;
-  const admin = esAdmin(), puede = !S.prev && (admin || e.suc === miFarm()), r = resumenEnt(e);
-  const fila = it => { const x = respEnt(e, it.c), es = x && entEst(x.estado), id = esc(it.c);
-    const extra = x && x.estado !== "ok" ? `<div class="ent-extra">${x.estado === "cantidad" ? `<label>Llegó <input type="number" min="0" step="1" value="${x.q ?? ""}" data-entq="${id}" ${puede ? "" : "disabled"}></label>` : ""}<input type="text" maxlength="150" placeholder="${x.estado === "otro" ? "Describa el problema (obligatorio)" : "Detalle (opcional): lote, vencimiento…"}" value="${esc(x.nota || "")}" data-entn="${id}" ${puede ? "" : "disabled"}></div>` : "";
-    return `<tr class="${x ? (x.estado === "ok" ? "ent-ok" : "ent-mal") : ""}"><td class="c"><code>${id}</code></td><td><b>${esc(it.n)}</b><br><small class="muted">${esc(it.l || "")}</small></td><td class="der"><b>${nf(it.q)}</b></td>
-      <td>${puede ? `<div class="ent-bot"><button type="button" class="btn sm${x?.estado === "ok" ? " ok-act" : ""}" data-entok="${id}">✔</button><select data-ents="${id}"><option value="">${x && x.estado !== "ok" ? "" : "¿Algún problema?"}</option>${ENT_EST.slice(1).map(([v, t]) => `<option value="${v}" ${x?.estado === v ? "selected" : ""}>${t}</option>`).join("")}</select></div>` : ""}
-        ${es ? `<span class="chip ${es[2]}">${es[1]}</span>` : '<span class="muted">Sin revisar</span>'}${extra}${x ? `<small class="muted ent-quien">${esc(x.porNombre || "")} · ${fFecha(x.fecha)}</small>` : ""}</td></tr>`; };
-  box.innerHTML = `<div class="lh"><h2>${esc(corto(e.suc))} · entrega del ${fDia(e.fecha)}</h2>
-      <div class="filtros"><small class="muted">${nf(r.rev)} de ${nf(r.n)} revisados${r.prob ? ` · <b class="rojo-t">${nf(r.prob)} con observación</b>` : ""}</small>
-      ${puede && r.rev < r.n ? `<button class="btn" type="button" id="entTodoOk">✔ Marcar los pendientes como correctos</button>` : ""}
-      ${admin ? `<button class="btn" type="button" id="entBorrar">🗑 Quitar esta lista</button>` : ""}</div></div>
-    <div class="tabla-wrap"><table class="tabla ent-tabla"><thead><tr><th>Código</th><th>Medicamento</th><th class="der">Cantidad</th><th>Revisión</th></tr></thead><tbody>${(e.items || []).map(fila).join("")}</tbody></table></div>`;
+  const admin = esAdmin(), puede = !S.prev && (admin || e.suc === miFarm()), r = resumenEnt(e), pct = r.n ? Math.round(r.rev / r.n * 100) : 0, dis = puede ? "" : "disabled";
+  const quien = x => `<small class="ent-quien">${esc(x.porNombre || "")} · ${fFecha(x.fecha)}</small>`;
+  const fila = it => { const x = respEnt(e, it.c), es = x && entEst(x.estado), id = esc(it.c), mal = x && x.estado !== "ok";
+    const estado = !x ? `${puede ? `<button type="button" class="ent-okbtn" data-entok="${id}">✔ Correcto</button>` : ""}<span class="ent-badge sin">Sin revisar</span>`
+      : x.estado === "ok" ? `<span class="ent-badge ok">✔ Correcto</span>${quien(x)}`
+      : `<span class="ent-badge ${es?.[2] === "rojo" ? "rojo" : "amb"}">⚠ ${esc(es?.[1] || x.estado)}</span>${quien(x)}${puede ? `<button type="button" class="ent-okbtn sm" data-entok="${id}">✔ Sí está correcto</button>` : ""}`;
+    const motivo = `<select data-ents="${id}" ${dis}><option value="">${mal ? "" : "¿Algún problema? Elija el motivo…"}</option>${ENT_EST.slice(1).map(([v, t]) => `<option value="${v}" ${x?.estado === v ? "selected" : ""}>${t}</option>`).join("")}</select>`
+      + (mal && x.estado === "cantidad" ? `<label class="ent-lleg">¿Cuánto llegó? <input type="number" min="0" step="1" value="${x.q ?? ""}" data-entq="${id}" ${dis}></label>` : "")
+      + (x ? `<input type="text" maxlength="150" placeholder="${x.estado === "otro" ? "Describa el problema" : mal ? "Detalle (opcional): lote, vencimiento…" : "Comentario (opcional)…"}" value="${esc(x.nota || "")}" data-entn="${id}" ${dis}>` : "");
+    return `<tr class="${x ? (mal ? "ent-mal" : "ent-ok") : ""}"><td><div class="ent-med"><span class="ent-cod">${id}</span><div><b>${esc(it.n)}</b><small>${esc(it.l || "")}</small></div></div></td>
+      <td class="c"><span class="ent-q">${nf(it.q)}</span></td><td><div class="ent-est">${estado}</div></td><td><div class="ent-mot">${motivo}</div></td></tr>`; };
+  // otras observaciones: lo que llegó sin estar en la lista u observaciones generales
+  const otras = [...S.entResp.entries()].filter(([, d]) => d.ent === e.id && d.x && !d.anulado).sort((a, b) => (a[1].fecha || "").localeCompare(b[1].fecha || ""));
+  box.innerHTML = `<div class="ent-cab"><h2>${esc(corto(e.suc))} · entrega del ${fDia(e.fecha)}</h2>
+      <div class="ent-prog"><small>${nf(r.rev)} de ${nf(r.n)} revisados${r.prob ? ` · <b class="rojo-t">${nf(r.prob)} con observación</b>` : ""}</small><span class="ent-barra"><i style="width:${pct}%"></i></span></div>
+      ${admin ? `<button class="btn" type="button" id="entBorrar">🗑 Quitar esta lista</button>` : ""}</div>
+    <div class="tabla-wrap"><table class="tabla ent-tabla"><thead><tr><th>Medicamento</th><th class="c">Cantidad</th><th>Estado</th><th>Motivo / comentario</th></tr></thead><tbody>${(e.items || []).map(fila).join("")}</tbody></table></div>
+    <div class="ent-otras"><h3>📝 Otras observaciones</h3><p class="muted">Si llegó un producto que no estaba en la lista (no estaba previsto su envío) o tiene una observación general de esta entrega, anótela aquí.</p>
+      ${otras.length ? `<ul class="ent-olist">${otras.map(([k, d]) => `<li><span class="ent-badge ${d.x === "extra" ? "amb" : "sin"}">${d.x === "extra" ? "No estaba en la lista" : "Observación general"}</span>
+        ${d.x === "extra" ? `${d.cod ? `<span class="ent-cod">${esc(d.cod)}</span>` : ""}<b>${esc(d.prod || "")}</b>${d.q ? ` · llegó <b>${nf(d.q)}</b>` : ""}` : ""}${d.nota ? ` <span>${d.x === "extra" ? "· " : ""}${esc(d.nota)}</span>` : ""}
+        ${quien(d)}${puede && (admin || d.porUid === S.perfil?.uid) ? `<button type="button" class="ab-x" data-entanula="${esc(k)}" title="Quitar">✕</button>` : ""}</li>`).join("")}</ul>` : ""}
+      ${puede ? `<div class="ent-onuevo"><select id="entOTipo"><option value="extra">Llegó un producto que no estaba en la lista</option><option value="general">Observación general</option></select>
+        <span class="ent-oprod"><input type="text" id="entOProd" list="entOLista" placeholder="Código o nombre del medicamento" autocomplete="off"><datalist id="entOLista"></datalist>
+        <input type="number" id="entOQ" min="1" step="1" placeholder="Cant."></span>
+        <input type="text" id="entONota" maxlength="200" placeholder="Comentario (por ejemplo: se queda en la sucursal, se devuelve…)">
+        <button type="button" class="btn primario" id="entOAdd">Agregar</button></div>` : ""}</div>`;
 }
 async function guardarRespEnt(e, c, cambios) {
   if (S.prev) return toast(PREVIA.message);
@@ -2343,11 +2358,22 @@ $("vEnt").addEventListener("click", async ev => {
   const card = ev.target.closest("[data-ent]"); if (card) { S.entSel = card.dataset.ent; pintarEnt(); $("entDet").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
   const e = entActual(); if (!e) return;
   const ok = ev.target.closest("[data-entok]"); if (ok) return guardarRespEnt(e, ok.dataset.entok, { estado: "ok", q: null, nota: "" });
-  if (ev.target.closest("#entTodoOk")) {
-    const pend = (e.items || []).filter(it => !respEnt(e, it.c)); if (!pend.length || !confirm(`¿Marcar ${pend.length} productos pendientes como correctos?`)) return;
-    try { for (let i = 0; i < pend.length; i += 400) { const lote = writeBatch(db);
-      for (const it of pend.slice(i, i + 400)) { const d = { ent: e.id, suc: e.suc, dia: e.fecha, cod: it.c, estado: "ok", q: null, nota: "", porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario, fecha: new Date().toISOString() }; lote.set(doc(db, "entrega_resp", e.id + "__" + it.c), d); }
-      await lote.commit(); } toast("Marcados como correctos"); } catch (x) { avisar(x); }
+  const an = ev.target.closest("[data-entanula]");
+  if (an) { const d = S.entResp.get(an.dataset.entanula); if (!d || !confirm("¿Quitar esta observación?")) return;
+    const n = { ...d, anulado: true, porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario, fecha: new Date().toISOString() };
+    S.entResp.set(an.dataset.entanula, n); pintarEnt(); try { await setDoc(doc(db, "entrega_resp", an.dataset.entanula), n); } catch (x) { avisar(x); } return; }
+  if (ev.target.closest("#entOAdd")) {
+    if (S.prev) return toast(PREVIA.message);
+    const tipo = $("entOTipo").value, txt = $("entOProd").value.trim(), nota = $("entONota").value.trim().slice(0, 200), q = Math.max(0, Math.round(+$("entOQ").value || 0));
+    let cod = "", prod = "";
+    if (tipo === "extra") { if (!txt) return toast("Escriba el código o el nombre del medicamento que llegó.");
+      const m = txt.match(/^(\d{4,6})\b/), p = m && S.catIdx.get(m[1].padStart(5, "0"));
+      cod = m ? m[1].padStart(5, "0") : ""; prod = p ? p.n : txt.replace(/^\d{4,6}\s*·\s*/, ""); }
+    else if (!nota) return toast("Escriba la observación.");
+    const id = `${e.id}__X${Date.now().toString(36)}`, d = { ent: e.id, suc: e.suc, dia: e.fecha, cod, prod, x: tipo, estado: "otro", q: tipo === "extra" && q ? q : null, nota,
+      porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario, fecha: new Date().toISOString() };
+    S.entResp.set(id, d); pintarEnt();
+    try { await setDoc(doc(db, "entrega_resp", id), d); toast("Observación guardada"); } catch (x) { avisar(x); }
     return; }
   if (ev.target.closest("#entBorrar")) { if (!confirm(`¿Quitar la lista de ${corto(e.suc)} del ${fDia(e.fecha)}? La sucursal dejará de verla.`)) return; try { await deleteDoc(doc(db, "entregas", e.id)); S.entSel = ""; } catch (x) { avisar(x); } }
 });
@@ -2357,12 +2383,19 @@ $("vEnt").addEventListener("change", ev => {
   const q = ev.target.closest("[data-entq]"); if (q) return guardarRespEnt(e, q.dataset.entq, { q: q.value === "" ? null : Math.max(0, Math.round(+q.value)) });
   const n = ev.target.closest("[data-entn]"); if (n) return guardarRespEnt(e, n.dataset.entn, { nota: n.value.trim().slice(0, 150) });
 });
+$("vEnt").addEventListener("input", ev => {
+  if (ev.target.id !== "entOProd") return; const t = ev.target.value.trim(); if (t.length < 3 || /·/.test(t)) return;
+  $("entOLista").innerHTML = buscarCat(t).map(p => `<option value="${esc(p.c + " · " + p.n)}">`).join("");
+});
+$("vEnt").addEventListener("change", ev => { if (ev.target.id === "entOTipo") document.querySelector(".ent-oprod")?.toggleAttribute("hidden", ev.target.value !== "extra"); });
 $("entSuc").addEventListener("change", e => { S.entSuc = e.target.value; S.entSel = ""; pintarEnt(); });
 // Excel de observaciones (Abastecimiento): todo lo que no llegó bien, de la sucursal elegida (o todas)
 $("entXls").addEventListener("click", () => {
   const filas = [];
   for (const e of (S.ent || []).filter(x => !S.entSuc || x.suc === S.entSuc)) for (const it of e.items || []) { const x = respEnt(e, it.c); if (!x || x.estado === "ok") continue;
     filas.push({ Sucursal: corto(e.suc), "Fecha de entrega": fDia(e.fecha), "Código": it.c, Medicamento: it.n, Laboratorio: it.l || "", "Cantidad enviada": it.q, "Observación": entEst(x.estado)?.[1] || x.estado, "Cantidad que llegó": x.q ?? "", Detalle: x.nota || "", "Revisó": x.porNombre || "", "Fecha de revisión": fFecha(x.fecha) }); }
+  for (const d of S.entResp.values()) { if (!d.x || d.anulado) continue; const e = (S.ent || []).find(x => x.id === d.ent); if (!e || (S.entSuc && e.suc !== S.entSuc)) continue;
+    filas.push({ Sucursal: corto(e.suc), "Fecha de entrega": fDia(e.fecha), "Código": d.cod || "", Medicamento: d.prod || "", Laboratorio: "", "Cantidad enviada": "", "Observación": d.x === "extra" ? "Llegó sin estar en la lista" : "Observación general", "Cantidad que llegó": d.q ?? "", Detalle: d.nota || "", "Revisó": d.porNombre || "", "Fecha de revisión": fFecha(d.fecha) }); }
   if (!filas.length) return toast("No hay observaciones.");
   excelDe(filas, "Observaciones", "recepcion_observaciones" + (S.entSuc ? "_" + corto(S.entSuc).toLowerCase() : ""));
 });
