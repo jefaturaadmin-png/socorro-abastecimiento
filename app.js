@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611131000";
+const VERSION_PROY = "202611131100";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2279,15 +2279,22 @@ const ENT_EST = [["ok", "✔ Correcto", "verde"], ["cruzado", "Cruzado (llegó o
 const entEst = id => ENT_EST.find(e => e[0] === id);
 S.ent = null; S.entResp = new Map(); S.entSel = ""; S.entSuc = "";
 function escucharEnt() {
-  if (S.entSub) return; S.entSub = true;
+  // la escucha es de un usuario: si cambia (cerró sesión y entró otro, o vista previa) se vuelve a escuchar solo lo suyo
+  const clave = (S.perfil?.uid || "") + "|" + (esAdmin() ? "*" : miFarm() || "");
+  if (S.entSub && S.entClave === clave) return;
+  S.entUnsub?.(); S.entUnsub = null;
+  S.entSub = true; S.entClave = clave; S.ent = null; S.entResp = new Map(); S.entSel = ""; S.entSuc = "";
   const suc = esAdmin() ? null : miFarm();
   if (!esAdmin() && !suc) { S.ent = []; return; }
   const qE = suc ? query(collection(db, "entregas"), where("suc", "==", suc)) : collection(db, "entregas");
-  S.subs.push(onSnapshot(qE, sn => { S.ent = sn.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "") || (b.creado || "").localeCompare(a.creado || "")); S.entErr = ""; if (S.vista === "vEnt") pintarEnt(); },
+  const subs = [];
+  S.entUnsub = () => { subs.forEach(u => u()); subs.length = 0; };
+  S.subs.push(() => { S.entUnsub?.(); S.entUnsub = null; S.entSub = false; S.ent = null; S.entResp = new Map(); S.entSel = ""; });
+  subs.push(onSnapshot(qE, sn => { S.ent = sn.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "") || (b.creado || "").localeCompare(a.creado || "")); S.entErr = ""; if (S.vista === "vEnt") pintarEnt(); },
     e => { S.entErr = textoError(e); S.entSub = false; if (S.vista === "vEnt") pintarEnt(); }));
   // respuestas: la sucursal las suyas; Abastecimiento, las de los últimos 120 días
   const qR = suc ? query(collection(db, "entrega_resp"), where("suc", "==", suc)) : query(collection(db, "entrega_resp"), where("dia", ">=", new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10)));
-  S.subs.push(onSnapshot(qR, sn => { S.entResp = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === "vEnt") pintarEnt(); }, () => {}));
+  subs.push(onSnapshot(qR, sn => { S.entResp = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === "vEnt") pintarEnt(); }, () => {}));
 }
 const respEnt = (e, c) => S.entResp.get(e.id + "__" + c);
 function resumenEnt(e) { let rev = 0, prob = 0; for (const it of e.items || []) { const r = respEnt(e, it.c); if (r) { rev++; if (r.estado !== "ok") prob++; } } return { rev, prob, n: (e.items || []).length }; }
@@ -2300,7 +2307,7 @@ function pintarEnt() {
   if (admin && !$("entSuc").options.length) $("entSuc").innerHTML = `<option value="">Todas</option>` + FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => `<option value="${esc(f)}">${esc(corto(f))}</option>`).join("");
   if (admin) $("entSuc").value = S.entSuc;
   if (!S.ent) { $("entLista").innerHTML = '<p class="muted">Cargando…</p>'; return; }
-  const lista = S.ent.filter(e => !S.entSuc || e.suc === S.entSuc);
+  const lista = S.ent.filter(e => admin ? (!S.entSuc || e.suc === S.entSuc) : e.suc === miFarm());
   $("entLista").innerHTML = lista.length ? lista.slice(0, 60).map(e => { const r = resumenEnt(e), pct = r.n ? Math.round(r.rev / r.n * 100) : 0;
     return `<button type="button" class="card ent-card${S.entSel === e.id ? " act" : ""}" data-ent="${esc(e.id)}"><b>${esc(admin ? corto(e.suc) : "Entrega")} · ${fDia(e.fecha)}</b>
       <small>${nf(r.n)} productos · revisados ${nf(r.rev)} (${pct} %)${r.prob ? ` · <span class="rojo-t">${nf(r.prob)} con observación</span>` : ""}</small>
