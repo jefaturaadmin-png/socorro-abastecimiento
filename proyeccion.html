@@ -1426,7 +1426,10 @@ document.querySelectorAll('.sGen').forEach(s => s.addEventListener('input', e =>
 
 const catBadge = c => `<span class="cat ${c}" title="${c} · ${NCAT[c]}">${c}</span>`;
 const tagKR = c => window.REEMP?.has(c) ? `<span class="tag kr" title="Ya no se compra: se reparte lo que queda hasta terminarlo">🔁 reemplazado por ${esc(window.REEMP.get(c).nuevo)}</span>`
-  : window.REEMP_NUEVO?.has(c) ? `<span class="tag kr" title="Si no tiene historial, se proyecta con el que reemplaza">🔁 reemplaza a ${esc(window.REEMP_NUEVO.get(c).join(', '))}</span>` : '';
+  : window.REEMP_NUEVO?.has(c) ? `<span class="tag kr" title="Si no tiene historial, se proyecta con el que reemplaza (convertido a su presentación)">🔁 reemplaza a ${esc(window.REEMP_NUEVO.get(c).join(', '))}${equivTxt(window.REEMP_NUEVO.get(c)[0], c)}</span>` : '';
+// «1 caja = 10 del anterior» cuando el anterior y el nuevo vienen en distinta presentación (fraccionero)
+function equivTxt(viejo, nuevo) { const a = S.idx?.get(viejo), b = S.idx?.get(nuevo); if (!a || !b) return ''; const fa = +a.fr > 0 ? +a.fr : 1, fb = +b.fr > 0 ? +b.fr : 1;
+  return fa === fb ? '' : ` · 1 entero = ${nf0.format(fb / fa)} del anterior`; }
 const fFH = v => { if (!v) return ''; const d = v?.toDate ? v.toDate() : new Date(v); if (isNaN(d)) return String(v).slice(0, 10);
   return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }); };
 const quienCuando = x => [x?.porNombre, fFH(x?.fecha)].filter(Boolean).join(' · ');
@@ -1574,8 +1577,10 @@ function compraKR(p, H) {
   const viejos = (window.REEMP_NUEVO?.get(p.c) || []).map(c => S.idx.get(c)).filter(Boolean);
   let nec = necesidad(p, H), resta = 0;
   if (viejos.length) {
-    if (!conHistorial(p)) nec = Math.max(nec, viejos.reduce((a, q) => a + necesidad(q, H), 0));
-    resta = viejos.reduce((a, q) => a + stockTotal(q).t, 0);
+    // pasando de la presentación del anterior a la del nuevo (fraccionero): 24 agujas sueltas = 0,24 de la caja x100
+    const k = q => (+q.fr > 0 ? +q.fr : 1) / (+p.fr > 0 ? +p.fr : 1);
+    if (!conHistorial(p)) nec = Math.max(nec, viejos.reduce((a, q) => a + necesidad(q, H) * k(q), 0));
+    resta = viejos.reduce((a, q) => a + stockTotal(q).t * k(q), 0);
   }
   return { nec, cmp: Math.max(0, redPed(nec - stockTotal(p).t - resta)) };
 }
@@ -1921,7 +1926,7 @@ function filasStk() {
       // lo que necesita la red; el reemplazado no se compra y al nuevo se le descuenta lo que queda del anterior en droguería
       nec = compraKR(p, H).nec;
       const viejos = (window.REEMP_NUEVO?.get(p.c) || []).map(c => S.idx.get(c)).filter(Boolean);
-      cmp = R.has(p.c) ? 0 : redPed(nec - st - viejos.reduce((a, q) => a + stDe(q, f), 0));
+      cmp = R.has(p.c) ? 0 : redPed(nec - st - viejos.reduce((a, q) => a + stDe(q, f) * (+q.fr > 0 ? +q.fr : 1) / (+p.fr > 0 ? +p.fr : 1), 0));
       vd = H ? nec / H : 0; met = metodoEst(p);
     } else {
       // igual que Atención a sucursales: venta diaria del motor con la historia de esa sucursal, su criterio, cambios,
@@ -2702,7 +2707,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611130500"></script>
+<script src="sucursales.js?v=202611130700"></script>
 <script src="estadistica.js?v=202611101700"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611111000"></script>

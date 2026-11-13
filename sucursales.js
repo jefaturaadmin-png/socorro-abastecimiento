@@ -129,6 +129,10 @@
     cache = { filas, porProd }; return cache;
   }
   // fila de un producto en una sucursal con su criterio (también para los que no tienen venta ni stock)
+  // CONVERSIÓN DE PRESENTACIÓN: cuando un producto usa la venta o el stock de otro (reemplazo, cambio, referencia de nuevo),
+  // se pasa a unidades con el fraccionero de cada uno: 6 ampollas sueltas (fraccionero 1) = 0,6 de la caja x10 (fraccionero 10)
+  const frDe = x => +x?.fr > 0 ? +x.fr : 1, kU = (de, a) => frDe(de) / frDe(a);
+  window.kUnidades = (cDe, cA) => { const a = prodDe(cDe), b = prodDe(cA); return a && b ? kU(a, b) : 1; };
   function filaBase(p, f, H, fte) {   // fte: «motor» o N días de venta, en lugar del criterio (el Kardex puede elegirlo)   // H: días a usar en lugar de los del criterio (el Kardex usa los que se ponen allí)
         const st = +(window.STOCK_TODOS?.[p.c]?.[f]?.[0] ?? p.st?.[f] ?? 0) || 0;
         const o = cfgDe(f, p.c), aj = ajProd(f, p.c); if (fte) o.fte = fte; let dv = diaria(p, f, o);
@@ -136,22 +140,22 @@
         // venta propia, toma la venta y el tipo de ese producto en esta sucursal
         const nr = window.NUEVO_REF?.get(p.c), refP = nr && nr.ref !== p.c ? prodDe(nr.ref) : null;
         const usaRef = !!refP && !(dv.d > 0) && !(p.hf?.[f] || []).some(v => v > 1e-9);
-        if (usaRef) dv = diaria(refP, f, { ...cfgDe(f, refP.c), ...(fte ? { fte } : {}) });
+        if (usaRef) { const dr = diaria(refP, f, { ...cfgDe(f, refP.c), ...(fte ? { fte } : {}) }); dv = { ...dr, d: dr.d * kU(refP, p) }; }
         const base = usaRef ? refP : p, c = base.catF?.[f] || 'E';
         // "Se tiene otro medicamento en su cambio": el que usa en su lugar se atiende con la venta del original
-        const usa = enCambio(p, f), cambio = usa ? null : cambioDe(p, f), dOrig = cambio ? diaria(cambio.orig, f, cfgDe(f, cambio.orig.c)).d * cambio.parte : 0;
+        const usa = enCambio(p, f), cambio = usa ? null : cambioDe(p, f), dOrig = cambio ? diaria(cambio.orig, f, cfgDe(f, cambio.orig.c)).d * cambio.parte * kU(cambio.orig, p) : 0;
         // lo que droguería dice que reemplaza a otro (Faltantes: "existe otro medicamento" o "descontinuado" con reemplazo):
         // a la sucursal a la que le falta el original se le atiende este, con la venta del original
         let extra = 0; const enLugar = [];
         if (!usa) for (const oc of reempDrog.get(p.c) || []) {
           const op = prodDe(oc); if (!op || enCambio(op, f)) continue;
           const oo = cfgDe(f, op.c), dO = diaria(op, f, oo).d, stO = +(window.STOCK_TODOS?.[op.c]?.[f]?.[0] ?? op.st?.[f] ?? 0) || 0;
-          if (dO > 0 && stO < dO * (oo.C + oo.Sg)) { extra += dO; enLugar.push(op.c + ' - ' + op.n); }
+          if (dO > 0 && stO < dO * (oo.C + oo.Sg)) { extra += dO * kU(op, p); enLugar.push(op.c + ' - ' + op.n); }
         }
         // nuevo que reemplaza a otro en el kardex: si en esta sucursal aún no tiene venta, se proyecta con la del anterior
         const viejos = usa ? [] : (window.REEMP_NUEVO?.get(p.c) || []).map(prodDe).filter(Boolean);
         let dV = 0, stV = 0, envV = 0;
-        for (const q of viejos) { dV += diaria(q, f, cfgDe(f, q.c)).d; stV += stockEn(q.c, f); envV += S.krEnviado?.get(q.c + '__' + f) || 0; }
+        for (const q of viejos) { const k = kU(q, p); dV += diaria(q, f, cfgDe(f, q.c)).d * k; stV += stockEn(q.c, f) * k; envV += (S.krEnviado?.get(q.c + '__' + f) || 0) * k; }
         const d = Math.max(dv.d, dOrig) + extra + (viejos.length && !(dv.d > 0) ? dV : 0);
         const bloq = bloqueado(p.c, f) || !!window.BLOQ_ATEN?.has(p.c), nec = d * (H ?? (o.C + o.Sg)), seg = d * o.Sg, cob = d > 0 ? st / d : Infinity;
         let pide = 0, nota = '';
