@@ -231,6 +231,20 @@ service cloud.firestore {
       allow delete: if esAdmin();
     }
 
+    // ---------- recepción de pedidos: la lista de lo que se entrega a cada sucursal (la sube el administrador) ----------
+    match /entregas/{id} {
+      allow read: if esAdmin() || (conSucursal() && resource.data.suc == perfil().get('farmacia', ''));
+      allow write: if esAdmin();
+    }
+    // revisión de cada producto al recibirlo: la hace la sucursal (o el administrador)
+    match /entrega_resp/{id} {
+      allow read: if esAdmin() || (conSucursal() && resource.data.suc == perfil().get('farmacia', ''));
+      allow create, update: if suSucursal(request.resource.data.suc)
+        && request.resource.data.porUid == request.auth.uid
+        && request.resource.data.estado in ['ok', 'cruzado', 'danado', 'cantidad', 'lote', 'fecha_corta', 'no_llego', 'otro'];
+      allow delete: if esAdmin();
+    }
+
     // ---------- productos nuevos: con qué producto se reparten (lo elige el administrador en el Kardex) ----------
     match /nuevo_ref/{cod} {
       allow read: if conPerfil();

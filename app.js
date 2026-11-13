@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611130900";
+const VERSION_PROY = "202611131000";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -88,6 +88,7 @@ const VISTAS = [
   { id: "pedidos", nombre: "Productos agotados o de extrema urgencia", vista: "vPed", ic: "i-lista", desc: "Lo que cada sucursal pidió de urgencia (desde el formulario)", ayuda: "químicos: ven los de su sucursal" },
   { id: "compras", nombre: "Compras por laboratorio", vista: "vCompL", c: "comp", ic: "i-grafico", desc: "Qué porcentaje de las compras de cada mes fue de cada laboratorio" },
   { id: "evaluacion", nombre: "Evaluación de sucursales", vista: "vEval", c: "est", ic: "i-grafico", desc: "Stock, orden, limpieza, capacidad y BPA de cada sucursal", ayuda: "químicos: ven la de su sucursal" },
+  { id: "entregas", nombre: "Recepción de pedidos", vista: "vEnt", c: "suc", ic: "i-lista", desc: "Lo que se le entrega a cada sucursal: revisar y marcar cada producto al recibirlo", todos: true },
   { id: "nuevos", nombre: "Productos que buscan los clientes", vista: "vNue", c: "suc", ic: "i-mas", desc: "Registrar con foto lo que piden y no tenemos; lo ven todas las sucursales", ayuda: "ve lo que reportan todas las sucursales" },
   { id: "flujo", nombre: "Flujograma de abastecimiento", vista: "vFlujo", c: "mapa", ic: "i-lista", desc: "Cómo se trabaja: de la compra al proveedor hasta la atención a sucursales", todos: true },
   { id: "rutas", nombre: "Rutas de reparto", vista: "vRutas", c: "mapa", ic: "i-grafico", desc: "La ruta más corta para repartir a un grupo de sucursales, en el mapa y en Google Maps" },
@@ -388,7 +389,7 @@ function pintarNav() {
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vCompL", "vNue", "vFlujo", "vFlued", "vRutas", "vDrog", "vSucx", "vInd", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vCompL", "vNue", "vEnt", "vFlujo", "vFlued", "vRutas", "vDrog", "vSucx", "vInd", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
@@ -421,6 +422,7 @@ function render() {
   else if (S.vista === "vEval") { cargarEval(); pintarEval(); }
   else if (S.vista === "vCompL") { cargarCompras(); pintarCompras(); }   // escucharFalt vuelve a conectar si se había cortado
   else if (S.vista === "vNue") { escucharNue(); marcarNueVisto(); pintarNue(); }
+  else if (S.vista === "vEnt") { escucharEnt(); pintarEnt(); }
   else if (S.vista === "vFlujo") pintarFlujo();
   else if (S.vista === "vFlued") abrirFlued();
   else if (S.vista === "vRutas") abrirRutas();
@@ -2266,6 +2268,140 @@ $("urgDlg").addEventListener("click", async e => {
     else alert(`⚠ El pedido NO aparece en la hoja de Drive todavía.\n\nProductos: ${items.map(p => p.c).join(", ")}\n\nVuelva a intentarlo en un momento o regístrelo en el formulario de Google. Si sigue igual, avise a Abastecimiento.`);
   } catch (x) { msg("urgMsg", x?.name === "AbortError" ? "Google no respondió (más de 20 segundos). Revisa tu internet e inténtalo de nuevo." : "No se pudo enviar. Revisa tu internet e inténtalo de nuevo.", true); }
   finally { b.disabled = false; }
+});
+
+/* ===================== RECEPCIÓN DE PEDIDOS =====================
+   Abastecimiento sube la lista de lo que droguería entrega a cada sucursal (el Excel «Sucursal_dd-mm-aa»):
+   entregas/{id} = { suc, fecha, items: [{ c, n, l, q }], archivo, porNombre, creado }.
+   La sucursal revisa cada producto al recibirlo: entrega_resp/{idEntrega}__{código} = { ent, suc, dia, cod, estado, q, nota, porUid, porNombre, fecha }. */
+const ENT_EST = [["ok", "✔ Correcto", "verde"], ["cruzado", "Cruzado (llegó otro producto)", "rojo"], ["danado", "Dañado", "rojo"], ["cantidad", "Cantidad incorrecta", "amb"],
+  ["lote", "Lote no coincide", "amb"], ["fecha_corta", "Fecha corta", "amb"], ["no_llego", "No llegó", "rojo"], ["otro", "Otro", "amb"]];
+const entEst = id => ENT_EST.find(e => e[0] === id);
+S.ent = null; S.entResp = new Map(); S.entSel = ""; S.entSuc = "";
+function escucharEnt() {
+  if (S.entSub) return; S.entSub = true;
+  const suc = esAdmin() ? null : miFarm();
+  if (!esAdmin() && !suc) { S.ent = []; return; }
+  const qE = suc ? query(collection(db, "entregas"), where("suc", "==", suc)) : collection(db, "entregas");
+  S.subs.push(onSnapshot(qE, sn => { S.ent = sn.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "") || (b.creado || "").localeCompare(a.creado || "")); S.entErr = ""; if (S.vista === "vEnt") pintarEnt(); },
+    e => { S.entErr = textoError(e); S.entSub = false; if (S.vista === "vEnt") pintarEnt(); }));
+  // respuestas: la sucursal las suyas; Abastecimiento, las de los últimos 120 días
+  const qR = suc ? query(collection(db, "entrega_resp"), where("suc", "==", suc)) : query(collection(db, "entrega_resp"), where("dia", ">=", new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10)));
+  S.subs.push(onSnapshot(qR, sn => { S.entResp = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === "vEnt") pintarEnt(); }, () => {}));
+}
+const respEnt = (e, c) => S.entResp.get(e.id + "__" + c);
+function resumenEnt(e) { let rev = 0, prob = 0; for (const it of e.items || []) { const r = respEnt(e, it.c); if (r) { rev++; if (r.estado !== "ok") prob++; } } return { rev, prob, n: (e.items || []).length }; }
+function pintarEnt() {
+  const admin = esAdmin();
+  $("entAcc").hidden = !admin; $("entFil").hidden = !admin;
+  $("entSub").textContent = admin ? "Suba la lista de cada sucursal; ellas revisan cada producto al recibirlo y usted ve lo que llegó bien y lo que no."
+    : `Lo que droguería le entrega a ${nombreFarm(miFarm())}. Revise cada producto al recibirlo y márquelo: ✔ si está correcto o el problema que encontró.`;
+  msg("entMsg", S.entErr || "", true);
+  if (admin && !$("entSuc").options.length) $("entSuc").innerHTML = `<option value="">Todas</option>` + FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => `<option value="${esc(f)}">${esc(corto(f))}</option>`).join("");
+  if (admin) $("entSuc").value = S.entSuc;
+  if (!S.ent) { $("entLista").innerHTML = '<p class="muted">Cargando…</p>'; return; }
+  const lista = S.ent.filter(e => !S.entSuc || e.suc === S.entSuc);
+  $("entLista").innerHTML = lista.length ? lista.slice(0, 60).map(e => { const r = resumenEnt(e), pct = r.n ? Math.round(r.rev / r.n * 100) : 0;
+    return `<button type="button" class="card ent-card${S.entSel === e.id ? " act" : ""}" data-ent="${esc(e.id)}"><b>${esc(admin ? corto(e.suc) : "Entrega")} · ${fDia(e.fecha)}</b>
+      <small>${nf(r.n)} productos · revisados ${nf(r.rev)} (${pct} %)${r.prob ? ` · <span class="rojo-t">${nf(r.prob)} con observación</span>` : ""}</small>
+      <span class="ent-barra"><i style="width:${pct}%"></i></span></button>`; }).join("")
+    : `<p class="muted">${admin ? "Todavía no hay listas. Súbalas con «⬆ Subir listas (Excel)»." : "Todavía no hay entregas para su sucursal."}</p>`;
+  const e = lista.find(x => x.id === S.entSel) || (!admin ? lista[0] : null);
+  if (e && !S.entSel) S.entSel = e.id;
+  pintarEntDet(e);
+}
+function pintarEntDet(e) {
+  const box = $("entDet"); box.hidden = !e; if (!e) return;
+  const admin = esAdmin(), puede = !S.prev && (admin || e.suc === miFarm()), r = resumenEnt(e);
+  const fila = it => { const x = respEnt(e, it.c), es = x && entEst(x.estado), id = esc(it.c);
+    const extra = x && x.estado !== "ok" ? `<div class="ent-extra">${x.estado === "cantidad" ? `<label>Llegó <input type="number" min="0" step="1" value="${x.q ?? ""}" data-entq="${id}" ${puede ? "" : "disabled"}></label>` : ""}<input type="text" maxlength="150" placeholder="${x.estado === "otro" ? "Describa el problema (obligatorio)" : "Detalle (opcional): lote, vencimiento…"}" value="${esc(x.nota || "")}" data-entn="${id}" ${puede ? "" : "disabled"}></div>` : "";
+    return `<tr class="${x ? (x.estado === "ok" ? "ent-ok" : "ent-mal") : ""}"><td class="c"><code>${id}</code></td><td><b>${esc(it.n)}</b><br><small class="muted">${esc(it.l || "")}</small></td><td class="der"><b>${nf(it.q)}</b></td>
+      <td>${puede ? `<div class="ent-bot"><button type="button" class="btn sm${x?.estado === "ok" ? " ok-act" : ""}" data-entok="${id}">✔</button><select data-ents="${id}"><option value="">${x && x.estado !== "ok" ? "" : "¿Algún problema?"}</option>${ENT_EST.slice(1).map(([v, t]) => `<option value="${v}" ${x?.estado === v ? "selected" : ""}>${t}</option>`).join("")}</select></div>` : ""}
+        ${es ? `<span class="chip ${es[2]}">${es[1]}</span>` : '<span class="muted">Sin revisar</span>'}${extra}${x ? `<small class="muted ent-quien">${esc(x.porNombre || "")} · ${fFecha(x.fecha)}</small>` : ""}</td></tr>`; };
+  box.innerHTML = `<div class="lh"><h2>${esc(corto(e.suc))} · entrega del ${fDia(e.fecha)}</h2>
+      <div class="filtros"><small class="muted">${nf(r.rev)} de ${nf(r.n)} revisados${r.prob ? ` · <b class="rojo-t">${nf(r.prob)} con observación</b>` : ""}</small>
+      ${puede && r.rev < r.n ? `<button class="btn" type="button" id="entTodoOk">✔ Marcar los pendientes como correctos</button>` : ""}
+      ${admin ? `<button class="btn" type="button" id="entBorrar">🗑 Quitar esta lista</button>` : ""}</div></div>
+    <div class="tabla-wrap"><table class="tabla ent-tabla"><thead><tr><th>Código</th><th>Medicamento</th><th class="der">Cantidad</th><th>Revisión</th></tr></thead><tbody>${(e.items || []).map(fila).join("")}</tbody></table></div>`;
+}
+async function guardarRespEnt(e, c, cambios) {
+  if (S.prev) return toast(PREVIA.message);
+  const ant = respEnt(e, c) || {}, d = { ent: e.id, suc: e.suc, dia: e.fecha, cod: c, estado: ant.estado || "ok", q: ant.q ?? null, nota: ant.nota || "", ...cambios,
+    porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario, fecha: new Date().toISOString() };
+  S.entResp.set(e.id + "__" + c, d); pintarEnt();
+  try { await setDoc(doc(db, "entrega_resp", e.id + "__" + c), d); } catch (x) { avisar(x); }
+}
+const entActual = () => S.ent?.find(x => x.id === S.entSel);
+$("vEnt").addEventListener("click", async ev => {
+  const card = ev.target.closest("[data-ent]"); if (card) { S.entSel = card.dataset.ent; pintarEnt(); $("entDet").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+  const e = entActual(); if (!e) return;
+  const ok = ev.target.closest("[data-entok]"); if (ok) return guardarRespEnt(e, ok.dataset.entok, { estado: "ok", q: null, nota: "" });
+  if (ev.target.closest("#entTodoOk")) {
+    const pend = (e.items || []).filter(it => !respEnt(e, it.c)); if (!pend.length || !confirm(`¿Marcar ${pend.length} productos pendientes como correctos?`)) return;
+    try { for (let i = 0; i < pend.length; i += 400) { const lote = writeBatch(db);
+      for (const it of pend.slice(i, i + 400)) { const d = { ent: e.id, suc: e.suc, dia: e.fecha, cod: it.c, estado: "ok", q: null, nota: "", porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario, fecha: new Date().toISOString() }; lote.set(doc(db, "entrega_resp", e.id + "__" + it.c), d); }
+      await lote.commit(); } toast("Marcados como correctos"); } catch (x) { avisar(x); }
+    return; }
+  if (ev.target.closest("#entBorrar")) { if (!confirm(`¿Quitar la lista de ${corto(e.suc)} del ${fDia(e.fecha)}? La sucursal dejará de verla.`)) return; try { await deleteDoc(doc(db, "entregas", e.id)); S.entSel = ""; } catch (x) { avisar(x); } }
+});
+$("vEnt").addEventListener("change", ev => {
+  const e = entActual(); if (!e) return;
+  const s = ev.target.closest("[data-ents]"); if (s && s.value) return guardarRespEnt(e, s.dataset.ents, { estado: s.value });
+  const q = ev.target.closest("[data-entq]"); if (q) return guardarRespEnt(e, q.dataset.entq, { q: q.value === "" ? null : Math.max(0, Math.round(+q.value)) });
+  const n = ev.target.closest("[data-entn]"); if (n) return guardarRespEnt(e, n.dataset.entn, { nota: n.value.trim().slice(0, 150) });
+});
+$("entSuc").addEventListener("change", e => { S.entSuc = e.target.value; S.entSel = ""; pintarEnt(); });
+// Excel de observaciones (Abastecimiento): todo lo que no llegó bien, de la sucursal elegida (o todas)
+$("entXls").addEventListener("click", () => {
+  const filas = [];
+  for (const e of (S.ent || []).filter(x => !S.entSuc || x.suc === S.entSuc)) for (const it of e.items || []) { const x = respEnt(e, it.c); if (!x || x.estado === "ok") continue;
+    filas.push({ Sucursal: corto(e.suc), "Fecha de entrega": fDia(e.fecha), "Código": it.c, Medicamento: it.n, Laboratorio: it.l || "", "Cantidad enviada": it.q, "Observación": entEst(x.estado)?.[1] || x.estado, "Cantidad que llegó": x.q ?? "", Detalle: x.nota || "", "Revisó": x.porNombre || "", "Fecha de revisión": fFecha(x.fecha) }); }
+  if (!filas.length) return toast("No hay observaciones.");
+  excelDe(filas, "Observaciones", "recepcion_observaciones" + (S.entSuc ? "_" + corto(S.entSuc).toLowerCase() : ""));
+});
+// subir listas: Excel con Código, Medicamento, Laboratorio y «Se atenderá» (o Cantidad); sucursal y fecha del nombre del archivo
+// la sucursal que aparece en el nombre del archivo (la coincidencia más larga: «ParraReal» es PARRA REAL, «Parra» es PARRA, «Tambo» es MCDO. TAMBO)
+const sucDeNombre = t => { const k = norm(t).replace(/\.XLSX?$/, "").replace(/[^A-Z]/g, ""); if (!k) return ""; let mejor = "", largo = 0;
+  for (const f of FARMACIAS.filter(f => /^ALMACEN /.test(f))) {
+    const cand = [corto(f), f.replace(/^ALMACEN /, ""), ...norm(corto(f)).split(/[^A-Z]+/).filter(w => w.length >= 4)].map(x => norm(x).replace(/[^A-Z]/g, ""));
+    for (const c of cand) if (c && k.includes(c) && c.length > largo) { mejor = f; largo = c.length; } }
+  return mejor; };
+const fechaDeNombre = t => { const m = String(t).match(/(\d{1,2})[-_.](\d{1,2})[-_.](\d{2,4})/); if (!m) return hoyISO(); const a = m[3].length === 2 ? "20" + m[3] : m[3]; return `${a}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`; };
+$("entArch").addEventListener("change", async ev => {
+  const archivos = [...ev.target.files]; ev.target.value = ""; if (!archivos.length) return;
+  try { XLSX ??= await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm"); } catch { return toast("No se pudo leer el Excel. Revisa tu internet."); }
+  S.entNuevas = [];
+  for (const a of archivos) {
+    try {
+      const wb = XLSX.read(await a.arrayBuffer()), ws = wb.Sheets[wb.SheetNames[0]], filas = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false });
+      const iCab = filas.findIndex(f => f.some(v => /^C[OÓ]DIGO$/i.test(String(v).trim()))); if (iCab < 0) { S.entNuevas.push({ archivo: a.name, error: "no tiene la columna «Código»" }); continue; }
+      const cab = filas[iCab].map(v => norm(String(v))), col = re => cab.findIndex(h => re.test(h));
+      const iC = col(/^CODIGO$/), iN = col(/MEDICAMENTO|PRODUCTO|DESCRIPCION/), iL = col(/^LABORATORIO$/), iQ = col(/SE ATENDERA|CANTIDAD|ENVIAR|PEDIR/);
+      if (iQ < 0) { S.entNuevas.push({ archivo: a.name, error: "no tiene la columna «Se atenderá» o «Cantidad»" }); continue; }
+      const items = filas.slice(iCab + 1).map(f => ({ c: String(f[iC] ?? "").trim(), n: String(f[iN] ?? "").trim(), l: iL >= 0 ? String(f[iL] ?? "").trim() : "", q: +String(f[iQ] ?? "").replace(",", ".") || 0 }))
+        .filter(x => /^\d+$/.test(x.c) && x.q > 0).map(x => ({ ...x, c: x.c.padStart(5, "0") }));
+      S.entNuevas.push({ archivo: a.name, suc: sucDeNombre(a.name) || sucDeNombre(wb.SheetNames[0]), fecha: fechaDeNombre(a.name), items });
+    } catch (x) { S.entNuevas.push({ archivo: a.name, error: "no se pudo leer (" + (x.message || x) + ")" }); }
+  }
+  const ops = FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => `<option value="${esc(f)}">${esc(corto(f))}</option>`).join("");
+  $("entDlgLista").innerHTML = S.entNuevas.map((x, k) => x.error ? `<p class="rojo-t">✘ ${esc(x.archivo)}: ${esc(x.error)}</p>`
+    : `<div class="ent-sube"><b>${esc(x.archivo)}</b> · ${nf(x.items.length)} productos<div class="filtros"><label class="filtro">Sucursal <select data-entsuc="${k}"><option value="">Elija…</option>${ops}</select></label><label class="filtro">Fecha de entrega <input type="date" min="2020-01-01" max="2100-12-31" value="${x.fecha}" data-entfe="${k}"></label></div></div>`).join("");
+  S.entNuevas.forEach((x, k) => { const s = $("entDlgLista").querySelector(`[data-entsuc="${k}"]`); if (s) s.value = x.suc || ""; });
+  msg("entDlgMsg", ""); $("entDlg").showModal();
+});
+$("entDlg").addEventListener("change", ev => { const s = ev.target.closest("[data-entsuc]"), f = ev.target.closest("[data-entfe]");
+  if (s) S.entNuevas[+s.dataset.entsuc].suc = s.value; if (f) S.entNuevas[+f.dataset.entfe].fecha = f.value; });
+$("entDlg").addEventListener("click", async ev => {
+  if (ev.target.closest("[data-cerrar-dlg]") || ev.target === $("entDlg")) return $("entDlg").close();
+  if (!ev.target.closest("#entGuardar")) return;
+  const ok = (S.entNuevas || []).filter(x => !x.error && x.items.length);
+  if (!ok.length) return msg("entDlgMsg", "No hay listas válidas para publicar.", true);
+  if (ok.some(x => !x.suc || !/^\d{4}-\d{2}-\d{2}$/.test(x.fecha || ""))) return msg("entDlgMsg", "Elija la sucursal y la fecha de cada archivo.", true);
+  try {
+    for (const x of ok) { const id = `${x.suc.replace(/\W+/g, "_")}__${x.fecha}__${Date.now().toString(36)}`;
+      await setDoc(doc(db, "entregas", id), { suc: x.suc, fecha: x.fecha, items: x.items, archivo: x.archivo, porNombre: S.perfil.nombre || S.perfil.usuario, creado: new Date().toISOString() }); }
+    $("entDlg").close(); toast(`Publicadas ${ok.length} lista${ok.length === 1 ? "" : "s"} a las sucursales`);
+  } catch (x) { msg("entDlgMsg", textoError(x), true); }
 });
 
 /* ===================== vista previa: el administrador ve la página como la ve un usuario ===================== */

@@ -575,6 +575,13 @@ main { padding-bottom: 80px }
 #pdTopH { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between } .pd-topn { display: inline-flex; gap: 4px } .pd-topn .btn.act { background: #14306B; color: #fff; border-color: #14306B }
 .pd-otras { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 6px; max-width: 360px } .pd-otra { font-size: 12px; background: #eef2fb; color: #14306B; border-radius: 999px; padding: 2px 8px; white-space: nowrap } .pd-otra i { color: #8a5a00; font-style: normal }
 .urg-it { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px } .urg-q { display: inline-flex; align-items: center; gap: 4px; font-size: 13px } .urg-q input { width: 64px; padding: 4px 6px }
+.ent-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin-bottom: 14px }
+.ent-card { text-align: left; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; border: 1px solid #e3e7ee; font: inherit } .ent-card.act { outline: 2px solid #14306B }
+.ent-barra { display: block; height: 6px; background: #eceff3; border-radius: 3px; overflow: hidden } .ent-barra i { display: block; height: 100%; background: #2e8b3d }
+.ent-tabla td { vertical-align: top } .ent-tabla tr.ent-ok td { background: #f2faf3 } .ent-tabla tr.ent-mal td { background: #fff4f2 }
+.ent-bot { display: flex; gap: 6px; align-items: center; margin-bottom: 4px } .ent-bot .ok-act { background: #2e8b3d; color: #fff; border-color: #2e8b3d } .ent-bot select { max-width: 220px }
+.ent-extra { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px } .ent-extra input[type=number] { width: 70px } .ent-extra input[type=text] { flex: 1; min-width: 180px }
+.ent-quien { display: block; margin-top: 2px } .ent-sube { padding: 8px 0; border-bottom: 1px solid #eceff3 }
 .pd-filtros { padding: 14px 18px; margin-bottom: 14px; align-items: flex-end }
 .pd-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 14px }
 .pd-kpi { display: grid; gap: 2px; padding: 14px 16px } .pd-kpi small { color: var(--muted); font-size: 12.5px }
