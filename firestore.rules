@@ -222,6 +222,15 @@ service cloud.firestore {
       allow write: if esAdmin();
     }
 
+    // ---------- cantidad de cada pedido de urgencia (el formulario de Google solo guarda los códigos) ----------
+    match /urgencia_cant/{id} {
+      allow read: if conPerfil();
+      allow create, update: if conPerfil() && request.resource.data.porUid == request.auth.uid
+        && (esAdmin() || request.resource.data.suc == perfil().get('farmacia', ''))
+        && request.resource.data.q is number && request.resource.data.q >= 1 && request.resource.data.q <= 10000;
+      allow delete: if esAdmin();
+    }
+
     // ---------- productos nuevos: con qué producto se reparten (lo elige el administrador en el Kardex) ----------
     match /nuevo_ref/{cod} {
       allow read: if conPerfil();

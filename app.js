@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611121600";
+const VERSION_PROY = "202611130100";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1978,6 +1978,10 @@ async function cargarPedidos(forzar) {
           q: conQ?.[j]?.[1] || (cQ >= 0 ? parseFloat(String(x[cQ]).replace(",", ".")) || 0 : 0), mot: cM >= 0 ? x[cM].trim() : "", quien: cU >= 0 ? x[cU].trim() : "" };
       });
     });
+    // cantidades guardadas desde la página (urgencia_cant/{sucursal__código__día})
+    if (!S.urgCant) { S.urgCant = new Map(); try { (await getDocs(collection(db, "urgencia_cant"))).docs.forEach(d => S.urgCant.set(d.id, +d.data().q || 0)); } catch {} }
+    const iso = f => f ? new Date(f.getTime() - f.getTimezoneOffset() * 6e4).toISOString().slice(0, 10) : "";
+    for (const d of datos) if (!d.q && d.cod && d.suc) { const q = S.urgCant.get(`${d.suc}__${d.cod}__${iso(d.f)}`) || S.urgCant.get(`${d.suc}__${d.cod}__${d.f?.toISOString().slice(0, 10)}`); if (q) d.q = q; }
     S.ped = { t: Date.now(), cab, cS, cF, datos: datos.filter(d => d.cod || d.nom) }; S.pdErr = "";
   } catch (e) {
     S.pdErr = "No se pudo leer la hoja de pedidos. Revisa tu internet, y que la hoja esté compartida como «Cualquier persona con el enlace puede ver». (" + (e.message || e) + ")";
@@ -2206,12 +2210,22 @@ $("urgDlg").addEventListener("click", async e => {
   const b = $("urgEnviar"); b.disabled = true; msg("urgMsg", "Enviando…");
   try {
     // Google no deja leer la respuesta desde otra página (no-cors): se envía y luego se confirma al releer la hoja
-    // como en el formulario: todos los códigos en una sola respuesta, separados por coma, cada uno con su cantidad ("21648 x3, 00052 x1")
-    const datos = new URLSearchParams({ [FORM_URGENCIA.campoSucursal]: sucFormDe(suc), [FORM_URGENCIA.campoProducto]: S.urgNuevo.map(p => `${p.c} x${Math.max(1, Math.round(+p.q || 1))}`).join(", ") });   // con la cantidad: «21648 x3»
-    await fetch(FORM_URGENCIA.url, { method: "POST", mode: "no-cors", body: datos });
-    const n = S.urgNuevo.length; $("urgDlg").close(); toast(`Pedido enviado al formulario (${n} producto${n === 1 ? "" : "s"}). Aparecerá en unos segundos.`);
-    S.urgNuevo = []; setTimeout(() => cargarPedidos(true), 4000); setTimeout(() => cargarPedidos(true), 15000);
-  } catch (x) { msg("urgMsg", "No se pudo enviar. Revisa tu internet e inténtalo de nuevo.", true); }
+    // como en el formulario: SOLO los códigos, separados por coma ("21648, 00052"). El formulario no acepta otra cosa en ese campo
+    // (si se manda texto, Google rechaza la respuesta sin avisar). La cantidad se guarda aparte, en la página (urgencia_cant).
+    const items = S.urgNuevo.map(p => ({ c: p.c, q: Math.max(1, Math.round(+p.q || 1)) })), hoy = new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+    const datos = new URLSearchParams({ [FORM_URGENCIA.campoSucursal]: sucFormDe(suc), [FORM_URGENCIA.campoProducto]: items.map(p => p.c).join(", ") });
+    const ctl = new AbortController(), tope = setTimeout(() => ctl.abort(), 20000);
+    await fetch(FORM_URGENCIA.url, { method: "POST", mode: "no-cors", body: datos, signal: ctl.signal }); clearTimeout(tope);
+    // cantidades (si no son 1): por sucursal, código y día
+    for (const p of items) if (p.q > 1) try { await setDoc(doc(db, "urgencia_cant", `${suc}__${p.c}__${hoy}`), { suc, cod: p.c, q: p.q, dia: hoy, porUid: S.perfil.uid, fecha: new Date().toISOString() }); S.urgCant?.set(`${suc}__${p.c}__${hoy}`, p.q); } catch {}
+    const n = items.length; $("urgDlg").close(); toast(`Enviando ${n} producto${n === 1 ? "" : "s"}… se confirma en unos segundos.`);
+    S.urgNuevo = [];
+    // confirmación: se relee la hoja hasta ver el pedido; si no aparece, se avisa (nunca más un «enviado» que no llegó)
+    const llego = () => (S.ped?.datos || []).some(d => d.suc === suc && items.some(p => p.c === d.cod) && d.f && Date.now() - d.f < 10 * 60000);
+    let ok = false; for (const espera of [4000, 8000, 15000]) { await new Promise(r => setTimeout(r, espera)); await cargarPedidos(true); if (llego()) { ok = true; break; } }
+    if (ok) toast(`✔ Pedido registrado en la hoja (${n} producto${n === 1 ? "" : "s"}).`);
+    else alert(`⚠ El pedido NO aparece en la hoja de Drive todavía.\n\nProductos: ${items.map(p => p.c).join(", ")}\n\nVuelva a intentarlo en un momento o regístrelo en el formulario de Google. Si sigue igual, avise a Abastecimiento.`);
+  } catch (x) { msg("urgMsg", x?.name === "AbortError" ? "Google no respondió (más de 20 segundos). Revisa tu internet e inténtalo de nuevo." : "No se pudo enviar. Revisa tu internet e inténtalo de nuevo.", true); }
   finally { b.disabled = false; }
 });
 
