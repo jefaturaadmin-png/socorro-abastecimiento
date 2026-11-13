@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611131200";
+const VERSION_PROY = "202611131300";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2321,21 +2321,21 @@ function pintarEntDet(e) {
   const box = $("entDet"); box.hidden = !e; if (!e) return;
   const admin = esAdmin(), puede = !S.prev && (admin || e.suc === miFarm()), r = resumenEnt(e), pct = r.n ? Math.round(r.rev / r.n * 100) : 0, dis = puede ? "" : "disabled";
   const quien = x => `<small class="ent-quien">${esc(x.porNombre || "")} · ${fFecha(x.fecha)}</small>`;
-  const fila = it => { const x = respEnt(e, it.c), es = x && entEst(x.estado), id = esc(it.c), mal = x && x.estado !== "ok";
-    const estado = !x ? `${puede ? `<button type="button" class="ent-okbtn" data-entok="${id}">✔ Correcto</button>` : ""}<span class="ent-badge sin">Sin revisar</span>`
-      : x.estado === "ok" ? `<span class="ent-badge ok">✔ Correcto</span>${quien(x)}`
-      : `<span class="ent-badge ${es?.[2] === "rojo" ? "rojo" : "amb"}">⚠ ${esc(es?.[1] || x.estado)}</span>${quien(x)}${puede ? `<button type="button" class="ent-okbtn sm" data-entok="${id}">✔ Sí está correcto</button>` : ""}`;
-    const motivo = `<select data-ents="${id}" ${dis}><option value="">${mal ? "" : "¿Algún problema? Elija el motivo…"}</option>${ENT_EST.slice(1).map(([v, t]) => `<option value="${v}" ${x?.estado === v ? "selected" : ""}>${t}</option>`).join("")}</select>`
-      + (mal && x.estado === "cantidad" ? `<label class="ent-lleg">¿Cuánto llegó? <input type="number" min="0" step="1" value="${x.q ?? ""}" data-entq="${id}" ${dis}></label>` : "")
-      + (x ? `<input type="text" maxlength="150" placeholder="${x.estado === "otro" ? "Describa el problema" : mal ? "Detalle (opcional): lote, vencimiento…" : "Comentario (opcional)…"}" value="${esc(x.nota || "")}" data-entn="${id}" ${dis}>` : "");
+  S.entObs ??= new Set();
+  const fila = it => { const x = respEnt(e, it.c), es = x && entEst(x.estado), id = esc(it.c), mal = x && x.estado !== "ok", abierto = mal || S.entObs.has(e.id + "__" + it.c);
+    const sel = `<select data-ents="${id}" ${dis}>${mal ? "" : `<option value="">Elija la observación…</option>`}${ENT_EST.slice(1).map(([v, t]) => `<option value="${v}" ${x?.estado === v ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+    const obs = abierto ? `<div class="ent-obs">${sel}${mal && x.estado === "cantidad" ? `<label>Llegó <input type="number" min="0" step="1" value="${x.q ?? ""}" data-entq="${id}" ${dis}></label>` : ""}${mal ? `<input type="text" maxlength="150" placeholder="${x.estado === "otro" ? "Describa el problema" : "Detalle (opcional)"}" value="${esc(x.nota || "")}" data-entn="${id}" ${dis}>` : ""}${!mal && puede ? `<button type="button" class="ent-x" data-entobs="${id}" title="Cancelar">✕</button>` : ""}</div>` : "";
+    const rev = !x ? (puede ? `<button type="button" class="ent-ck" data-entok="${id}" title="Conforme">✔</button><button type="button" class="ent-ob${abierto ? " act" : ""}" data-entobs="${id}">Observar</button>` : `<span class="ent-badge sin">Sin revisar</span>`)
+      : x.estado === "ok" ? `<button type="button" class="ent-badge ok" ${puede ? `data-entobs="${id}" title="Clic si encontró un problema"` : "disabled"}>✔ Conforme</button>`
+      : `<span class="ent-badge ${es?.[2] === "rojo" ? "rojo" : "amb"}">⚠ ${esc((es?.[1] || x.estado).replace(/ \(.*\)/, ""))}</span>${puede ? `<button type="button" class="ent-ck sm" data-entok="${id}" title="Sí está conforme">✔</button>` : ""}`;
     return `<tr class="${x ? (mal ? "ent-mal" : "ent-ok") : ""}"><td><div class="ent-med"><span class="ent-cod">${id}</span><div><b>${esc(it.n)}</b><small>${esc(it.l || "")}</small></div></div></td>
-      <td class="c"><span class="ent-q">${nf(it.q)}</span></td><td><div class="ent-est">${estado}</div></td><td><div class="ent-mot">${motivo}</div></td></tr>`; };
+      <td class="c"><span class="ent-q">${nf(it.q)}</span></td><td><div class="ent-rev">${rev}${x ? `<small class="ent-quien">${esc(x.porNombre || "")} · ${fFecha(x.fecha)}</small>` : ""}</div>${obs}</td></tr>`; };
   // otras observaciones: lo que llegó sin estar en la lista u observaciones generales
   const otras = [...S.entResp.entries()].filter(([, d]) => d.ent === e.id && d.x && !d.anulado).sort((a, b) => (a[1].fecha || "").localeCompare(b[1].fecha || ""));
   box.innerHTML = `<div class="ent-cab"><h2>${esc(corto(e.suc))} · entrega del ${fDia(e.fecha)}</h2>
       <div class="ent-prog"><small>${nf(r.rev)} de ${nf(r.n)} revisados${r.prob ? ` · <b class="rojo-t">${nf(r.prob)} con observación</b>` : ""}</small><span class="ent-barra"><i style="width:${pct}%"></i></span></div>
       ${admin ? `<button class="btn" type="button" id="entBorrar">🗑 Quitar esta lista</button>` : ""}</div>
-    <div class="tabla-wrap"><table class="tabla ent-tabla"><thead><tr><th>Medicamento</th><th class="c">Cantidad</th><th>Estado</th><th>Motivo / comentario</th></tr></thead><tbody>${(e.items || []).map(fila).join("")}</tbody></table></div>
+    <div class="tabla-wrap"><table class="tabla ent-tabla"><thead><tr><th>Medicamento</th><th class="c">Cantidad</th><th>Revisión</th></tr></thead><tbody>${(e.items || []).map(fila).join("")}</tbody></table></div>
     <div class="ent-otras"><h3>📝 Otras observaciones</h3><p class="muted">Si llegó un producto que no estaba en la lista (no estaba previsto su envío) o tiene una observación general de esta entrega, anótela aquí.</p>
       ${otras.length ? `<ul class="ent-olist">${otras.map(([k, d]) => `<li><span class="ent-badge ${d.x === "extra" ? "amb" : "sin"}">${d.x === "extra" ? "No estaba en la lista" : "Observación general"}</span>
         ${d.x === "extra" ? `${d.cod ? `<span class="ent-cod">${esc(d.cod)}</span>` : ""}<b>${esc(d.prod || "")}</b>${d.q ? ` · llegó <b>${nf(d.q)}</b>` : ""}` : ""}${d.nota ? ` <span>${d.x === "extra" ? "· " : ""}${esc(d.nota)}</span>` : ""}
@@ -2357,7 +2357,10 @@ const entActual = () => S.ent?.find(x => x.id === S.entSel);
 $("vEnt").addEventListener("click", async ev => {
   const card = ev.target.closest("[data-ent]"); if (card) { S.entSel = card.dataset.ent; pintarEnt(); $("entDet").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
   const e = entActual(); if (!e) return;
-  const ok = ev.target.closest("[data-entok]"); if (ok) return guardarRespEnt(e, ok.dataset.entok, { estado: "ok", q: null, nota: "" });
+  const ob = ev.target.closest("[data-entobs]");
+  if (ob) { S.entObs ??= new Set(); const k = e.id + "__" + ob.dataset.entobs; S.entObs.has(k) ? S.entObs.delete(k) : S.entObs.add(k); pintarEnt();
+    if (S.entObs.has(k)) $("entDet").querySelector(`[data-ents="${ob.dataset.entobs}"]`)?.focus(); return; }
+  const ok = ev.target.closest("[data-entok]"); if (ok) { S.entObs?.delete(e.id + "__" + ok.dataset.entok); return guardarRespEnt(e, ok.dataset.entok, { estado: "ok", q: null, nota: "" }); }
   const an = ev.target.closest("[data-entanula]");
   if (an) { const d = S.entResp.get(an.dataset.entanula); if (!d || !confirm("¿Quitar esta observación?")) return;
     const n = { ...d, anulado: true, porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario, fecha: new Date().toISOString() };
@@ -2379,7 +2382,7 @@ $("vEnt").addEventListener("click", async ev => {
 });
 $("vEnt").addEventListener("change", ev => {
   const e = entActual(); if (!e) return;
-  const s = ev.target.closest("[data-ents]"); if (s && s.value) return guardarRespEnt(e, s.dataset.ents, { estado: s.value });
+  const s = ev.target.closest("[data-ents]"); if (s && s.value) S.entObs?.delete(e.id + "__" + s.dataset.ents); if (s && s.value) return guardarRespEnt(e, s.dataset.ents, { estado: s.value });
   const q = ev.target.closest("[data-entq]"); if (q) return guardarRespEnt(e, q.dataset.entq, { q: q.value === "" ? null : Math.max(0, Math.round(+q.value)) });
   const n = ev.target.closest("[data-entn]"); if (n) return guardarRespEnt(e, n.dataset.entn, { nota: n.value.trim().slice(0, 150) });
 });
