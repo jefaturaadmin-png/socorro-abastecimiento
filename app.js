@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611130700";
+const VERSION_PROY = "202611130800";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2113,7 +2113,8 @@ function pintarTableroUrg(P) {
   let pts;
   if (!porMes) pts = Array.from({ length: nDias }, (_, i) => { const a = new Date(inicioDiaDe(d0).getTime() + i * 864e5), b = new Date(a.getTime() + 864e5);
     return { a, b, et: nDias <= 7 ? (+a === +hoy ? "hoy" : a.toLocaleDateString("es-PE", { weekday: "short" })) : a.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit" }) }; });
-  else { pts = []; for (let a = new Date(d0.getFullYear(), d0.getMonth(), 1); a <= d1; a = new Date(a.getFullYear(), a.getMonth() + 1, 1)) pts.push({ a: a < d0 ? d0 : a, b: new Date(a.getFullYear(), a.getMonth() + 1, 1), et: a.toLocaleDateString("es-PE", { month: "short", year: "2-digit" }) }); }
+  else { pts = []; const ini = new Date(Math.max(+d0, +new Date(d1.getFullYear() - 3, d1.getMonth(), 1)));   // como máximo 36 meses
+    for (let a = new Date(ini.getFullYear(), ini.getMonth(), 1); a <= d1; a = new Date(a.getFullYear(), a.getMonth() + 1, 1)) pts.push({ a: a < d0 ? d0 : a, b: new Date(a.getFullYear(), a.getMonth() + 1, 1), et: a.toLocaleDateString("es-PE", { month: "short", year: "2-digit" }) }); }
   const vals = pts.map(p => base.filter(d => d.f && d.f >= p.a && d.f < p.b && d.f <= d1).length);
   const mv = Math.max(1, ...vals), paso = pts.length > 1 ? 410 / (pts.length - 1) : 0, X = i => 40 + i * paso, Y = v => 170 - v / mv * 140, cada = Math.ceil(pts.length / 12);
   $("pdLinH").textContent = "Pedidos por " + (porMes ? "mes" : "día") + (S.pdSuc ? " · " + corto(S.pdSuc) : "");
@@ -2187,8 +2188,10 @@ $("pdSuc").addEventListener("change", e => { S.pdSuc = e.target.value; pintarPed
 $("pdTopH").addEventListener("click", e => { const b = e.target.closest("[data-pdtopn]"); if (b) { S.pdTopN = +b.dataset.pdtopn; pintarPedidos(); return; } const k = e.target.closest("[data-pdstk]"); if (k) { S.pdStk = k.dataset.pdstk; pintarPedidos(); } });
 $("pdLimpiar").addEventListener("click", () => { S.pdSuc = S.pdDesde = S.pdHasta = ""; $("pdDesde").value = $("pdHasta").value = $("pdDesde2").value = $("pdHasta2").value = ""; pintarPedidos(); });
 ["pdQ", "pdQ2"].forEach(id => $(id).addEventListener("input", e => { S.pdQ = e.target.value; pintarPedidos(); }));
-["pdDesde", "pdDesde2"].forEach(id => $(id).addEventListener("change", e => { S.pdDesde = e.target.value; pintarPedidos(); }));
-["pdHasta", "pdHasta2"].forEach(id => $(id).addEventListener("change", e => { S.pdHasta = e.target.value; pintarPedidos(); }));
+// fechas: mientras se escribe el año, el navegador da valores incompletos (año 0002, 0020…): se ignoran hasta que el año sea válido
+const fechaOk = v => !v || (/^\d{4}-\d{2}-\d{2}$/.test(v) && +v.slice(0, 4) >= 2020 && +v.slice(0, 4) <= 2100);
+["pdDesde", "pdDesde2"].forEach(id => $(id).addEventListener("change", e => { if (!fechaOk(e.target.value)) return; S.pdDesde = e.target.value; pintarPedidos(); }));
+["pdHasta", "pdHasta2"].forEach(id => $(id).addEventListener("change", e => { if (!fechaOk(e.target.value)) return; S.pdHasta = e.target.value; pintarPedidos(); }));
 ["pdRes", "pdBarras"].forEach(id => $(id).addEventListener("click", e => { const b = e.target.closest("[data-pdsuc]"); if (!b) return; S.pdSuc = S.pdSuc === b.dataset.pdsuc ? "" : b.dataset.pdsuc; pintarPedidos(); }));
 $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) { S.pdMostrar += 200; pintarPedidos(); } });
 ["pdXls", "pdXls2"].forEach(id => $(id).addEventListener("click", () => {
