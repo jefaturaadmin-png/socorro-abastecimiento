@@ -244,6 +244,12 @@ service cloud.firestore {
       allow write: if esAdmin();
     }
 
+    // ---------- versión de la página: el administrador pide que todas se recarguen ----------
+    match /app/{id} {
+      allow read: if conPerfil();
+      allow write: if esAdmin();
+    }
+
     // ---------- avisos generales: los publica el administrador y los ven todos en su menú principal ----------
     match /avisos/{id} {
       allow read: if conPerfil();

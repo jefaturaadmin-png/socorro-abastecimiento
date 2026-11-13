@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611130100";
+const VERSION_PROY = "202611130200";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -350,7 +350,7 @@ function iniciar() {
     }));
     ir("vInicio");
   }
-  montarAyuda(); escucharAvisos();
+  montarAyuda(); escucharAvisos(); escucharVersion();
   // enlace directo a un módulo (p. ej. ?m=nuevos, el que abre la app instalada en el celular); en el celular se recuerda
   if (misVistas().some(v => v.id === "nuevos")) escucharNue();   // para avisar de lo que registran otros
   const vDir = MODO_M && misVistas().find(v => v.id === MODO_M);
@@ -539,6 +539,12 @@ function pintarLados() {
 // Avisos generales: los publica el administrador (colección avisos) y los ven todos en el menú principal
 S.avisos = [];
 const htmlAvisos = () => S.avisos.map(a => `<div class="aviso general">📢 ${esc(a.texto)}<small>${esc(a.porNombre || "Abastecimiento")} · ${fmtF(a.fecha)}</small></div>`);
+// versión de la página: si Abastecimiento pide «recargar a todos», las páginas con esta versión (o posteriores) se recargan solas
+function escucharVersion() {
+  let primera = true;
+  S.subs.push(onSnapshot(doc(db, "app", "version"), sn => { const d = sn.data(); if (primera) { primera = false; S.recargaVista = d?.recarga; return; }
+    if (d?.recarga && d.recarga !== S.recargaVista && !esAdmin()) location.reload(); }, () => {}));
+}
 function escucharAvisos() {
   S.subs.push(onSnapshot(collection(db, "avisos"), sn => {
     S.avisos = sn.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (aFecha(b.fecha) || 0) - (aFecha(a.fecha) || 0));
@@ -1081,12 +1087,30 @@ $("uRolSel").addEventListener("change", () => { $("uFarm").disabled = $("uRolSel
 const chkVistas = (sel = []) => VISTAS.filter(v => !v.todos).map(v => `<label class="check"><input type="checkbox" data-vista="${esc(v.id)}" ${sel.includes(v.id) ? "checked" : ""}> ${esc(v.nombre)}${v.ayuda ? ` <small class="muted">(${esc(v.ayuda)})</small>` : ""}</label>`).join("");
 $("uVistas").innerHTML = chkVistas();
 const vistasDe = el => [...el.querySelectorAll("[data-vista]:checked")].map(x => x.dataset.vista);
+// RECARGAR A TODOS: la página abierta vigila el usuario de cada uno y se recarga sola si cambia la lista de módulos («vistas»).
+// Se agrega a esa lista una marca «_recarga…» (no es un módulo: no cambia nada de lo que ven) y la página de cada uno se recarga.
+$("recargarTodos").addEventListener("click", async () => {
+  if (!esAdmin()) return;
+  const us = (S.usuarios || []).filter(u => u.uid !== S.perfil.uid && !u.reemplazadoPor);
+  if (!confirm(`Se recargará la página a ${us.length} usuarios que la tengan abierta (computadoras y celulares), para que tomen la versión nueva.\n\nNo cambia sus módulos ni cierra su sesión. ¿Continuar?`)) return;
+  try {
+    const marca = "_recarga" + Date.now();
+    for (let i = 0; i < us.length; i += 400) {
+      const lote = writeBatch(db);
+      for (const u of us.slice(i, i + 400)) lote.update(doc(db, "usuarios", u.uid), { vistas: [...(u.vistas || []).filter(v => !String(v).startsWith("_recarga")), marca] });
+      await lote.commit();
+    }
+    // y para las páginas con la versión nueva: aviso de versión
+    try { await setDoc(doc(db, "app", "version"), { v: VERSION_PROY, recarga: marca, fecha: new Date().toISOString() }); } catch {}
+    toast(`Listo: se recargará la página a ${us.length} usuarios.`);
+  } catch (x) { avisar(x); }
+});
 function pintarUsuarios() {
   const lista = S.usuarios.filter(u => !u.reemplazadoPor).sort((a, b) => (a.rol + a.farmacia + a.usuario).localeCompare(b.rol + b.farmacia + b.usuario));
   const opcFarm = sel => FARMACIAS.map(f => `<option value="${esc(f)}" ${f === sel ? "selected" : ""}>${esc(corto(f))}</option>`).join("");
   const fila = u => `<tr class="${u.activo === false ? "inactivo" : ""}">
       <td class="f">${esc(u.usuario)}</td><td>${u.nombre ? esc(u.nombre) : '<span class="muted">Lo escribirá al ingresar</span>'}</td>
-      <td>${NOMBRE_ROL[u.rol] || esc(u.rol)}${(u.vistas || []).map(id => `<br><span class="tag">${esc(VISTAS.find(v => v.id === id)?.nombre || id)}</span>`).join("")}</td><td>${esc(u.farmacia ? corto(u.farmacia) : "–")}</td>
+      <td>${NOMBRE_ROL[u.rol] || esc(u.rol)}${(u.vistas || []).filter(id => !String(id).startsWith("_recarga")).map(id => `<br><span class="tag">${esc(VISTAS.find(v => v.id === id)?.nombre || id)}</span>`).join("")}</td><td>${esc(u.farmacia ? corto(u.farmacia) : "–")}</td>
       <td>${u.cambiarClave === true ? '<span class="tag t-pend">Aún no cambia su contraseña</span>' : '<span class="tag t-ok">Contraseña propia</span>'}${u.activo === false ? ' <span class="tag t-rech">Deshabilitado</span>' : ""}</td>
       <td class="der"><div class="botones-fila">${u.uid === S.perfil.uid ? '<span class="muted">Tú</span>' :
         `<button class="btn sm" type="button" data-editar="${esc(u.uid)}">Editar</button>
