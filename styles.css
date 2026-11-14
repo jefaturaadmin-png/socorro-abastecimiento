@@ -840,3 +840,4 @@ body.nav-abierta .top .nav button { text-align: left; justify-content: flex-star
 #entCabeza[hidden] { display: none }
 #entCabeza[hidden] + .cuerpo { padding-top: 22px }
 .ent-onuevo select, .ent-onuevo input, .ent-onuevo .btn { min-height: 0; height: 32px; padding: 2px 8px; font-size: 13px } .ent-olist { gap: 5px }
+.ent-ver select { min-height: 0; height: 32px; padding: 2px 8px; font-size: 13px }
