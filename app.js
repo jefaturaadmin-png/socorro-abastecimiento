@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611131300";
+const VERSION_PROY = "202611140100";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2329,12 +2329,12 @@ function pintarEntDet(e) {
       : x.estado === "ok" ? `<button type="button" class="ent-badge ok" ${puede ? `data-entobs="${id}" title="Clic si encontró un problema"` : "disabled"}>✔ Conforme</button>`
       : `<span class="ent-badge ${es?.[2] === "rojo" ? "rojo" : "amb"}">⚠ ${esc((es?.[1] || x.estado).replace(/ \(.*\)/, ""))}</span>${puede ? `<button type="button" class="ent-ck sm" data-entok="${id}" title="Sí está conforme">✔</button>` : ""}`;
     return `<tr class="${x ? (mal ? "ent-mal" : "ent-ok") : ""}"><td><div class="ent-med"><span class="ent-cod">${id}</span><div><b>${esc(it.n)}</b><small>${esc(it.l || "")}</small></div></div></td>
-      <td class="c"><span class="ent-q">${nf(it.q)}</span></td><td><div class="ent-rev">${rev}${x ? `<small class="ent-quien">${esc(x.porNombre || "")} · ${fFecha(x.fecha)}</small>` : ""}</div>${obs}</td></tr>`; };
+      <td class="c"><span class="ent-q">${nf(it.q)}</span></td><td><div class="ent-rev">${rev}${x ? `<small class="ent-quien">${esc(x.porNombre || "")} · ${fFecha(x.fecha)}</small>` : ""}${x && admin && !S.prev ? `<button type="button" class="ent-x" data-entborra="${id}" title="Borrar esta revisión (queda sin revisar)">↺</button>` : ""}</div>${obs}</td></tr>`; };
   // otras observaciones: lo que llegó sin estar en la lista u observaciones generales
   const otras = [...S.entResp.entries()].filter(([, d]) => d.ent === e.id && d.x && !d.anulado).sort((a, b) => (a[1].fecha || "").localeCompare(b[1].fecha || ""));
   box.innerHTML = `<div class="ent-cab"><h2>${esc(corto(e.suc))} · entrega del ${fDia(e.fecha)}</h2>
       <div class="ent-prog"><small>${nf(r.rev)} de ${nf(r.n)} revisados${r.prob ? ` · <b class="rojo-t">${nf(r.prob)} con observación</b>` : ""}</small><span class="ent-barra"><i style="width:${pct}%"></i></span></div>
-      ${admin ? `<button class="btn" type="button" id="entBorrar">🗑 Quitar esta lista</button>` : ""}</div>
+      ${admin && r.rev ? `<button class="btn" type="button" id="entBorrarRev">↺ Borrar las revisiones</button>` : ""}${admin ? `<button class="btn" type="button" id="entBorrar">🗑 Quitar esta lista</button>` : ""}</div>
     <div class="tabla-wrap"><table class="tabla ent-tabla"><thead><tr><th>Medicamento</th><th class="c">Cantidad</th><th>Revisión</th></tr></thead><tbody>${(e.items || []).map(fila).join("")}</tbody></table></div>
     <div class="ent-otras"><h3>📝 Otras observaciones</h3><p class="muted">Si llegó un producto que no estaba en la lista (no estaba previsto su envío) o tiene una observación general de esta entrega, anótela aquí.</p>
       ${otras.length ? `<ul class="ent-olist">${otras.map(([k, d]) => `<li><span class="ent-badge ${d.x === "extra" ? "amb" : "sin"}">${d.x === "extra" ? "No estaba en la lista" : "Observación general"}</span>
@@ -2361,8 +2361,17 @@ $("vEnt").addEventListener("click", async ev => {
   if (ob) { S.entObs ??= new Set(); const k = e.id + "__" + ob.dataset.entobs; S.entObs.has(k) ? S.entObs.delete(k) : S.entObs.add(k); pintarEnt();
     if (S.entObs.has(k)) $("entDet").querySelector(`[data-ents="${ob.dataset.entobs}"]`)?.focus(); return; }
   const ok = ev.target.closest("[data-entok]"); if (ok) { S.entObs?.delete(e.id + "__" + ok.dataset.entok); return guardarRespEnt(e, ok.dataset.entok, { estado: "ok", q: null, nota: "" }); }
+  const bo = ev.target.closest("[data-entborra]");
+  if (bo) { const k = e.id + "__" + bo.dataset.entborra; try { await deleteDoc(doc(db, "entrega_resp", k)); S.entResp.delete(k); pintarEnt(); } catch (x) { avisar(x); } return; }
+  if (ev.target.closest("#entBorrarRev")) {
+    const ks = [...S.entResp.entries()].filter(([, d]) => d.ent === e.id).map(([k]) => k);
+    if (!ks.length || !confirm(`¿Borrar las ${ks.length} revisiones y observaciones de ${corto(e.suc)} del ${fDia(e.fecha)}? La lista queda sin revisar.`)) return;
+    try { for (let i = 0; i < ks.length; i += 400) { const lote = writeBatch(db); ks.slice(i, i + 400).forEach(k => lote.delete(doc(db, "entrega_resp", k))); await lote.commit(); }
+      ks.forEach(k => S.entResp.delete(k)); pintarEnt(); toast("Revisiones borradas"); } catch (x) { avisar(x); }
+    return; }
   const an = ev.target.closest("[data-entanula]");
   if (an) { const d = S.entResp.get(an.dataset.entanula); if (!d || !confirm("¿Quitar esta observación?")) return;
+    if (esAdmin()) { try { await deleteDoc(doc(db, "entrega_resp", an.dataset.entanula)); S.entResp.delete(an.dataset.entanula); pintarEnt(); } catch (x) { avisar(x); } return; }
     const n = { ...d, anulado: true, porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario, fecha: new Date().toISOString() };
     S.entResp.set(an.dataset.entanula, n); pintarEnt(); try { await setDoc(doc(db, "entrega_resp", an.dataset.entanula), n); } catch (x) { avisar(x); } return; }
   if (ev.target.closest("#entOAdd")) {
