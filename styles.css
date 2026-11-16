@@ -841,3 +841,4 @@ body.nav-abierta .top .nav button { text-align: left; justify-content: flex-star
 #entCabeza[hidden] + .cuerpo { padding-top: 22px }
 .ent-onuevo select, .ent-onuevo input, .ent-onuevo .btn { min-height: 0; height: 32px; padding: 2px 8px; font-size: 13px } .ent-olist { gap: 5px }
 .ent-ver select { min-height: 0; height: 32px; padding: 2px 8px; font-size: 13px }
+.ent-conf { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; max-width: 320px } .ent-conf small { color: #6b7280; font-size: 11.5px; text-align: right; line-height: 1.3 }

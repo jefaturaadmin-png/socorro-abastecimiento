@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611160100";
+const VERSION_PROY = "202611160200";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2330,13 +2330,13 @@ function pintarEntDet(e) {
       : `<span class="ent-badge ${es?.[2] === "rojo" ? "rojo" : "amb"}">⚠ ${esc((es?.[1] || x.estado).replace(/ \(.*\)/, ""))}</span>${puede ? `<button type="button" class="ent-ck sm" data-entok="${id}" title="Sí está conforme">✔</button>` : ""}`;
     return `<tr class="${x ? (mal ? "ent-mal" : "ent-ok") : ""}"><td><div class="ent-med"><span class="ent-cod">${id}</span><div><b>${esc(it.n)}</b><small>${esc(it.l || "")}</small></div></div></td>
       <td class="c"><span class="ent-q">${nf(it.q)}</span></td><td><div class="ent-rev">${rev}${x ? `<small class="ent-quien">${esc(x.porNombre || "")} · ${fFecha(x.fecha)}</small>` : ""}${x && admin && !S.prev ? `<button type="button" class="ent-x" data-entborra="${id}" title="Borrar esta revisión (queda sin revisar)">↺</button>` : ""}</div>${obs}</td></tr>`; };
-  const fv = S.entVer || "", verEnt = (e.items || []).filter(it => { const x = respEnt(e, it.c);
+  const fv = admin ? S.entVer || "" : "", verEnt = (e.items || []).filter(it => { const x = respEnt(e, it.c);
     return !fv || (fv === "obs" ? x && x.estado !== "ok" : fv === "ok" ? x?.estado === "ok" : fv === "sin" ? !x : x?.estado === fv); });
   // otras observaciones: lo que llegó sin estar en la lista u observaciones generales
   const otras = [...S.entResp.entries()].filter(([, d]) => d.ent === e.id && d.x && !d.anulado).sort((a, b) => (a[1].fecha || "").localeCompare(b[1].fecha || ""));
   box.innerHTML = `<div class="ent-cab"><h2>${esc(corto(e.suc))} · entrega del ${fDia(e.fecha)}</h2>
       <div class="ent-prog"><small>${nf(r.rev)} de ${nf(r.n)} revisados${r.prob ? ` · <b class="rojo-t">${nf(r.prob)} con observación</b>` : ""}</small><span class="ent-barra"><i style="width:${pct}%"></i></span></div>
-      <label class="filtro ent-ver">Mostrar <select id="entVer">${[["", "Todos"], ["obs", "Con observación (no conformes)"], ["ok", "Conformes"], ["sin", "Sin revisar"], ...ENT_EST.slice(1)].map(([v, t]) => `<option value="${v}" ${fv === v ? "selected" : ""}>${v && v !== "obs" && v !== "ok" && v !== "sin" ? "· " : ""}${esc(t)}</option>`).join("")}</select></label>
+      ${admin ? `<label class="filtro ent-ver">Mostrar <select id="entVer">${[["", "Todos"], ["obs", "Con observación (no conformes)"], ["ok", "Conformes"], ["sin", "Sin revisar"], ...ENT_EST.slice(1)].map(([v, t]) => `<option value="${v}" ${fv === v ? "selected" : ""}>${v && v !== "obs" && v !== "ok" && v !== "sin" ? "· " : ""}${esc(t)}</option>`).join("")}</select></label>` : puede && r.rev < r.n ? `<div class="ent-conf"><button class="btn primario" type="button" id="entConfResto">✔ Dar conformidad al resto</button><small>Da conformidad a todos los productos que <b>no</b> fueron observados (${nf(r.n - r.rev)} pendientes).</small></div>` : ""}
       ${admin && r.rev ? `<button class="btn" type="button" id="entBorrarRev">↺ Borrar las revisiones</button>` : ""}${admin ? `<button class="btn" type="button" id="entBorrar">🗑 Quitar esta lista</button>` : ""}</div>
     <div class="tabla-wrap"><table class="tabla ent-tabla"><thead><tr><th>Medicamento</th><th class="c">Cantidad</th><th>Revisión</th></tr></thead><tbody>${verEnt.map(fila).join("") || `<tr><td colspan="3" class="muted">No hay productos con este filtro.</td></tr>`}</tbody></table></div>
     <div class="ent-otras"><h3>📝 Otras observaciones</h3><p class="muted">Si llegó un producto que no estaba en la lista (no estaba previsto su envío) o tiene una observación general de esta entrega, anótela aquí.</p>
@@ -2364,6 +2364,17 @@ $("vEnt").addEventListener("click", async ev => {
   if (ob) { S.entObs ??= new Set(); const k = e.id + "__" + ob.dataset.entobs; S.entObs.has(k) ? S.entObs.delete(k) : S.entObs.add(k); pintarEnt();
     if (S.entObs.has(k)) $("entDet").querySelector(`[data-ents="${ob.dataset.entobs}"]`)?.focus(); return; }
   const ok = ev.target.closest("[data-entok]"); if (ok) { S.entObs?.delete(e.id + "__" + ok.dataset.entok); return guardarRespEnt(e, ok.dataset.entok, { estado: "ok", q: null, nota: "" }); }
+  if (ev.target.closest("#entConfResto")) {
+    if (S.prev) return toast(PREVIA.message);
+    const abiertos = (e.items || []).filter(it => !respEnt(e, it.c) && S.entObs?.has(e.id + "__" + it.c));
+    if (abiertos.length) return toast(`Primero elija la observación de ${abiertos.map(it => it.c).join(", ")} (o ciérrela con ✕).`);
+    const pend = (e.items || []).filter(it => !respEnt(e, it.c)); if (!pend.length) return;
+    if (!confirm(`¿Dar conformidad a los ${pend.length} productos que no fueron observados?\n\nRevise antes que todos los productos con problema ya estén observados.`)) return;
+    const quien = { porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario, fecha: new Date().toISOString() };
+    try { for (let i = 0; i < pend.length; i += 400) { const lote = writeBatch(db);
+      for (const it of pend.slice(i, i + 400)) { const d = { ent: e.id, suc: e.suc, dia: e.fecha, cod: it.c, estado: "ok", q: null, nota: "", ...quien }; lote.set(doc(db, "entrega_resp", e.id + "__" + it.c), d); S.entResp.set(e.id + "__" + it.c, d); }
+      await lote.commit(); } pintarEnt(); toast("Conformidad registrada"); } catch (x) { avisar(x); }
+    return; }
   const bo = ev.target.closest("[data-entborra]");
   if (bo) { const k = e.id + "__" + bo.dataset.entborra; try { await deleteDoc(doc(db, "entrega_resp", k)); S.entResp.delete(k); pintarEnt(); } catch (x) { avisar(x); } return; }
   if (ev.target.closest("#entBorrarRev")) {
