@@ -1195,7 +1195,8 @@ async function iniciar() {
       const m = window.stockKardex ? await window.stockKardex() : null; // el stock del último kardex, si es más nuevo
       if (m) window.aplicarStock(m);
       // pronósticos del archivo de Colab y ya hay kardex guardado: se unen y se recalculan una vez
-      if ((cfg.data().archivo !== 'kardex' || S.P.ver !== window.CALC_VER) && m?.corte && window.recalcularPron) {
+      // (si solo cambió la versión del cálculo, lo recalcula y guarda una vez el administrador al abrir la página)
+      if ((cfg.data().archivo !== 'kardex' || (S.P.ver !== window.CALC_VER && esAdminP())) && m?.corte && window.recalcularPron) {
         try { const a = await window.recalcularPron(); if (a) msg(a); } catch (e) { console.warn(e); }
       }
       if (!S.P.dias && m?.corte && window.ventasDiarias) {
@@ -2716,6 +2717,6 @@ window.iniciarKardex = iniciar;
 <script src="sucursales.js?v=202611130700"></script>
 <script src="estadistica.js?v=202611101700"></script>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="proyeccion.js?v=202611160300"></script>
+<script type="module" src="proyeccion.js?v=202611160400"></script>
 
 </body></html>

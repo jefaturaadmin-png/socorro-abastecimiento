@@ -388,7 +388,7 @@ async function guardarResumen(prev, m) {
 }
 
 // Versión del cálculo: si cambia, los pronósticos guardados se rehacen solos al abrir la página.
-const CALC_VER = 5; window.CALC_VER = CALC_VER;
+const CALC_VER = 6;   // 6: ventas por sucursal exactas a la fracción (antes a 1 decimal) window.CALC_VER = CALC_VER;
 async function recalcular() {
   const metas = await mesesMeta(); if (!metas.size) return "";
   const maestro = await leerMaestro(), lista = [...metas.keys()].sort();
