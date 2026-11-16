@@ -322,6 +322,8 @@ function pronosticar(h, meses, futuros, apto) {
 }
 const sumaM = (m, k) => { const [a, b] = m.split("-").map(Number), t = a * 12 + b - 1 + k; return `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, "0")}`; };
 const r1 = v => Math.round(v * 10) / 10;
+// ventas reales (por sucursal y de la red): exactas hasta la fracción (0,06 de caja = 6 tabletas), no a 1 decimal
+const r3 = v => Math.round(v * 1000) / 1000;
 
 // ventas por día de los últimos 90 días hasta el corte, leídas de los meses guardados.
 // primero = índice del primer día con datos (los días anteriores no se conocen); null si no hay ninguno.
@@ -471,7 +473,7 @@ async function recalcular() {
     }
     dem.set(cod, pf);
     hTot.set(cod, meses.map((m, i) => !conDatos.has(i) ? null : usaBase(cod, m) ? hBase.get(cod)[i]
-      : conK.has(i) ? r1([...pk.values()].reduce((x, v) => x + v[i], 0)) : 0));
+      : conK.has(i) ? r3([...pk.values()].reduce((x, v) => x + v[i], 0)) : 0));
   }
   // ventas por día de los últimos 90 días hasta el corte (para "ventas de los últimos N días")
   msg("Leyendo ventas por día…");
@@ -503,7 +505,7 @@ async function recalcular() {
     const tot3 = farmacias.reduce((a, fa) => a + Math.max(0, media((pf.get(fa) || []).slice(-3))), 0);
     const s = {}, st = {}, hf = {};
     for (const fa of farmacias) {
-      const v = pf.get(fa); if (v) { hf[fa] = v.slice(-36).map(r1); const x = Math.max(0, media(v.slice(-3))); if (tot3 && x) s[fa] = Math.round(x / tot3 * 1e4) / 1e4; }
+      const v = pf.get(fa); if (v) { hf[fa] = v.slice(-36).map(r3); const x = Math.max(0, media(v.slice(-3))); if (tot3 && x) s[fa] = Math.round(x / tot3 * 1e4) / 1e4; }
       const sk = maestro.stock[cod]?.[fa]; if (sk) st[fa] = sk[0]; else if (bp?.st?.[fa] != null) st[fa] = bp.st[fa];
     }
     const pr = maestro.prod[cod] || (bp ? [bp.n, bp.fr || 1, bp.k || 0] : [cod, 1, 0]);
