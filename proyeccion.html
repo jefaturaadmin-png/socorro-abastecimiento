@@ -2083,8 +2083,8 @@ $('xXls').addEventListener('click', () => {
   const txtOtras = p => [p.pap ? 'PAP' : '', p.est ? 'Estacional (venta por temporadas)' : ''].filter(Boolean).join(' · ');
   const extra = ['Motivo de la atención', 'Línea', 'Familia', 'Genérico', 'Comunicado de droguería', 'Reemplazo', 'Atención bloqueada', 'Movimiento', 'Otras etiquetas'];
   const datosExtra = p => { const x = clas(p); return [x.t, x.f, x.g, txtGest(p.c), txtKR(p.c), txtBAt(p.c), (MOV_TXT[movDe(p)] || '').replace(/^\S+ /, ''), txtOtras(p)]; };
-  // venta de la sucursal en los 3 meses anteriores y en el mes en curso (hasta la fecha del kardex)
-  const mAct = o.dias?.hasta ? o.dias.hasta.slice(0, 7) : o.corte.slice(0, 7), mVen = [addM(mAct, -3), addM(mAct, -2), addM(mAct, -1), mAct];
+  // venta de la sucursal mes a mes desde enero del año en curso hasta el mes en curso (hasta la fecha del kardex)
+  const mAct = o.dias?.hasta ? o.dias.hasta.slice(0, 7) : o.corte.slice(0, 7), mVen = []; for (let m = mAct.slice(0, 4) + '-01'; m <= mAct; m = addM(m, 1)) mVen.push(m);
   const diaAct = o.dias?.hasta ? +o.dias.hasta.slice(8, 10) : null, hm = o.hfm || [];
   const vMes = (p, mes) => { if (mes === mAct) { const av = avance(p, f); if (av) return av.v; }
     const i = hm.indexOf(mes), v = i >= 0 ? p.hf?.[f]?.[i] : null; return v == null ? '' : v; };
