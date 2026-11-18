@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611180400";
+const VERSION_PROY = "202611180500";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2179,13 +2179,13 @@ function pintarTableroUrg(P) {
     const [a, m, di] = u[0].slice(0, 10).split("-"), dias = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(+a, m - 1, +di)) / 864e5);
     return `${di}/${m}/${a.slice(2)} · <b>${nf(Math.round(u[1] * 100) / 100)}</b><br><small class="muted">hace ${nf(dias)} día${dias === 1 ? "" : "s"}</small>`; };
   $("pdTit").textContent = `Pedidos recientes · ${nf(lista.length)}`;
-  $("pdTabla").innerHTML = `<thead><tr><th>Fecha</th>${P.cS >= 0 ? "<th>Sucursal</th>" : ""}<th>Producto</th><th class="der">Cant.</th>${verStkSuc ? '<th class="der" title="Stock de esa sucursal según el último kardex publicado">Stock suc.</th><th title="Último «CARGO ENVIO» de ese producto en esa sucursal (kardex general)">Último abastecimiento</th>' : ""}<th>Motivo</th><th>Pidió</th><th>Estado</th><th>Nota de droguería</th></tr></thead><tbody>` +
+  $("pdTabla").innerHTML = `<thead><tr><th>Fecha</th>${P.cS >= 0 ? "<th>Sucursal</th>" : ""}<th>Producto</th><th class="der">Cant.</th>${verStkSuc ? '<th class="der" title="Stock de esa sucursal según el último kardex publicado">Stock suc.</th><th title="Último «CARGO ENVIO» de ese producto en esa sucursal (kardex general)">Último abastecimiento</th><th>En droguería</th>' : ""}<th>Motivo</th><th>Pidió</th><th>Estado</th><th>Nota de droguería</th></tr></thead><tbody>` +
     (vis.length ? vis.map(d => { const e = estU(d), k = e.estado || "";
       return `<tr data-uid="${esc(d.id)}"><td class="f">${d.f ? d.f.toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}</td>${P.cS >= 0 ? `<td><b>${esc(d.suc ? corto(d.suc) : "¿" + (d.x[P.cS] || "") + "?")}</b></td>` : ""}
-        <td class="p"><b>${esc(nomProd(d))}</b><code>${esc(d.cod)}</code></td><td class="der">${d.q ? nf(d.q) : ""}</td>${verStkSuc ? `<td class="der">${stkSucTxt(d)}</td><td>${ultAbTxt(d)}</td>` : ""}<td>${esc(d.mot)}</td><td>${esc(d.quien)}</td>
+        <td class="p"><b>${esc(nomProd(d))}</b><code>${esc(d.cod)}</code></td><td class="der">${d.q ? nf(d.q) : ""}</td>${verStkSuc ? `<td class="der">${stkSucTxt(d)}</td><td>${ultAbTxt(d)}</td><td class="pd-endrog">${stDrog(d.cod, new Set([d.suc]))}</td>` : ""}<td>${esc(d.mot)}</td><td>${esc(d.quien)}</td>
         <td>${marca ? `<select class="pd-est ${ESTADO_U[k][1]}" data-uest>${Object.entries(ESTADO_U).map(([v, [t]]) => `<option value="${v}" ${v === k ? "selected" : ""}>${t}</option>`).join("")}</select>` : `<span class="chip ${ESTADO_U[k][1]}">${ESTADO_U[k][0]}</span>`}</td>
         <td>${marca ? `<input class="pd-nota" data-unota maxlength="120" placeholder="Ej. en tránsito, guía GR…" value="${esc(e.nota || "")}">` : esc(e.nota || "")}</td></tr>`; }).join("")
-      : `<tr class="vacia"><td colspan="10">No hay pedidos con estos filtros.</td></tr>`) + "</tbody>";
+      : `<tr class="vacia"><td colspan="11">No hay pedidos con estos filtros.</td></tr>`) + "</tbody>";
   $("pdMas").innerHTML = lista.length > vis.length ? `<button class="btn" type="button" id="pdMasBtn">Ver más (de ${nf(lista.length)})</button>` : "";
 }
 async function marcarUrg(tr) {
