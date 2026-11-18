@@ -159,8 +159,9 @@
         const d = Math.max(dv.d, dOrig) + extra + (viejos.length && !(dv.d > 0) ? dV : 0);
         const bloq = bloqueado(p.c, f) || !!window.BLOQ_ATEN?.has(p.c), nec = d * (H ?? (o.C + o.Sg)), seg = d * o.Sg, cob = d > 0 ? st / d : Infinity;
         let pide = 0, nota = '';
-        // redondeo (,45 abajo / ,46 arriba) pero si la sucursal está en CERO y sí se mueve, se le atiende al menos 1
-        const sinStock = st <= 1e-9, ped = x => { const q = Math.max(0, redPed(x)); return !q && sinStock && x > 1e-9 ? 1 : q; };
+        // redondeo (,45 abajo / ,46 arriba) pero si su stock es menor a lo que va a necesitar (o está en cero) y sí se mueve,
+        // se le atiende al menos 1 (stock 0,02 y necesita 0,3: el redondeo daría 0, se manda 1)
+        const sinStock = st <= 1e-9, ped = x => { const q = Math.max(0, redPed(x)); return !q && x > 1e-9 ? 1 : q; };
         if (usa) return { p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide: 0, nota: 'usa en su cambio ' + usa, bloq, exceso: 0, o, aj, urgente: false, usa };
         if (bloq) nota = 'bloqueado';
         else if (cambio) { pide = d > 0 ? ped(nec - st) : 0; nota = 'en cambio de ' + cambio.orig.c; }
