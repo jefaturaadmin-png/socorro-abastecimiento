@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611180300";
+const VERSION_PROY = "202611180400";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2140,9 +2140,14 @@ function pintarTableroUrg(P) {
   const fDia = f => f.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }), fHora = f => f.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
   const fSol = x => !x.f1 ? "" : x.n === 1 || +inicioDiaDe(x.f0) === +inicioDiaDe(x.f1) ? `${fDia(x.f1)}<br><small class="muted">${x.n === 1 ? fHora(x.f1) : fHora(x.f0) + " – " + fHora(x.f1)}</small>`
     : `${fDia(x.f0)} – ${fDia(x.f1)}<br><small class="muted">${nf(x.n)} solicitudes</small>`;
-  $("pdTop").innerHTML = `<thead><tr><th>Producto</th><th>Sucursales que lo pidieron</th><th class="der">Cant.</th><th>Fecha de solicitud</th><th>En droguería</th></tr></thead><tbody>` +
-    (top.length ? top.map(x => `<tr><td class="p"><b>${esc(nomProd(x.d))}</b><code>${esc(x.d.cod)}</code></td><td>${[...x.s].map(f => `<span class="tag">${esc(corto(f))}</span>`).join(" ")} <b>${x.s.size}</b></td><td class="der"><b>${nf(x.q)}</b></td><td class="f">${fSol(x)}</td><td>${stDrog(x.d.cod, x.s)}</td></tr>`).join("")
-      : `<tr class="vacia"><td colspan="5">${S.pdStk && todosTop.length ? `Ningún producto ${S.pdStk === "con" ? "con" : "sin"} stock en droguería en ${conRango ? "ese periodo" : "esta semana"}.` : `Sin pedidos en ${conRango ? "ese periodo" : "esta semana"}.`}</td></tr>`) + "</tbody>";
+  // último «CARGO ENVIO» del producto en cada sucursal que lo pidió (kardex general)
+  const ultAbSucs = (c, sucs) => { const l = [...sucs].map(f => [f, S.ultAbast?.[c]?.[f]]);
+    return `<div class="pd-ultab">${l.map(([f, u]) => { if (!u) return `<span><b>${esc(corto(f))}</b> <span class="muted">sin registro</span></span>`;
+      const [a, m, di] = u[0].slice(0, 10).split("-"), dias = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(+a, m - 1, +di)) / 864e5);
+      return `<span><b>${esc(corto(f))}</b> ${di}/${m}/${a.slice(2)} · ${nf(Math.round(u[1] * 100) / 100)} <small class="muted">(hace ${nf(dias)} d)</small></span>`; }).join("")}</div>`; };
+  $("pdTop").innerHTML = `<thead><tr><th>Producto</th><th>Sucursales que lo pidieron</th><th class="der">Cant.</th><th>Fecha de solicitud</th><th>En droguería</th>${esAdmin() ? "<th>Último abastecimiento</th>" : ""}</tr></thead><tbody>` +
+    (top.length ? top.map(x => `<tr><td class="p"><b>${esc(nomProd(x.d))}</b><code>${esc(x.d.cod)}</code></td><td>${[...x.s].map(f => `<span class="tag">${esc(corto(f))}</span>`).join(" ")} <b>${x.s.size}</b></td><td class="der"><b>${nf(x.q)}</b></td><td class="f">${fSol(x)}</td><td>${stDrog(x.d.cod, x.s)}</td>${esAdmin() ? `<td>${ultAbSucs(x.d.cod, x.s)}</td>` : ""}</tr>`).join("")
+      : `<tr class="vacia"><td colspan="6">${S.pdStk && todosTop.length ? `Ningún producto ${S.pdStk === "con" ? "con" : "sin"} stock en droguería en ${conRango ? "ese periodo" : "esta semana"}.` : `Sin pedidos en ${conRango ? "ese periodo" : "esta semana"}.`}</td></tr>`) + "</tbody>";
   // movimiento de cada sucursal: venta diaria publicada (red/stk_SUCURSAL) y pedidos urgentes del periodo, con su % del total
   const movBox = $("pdMov") && $("pdMovBox"); if (movBox) {
     const pedS = new Map(cuenta(P.datos.filter(enRango), d => d.suc)), filas = FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => {
