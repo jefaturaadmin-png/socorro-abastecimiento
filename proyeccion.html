@@ -902,9 +902,9 @@ const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov'
 const MESESL = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const nf1 = new Intl.NumberFormat('es-PE', { maximumFractionDigits: 1 });
 const nf0 = new Intl.NumberFormat('es-PE', { maximumFractionDigits: 0 });
-// Redondeo de lo que se pide, se atiende y se compra (en todos los módulos): hasta ,75 hacia abajo; desde ,76 hacia arriba.
-// 3,2 → 3 · 3,75 → 3 · 3,76 → 4 · 0,5 → 0
-function redPed(x) { if (!(x > 0)) return 0; const e = Math.floor(x + 1e-9); return x - e > 0.75 + 1e-9 ? e + 1 : e; }
+// Redondeo de lo que se pide, se atiende y se compra (en todos los módulos): hasta ,45 hacia abajo; desde ,46 hacia arriba.
+// 3,2 → 3 · 3,45 → 3 · 3,46 → 4 · 0,75 → 1
+function redPed(x) { if (!(x > 0)) return 0; const e = Math.floor(x + 1e-9); return x - e > 0.45 + 1e-9 ? e + 1 : e; }
 const PAGINA = 100;
 const CORTO = { 'Media 3 meses': 'Media 3m', 'Media 6 meses': 'Media 6m', 'Media 3m × estac.': 'Media×estac.',
   'SES': 'SES', 'Holt amortiguado': 'Holt', 'SARIMA AR estacional': 'SARIMA AR', 'SARIMA aerolínea': 'SARIMA aero' };
@@ -2714,7 +2714,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611130700"></script>
+<script src="sucursales.js?v=202611180700"></script>
 <script src="estadistica.js?v=202611101700"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611180300"></script>

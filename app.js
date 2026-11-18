@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611180600";
+const VERSION_PROY = "202611180700";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1370,9 +1370,8 @@ function pintarFalt() {
     const e = estVig(i.c) || S.fEst.get(i.c); return `<h2>${esc(i.c)} - ${esc(i.n)}</h2><p class="muted">${esc(i.l || "")} · le falta a ${i.s.length} sucursales (${nf(i.t)} cajas)</p>` + formResp(i, e); })());
   $("fsMas").innerHTML = lista.length > vis.length ? `<button class="btn" type="button" id="fsMasBtn">Ver ${Math.min(100, lista.length - vis.length)} más (de ${nf(lista.length)})</button>` : "";
 }
-// Redondeo de lo que se pide, se atiende y se compra (en todos los módulos): hasta ,75 hacia abajo; desde ,76 hacia arriba.
-// Redondeo de lo que se pide y se atiende (igual en todos los módulos): hasta ,75 hacia abajo; desde ,76 hacia arriba (3,75 → 3 · 3,76 → 4)
-const redPed = x => { if (!(x > 0)) return 0; const e = Math.floor(x + 1e-9); return x - e > 0.75 + 1e-9 ? e + 1 : e; };
+// Redondeo de lo que se pide, se atiende y se compra (igual en todos los módulos): hasta ,45 hacia abajo; desde ,46 hacia arriba (3,45 → 3 · 3,46 → 4)
+const redPed = x => { if (!(x > 0)) return 0; const e = Math.floor(x + 1e-9); return x - e > 0.45 + 1e-9 ? e + 1 : e; };
 const nf = v => Number(v || 0).toLocaleString("es-PE");
 // Clasificación de productos (línea, genérico y familia por nombre): la última que se subió desde los reportes «producto por genérico / familia / línea»
 // (proy_config/clasificacion → archivo comprimido en proy_blobs); si no hay, la de clasificacion.json de la página.
