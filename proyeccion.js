@@ -105,6 +105,7 @@ function columnasDe(cab) {
 }
 const num = v => { const t = String(v ?? "").trim(); return +(/,\d{1,3}$/.test(t) && !t.includes(".") ? t.replace(",", ".") : t.replace(/,/g, "")) || 0; };
 const VENTA = "DESCARGO POR VENTA", ANULA = "CARGO POR ANULACIONES", DROG = "DROGUERIA FS";
+const ENVIO = /^CARGO\s+(POR\s+)?ENVIO$/i;   // ingreso en la sucursal de lo que le envía droguería
 const CM_VER = 3, CM_MAX_UNIT = 20000, CM_MAX_MES = 1e6;   // versión del cálculo de compras; topes creíbles (S/)
 const ignorar = alm => /CANJE/i.test(alm) || !alm;
 
@@ -180,6 +181,7 @@ window.subirKardex = async function (files) {
     let filas = 0, nuevas = 0, repetidas = 0, ignoradas = 0, stockCambio = false, diarias = 0;
     const cambioDia = new Set();
     maestro.uv ??= {};
+    maestro.ua ??= {};   // último abastecimiento de cada producto en cada sucursal: {cod: {alm: [fecha, cantidad, [numkar…]]}}
     const malas = [];
     for (const f of files) {
       COL = COL0; const ign0 = ignoradas;
@@ -204,6 +206,12 @@ window.subirKardex = async function (files) {
         const ing = num(x[COL.iE]) + num(x[COL.iM]) / fra, sal = num(x[COL.sE]) + num(x[COL.sM]) / fra;
         // última venta del producto (para los que dejaron de moverse)
         if (tipo === VENTA && (!maestro.uv[cod] || fecha > maestro.uv[cod])) { maestro.uv[cod] = fecha; stockCambio = true; }
+        // último abastecimiento a la sucursal («CARGO ENVIO» en su almacén): fecha y cantidad (varios a la misma hora se suman una vez cada uno)
+        if (ENVIO.test(tipo) && alm !== DROG && ing > 0) {
+          const ua = (maestro.ua[cod] ??= {}), u = ua[alm];
+          if (!u || fecha > u[0]) { ua[alm] = [fecha, Math.round(ing * 1000) / 1000, [nk]]; stockCambio = true; }
+          else if (fecha === u[0] && !(u[2] || []).includes(nk)) { u[1] = Math.round((u[1] + ing) * 1000) / 1000; (u[2] ??= []).push(nk); stockCambio = true; }
+        }
         // ventas por día (ventas − anulaciones) de cada almacén; los meses guardados antes se completan al volver a subir el kardex
         const nuevo = !M.k.has(nk);
         if ((tipo === VENTA || tipo === ANULA) && alm !== DROG && (M.kd ? !M.kd.has(nk) : nuevo)) {
