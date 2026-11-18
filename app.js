@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611180100";
+const VERSION_PROY = "202611180200";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2165,14 +2165,18 @@ function pintarTableroUrg(P) {
   if (!$("pdSuc").options.length) $("pdSuc").innerHTML = `<option value="">Todas</option>` + FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => `<option value="${esc(f)}">${esc(corto(f))}</option>`).join("");
   $("pdSuc").value = S.pdSuc;
   const lista = pedidosVisibles(), vis = lista.slice(0, S.pdMostrar), marca = puedeMarcarUrg();
+  // stock de la sucursal que pidió (solo el administrador): red/stk_SUCURSAL, se publica con las listas de atención
+  const verStkSuc = esAdmin() && !!S.sucStk?.size;
+  const stkSucTxt = d => { const m = d.suc && S.sucStk.get(d.suc); if (!m) return '<span class="muted">–</span>'; const v = +(m[d.cod]?.[0] || 0);
+    return v > 0 ? `<b>${nf(Math.round(v * 100) / 100)}</b>` : '<span class="rojo-t">0</span>'; };
   $("pdTit").textContent = `Pedidos recientes · ${nf(lista.length)}`;
-  $("pdTabla").innerHTML = `<thead><tr><th>Fecha</th>${P.cS >= 0 ? "<th>Sucursal</th>" : ""}<th>Producto</th><th class="der">Cant.</th><th>Motivo</th><th>Pidió</th><th>Estado</th><th>Nota de droguería</th></tr></thead><tbody>` +
+  $("pdTabla").innerHTML = `<thead><tr><th>Fecha</th>${P.cS >= 0 ? "<th>Sucursal</th>" : ""}<th>Producto</th><th class="der">Cant.</th>${verStkSuc ? '<th class="der" title="Stock de esa sucursal según el último kardex publicado">Stock suc.</th>' : ""}<th>Motivo</th><th>Pidió</th><th>Estado</th><th>Nota de droguería</th></tr></thead><tbody>` +
     (vis.length ? vis.map(d => { const e = estU(d), k = e.estado || "";
       return `<tr data-uid="${esc(d.id)}"><td class="f">${d.f ? d.f.toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}</td>${P.cS >= 0 ? `<td><b>${esc(d.suc ? corto(d.suc) : "¿" + (d.x[P.cS] || "") + "?")}</b></td>` : ""}
-        <td class="p"><b>${esc(nomProd(d))}</b><code>${esc(d.cod)}</code></td><td class="der">${d.q ? nf(d.q) : ""}</td><td>${esc(d.mot)}</td><td>${esc(d.quien)}</td>
+        <td class="p"><b>${esc(nomProd(d))}</b><code>${esc(d.cod)}</code></td><td class="der">${d.q ? nf(d.q) : ""}</td>${verStkSuc ? `<td class="der">${stkSucTxt(d)}</td>` : ""}<td>${esc(d.mot)}</td><td>${esc(d.quien)}</td>
         <td>${marca ? `<select class="pd-est ${ESTADO_U[k][1]}" data-uest>${Object.entries(ESTADO_U).map(([v, [t]]) => `<option value="${v}" ${v === k ? "selected" : ""}>${t}</option>`).join("")}</select>` : `<span class="chip ${ESTADO_U[k][1]}">${ESTADO_U[k][0]}</span>`}</td>
         <td>${marca ? `<input class="pd-nota" data-unota maxlength="120" placeholder="Ej. en tránsito, guía GR…" value="${esc(e.nota || "")}">` : esc(e.nota || "")}</td></tr>`; }).join("")
-      : `<tr class="vacia"><td colspan="8">No hay pedidos con estos filtros.</td></tr>`) + "</tbody>";
+      : `<tr class="vacia"><td colspan="9">No hay pedidos con estos filtros.</td></tr>`) + "</tbody>";
   $("pdMas").innerHTML = lista.length > vis.length ? `<button class="btn" type="button" id="pdMasBtn">Ver más (de ${nf(lista.length)})</button>` : "";
 }
 async function marcarUrg(tr) {
