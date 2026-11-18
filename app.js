@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611170200";
+const VERSION_PROY = "202611180100";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1909,7 +1909,7 @@ async function descargarExcel(filas, nombre, conFarmacia) {
   }));
   excelDe(datos, "Bloqueados", nombre);
 }
-async function excelDe(datos, hojaNom, nombre) {
+async function excelDe(datos, hojaNom, nombre, conFecha = true) {
   try { XLSX ??= await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm"); }
   catch { return toast("No se pudo preparar el Excel. Revisa tu internet e inténtalo de nuevo."); }
   const hoja = XLSX.utils.json_to_sheet(datos, { cellDates: true, dateNF: "dd/mm/yyyy" });
@@ -1917,7 +1917,7 @@ async function excelDe(datos, hojaNom, nombre) {
   hoja["!cols"] = cols.map(c => ({ wch: Math.min(48, Math.max(c.length, ...datos.map(d => String(d[c] instanceof Date ? "00/00/0000" : d[c]).length)) + 2) }));
   const libro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(libro, hoja, hojaNom);
-  XLSX.writeFile(libro, `${nombre}_${hoyISO()}.xlsx`);
+  XLSX.writeFile(libro, conFecha ? `${nombre}_${hoyISO()}.xlsx` : `${nombre}.xlsx`);
 }
 const bloqueadosAhora = () => [...S.bloqueos.values()].filter(d => d.estado === "bloqueado");
 $("aCsv").addEventListener("click", () => {
@@ -2337,7 +2337,7 @@ function pintarEntDet(e) {
   box.innerHTML = `<div class="ent-cab"><h2>${esc(corto(e.suc))} · entrega del ${fDia(e.fecha)}</h2>
       <div class="ent-prog"><small>${nf(r.rev)} de ${nf(r.n)} revisados${r.prob ? ` · <b class="rojo-t">${nf(r.prob)} con observación</b>` : ""}</small><span class="ent-barra"><i style="width:${pct}%"></i></span></div>
       ${admin ? `<label class="filtro ent-ver">Mostrar <select id="entVer">${[["", "Todos"], ["obs", "Con observación (no conformes)"], ["ok", "Conformes"], ["sin", "Sin revisar"], ...ENT_EST.slice(1)].map(([v, t]) => `<option value="${v}" ${fv === v ? "selected" : ""}>${v && v !== "obs" && v !== "ok" && v !== "sin" ? "· " : ""}${esc(t)}</option>`).join("")}</select></label>` : puede && r.rev < r.n ? `<div class="ent-conf"><button class="btn primario" type="button" id="entConfResto">✔ Dar conformidad al resto</button><small>Da conformidad a todos los productos que <b>no</b> fueron observados (${nf(r.n - r.rev)} pendientes).</small></div>` : ""}
-      ${admin && r.rev ? `<button class="btn" type="button" id="entBorrarRev">↺ Borrar las revisiones</button>` : ""}${admin ? `<button class="btn" type="button" id="entBorrar">🗑 Quitar esta lista</button>` : ""}</div>
+      ${admin && r.rev ? `<button class="btn" type="button" id="entBorrarRev">↺ Borrar las revisiones</button>` : ""}<button class="btn" type="button" id="entXlsLista">⬇ Excel</button>${admin ? `<button class="btn" type="button" id="entBorrar">🗑 Quitar esta lista</button>` : ""}</div>
     <div class="tabla-wrap"><table class="tabla ent-tabla"><thead><tr><th>Medicamento</th><th class="c">Cantidad</th><th>Revisión</th></tr></thead><tbody>${verEnt.map(fila).join("") || `<tr><td colspan="3" class="muted">No hay productos con este filtro.</td></tr>`}</tbody></table></div>
     <div class="ent-otras"><h3>📝 Otras observaciones</h3><p class="muted">Si llegó un producto que no estaba en la lista (no estaba previsto su envío) o tiene una observación general de esta entrega, anótela aquí.</p>
       ${otras.length ? `<ul class="ent-olist">${otras.map(([k, d]) => `<li><span class="ent-badge ${d.x === "extra" ? "amb" : "sin"}">${d.x === "extra" ? "No estaba en la lista" : "Observación general"}</span>
@@ -2401,6 +2401,8 @@ $("vEnt").addEventListener("click", async ev => {
     S.entResp.set(id, d); pintarEnt();
     try { await setDoc(doc(db, "entrega_resp", id), d); toast("Observación guardada"); } catch (x) { avisar(x); }
     return; }
+  if (ev.target.closest("#entXlsLista")) return excelDe((e.items || []).map(it => ({ "Código": it.c, Medicamento: it.n, Laboratorio: it.l || "", Cantidad: it.q })),
+    "Entrega", `entrega_${corto(e.suc).toLowerCase().replace(/\W+/g, "_")}_${e.fecha.split("-").reverse().join("-")}`, false);
   if (ev.target.closest("#entBorrar")) { if (!confirm(`¿Quitar la lista de ${corto(e.suc)} del ${fDia(e.fecha)}? La sucursal dejará de verla.`)) return; try { await deleteDoc(doc(db, "entregas", e.id)); S.entSel = ""; } catch (x) { avisar(x); } }
 });
 $("vEnt").addEventListener("change", ev => {
