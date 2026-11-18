@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611180500";
+const VERSION_PROY = "202611180600";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2128,10 +2128,7 @@ function pintarTableroUrg(P) {
   // top 5 con el stock de droguería
   // sin stock en droguería: sucursales que lo tienen y no lo mueven (sin venta) o lo mueven lento (su stock le dura más de 60 días)
   const fx1 = v => Number(v || 0).toLocaleString("es-PE", { maximumFractionDigits: 1 });
-  const otras = (c, pidieron) => { const l = [];
-    for (const [f, p] of S.sucStk || []) { if (pidieron.has(f)) continue; const x = p[c]; if (!x) continue; const [st, d] = x; if (!(st >= 1)) continue;
-      const cob = d > 0 ? st / d : Infinity; if (cob <= 60) continue; l.push({ f, st, d, cob }); }
-    return l.sort((a, b) => b.cob - a.cob || b.st - a.st); };
+  const otras = otrasSucs;
   const stDrog = (c, pidieron) => { const v = S.drogStk?.[c]?.[0]; if (S.drogStk == null) return "";
     if (v > 0) return `<span class="chip verde">Con stock: ${nf(v)}</span>`;
     const o = otras(c, pidieron || new Set());
@@ -2188,6 +2185,11 @@ function pintarTableroUrg(P) {
       : `<tr class="vacia"><td colspan="11">No hay pedidos con estos filtros.</td></tr>`) + "</tbody>";
   $("pdMas").innerHTML = lista.length > vis.length ? `<button class="btn" type="button" id="pdMasBtn">Ver más (de ${nf(lista.length)})</button>` : "";
 }
+// sucursales que tienen el producto sin moverlo (sin venta) o lento (su stock le dura más de 60 días), sin las que lo pidieron
+function otrasSucs(c, pidieron) { const l = [];
+  for (const [f, p] of S.sucStk || []) { if (pidieron.has(f)) continue; const x = p[c]; if (!x) continue; const [st, d] = x; if (!(st >= 1)) continue;
+    const cob = d > 0 ? st / d : Infinity; if (cob <= 60) continue; l.push({ f, st, d, cob }); }
+  return l.sort((a, b) => b.cob - a.cob || b.st - a.st); }
 async function marcarUrg(tr) {
   const d = S.ped?.datos.find(x => x.id === tr.dataset.uid); if (!d) return;
   const estado = tr.querySelector("[data-uest]").value, nota = tr.querySelector("[data-unota]").value.trim().slice(0, 120);
@@ -2215,7 +2217,14 @@ $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) {
   if (!(esAdmin() || !miFarm())) { const ds = pedidosVisibles().map(d => ({ "Código": d.cod, Medicamento: nomProd(d), "Fecha y hora": d.f || "", "¿Hay en droguería?": S.drogStk?.[d.cod]?.[0] > 0 ? "Sí (" + S.drogStk[d.cod][0] + ")" : "No" }));
     if (!ds.length) return toast("No hay pedidos para descargar."); return excelDe(ds, "Urgencias", "agotados_urgencia_" + corto(miFarm()).replace(/\W+/g, "_").toLowerCase()); }
   const datos = pedidosVisibles().map(d => { const e = estU(d);
-    return Object.fromEntries([["Sucursal (reconocida)", d.suc ? corto(d.suc) : ""], ["Código", d.cod], ["Producto (catálogo)", d.nom], ["Estado", ESTADO_U[e.estado || ""][0].slice(3)], ["Nota de droguería", e.nota || ""],
+    // lo mismo que se ve en la tabla: stock de la sucursal, último abastecimiento, droguería y otras sucursales
+    const r2 = v => Math.round((+v || 0) * 100) / 100, stS = d.suc && S.sucStk?.get(d.suc), u = d.suc && S.ultAbast?.[d.cod]?.[d.suc];
+    const dias = u ? Math.round((new Date().setHours(0, 0, 0, 0) - new Date(+u[0].slice(0, 4), +u[0].slice(5, 7) - 1, +u[0].slice(8, 10))) / 864e5) : "";
+    const sd = S.drogStk?.[d.cod]?.[0], ot = sd > 0 ? [] : otrasSucs(d.cod, new Set([d.suc]));
+    return Object.fromEntries([["Sucursal (reconocida)", d.suc ? corto(d.suc) : ""], ["Código", d.cod], ["Producto (catálogo)", d.nom], ["Cantidad pedida", d.q || ""],
+      ["Stock de la sucursal", stS ? r2(stS[d.cod]?.[0]) : ""], ["Último abastecimiento", u ? u[0].slice(0, 10).split("-").reverse().join("/") : ""], ["Cantidad abastecida", u ? r2(u[1]) : ""], ["Días desde el abastecimiento", dias],
+      ["Stock droguería", S.drogStk ? r2(sd) : ""], ["Pedir a otra sucursal", ot.map(x => `${corto(x.f)} ${r2(x.st)} (${x.d > 0 ? "lento, " + Math.round(x.cob) + " d" : "sin movimiento"})`).join(" · ")],
+      ["Estado", ESTADO_U[e.estado || ""][0].slice(3)], ["Nota de droguería", e.nota || ""],
       ...cols.map(i => [P.cab[i], d.x[i] || ""])]); });
   if (!datos.length) return toast("No hay pedidos para descargar.");
   const suc = esAdmin() || !miFarm() ? S.pdSuc : miFarm();
