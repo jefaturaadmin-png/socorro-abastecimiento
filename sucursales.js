@@ -93,6 +93,8 @@
       const { a, fp } = pronRedDe(p), fm = S.P.fm || [];
       const sh = participa(p, f), f12 = fp.f.map((v, i) => Math.max(0, (a.over?.[fm[i]] ?? v) * sh)), f3 = f12.slice(0, 3);
       r = { d: Math.max(0, f3.reduce((x, v) => x + v, 0) / 3 / 30), metodo: fp.metodo, hv, f: f3, f12, fp, sh };
+      // producto nuevo, sin ningún mes completo con venta (el pronóstico no tiene con qué): su venta por día de los últimos 30 días
+      if (!(r.d > 0) && !(p.h || []).some(v => v > 0)) { const v = ventaDias(p, f, 30); if (v > 0) r = { ...r, d: v / 30, metodo: 'nuevo: ventas de 30 días' }; }
       motor.set(k, r);
     }
     return r;

@@ -333,6 +333,11 @@ const sumaM = (m, k) => { const [a, b] = m.split("-").map(Number), t = a * 12 + 
 const r1 = v => Math.round(v * 10) / 10;
 // ventas reales (por sucursal y de la red): exactas hasta la fracción (0,06 de caja = 6 tabletas), no a 1 decimal
 const r3 = v => Math.round(v * 1000) / 1000;
+// participación por las ventas por día del kardex (para el que no vendió en los últimos 3 meses completos: producto nuevo
+// que recién se vende este mes): parte de cada farmacia en lo vendido día por día
+const partDiaria = (dv, farmacias) => { const t = {}; let tot = 0;
+  for (const fa of farmacias) { const x = (dv?.[fa] || []).reduce((a, [, q]) => a + q, 0); if (x > 0) { t[fa] = x; tot += x; } }
+  const s = {}; if (tot > 0) for (const fa in t) s[fa] = Math.round(t[fa] / tot * 1e4) / 1e4; return s; };
 
 // ventas por día de los últimos 90 días hasta el corte, leídas de los meses guardados.
 // primero = índice del primer día con datos (los días anteriores no se conocen); null si no hay ninguno.
@@ -397,8 +402,8 @@ async function guardarResumen(prev, m) {
 }
 
 // Versión del cálculo: si cambia, los pronósticos guardados se rehacen solos al abrir la página.
-// 6: ventas por sucursal exactas a la fracción · 7: productos nuevos con su venta por día del mes en curso
-const CALC_VER = 7; window.CALC_VER = CALC_VER;
+// 6: ventas por sucursal exactas a la fracción · 7: productos nuevos con su venta por día del mes en curso · 8: su participación por esas ventas
+const CALC_VER = 8; window.CALC_VER = CALC_VER;
 async function recalcular() {
   const metas = await mesesMeta(); if (!metas.size) return "";
   const maestro = await leerMaestro(), lista = [...metas.keys()].sort();
@@ -518,6 +523,7 @@ async function recalcular() {
       const v = pf.get(fa); if (v) { hf[fa] = v.slice(-36).map(r3); const x = Math.max(0, media(v.slice(-3))); if (tot3 && x) s[fa] = Math.round(x / tot3 * 1e4) / 1e4; }
       const sk = maestro.stock[cod]?.[fa]; if (sk) st[fa] = sk[0]; else if (bp?.st?.[fa] != null) st[fa] = bp.st[fa];
     }
+    if (!tot3) Object.assign(s, partDiaria(vd.get(cod), farmacias));
     const pr = maestro.prod[cod] || (bp ? [bp.n, bp.fr || 1, bp.k || 0] : [cod, 1, 0]);
     p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: apto, h, b: bOk, f: fOk, s, st, hf, sd: maestro.stock[cod]?.[DROG]?.[0] ?? bp?.sd ?? 0,
       dv: vd.get(cod) || {}, um: (maestro.prod[cod] || [])[3]?.slice(0, 10) || "", uv: maestro.uv?.[cod]?.slice(0, 10) || "",
@@ -528,7 +534,7 @@ async function recalcular() {
     if (dem.has(cod)) continue;
     const st = maestro.stock[cod] || {}, pr = maestro.prod[cod] || [cod, 1, 0], stf = {};
     for (const fa of farmacias) if (st[fa]) stf[fa] = st[fa][0];
-    p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: false, h: meses.map(() => 0), b: {}, f: {}, s: {}, st: stf, hf: {}, sd: st[DROG]?.[0] || 0,
+    p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: false, h: meses.map(() => 0), b: {}, f: {}, s: partDiaria(vd.get(cod), farmacias), st: stf, hf: {}, sd: st[DROG]?.[0] || 0,
       // las ventas por día sí se ponen: un producto nuevo que recién se vende este mes (sin mes completo) ya tiene venta
       sinVentas: true, dv: vd.get(cod) || {}, um: (pr[3] || "").slice(0, 10), uv: maestro.uv?.[cod]?.slice(0, 10) || "", ...(compras.has(cod) ? { cm: compras.get(cod).map(v => Math.round(v)) } : {}) });
   }
