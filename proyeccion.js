@@ -397,7 +397,8 @@ async function guardarResumen(prev, m) {
 }
 
 // Versión del cálculo: si cambia, los pronósticos guardados se rehacen solos al abrir la página.
-const CALC_VER = 6;   // 6: ventas por sucursal exactas a la fracción (antes a 1 decimal) window.CALC_VER = CALC_VER;
+// 6: ventas por sucursal exactas a la fracción · 7: productos nuevos con su venta por día del mes en curso
+const CALC_VER = 7; window.CALC_VER = CALC_VER;
 async function recalcular() {
   const metas = await mesesMeta(); if (!metas.size) return "";
   const maestro = await leerMaestro(), lista = [...metas.keys()].sort();
@@ -528,7 +529,8 @@ async function recalcular() {
     const st = maestro.stock[cod] || {}, pr = maestro.prod[cod] || [cod, 1, 0], stf = {};
     for (const fa of farmacias) if (st[fa]) stf[fa] = st[fa][0];
     p.push({ c: cod, n: pr[0], k: pr[2] || 0, fr: +pr[1] || 1, a: false, h: meses.map(() => 0), b: {}, f: {}, s: {}, st: stf, hf: {}, sd: st[DROG]?.[0] || 0,
-      sinVentas: true, dv: {}, um: (pr[3] || "").slice(0, 10), uv: "", ...(compras.has(cod) ? { cm: compras.get(cod).map(v => Math.round(v)) } : {}) });
+      // las ventas por día sí se ponen: un producto nuevo que recién se vende este mes (sin mes completo) ya tiene venta
+      sinVentas: true, dv: vd.get(cod) || {}, um: (pr[3] || "").slice(0, 10), uv: maestro.uv?.[cod]?.slice(0, 10) || "", ...(compras.has(cod) ? { cm: compras.get(cod).map(v => Math.round(v)) } : {}) });
   }
   const cmM = meses.slice();   // meses de p.cm (compras): toda la historia, más el mes en curso (aunque esté incompleto)
   if (metas.has(mesCorte) && !cmM.includes(mesCorte)) {
