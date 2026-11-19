@@ -1172,6 +1172,7 @@ async function elegir(c, m) {
 }
 
 /* ---------- arranque: datos guardados ---------- */
+let recargandoDatos = false;
 async function iniciar() {
   usarPron(ejemplo(), true);
   if (!window.claude?.use) return;
@@ -1205,6 +1206,25 @@ async function iniciar() {
       }
     }
   } catch (e) { msg(e.message || 'No se pudieron leer los datos guardados.', true); }
+  // EN VIVO: si en otro módulo (u otra pestaña, u otro usuario) se sube el kardex y se guardan pronósticos nuevos,
+  // este módulo los vuelve a leer solo, con su stock y sus ventas por día (no hace falta recargar la página)
+  window.DATOS_ASSET ??= (await db.doc('config/datos').get().catch(() => null))?.data?.()?.asset || '';
+  db.doc('config/datos').onSnapshot?.(async sn => {
+    const a = sn.exists ? sn.data().asset : ''; if (!a || a === window.DATOS_ASSET || recargandoDatos) return;
+    recargandoDatos = true; window.DATOS_ASSET = a;
+    try {
+      const r = await S.assets.fetch(a); if (!r.ok) return;
+      usarPron(validar(await r.json()), false);
+      pintarFuente(`actualizado el ${new Date(sn.data().subido || Date.now()).toLocaleString('es-PE')}`);
+      const m = window.stockKardex ? await window.stockKardex() : null; if (m) window.aplicarStock(m);
+      if (!S.P.dias && m?.corte && window.ventasDiarias) {
+        const v = await window.ventasDiarias(m.corte);
+        if (v && v.dias.primero != null) { S.P.dias = v.dias; for (const p of S.P.p) p.dv = v.vd.get(p.c) || {}; clasificar(S.P); pedCache = null; }
+      }
+      render(); toast('Datos actualizados con el kardex nuevo');
+    } catch (e) { console.warn('No se pudieron leer los datos nuevos', e); }
+    finally { recargandoDatos = false; }
+  }, () => {});
 }
 
 // Stock del último kardex subido (proy_config/maestro) sobre los pronósticos guardados, si es más reciente que su fecha de corte.
@@ -1313,7 +1333,12 @@ const nomN = s => String(s || '').trim().toUpperCase().replace(/\s+/g, ' ');
 const ponerCLAS = c => { if (!c?.p) return; CLAS = c; clasDe = null; clasLlenos = null; if (S.P) render(); };
 // primero la de la página (rápido); ya con sesión, la última subida desde los reportes (cargarCLAS se llama al tener los datos)
 fetch('clasificacion.json').then(r => r.json()).then(c => { if (!CLAS) ponerCLAS(c); }).catch(() => {});
-function cargarCLAS() { try { window.parent?.cargarClasificacion?.().then(ponerCLAS).catch(() => {}); } catch {} }
+function cargarCLAS() { try { window.parent?.cargarClasificacion?.().then(ponerCLAS).catch(() => {}); } catch {}
+  // EN VIVO: si se sube una clasificación nueva (en otro módulo o por otro usuario), se vuelve a leer aquí
+  if (cargarCLAS.esc || !S.db?.doc) return; cargarCLAS.esc = true; let ant = null;
+  S.db.doc('config/clasificacion').onSnapshot?.(d => { const a = d.exists ? d.data().asset : '';
+    if (ant === null) { ant = a; return; } if (a === ant) return; ant = a;
+    try { if (window.parent?.cargarClasificacion) window.parent.cargarClasificacion.p = null; window.parent?.cargarClasificacion?.().then(ponerCLAS).catch(() => {}); } catch {} }, () => {}); }
 /* ---------- subir la clasificación desde los reportes «producto por genérico / familia / línea» (.TXT separados por tabulación) ----------
    «producto por genérico» (despro + desgen), «producto por familia» (despro + desfam) y, si existe, «producto por línea».
    Solo cambia el dato que trae cada archivo; «NO CLASIFICADOS» o vacío no borra lo que ya había. */
@@ -2732,8 +2757,8 @@ window.iniciarKardex = iniciar;
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
 <script src="sucursales.js?v=202611190200"></script>
-<script src="estadistica.js?v=202611101700"></script>
+<script src="estadistica.js?v=202611190300"></script>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="proyeccion.js?v=202611180300"></script>
+<script type="module" src="proyeccion.js?v=202611190300"></script>
 
 </body></html>

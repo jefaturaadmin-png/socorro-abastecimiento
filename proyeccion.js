@@ -24,6 +24,7 @@ const dbShim = {
     const r = doc(db, ...ruta(p));
     return {
       get: async () => { const s = await getDoc(r); return { exists: s.exists(), data: () => s.data() }; },
+      onSnapshot: (ok, mal) => onSnapshot(r, s => ok({ exists: s.exists(), data: () => s.data() }), mal),
       set: v => setDoc(r, v),
       delete: () => deleteDoc(r)
     };
@@ -541,6 +542,7 @@ async function recalcular() {
   msg("Guardando pronósticos…"); paso = "guardar los pronósticos (proy_config/datos)";
   const prev = await getDoc(doc(db, "proy_config", "datos"));
   const { id } = await assetsShim.upload(new Blob([JSON.stringify(o)]));
+  window.DATOS_ASSET = id;   // esta pestaña ya tiene estos datos: al llegar el aviso de cambio no los vuelve a leer
   await setDoc(doc(db, "proy_config", "datos"), { asset: id, archivo: "kardex", corte, subido: new Date().toISOString() });
   if (prev.exists() && prev.data().asset && prev.data().asset !== base?.id) assetsShim.delete(prev.data().asset).catch(() => {});
   window.STOCK_TODOS = maestro.stock;

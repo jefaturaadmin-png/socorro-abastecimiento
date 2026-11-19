@@ -21,6 +21,11 @@
     catch (e) { console.warn(e); EST.cfg = { p: {} }; }
     EST.cargando = false; cache = new Map(); window.EST_VER = (window.EST_VER || 0) + 1;
     if (S.vista === 'fre') window.pintarEst(); else if (S.P) render();
+    // EN VIVO: lo que se ajusta en Estadística (aquí, en otro módulo o por otro usuario) se aplica al instante en todos
+    let primero = true;
+    S.db.doc('config/estadistica').onSnapshot?.(d => { if (primero) { primero = false; return; }
+      EST.cfg = d.exists ? d.data() : { p: {} }; EST.cfg.p ??= {}; cache = new Map(); window.EST_VER = (window.EST_VER || 0) + 1;
+      if (S.vista === 'fre') window.pintarEst(); else if (S.P) render(); }, () => {});
   }
   const ajustes = c => EST.edit[c] || EST.cfg?.p?.[c] || {};
   // el pronóstico de toda la página sale de este motor: se exponen los ajustes guardados y se cargan al iniciar
