@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611190100";
+const VERSION_PROY = "202611190200";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1971,7 +1971,10 @@ const prodCat = c => { c = String(c || "").trim(); return c ? S.catIdx.get(c) ||
 // pedidos de urgencia de los últimos N días (para que Atención y el módulo de cada sucursal los consideren)
 window.urgenciasRecientes = async (dias = 14, fresco = false) => {
   // se vuelve a leer la hoja si lo leído tiene más de 5 minutos (1 minuto si se pide fresco, p. ej. al descargar el Excel)
-  if (!S.ped || Date.now() - S.ped.t > (fresco ? 60e3 : 5 * 60e3)) { try { await cargarPedidos(!!S.ped); } catch {} }
+  // si otra parte de la página ya está leyendo la hoja, se espera a que termine (antes devolvía la lista vacía)
+  const esperar = async () => { for (let i = 0; i < 120 && S.pdCargando; i++) await new Promise(r => setTimeout(r, 250)); };
+  await esperar();
+  if (!S.ped || Date.now() - S.ped.t > (fresco ? 60e3 : 5 * 60e3)) { try { await cargarPedidos(!!S.ped); } catch {} await esperar(); }
   const desde = Date.now() - dias * 864e5;
   return (S.ped?.datos || []).filter(d => d.cod && d.suc && d.f && +d.f >= desde).map(d => ({ suc: d.suc, cod: String(d.cod), q: +d.q || 1, f: d.f.toISOString().slice(0, 10) }));
 };

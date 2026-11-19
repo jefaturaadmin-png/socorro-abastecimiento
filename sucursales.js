@@ -487,12 +487,16 @@
   // hecho con la página abierta entra en el cálculo. Solo se recalcula si cambió algo.
   async function cargarUrgencias(forzar) {
     if (S.ejemplo) return;
+    // si ya se está leyendo, se espera; si mientras tanto cambiaron los días (llegó el criterio), se vuelve a leer
+    if (cargarUrgencias.en) { await cargarUrgencias.en; if (!forzar && cargarUrgencias.dias === urgDias()) return; }
     if (!forzar && cargarUrgencias.ok && cargarUrgencias.dias === urgDias() && Date.now() - (cargarUrgencias.t || 0) < 5 * 60e3) return;
-    if (cargarUrgencias.en) return cargarUrgencias.en;
     cargarUrgencias.ok = true; cargarUrgencias.dias = urgDias(); cargarUrgencias.t = Date.now();
     if (!cargarUrgencias.iv) cargarUrgencias.iv = setInterval(() => cargarUrgencias(), 5 * 60e3);
     return cargarUrgencias.en = (async () => {
-      try { const l = await window.parent?.urgenciasRecientes?.(urgDias(), !!forzar) || []; const m = new Map();
+      try { const l = await window.parent?.urgenciasRecientes?.(urgDias(), !!forzar) || [];
+        // nada leído (la hoja no respondió o aún se estaba leyendo): no se borra lo que ya había y se reintenta en 20 segundos
+        if (!l.length) { cargarUrgencias.t = 0; setTimeout(() => cargarUrgencias(), 20e3); return; }
+        const m = new Map();
         for (const u of l) { const k = u.suc + '__' + u.cod, x = m.get(k); m.set(k, x ? { q: Math.max(x.q, u.q), f: u.f > x.f ? u.f : x.f } : u); }
         const firma = JSON.stringify([...m].sort((a, b) => a[0] < b[0] ? -1 : 1));
         if (firma !== cargarUrgencias.firma) { cargarUrgencias.firma = firma; URG = m; urgVer++;
