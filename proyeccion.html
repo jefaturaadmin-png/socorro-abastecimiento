@@ -2084,7 +2084,9 @@ $('xUrg').addEventListener('change', e => { if (!esAdminP()) return; if (!window
 $('xCob').addEventListener('change', e => { S.xCob = Math.max(S.xModo === 'sucx' ? 1 : 0, +e.target.value || 0); guardarDiasSuc(); pintarStk(); });
 $('xSeg').addEventListener('change', e => { S.xSeg = Math.max(0, +e.target.value || 0); guardarDiasSuc(); pintarStk(); });
 S.xVer = ''; $('xVer').value = '';   // al abrir el módulo de cada sucursal (y Droguería): «Todos»
-$('xXls').addEventListener('click', () => {
+$('xXls').addEventListener('click', async () => {
+  // antes de armar el Excel: los pedidos de urgencia más recientes (un pedido de hace un rato debe salir)
+  if (S.xModo !== 'drog') { const b = $('xXls'); b.disabled = true; try { await window.refrescarUrgencias?.(); } catch {} b.disabled = false; }
   const o = S.P, drog = S.xModo === 'drog', num = v => String(Math.round((+v || 0) * 1000) / 1000).replace('.', ',');
   const H = S.xCob + S.xSeg, f = S.xFarm, iF = o.farmacias.indexOf(f), ate = p => { if (drog || iF < 0) return ''; const rq = reqRed(p, H, o.farmacias.map(x => stDe(p, x))); return rq.listo ? rq.ate[iF] : ''; };
   // comentarios que se ven junto al nombre (comunicado, reemplazo, atención bloqueada, PAP, estacional) y la clasificación
@@ -2729,7 +2731,7 @@ window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
 <script src="frepple.js?v=202611042300"></script>
-<script src="sucursales.js?v=202611180900"></script>
+<script src="sucursales.js?v=202611190100"></script>
 <script src="estadistica.js?v=202611101700"></script>
 <script src="fx.js?v=202611050400"></script>
 <script type="module" src="proyeccion.js?v=202611180300"></script>

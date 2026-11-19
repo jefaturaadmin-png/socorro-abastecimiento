@@ -483,13 +483,25 @@
   const urgDias = () => Math.max(1, Math.round(+CFG.def.urgDias || 14));
   window.urgDias = urgDias;
   window.ponerUrgDias = n => { if (!cfgListo) return false; CFG.def = { ...CFG.def, urgDias: Math.max(1, Math.min(120, Math.round(+n || 14))) }; guardarCfg(); cargarUrgencias(); return true; };
-  async function cargarUrgencias() {
-    if (S.ejemplo || (cargarUrgencias.ok && cargarUrgencias.dias === urgDias())) return; cargarUrgencias.ok = true; cargarUrgencias.dias = urgDias();
-    try { const l = await window.parent?.urgenciasRecientes?.(urgDias()) || []; const m = new Map();
-      for (const u of l) { const k = u.suc + '__' + u.cod, x = m.get(k); m.set(k, x ? { q: Math.max(x.q, u.q), f: u.f > x.f ? u.f : x.f } : u); }
-      URG = m; urgVer++; if (S.vista === 'suc') window.pintarSuc(); else if (S.vista === 'stk' || S.vista === 'kar') render();
-    } catch { cargarUrgencias.ok = false; }
+  // pedidos de urgencia: se leen al abrir y se vuelven a leer cada 5 minutos (y antes de descargar el Excel), así un pedido
+  // hecho con la página abierta entra en el cálculo. Solo se recalcula si cambió algo.
+  async function cargarUrgencias(forzar) {
+    if (S.ejemplo) return;
+    if (!forzar && cargarUrgencias.ok && cargarUrgencias.dias === urgDias() && Date.now() - (cargarUrgencias.t || 0) < 5 * 60e3) return;
+    if (cargarUrgencias.en) return cargarUrgencias.en;
+    cargarUrgencias.ok = true; cargarUrgencias.dias = urgDias(); cargarUrgencias.t = Date.now();
+    if (!cargarUrgencias.iv) cargarUrgencias.iv = setInterval(() => cargarUrgencias(), 5 * 60e3);
+    return cargarUrgencias.en = (async () => {
+      try { const l = await window.parent?.urgenciasRecientes?.(urgDias(), !!forzar) || []; const m = new Map();
+        for (const u of l) { const k = u.suc + '__' + u.cod, x = m.get(k); m.set(k, x ? { q: Math.max(x.q, u.q), f: u.f > x.f ? u.f : x.f } : u); }
+        const firma = JSON.stringify([...m].sort((a, b) => a[0] < b[0] ? -1 : 1));
+        if (firma !== cargarUrgencias.firma) { cargarUrgencias.firma = firma; URG = m; urgVer++;
+          if (S.vista === 'suc') window.pintarSuc(); else if (S.vista === 'stk' || S.vista === 'kar') render(); }
+      } catch { cargarUrgencias.ok = false; }
+      finally { cargarUrgencias.en = null; }
+    })();
   }
+  window.refrescarUrgencias = () => cargarUrgencias(true);
   window.urgenciaDe = (f, c) => URG.get(f + '__' + c) || null;
   window.prepAtencion = async () => { escucharCfg(); escucharResp(); cargarUrgencias(); await cargarCfg(); for (let i = 0; i < 40 && !cfgListo; i++) await new Promise(r => setTimeout(r, 250)); await cargarRespuestas(); };
   window.atencionListo = () => cfgListo || S.ejemplo;
