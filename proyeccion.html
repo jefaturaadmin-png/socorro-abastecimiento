@@ -124,6 +124,7 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(22px, 3vw
 .rs-btn { white-space: nowrap; border-color: var(--accent); color: var(--accent); padding: 3px 10px; font-size: 12px }
 .x-sucs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px } .x-sucs button { border: 1px solid var(--line, #d0d5dd); background: #fff; border-radius: 999px; padding: 5px 12px; cursor: pointer; font: inherit; font-size: .85rem }
 .x-sucs button[aria-pressed="true"] { background: #1E6B5F; color: #fff; border-color: #1E6B5F } .x-sucs small { opacity: .75 }
+.rs-notas { margin-bottom: 4px; max-width: 260px } .rs-nota { font-size: 11px; line-height: 1.3; padding: 2px 6px; margin: 2px 0; border-radius: 6px; background: #ede7f6; color: #4a2c82; white-space: normal } .rs-nota small { font-size: 8.5px; opacity: .7 } .rs-nota.gest { background: #fff1d6; color: #8a5a00 } .rs-nota.bat { background: #fde4e1; color: #b3261e }
 .tag.gest { background: #fff1d6; color: #8a5a00; white-space: normal } .tag.gest small.gq { font-size: 8.5px; font-weight: 400; opacity: .7; margin-left: 4px }
 /* el comunicado general y el reemplazo van en su propia línea bajo el nombre: así no se cortan cuando el nombre es largo */
 .tag.mov { background: #e8f1fb; color: #2b5d99 } .tag.mov.reciente { background: #e6f4e3; color: #2e7d32 } .tag.mov.parado { background: #eee; color: #666 }
@@ -1465,6 +1466,17 @@ function equivTxt(viejo, nuevo) { const a = S.idx?.get(viejo), b = S.idx?.get(nu
 const fFH = v => { if (!v) return ''; const d = v?.toDate ? v.toDate() : new Date(v); if (isNaN(d)) return String(v).slice(0, 10);
   return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }); };
 const quienCuando = x => [x?.porNombre, fFH(x?.fecha)].filter(Boolean).join(' · ');
+// notas del producto para la columna Comentario del módulo de cada sucursal (para tenerlas en cuenta junto al comentario):
+// motivo de la atención (urgencia, a pedido, reemplazo…), comunicado de droguería, atención bloqueada y reemplazos del kardex
+function notasCol(r) {
+  const c = r.p.c, l = [], g = window.GEST?.get(c), b = window.BLOQ_ATEN?.get(c);
+  if (r.motivo) l.push(['mot', r.motivo]);
+  if (g) l.push(['gest', '📢 ' + (g.nota || 'Comunicado de droguería'), quienCuando(g)]);
+  if (b) l.push(['bat', '🚫 Atención bloqueada' + (b.motivo ? ': ' + b.motivo : ''), quienCuando(b)]);
+  if (window.REEMP?.has(c)) l.push(['kr', '🔁 Reemplazado por ' + window.REEMP.get(c).nuevo]);
+  if (window.REEMP_NUEVO?.has(c)) l.push(['kr', '🔁 Reemplaza a ' + window.REEMP_NUEVO.get(c).join(', ')]);
+  return l.length ? `<div class="rs-notas">${l.map(([k, t, q]) => `<div class="rs-nota ${k}">${esc(t)}${q ? ` <small>${esc(q)}</small>` : ''}</div>`).join('')}</div>` : '';
+}
 // comunicado de droguería: solo el mensaje y, en chiquito, quién y cuándo
 const tagGest = c => { const g = window.GEST?.get(c); if (!g) return ''; const qc = quienCuando(g);
   return `<span class="tag gest" title="${esc(qc)}">📢 ${esc(g.nota || 'Comunicado de droguería')}${qc ? ` <small class="fh gq">${esc(qc)}</small>` : ''}</span>`; };
@@ -2090,7 +2102,7 @@ function pintarStk() {
         if (m === k.best) cls.push('best'); if (m === sel) cls.push('sel'); return `<td class="${cls.join(' ')}" data-m="${esc(m)}" title="Usar ${esc(m)}">${pct(x.wape)}</td>`; }).join('')}
       <td class="n sep">${r.vd ? fmtS(p, conv(p, r.vd)) : '<span class="z">0</span>'}</td><td class="n dura${r.vd > 0 && r.st / r.vd < S.xSeg ? ' corta' : ''}">${r.vd > 0 ? nf0.format(Math.round(r.st / r.vd)) + ' d' : r.st > 0 ? '<span class="z">sin venta</span>' : '<span class="z">·</span>'}</td>
       <td class="n sep">${fmtE(p, conv(p, r.nec))}</td><td class="n comprar">${r.nota ? `<span class="z">${esc(r.nota)}</span>` : r.cmp ? fmt(conv(p, r.cmp)) : '<span class="z">·</span>'}</td>${drog ? '' : (() => { const a = ateDe(p), sv = r.st + (a || 0) - r.nec, sob = a ? sobraFr(p, sv) : '', falta = a && sob && sv < 0;
-        return `<td class="n sep ate">${a == null ? '<span class="z">…</span>' : a ? fmt(conv(p, a)) : '<span class="z">0</span>'}</td><td class="n">${+p.fr > 1 ? nf0.format(p.fr) : '1'}</td><td class="n sob${falta ? ' falta' : ''}" ${falta ? 'title="No le alcanza: esto le va a faltar para cubrir los días"' : ''}>${sob ? (falta ? 'falta ' + sob.replace('−', '') : sob) : '<span class="z">·</span>'}</td>`; })()}${drog ? '' : `<td class="rs-td">${r.resp ? `<span class="tag su-resp ${esc(r.resp.estado)}" title="${esc('Comentario de ' + (r.resp.por || 'la sucursal') + (r.resp.fh ? ' · ' + fFH(r.resp.fh) : ''))}">💬 ${esc(r.resp.txt)}${r.resp.por || r.resp.fh ? ` <small class="fh">· ${esc([r.resp.por, fFH(r.resp.fh)].filter(Boolean).join(' · '))}</small>` : ''}</span>` : ''}${edita ? `<button type="button" class="btn sm rs-btn" data-rs="${esc(p.c)}">${r.resp ? '✏️ Cambiar' : '💬 Comentar'}</button>` : r.resp ? '' : '<span class="z">·</span>'}</td>`}</tr>`;
+        return `<td class="n sep ate">${a == null ? '<span class="z">…</span>' : a ? fmt(conv(p, a)) : '<span class="z">0</span>'}</td><td class="n">${+p.fr > 1 ? nf0.format(p.fr) : '1'}</td><td class="n sob${falta ? ' falta' : ''}" ${falta ? 'title="No le alcanza: esto le va a faltar para cubrir los días"' : ''}>${sob ? (falta ? 'falta ' + sob.replace('−', '') : sob) : '<span class="z">·</span>'}</td>`; })()}${drog ? '' : `<td class="rs-td">${notasCol(r)}${r.resp ? `<span class="tag su-resp ${esc(r.resp.estado)}" title="${esc('Comentario de ' + (r.resp.por || 'la sucursal') + (r.resp.fh ? ' · ' + fFH(r.resp.fh) : ''))}">💬 ${esc(r.resp.txt)}${r.resp.por || r.resp.fh ? ` <small class="fh">· ${esc([r.resp.por, fFH(r.resp.fh)].filter(Boolean).join(' · '))}</small>` : ''}</span>` : ''}${edita ? `<button type="button" class="btn sm rs-btn" data-rs="${esc(p.c)}">${r.resp ? '✏️ Cambiar' : '💬 Comentar'}</button>` : r.resp ? '' : '<span class="z">·</span>'}</td>`}</tr>`;
   }
   if (!vis.length) h += `<tr><td class="c0"></td><td class="c1" colspan="${(S.verMet ? mets.length : 0) + (drog ? 7 : 11)}">Nada que mostrar con estos filtros.</td></tr>`;
   $('xTabla').innerHTML = h + '</tbody>'; ajustarC0($('xTabla'));
