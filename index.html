@@ -16,7 +16,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611201500">
+<link rel="stylesheet" href="styles.css?v=202611201600">
 </head>
 <body>
   <!-- instalar la página como app en el celular -->
@@ -417,7 +417,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
         <div class="lh"><h2>Comparar con mi Excel</h2>
           <div class="filtros"><label class="filtro">Su Excel <input type="file" id="rpCmp" accept=".xlsx,.xls"></label>
             <label class="filtro">Sucursal <select id="rpCmpSuc"></select></label>
-            <label class="filtro">Ver <select id="rpCmpVer"><option value="">Todo</option><option value="dif">Cantidad distinta</option><option value="rep">Solo en el reporte</option><option value="exc">Solo en su Excel</option><option value="ok">Iguales</option><option value="del">Eliminados</option></select></label>
+            <label class="filtro">Ver <select id="rpCmpVer"><option value="">Todo</option><option value="dif">Cantidad distinta</option><option value="rep">Solo en el reporte</option><option value="exc">Solo en su Excel</option><option value="ok">Iguales</option><option value="pen">Pendientes</option><option value="del">Eliminados</option></select></label>
             <button class="btn" type="button" id="rpCmpXls"><svg width="18" height="18"><use href="#i-bajar"/></svg>Excel de la comparación</button></div></div>
         <p class="muted" id="rpCmpTxt">Suba su Excel (con las columnas Código y Se atenderá o Cantidad) para ver qué coincide, qué cantidades son distintas, qué falta en su Excel y qué tiene su Excel que no sale del reporte.</p>
         <div class="ent-lista" id="rpCmpRes"></div>
@@ -761,6 +761,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 
 <div class="toast" id="toast" hidden></div>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="app.js?v=202611201400"></script>
+<script type="module" src="app.js?v=202611201500"></script>
 </body>
 </html>

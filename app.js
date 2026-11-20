@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611201400";
+const VERSION_PROY = "202611201500";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2650,7 +2650,7 @@ async function rpElegir(c, q, de) {
   pintarRep();
   if (!S.prev) try { await setDoc(doc(db, "proy_config", "rp_elegido"), { tipo: "rpel", datos: JSON.stringify([...S.rpEleg]) }); } catch (x) { avisar(x); }
 }
-const RP_RES = { ok: ["Igual", "verde", "Igual"], dif: ["Cantidad distinta", "amb", "Cantidad distinta"], rep: ["Solo en el reporte (no está en su Excel)", "rojo", "Falta en su Excel"], exc: ["Solo en su Excel (no sale del reporte)", "rojo", "Solo en su Excel"], del: ["Eliminados (no se entregan)", "gris", "Eliminado"] };
+const RP_RES = { ok: ["Igual", "verde", "Igual"], dif: ["Cantidad distinta", "amb", "Cantidad distinta"], rep: ["Solo en el reporte (no está en su Excel)", "rojo", "Falta en su Excel"], exc: ["Solo en su Excel (no sale del reporte)", "rojo", "Solo en su Excel"], del: ["Eliminados (no se entregan)", "gris", "Eliminado"], pen: ["Pendientes (por decidir; no se entregan aún)", "azul", "Pendiente"] };
 async function rpLeerMiExcel(a) {
   XLSX ??= await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
   const wb = XLSX.read(await a.arrayBuffer()), filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "", raw: false });
@@ -2676,10 +2676,10 @@ function rpComparar() {
   const out = [];
   for (const [c, p] of calc) { const e = E.items.get(c), qe = e ? e.q : null;
     const el = S.rpEleg?.get(rpElKey(r, c)), base = qe == null || qe === 0 ? "rep" : qe === p.qRep ? "ok" : "dif", usa = el && base !== "ok";
-    out.push({ c, n: p.it.n, l: p.it.lab, qr: p.qRep, qe, venta: p.venta, stock: p.stock, base, res: usa ? (el.de === "del" ? "del" : "ok") : base, el: usa ? el : null }); }
+    out.push({ c, n: p.it.n, l: p.it.lab, qr: p.qRep, qe, venta: p.venta, stock: p.stock, base, res: usa ? (el.de === "del" || el.de === "pen" ? el.de : "ok") : base, el: usa ? el : null }); }
   for (const [c, e] of E.items) { if (calc.has(c) || !(e.q > 0)) continue; const it = rep.get(c), fr = it ? frDe(it.c, it.n) : null, el = S.rpEleg?.get(rpElKey(r, c));
     out.push({ c, n: e.n || it?.n || "", l: e.l || it?.lab || "", qr: 0, qe: e.q, venta: it ? it.ce + (fr ? it.cf / fr : 0) : null, stock: it ? it.se + (fr ? it.sf / fr : 0) : null,
-      base: "exc", res: el ? (el.de === "del" ? "del" : "ok") : "exc", el: el || null,
+      base: "exc", res: el ? (el.de === "del" || el.de === "pen" ? el.de : "ok") : "exc", el: el || null,
       por: !it ? "no vendió en los días del reporte" : "su stock alcanza para lo que vendió" }); }
   return out.sort((a, b) => a.l.localeCompare(b.l) || a.n.localeCompare(b.n));
 }
@@ -2707,7 +2707,7 @@ function rpNotas(suc, c) {
 }
 // lo que se va a entregar de cada fila: la elegida; si son iguales o solo sale del reporte, la del reporte; solo en su Excel: 0
 const rpAt = x => x.el ? x.el.q : x.res === "dif" ? null : x.res === "exc" ? 0 : x.qr;
-const rpDeTxt = de => ({ rep: "del reporte", exc: "de su Excel", man: "escrita a mano", add: "añadido", del: "eliminado" })[de] || "";
+const rpDeTxt = de => ({ rep: "del reporte", exc: "de su Excel", man: "escrita a mano", add: "añadido", del: "eliminado", pen: "pendiente" })[de] || "";
 function pintarRpCmp() {
   const R = S.rp, box = $("rpCmpBox"); box.hidden = !R.sucs.length; if (!R.sucs.length) return;
   if (!S.rpCmpSuc || !R.sucs.some(x => x.archivo === S.rpCmpSuc)) S.rpCmpSuc = (R.sucs.find(x => S.rpCmp?.suc && x.suc === S.rpCmp.suc) || R.sucs[0]).archivo;
@@ -2719,7 +2719,7 @@ function pintarRpCmp() {
   escucharRpNotas(); const sucCmp = (R.sucs.find(x => x.archivo === S.rpCmpSuc) || {}).suc || "";
   const l = rpComparar(), cuenta = k => l.filter(x => x.res === k).length, n2 = v => v == null ? "–" : nf(Math.round(v * 100) / 100);
   $("rpCmpTxt").innerHTML = `Su Excel <b>${esc(S.rpCmp.archivo)}</b> (${nf(S.rpCmp.items.size)} productos) contra lo que sale del reporte de <b>${esc(rpNomSuc(R.sucs.find(x => x.archivo === S.rpCmpSuc)))}</b>.`;
-  $("rpCmpRes").innerHTML = ["ok", "dif", "rep", "exc", "del"].map(k => `<button type="button" class="card ent-card${S.rpCmpVer === k ? " act" : ""}" data-rpcmpver="${k}"><b>${nf(cuenta(k))}</b><small><span class="chip ${RP_RES[k][1]}">${RP_RES[k][0]}</span></small></button>`).join("");
+  $("rpCmpRes").innerHTML = ["ok", "dif", "rep", "exc", "pen", "del"].map(k => `<button type="button" class="card ent-card${S.rpCmpVer === k ? " act" : ""}" data-rpcmpver="${k}"><b>${nf(cuenta(k))}</b><small><span class="chip ${RP_RES[k][1]}">${RP_RES[k][0]}</span></small></button>`).join("");
   $("rpCmpVer").value = S.rpCmpVer;
   const v = l.filter(x => !S.rpCmpVer || x.res === S.rpCmpVer);
   $("rpCmpTabla").innerHTML = `<thead><tr><th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">Reporte</th><th class="der">Su Excel</th><th class="der" title="Lo que se va a entregar: si son iguales, esa cantidad; si eligió, la elegida">Atender</th><th class="der">Diferencia</th><th class="der">Vendió</th><th class="der">Stock</th><th class="der" title="Stock de droguería del último kardex subido">Stock droguería</th><th>Notas y comentarios</th><th>Resultado</th></tr></thead><tbody>` +
@@ -2727,8 +2727,8 @@ function pintarRpCmp() {
       <td class="der ${(x.qe || 0) - x.qr ? "rojo-t" : ""}">${(x.qe || 0) - x.qr > 0 ? "+" : ""}${nf((x.qe || 0) - x.qr)}</td><td class="der">${n2(x.venta)}</td><td class="der">${n2(x.stock)}</td><td class="der">${sdTxt(x.c)}</td><td class="rp-notas">${rpNotas(sucCmp, x.c).map(n => `<div class="rp-nota ${n.k}">${esc(n.t)}${n.q ? ` <small>${esc(n.q)}</small>` : ""}</div>`).join("")}</td>
       <td>${x.res === "dif" || x.res === "rep" || x.res === "exc" ? `${x.res === "dif" ? "" : `<span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.por ? `<br><small class="muted">${esc(x.por)}</small>` : ""}`}<div class="rp-eleg">${x.res === "dif"
           ? `<button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qr}" data-de="rep">Reporte: ${nf(x.qr)}</button><button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qe}" data-de="exc">Excel: ${nf(x.qe)}</button>`
-          : `<button type="button" class="btn sm ok-b" data-rpel="${esc(x.c)}" data-q="${x.res === "rep" ? x.qr : x.qe}" data-de="add">✔ Añadir ${nf(x.res === "rep" ? x.qr : x.qe)}</button><button type="button" class="btn sm del-b" data-rpel="${esc(x.c)}" data-q="0" data-de="del">✕ Eliminar</button>`}<input type="number" min="0" step="1" class="rp-man" data-rpman="${esc(x.c)}" placeholder="Otro" title="Escriba otra cantidad y pulse Enter"></div>`
-        : `<span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.el ? `<br><small class="muted">${x.el.de === "del" ? "eliminado" : `elegido: <b>${nf(x.el.q)}</b> (${rpDeTxt(x.el.de)})`} <button type="button" class="ab-x rp-desh" data-rpel="${esc(x.c)}" title="Deshacer">✕</button></small>` : ""}${x.por && !x.el ? `<br><small class="muted">${esc(x.por)}</small>` : ""}`}</td></tr>`).join("")
+          : `<button type="button" class="rp-b ok-b" data-rpel="${esc(x.c)}" data-q="${x.res === "rep" ? x.qr : x.qe}" data-de="add" title="Añadir ${nf(x.res === "rep" ? x.qr : x.qe)}">✔</button><button type="button" class="rp-b del-b" data-rpel="${esc(x.c)}" data-q="0" data-de="del" title="Eliminar (no se entrega)">✕</button>`}<button type="button" class="rp-b pen-b" data-rpel="${esc(x.c)}" data-q="0" data-de="pen" title="Pendiente (decidir después)">/</button><input type="number" min="0" step="1" class="rp-man" data-rpman="${esc(x.c)}" placeholder="Otro" title="Escriba otra cantidad y pulse Enter"></div>`
+        : `<span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.el ? `<br><small class="muted">${x.el.de === "del" ? "eliminado" : x.el.de === "pen" ? "pendiente" : `elegido: <b>${nf(x.el.q)}</b> (${rpDeTxt(x.el.de)})`} <button type="button" class="ab-x rp-desh" data-rpel="${esc(x.c)}" title="Deshacer">✕</button></small>` : ""}${x.por && !x.el ? `<br><small class="muted">${esc(x.por)}</small>` : ""}`}</td></tr>`).join("")
       : `<tr class="vacia"><td colspan="12">Nada en esta parte.</td></tr>`) + "</tbody>";
 }
 $("rpCmp").addEventListener("change", async e => { const a = e.target.files[0]; e.target.value = ""; if (!a) return;
