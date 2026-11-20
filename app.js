@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611202100";
+const VERSION_PROY = "202611202200";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2746,7 +2746,7 @@ function pintarRpCmp() {
     (v.length ? v.map(x => `<tr><td><code>${esc(x.c)}</code></td><td><b>${esc(x.n)}</b></td><td>${esc(x.l)}</td><td class="der"><b>${nf(x.qr)}</b></td><td class="der"><b>${x.qe == null ? "–" : nf(x.qe)}</b></td><td class="der rp-at">${rpAt(x) == null ? '<span class="muted">elegir →</span>' : `<b>${nf(rpAt(x))}</b>`}</td>
       <td class="der ${(x.qe || 0) - x.qr ? "rojo-t" : ""}">${(x.qe || 0) - x.qr > 0 ? "+" : ""}${nf((x.qe || 0) - x.qr)}</td><td class="der">${n2(x.venta)}</td><td class="der">${n2(x.stock)}</td><td class="der">${sdTxt(x.c)}</td><td class="rp-notas">${rpNotas(sucCmp, x.c).map(n => `<div class="rp-nota ${n.k}">${esc(n.t)}${n.q ? ` <small>${esc(n.q)}</small>` : ""}</div>`).join("")}</td>
       <td>${x.res === "dif" || x.res === "rep" || x.res === "exc" ? `${x.res === "dif" ? "" : `<span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.por ? `<br><small class="muted">${esc(x.por)}</small>` : ""}`}<div class="rp-eleg">${x.res === "dif"
-          ? `<button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qr}" data-de="rep">Reporte: ${nf(x.qr)}</button><button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qe}" data-de="exc">Excel: ${nf(x.qe)}</button>`
+          ? `<button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qr}" data-de="rep">Reporte: ${nf(x.qr)}</button><button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qe}" data-de="exc">Excel: ${nf(x.qe)}</button><button type="button" class="rp-b del-b" data-rpel="${esc(x.c)}" data-q="0" data-de="del" title="Eliminar (no se entrega)">✕</button>`
           : `<button type="button" class="rp-b ok-b" data-rpel="${esc(x.c)}" data-q="${x.res === "rep" ? x.qr : x.qe}" data-de="add" title="Añadir ${nf(x.res === "rep" ? x.qr : x.qe)}">✔</button><button type="button" class="rp-b del-b" data-rpel="${esc(x.c)}" data-q="0" data-de="del" title="Eliminar (no se entrega)">✕</button>`}<button type="button" class="rp-b pen-b" data-rpel="${esc(x.c)}" data-q="0" data-de="pen" title="Pendiente (decidir después)">/</button><input type="number" min="0" step="1" class="rp-man" data-rpman="${esc(x.c)}" placeholder="Otro" title="Escriba otra cantidad y pulse Enter"></div>`
         : `<span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.el ? `<br><small class="muted">${x.el.de === "del" ? "eliminado" : x.el.de === "pen" ? "pendiente" : `elegido: <b>${nf(x.el.q)}</b> (${rpDeTxt(x.el.de)})`} <button type="button" class="ab-x rp-desh" data-rpel="${esc(x.c)}" title="Deshacer">✕</button></small>` : ""}${x.por && !x.el ? `<br><small class="muted">${esc(x.por)}</small>` : ""}`}</td></tr>`).join("")
       : `<tr class="vacia"><td colspan="12">Nada en esta parte.</td></tr>`) + "</tbody>";
