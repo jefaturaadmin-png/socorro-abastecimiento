@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611202000";
+const VERSION_PROY = "202611202100";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2561,7 +2561,7 @@ function rpCalcular() {
     // añadidos desde «Solo en su Excel» que no están en el reporte de la sucursal
     const pre = rpElKey(r, ""), ya = new Set(r.items.map(it => it.c));
     for (const [k, el] of S.rpEleg || []) { if (!k.startsWith(pre) || !(el.q > 0)) continue; const c = k.slice(pre.length); if (ya.has(c)) continue;
-      const e = S.rpCmp?.items.get(c); pedidos.push({ r, it: { c, n: e?.n || el.n || c, lab: e?.l || el.l || "" }, qRep: 0, q: el.q, at: el.q, el, venta: 0, stock: 0, fr: null, dias }); }
+      const e = rpCmpDe(r)?.items.get(c); pedidos.push({ r, it: { c, n: e?.n || el.n || c, lab: e?.l || el.l || "" }, qRep: 0, q: el.q, at: el.q, el, venta: 0, stock: 0, fr: null, dias }); }
   }
   R.res = pedidos;
 }
@@ -2604,8 +2604,8 @@ function escucharRp() {
   if (S.rpSub) return; S.rpSub = true;
   S.subs.push(onSnapshot(query(collection(db, "proy_config"), where("tipo", "in", ["rp", "rpcmp", "rpel"])), sn => {
     S.rp.sucs = sn.docs.filter(d => d.data().tipo === "rp").map(d => ({ ...rpDesempacar(d.data()), id: d.id })).sort((a, b) => rpNomSuc(a).localeCompare(rpNomSuc(b)));
-    const c = sn.docs.find(d => d.data().tipo === "rpcmp")?.data();
-    S.rpCmp = c ? { archivo: c.archivo, suc: c.suc, items: new Map(JSON.parse(c.items || "[]").map(([cod, n, l, q]) => [cod, { c: cod, n, l, q }])) } : null;
+    S.rpCmps = new Map(sn.docs.filter(d => d.data().tipo === "rpcmp").map(d => { const c = d.data();
+      return [c.sk || c.suc || "", { id: d.id, archivo: c.archivo, suc: c.suc, items: new Map(JSON.parse(c.items || "[]").map(([cod, n, l, q]) => [cod, { c: cod, n, l, q }])) }]; }));
     const el = sn.docs.find(d => d.data().tipo === "rpel")?.data(); try { S.rpEleg = new Map(el ? JSON.parse(el.datos || "[]") : []); } catch { S.rpEleg = new Map(); }
     if (S.vista === "vRep") pintarRep();
   }, e => { S.rpSub = false; msg("rpMsg", "No se pudieron leer los reportes guardados: " + textoError(e), true); }));
@@ -2623,13 +2623,15 @@ async function rpCargar(files) {
 }
 $("rpSucs").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (f.length) rpCargar(f); });
 $("rpLimpiar").addEventListener("click", async () => {
-  if (!S.rp.sucs.length && !S.rpCmp) return; if (!confirm("¿Quitar los reportes guardados y su Excel de comparación?")) return;
-  try { for (const r of S.rp.sucs) await deleteDoc(doc(db, "proy_config", r.id || rpId(r))); await deleteDoc(doc(db, "proy_config", "rp_mi_excel")); } catch (x) { avisar(x); }
-  S.rp = { sucs: [], suc: "", q: "", det: false }; S.rpCmp = null; pintarRep(); });
+  if (!S.rp.sucs.length && !S.rpCmps.size) return; if (!confirm("¿Quitar los reportes guardados y su Excel de comparación?")) return;
+  try { for (const r of S.rp.sucs) await deleteDoc(doc(db, "proy_config", r.id || rpId(r))); for (const e of S.rpCmps.values()) if (e.id) await deleteDoc(doc(db, "proy_config", e.id)); } catch (x) { avisar(x); }
+  S.rp = { sucs: [], suc: "", q: "", det: false }; S.rpCmps = new Map(); pintarRep(); });
 $("rpSuc").addEventListener("change", e => { S.rp.suc = e.target.value; pintarRep(); });
 $("rpQ").addEventListener("input", e => { S.rp.q = e.target.value; pintarRep(); });
 $("rpDet").addEventListener("change", e => { S.rp.det = e.target.checked; pintarRep(); });
-$("rpRes").addEventListener("click", e => { const b = e.target.closest("[data-rpsuc]"); if (!b) return; S.rp.suc = S.rp.suc === b.dataset.rpsuc ? "" : b.dataset.rpsuc; pintarRep(); });
+$("rpRes").addEventListener("click", e => { const b = e.target.closest("[data-rpsuc]"); if (!b) return;
+  // al elegir una sucursal: su lista de entrega y su comparación
+  S.rp.suc = S.rp.suc === b.dataset.rpsuc ? "" : b.dataset.rpsuc; if (S.rp.suc) { S.rpCmpSuc = S.rp.suc; S.rpCmpVer = ""; } pintarRep(); });
 $("rpXls").addEventListener("click", () => {
   const R = S.rp, filas = rpFilas(); if (!filas.length) return toast("No hay nada para descargar.");
   const uno = R.suc || R.sucs.length === 1;
@@ -2639,13 +2641,17 @@ $("rpXls").addEventListener("click", () => {
 });
 
 // ---- comparar con el Excel del usuario: lo que está en los dos (igual o con otra cantidad), lo que falta en uno u otro ----
-S.rpCmp = null; S.rpCmpVer = ""; S.rpCmpSuc = "";
+S.rpCmps = new Map(); S.rpCmpVer = ""; S.rpCmpSuc = "";
+// cada sucursal se compara con SU Excel (se guarda uno por sucursal: proy_config/rpcmp_…)
+const rpSk = r => r?.suc || r?.est || r?.archivo || "";
+const rpCmpR = () => S.rp.sucs.find(x => x.archivo === S.rpCmpSuc) || S.rp.sucs[0];
+const rpCmpDe = r => S.rpCmps.get(rpSk(r)) || null;
 // cantidad elegida (reporte o su Excel) para los de «Cantidad distinta»: rp_elegido = { «sucursal|código»: { q, de } }
 S.rpEleg = new Map();
 const rpElKey = (r, c) => (r.suc || r.est || r.archivo) + "|" + c;
 async function rpElegir(c, q, de) {
   const r = S.rp.sucs.find(x => x.archivo === S.rpCmpSuc) || S.rp.sucs[0]; if (!r) return;
-  const e = S.rpCmp?.items.get(c);
+  const e = rpCmpDe(r)?.items.get(c);
   const k = rpElKey(r, c); if (de) S.rpEleg.set(k, { q, de, ...(e ? { n: e.n, l: e.l } : {}), por: S.perfil?.nombre || S.perfil?.usuario || "", fecha: new Date().toISOString() }); else S.rpEleg.delete(k);
   pintarRep();
   if (!S.prev) try { await setDoc(doc(db, "proy_config", "rp_elegido"), { tipo: "rpel", datos: JSON.stringify([...S.rpEleg]) }); } catch (x) { avisar(x); }
@@ -2669,19 +2675,20 @@ function rpBase(r) { const frDe = rpFracc([r]), out = [];
   for (const it of r.items) { const fr = frDe(it.c, it.n), venta = it.ce + (fr ? it.cf / fr : 0), stock = it.se + (fr ? it.sf / fr : 0), q = redPed(venta - stock);
     if (q > 0) out.push({ it, qRep: q, venta, stock }); }
   return out; }
+// una elección con cantidad 0 cuenta como eliminada (no se entrega): así «Igual» = lo que se entrega
+const rpTipoEl = el => el.de === "pen" ? "pen" : el.de === "del" || !(el.q > 0) ? "del" : "ok";
 function rpComparar() {
-  const R = S.rp, E = S.rpCmp; if (!E) return [];
-  const r = R.sucs.find(x => x.archivo === S.rpCmpSuc) || R.sucs[0]; if (!r) return [];
+  const R = S.rp, r = rpCmpR(); if (!r) return []; const E = rpCmpDe(r); if (!E) return [];
   const calc = new Map(rpBase(r).map(p => [p.it.c, p])), rep = new Map(r.items.map(it => [it.c, it])), frDe = rpFracc([r]);
   const out = [];
   for (const [c, p] of calc) { const e = E.items.get(c), qe = e ? e.q : null;
     const el = S.rpEleg?.get(rpElKey(r, c)), base = qe == null || qe === 0 ? "rep" : qe === p.qRep ? "ok" : "dif", usa = el && base !== "ok";
-    out.push({ c, n: p.it.n, l: p.it.lab, qr: p.qRep, qe, venta: p.venta, stock: p.stock, base, res: usa ? (el.de === "del" || el.de === "pen" ? el.de : "ok") : base, el: usa ? el : null }); }
+    out.push({ c, n: p.it.n, l: p.it.lab, qr: p.qRep, qe, venta: p.venta, stock: p.stock, base, res: usa ? rpTipoEl(el) : base, el: usa ? el : null }); }
   for (const [c, e] of E.items) { if (calc.has(c) || !(e.q > 0)) continue; const it = rep.get(c), fr = it ? frDe(it.c, it.n) : null, el = S.rpEleg?.get(rpElKey(r, c));
     // si no está en el reporte (no vendió en esos días): vendió 0 y su stock es el del kardex (el mismo que en el módulo de la sucursal)
     const stK = !it && r.suc ? S.karStock?.[c]?.[r.suc]?.[0] : null;
     out.push({ c, n: e.n || it?.n || "", l: e.l || it?.lab || "", qr: 0, qe: e.q, venta: it ? it.ce + (fr ? it.cf / fr : 0) : 0, stock: it ? it.se + (fr ? it.sf / fr : 0) : stK != null ? +stK : 0,
-      base: "exc", res: el ? (el.de === "del" || el.de === "pen" ? el.de : "ok") : "exc", el: el || null,
+      base: "exc", res: el ? rpTipoEl(el) : "exc", el: el || null,
       por: !it ? "no vendió en los días del reporte" : "su stock alcanza para lo que vendió" }); }
   return out.sort((a, b) => a.l.localeCompare(b.l) || a.n.localeCompare(b.n));
 }
@@ -2722,15 +2729,16 @@ const rpAt = x => x.el ? x.el.q : x.res === "dif" ? null : x.res === "exc" ? 0 :
 const rpDeTxt = de => ({ rep: "del reporte", exc: "de su Excel", man: "escrita a mano", add: "añadido", del: "eliminado", pen: "pendiente" })[de] || "";
 function pintarRpCmp() {
   const R = S.rp, box = $("rpCmpBox"); box.hidden = !R.sucs.length; if (!R.sucs.length) return;
-  if (!S.rpCmpSuc || !R.sucs.some(x => x.archivo === S.rpCmpSuc)) S.rpCmpSuc = (R.sucs.find(x => S.rpCmp?.suc && x.suc === S.rpCmp.suc) || R.sucs[0]).archivo;
+  if (!S.rpCmpSuc || !R.sucs.some(x => x.archivo === S.rpCmpSuc)) S.rpCmpSuc = R.sucs[0].archivo;
   $("rpCmpSuc").innerHTML = R.sucs.map(r => `<option value="${esc(r.archivo)}">${esc(rpNomSuc(r))}</option>`).join(""); $("rpCmpSuc").value = S.rpCmpSuc;
-  if (!S.rpCmp) { $("rpCmpRes").innerHTML = ""; $("rpCmpTabla").innerHTML = ""; return; }
+  const E = rpCmpDe(rpCmpR());
+  if (!E) { $("rpCmpTxt").innerHTML = `Todavía no subió su Excel de <b>${esc(rpNomSuc(rpCmpR()))}</b>. Súbalo para compararlo (cada sucursal se compara con su propio Excel y queda guardado).`; $("rpCmpRes").innerHTML = ""; $("rpCmpTabla").innerHTML = ""; return; }
   // stock de droguería (solo para ver; del último kardex del sistema)
   if (!S.drogStk) cargarDrogStk().then(() => { if (S.vista === "vRep") pintarRpCmp(); });
   const sdV = c => S.drogStk ? +(S.drogStk[c]?.[0] || 0) : null, sdTxt = c => { const v = sdV(c); return v == null ? "…" : v > 0 ? `<b>${nf(Math.round(v * 100) / 100)}</b>` : '<span class="rojo-t">0</span>'; };
   escucharRpNotas(); const sucCmp = (R.sucs.find(x => x.archivo === S.rpCmpSuc) || {}).suc || "";
   const l = rpComparar(), cuenta = k => l.filter(x => x.res === k).length, n2 = v => v == null ? "–" : nf(Math.round(v * 100) / 100);
-  $("rpCmpTxt").innerHTML = `Su Excel <b>${esc(S.rpCmp.archivo)}</b> (${nf(S.rpCmp.items.size)} productos) contra lo que sale del reporte de <b>${esc(rpNomSuc(R.sucs.find(x => x.archivo === S.rpCmpSuc)))}</b>.`;
+  $("rpCmpTxt").innerHTML = `Su Excel <b>${esc(E.archivo)}</b> (${nf(E.items.size)} productos) contra lo que sale del reporte de <b>${esc(rpNomSuc(R.sucs.find(x => x.archivo === S.rpCmpSuc)))}</b>.`;
   $("rpCmpRes").innerHTML = ["ok", "dif", "rep", "exc", "pen", "del"].map(k => `<button type="button" class="card ent-card${S.rpCmpVer === k ? " act" : ""}" data-rpcmpver="${k}"><b>${nf(cuenta(k))}</b><small><span class="chip ${RP_RES[k][1]}">${RP_RES[k][0]}</span></small></button>`).join("");
   $("rpCmpVer").value = S.rpCmpVer;
   const v = l.filter(x => !S.rpCmpVer || x.res === S.rpCmpVer);
@@ -2744,14 +2752,18 @@ function pintarRpCmp() {
       : `<tr class="vacia"><td colspan="12">Nada en esta parte.</td></tr>`) + "</tbody>";
 }
 $("rpCmp").addEventListener("change", async e => { const a = e.target.files[0]; e.target.value = ""; if (!a) return;
-  try { S.rpCmp = await rpLeerMiExcel(a); S.rpCmpVer = ""; S.rpCmpSuc = ""; pintarRpCmp();
-    if (!S.prev) await setDoc(doc(db, "proy_config", "rp_mi_excel"), { tipo: "rpcmp", archivo: S.rpCmp.archivo, suc: S.rpCmp.suc || "", items: JSON.stringify([...S.rpCmp.items.values()].map(x => [x.c, x.n, x.l, x.q])), subido: new Date().toISOString() });
-    toast("Su Excel quedó guardado para comparar");
+  try { const x = await rpLeerMiExcel(a);
+    // ¿de qué sucursal es? la del nombre del archivo si tiene su reporte; si no, la que está elegida en «Sucursal»
+    const r = S.rp.sucs.find(y => x.suc && y.suc === x.suc) || rpCmpR(); if (!r) return toast("Suba primero el reporte de la sucursal.");
+    S.rpCmpSuc = r.archivo; S.rpCmpVer = ""; const sk = rpSk(r), id = "rpcmp_" + norm(sk).replace(/[^A-Z0-9]+/g, "_");
+    S.rpCmps.set(sk, { ...x, id }); pintarRep();
+    if (!S.prev) await setDoc(doc(db, "proy_config", id), { tipo: "rpcmp", sk, archivo: x.archivo, suc: r.suc || "", items: JSON.stringify([...x.items.values()].map(y => [y.c, y.n, y.l, y.q])), subido: new Date().toISOString() });
+    toast(`Su Excel quedó guardado para comparar con ${rpNomSuc(r)}`);
   } catch (x) { toast(`«${a.name}»: ${x.message || x}`); } });
-$("rpCmpSuc").addEventListener("change", e => { S.rpCmpSuc = e.target.value; pintarRpCmp(); });
+$("rpCmpSuc").addEventListener("change", e => { S.rpCmpSuc = e.target.value; S.rp.suc = e.target.value; S.rpCmpVer = ""; pintarRep(); });
 // cantidad escrita a mano (si no está de acuerdo con ninguna de las dos): se guarda al pulsar Enter o al salir del cuadro
 $("rpCmpTabla").addEventListener("change", e => { const i = e.target.closest("[data-rpman]"); if (!i || i.value === "") return;
-  const q = Math.max(0, Math.round(+i.value || 0)); rpElegir(i.dataset.rpman, q, "man"); });
+  const q = Math.max(0, Math.round(+i.value || 0)); rpElegir(i.dataset.rpman, q, q ? "man" : "del"); });
 $("rpCmpTabla").addEventListener("click", e => { const b = e.target.closest("[data-rpel]"); if (!b) return; rpElegir(b.dataset.rpel, +b.dataset.q || 0, b.dataset.de || ""); });
 $("rpCmpVer").addEventListener("change", e => { S.rpCmpVer = e.target.value; pintarRpCmp(); });
 $("rpCmpRes").addEventListener("click", e => { const b = e.target.closest("[data-rpcmpver]"); if (!b) return; S.rpCmpVer = S.rpCmpVer === b.dataset.rpcmpver ? "" : b.dataset.rpcmpver; pintarRpCmp(); });
