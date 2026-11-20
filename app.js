@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611200800";
+const VERSION_PROY = "202611200900";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2044,7 +2044,7 @@ async function cargarDrogStk() {
   // stock y venta diaria de cada sucursal (red/stk_SUCURSAL): para ofrecer de dónde sacarlo cuando droguería no tiene
   S.sucStk = new Map();
   await Promise.all(FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(async f => { try { const d = await getDoc(doc(db, "red", "stk_" + f)); if (d.exists()) S.sucStk.set(f, d.data().p || {}); } catch {} }));
-  S.drogStkCargando = false; if (S.vista === "vPed") pintarPedidos();
+  S.drogStkCargando = false; if (S.vista === "vPed") pintarPedidos(); else if (S.vista === "vRep") pintarRpCmp();
 }
 const puedeMarcarUrg = () => esAdmin() || ["sucursales", "kardex"].some(v => (S.perfil?.vistas || []).includes(v));
 const ESTADO_U = { "": ["🔴 Pedido recién", "rojo"], viendo: ["🟠 Droguería lo está viendo", "amb"], atendido: ["🟢 Atendido", "verde"] };
@@ -2664,16 +2664,19 @@ function pintarRpCmp() {
   if (!S.rpCmpSuc || !R.sucs.some(x => x.archivo === S.rpCmpSuc)) S.rpCmpSuc = (R.sucs.find(x => S.rpCmp?.suc && x.suc === S.rpCmp.suc) || R.sucs[0]).archivo;
   $("rpCmpSuc").innerHTML = R.sucs.map(r => `<option value="${esc(r.archivo)}">${esc(rpNomSuc(r))}</option>`).join(""); $("rpCmpSuc").value = S.rpCmpSuc;
   if (!S.rpCmp) { $("rpCmpRes").innerHTML = ""; $("rpCmpTabla").innerHTML = ""; return; }
+  // stock de droguería (solo para ver; del último kardex del sistema)
+  if (!S.drogStk) cargarDrogStk().then(() => { if (S.vista === "vRep") pintarRpCmp(); });
+  const sdV = c => S.drogStk ? +(S.drogStk[c]?.[0] || 0) : null, sdTxt = c => { const v = sdV(c); return v == null ? "…" : v > 0 ? `<b>${nf(Math.round(v * 100) / 100)}</b>` : '<span class="rojo-t">0</span>'; };
   const l = rpComparar(), cuenta = k => l.filter(x => x.res === k).length, n2 = v => v == null ? "–" : nf(Math.round(v * 100) / 100);
   $("rpCmpTxt").innerHTML = `Su Excel <b>${esc(S.rpCmp.archivo)}</b> (${nf(S.rpCmp.items.size)} productos) contra lo que sale del reporte de <b>${esc(rpNomSuc(R.sucs.find(x => x.archivo === S.rpCmpSuc)))}</b>.`;
   $("rpCmpRes").innerHTML = ["ok", "dif", "rep", "exc"].map(k => `<button type="button" class="card ent-card${S.rpCmpVer === k ? " act" : ""}" data-rpcmpver="${k}"><b>${nf(cuenta(k))}</b><small><span class="chip ${RP_RES[k][1]}">${RP_RES[k][0]}</span></small></button>`).join("");
   $("rpCmpVer").value = S.rpCmpVer;
   const v = l.filter(x => !S.rpCmpVer || x.res === S.rpCmpVer);
-  $("rpCmpTabla").innerHTML = `<thead><tr><th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">Reporte</th><th class="der">Su Excel</th><th class="der">Diferencia</th><th class="der">Vendió</th><th class="der">Stock</th><th>Resultado</th></tr></thead><tbody>` +
+  $("rpCmpTabla").innerHTML = `<thead><tr><th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">Reporte</th><th class="der">Su Excel</th><th class="der">Diferencia</th><th class="der">Vendió</th><th class="der">Stock</th><th class="der" title="Stock de droguería del último kardex subido">Stock droguería</th><th>Resultado</th></tr></thead><tbody>` +
     (v.length ? v.map(x => `<tr><td><code>${esc(x.c)}</code></td><td><b>${esc(x.n)}</b></td><td>${esc(x.l)}</td><td class="der"><b>${nf(x.qr)}</b></td><td class="der"><b>${x.qe == null ? "–" : nf(x.qe)}</b></td>
-      <td class="der ${(x.qe || 0) - x.qr ? "rojo-t" : ""}">${(x.qe || 0) - x.qr > 0 ? "+" : ""}${nf((x.qe || 0) - x.qr)}</td><td class="der">${n2(x.venta)}</td><td class="der">${n2(x.stock)}</td>
+      <td class="der ${(x.qe || 0) - x.qr ? "rojo-t" : ""}">${(x.qe || 0) - x.qr > 0 ? "+" : ""}${nf((x.qe || 0) - x.qr)}</td><td class="der">${n2(x.venta)}</td><td class="der">${n2(x.stock)}</td><td class="der">${sdTxt(x.c)}</td>
       <td><span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.por ? `<br><small class="muted">${esc(x.por)}</small>` : ""}</td></tr>`).join("")
-      : `<tr class="vacia"><td colspan="9">Nada en esta parte.</td></tr>`) + "</tbody>";
+      : `<tr class="vacia"><td colspan="10">Nada en esta parte.</td></tr>`) + "</tbody>";
 }
 $("rpCmp").addEventListener("change", async e => { const a = e.target.files[0]; e.target.value = ""; if (!a) return;
   try { S.rpCmp = await rpLeerMiExcel(a); S.rpCmpVer = ""; S.rpCmpSuc = ""; pintarRpCmp();
@@ -2686,7 +2689,7 @@ $("rpCmpRes").addEventListener("click", e => { const b = e.target.closest("[data
 $("rpCmpXls").addEventListener("click", () => {
   const l = rpComparar().filter(x => !S.rpCmpVer || x.res === S.rpCmpVer); if (!l.length) return toast("Suba primero su Excel.");
   const r2 = v => v == null ? "" : Math.round(v * 100) / 100;
-  excelDe(l.map(x => ({ "Código": x.c, Medicamento: x.n, Laboratorio: x.l, "Reporte (vendió − stock)": x.qr, "Su Excel": x.qe ?? "", Diferencia: (x.qe || 0) - x.qr, "Vendió": r2(x.venta), Stock: r2(x.stock), Resultado: RP_RES[x.res][0] + (x.por ? ": " + x.por : "") })),
+  excelDe(l.map(x => ({ "Código": x.c, Medicamento: x.n, Laboratorio: x.l, "Reporte (vendió − stock)": x.qr, "Su Excel": x.qe ?? "", Diferencia: (x.qe || 0) - x.qr, "Vendió": r2(x.venta), Stock: r2(x.stock), "Stock droguería": S.drogStk ? r2(+(S.drogStk[x.c]?.[0] || 0)) : "", Resultado: RP_RES[x.res][0] + (x.por ? ": " + x.por : "") })),
     "Comparación", "comparacion_" + rpNomSuc(S.rp.sucs.find(x => x.archivo === S.rpCmpSuc) || {}).toLowerCase().replace(/\W+/g, "_"));
 });
 
