@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611201900";
+const VERSION_PROY = "202611202000";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2693,7 +2693,7 @@ function escucharRpNotas() {
   const vivo = (col, k) => S.subs.push(onSnapshot(collection(db, col), sn => { S.rpN[k] = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === "vRep") pintarRpCmp(); }, () => {}));
   vivo("gestion", "gest"); vivo("atencion_resp", "resp"); vivo("bloq_aten", "bat"); vivo("reemplazos", "reemp");
   // pedidos de urgencia (los mismos que usa el módulo de cada sucursal) y los días que se consideran (criterio de Atención)
-  S.subs.push(onSnapshot(doc(db, "proy_config", "atencion_cfg"), d => { S.rpUrgDias = +d.data()?.def?.urgDias || 14; if (S.vista === "vRep") pintarRpCmp(); }, () => {}));
+  S.subs.push(onSnapshot(doc(db, "proy_config", "atencion_cfg"), d => { S.rpUrgDias = +d.data()?.def?.urgDias || 14; S.rpCfgProd = d.data()?.prod || {}; if (S.vista === "vRep") pintarRpCmp(); }, () => {}));
   cargarPedidos().then(() => { if (S.vista === "vRep") pintarRpCmp(); }).catch(() => {});
   S.subs.push(() => { S.rpNotSub = false; });
 }
@@ -2706,6 +2706,9 @@ function rpNotas(suc, c) {
   if (r) { const alt = r.alternativa || (r.altCod ? String(r.altCod) : ""); l.push({ t: "💬 " + (RESP_TXT_RP[r.estado] || r.estado) + (alt ? ": " + alt : "") + (r.comentario ? (alt ? " · " : ": ") + r.comentario : ""), q: quienFecha(r), k: "resp" }); }
   const b = N.bat?.get(c); if (b) l.push({ t: "🚫 Atención bloqueada" + (b.motivo ? ": " + b.motivo : ""), q: quienFecha(b), k: "bat" });
   for (const id of [suc + "__" + c, "TODAS__" + c, "DROGUERIA FS__" + c]) { const x = S.bloqueos?.get(id); if (x?.estado === "bloqueado") l.push({ t: "⛔ Bloqueado" + (id.startsWith("TODAS") ? " en todas" : id.startsWith("DROG") ? " en droguería" : " en la sucursal") + (x.motivo ? ": " + x.motivo : ""), q: "", k: "bloq" }); }
+  // cantidad fija que puso Abastecimiento en el Kardex (✋) para esa sucursal
+  const cf = suc && S.rpCfgProd?.[suc]?.[c];
+  if (cf?.q != null) l.push({ t: `✋ Cantidad fija (Kardex): ${nf(cf.q)}`, q: cf.fecha ? "desde " + String(cf.fecha).slice(0, 10).split("-").reverse().join("/") : "", k: "fija" });
   // urgencia de esa sucursal en los últimos días (como en el módulo de la sucursal)
   const desde = Date.now() - (S.rpUrgDias || 14) * 864e5;
   const urg = (S.ped?.datos || []).filter(d => d.suc === suc && d.cod === c && d.f && +d.f >= desde).sort((a, b) => b.f - a.f);
