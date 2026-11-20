@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611200200";
+const VERSION_PROY = "202611200300";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2043,7 +2043,7 @@ async function cargarDrogStk() {
   // stock y venta diaria de cada sucursal (red/stk_SUCURSAL): para ofrecer de dónde sacarlo cuando droguería no tiene
   S.sucStk = new Map();
   await Promise.all(FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(async f => { try { const d = await getDoc(doc(db, "red", "stk_" + f)); if (d.exists()) S.sucStk.set(f, d.data().p || {}); } catch {} }));
-  S.drogStkCargando = false; if (S.vista === "vPed") pintarPedidos();
+  S.drogStkCargando = false; if (S.vista === "vPed") pintarPedidos(); else if (S.vista === "vRep") pintarRep();
 }
 const puedeMarcarUrg = () => esAdmin() || ["sucursales", "kardex"].some(v => (S.perfil?.vistas || []).includes(v));
 const ESTADO_U = { "": ["🔴 Pedido recién", "rojo"], viendo: ["🟠 Droguería lo está viendo", "amb"], atendido: ["🟢 Atendido", "verde"] };
@@ -2560,22 +2560,25 @@ function rpCalcular() {
   // stock de droguería: si no alcanza para todas, se reparte en proporción a lo que necesita cada una
   const porCod = new Map(); for (const p of pedidos) (porCod.get(p.it.c) ?? porCod.set(p.it.c, []).get(p.it.c)).push(p);
   for (const [c, l] of porCod) {
-    const d = drog.get(c), disp = R.drog ? Math.max(0, Math.floor(d ? d.se : 0)) : Infinity, tot = l.reduce((a, p) => a + p.q, 0);
-    l.forEach(p => { p.sd = d ? d.se : 0; });
+    // stock de droguería: el del reporte si se subió; si no, el del último kardex del sistema
+    const d = drog.get(c), sdv = R.drog ? (d ? d.se : 0) : S.drogStk ? +(S.drogStk[c]?.[0] || 0) : null;
+    const disp = sdv == null ? Infinity : Math.max(0, Math.floor(sdv)), tot = l.reduce((a, p) => a + p.q, 0);
+    l.forEach(p => { p.sd = sdv; });
     if (tot <= disp) { l.forEach(p => p.at = p.q); continue; }
     l.forEach(p => { p.at = Math.floor(disp * p.q / tot); p.resto = disp * p.q / tot - p.at; });
     let sobra = disp - l.reduce((a, p) => a + p.at, 0); [...l].sort((a, b) => b.resto - a.resto).forEach(p => { if (sobra > 0) { p.at++; sobra--; } });
   }
   R.res = pedidos;
 }
-const rpNomSuc = r => r.suc ? corto(r.suc) : r.est || r.archivo;
+const rpNomSuc = r => r.esDrog ? r.est : r.suc ? corto(r.suc) : r.est || r.archivo;
 function pintarRep() {
   const R = S.rp;
   const fD = d => d ? d.toLocaleDateString("es-PE") : "?";
   $("rpDrogTxt").innerHTML = R.drog ? `<b>${esc(R.drog.est)}</b> · ${fD(R.drog.desde)} al ${fD(R.drog.hasta)} · ${nf(R.drog.items.length)} productos` : "Sin archivo";
   $("rpSucsTxt").innerHTML = R.sucs.length ? R.sucs.map(r => `<b>${esc(rpNomSuc(r))}</b> · ${fD(r.desde)} al ${fD(r.hasta)} (${r.dias || "?"} días) · ${nf(r.items.length)} productos`).join("<br>") : "Sin archivos";
   const avisos = [];
-  if (R.sucs.length && !R.drog) avisos.push("Falta el reporte de droguería: se calcula sin límite de su stock.");
+  if (!S.drogStk) cargarDrogStk().then(() => { if (S.vista === "vRep") pintarRep(); });
+  if (R.sucs.length && !R.drog && !S.drogStk) avisos.push("Leyendo el stock de droguería del sistema…");
   for (const r of [R.drog, ...R.sucs].filter(Boolean)) if (r.sinCod.length) avisos.push(`${rpNomSuc(r)}: ${r.sinCod.length} producto${r.sinCod.length === 1 ? "" : "s"} sin código en el reporte (no se pueden cruzar): ${r.sinCod.map(x => x.n).join(", ")}.`);
   for (const r of R.sucs) if (!r.suc) avisos.push(`No reconocí la sucursal de «${r.archivo}» (dice «${r.est}»).`);
   msg("rpMsg", avisos.join(" "), false);
@@ -2591,7 +2594,7 @@ function pintarRep() {
   const n2 = v => nf(Math.round(v * 100) / 100);
   $("rpTabla").innerHTML = `<thead><tr>${uno ? "" : "<th>Sucursal</th>"}<th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">${R.ver === "sd" ? "Necesita pedir" : "Cantidad"}</th>${det ? `<th class="der">Vendió</th><th class="der">Stock suc.</th><th class="der">Stock droguería</th>` : ""}</tr></thead><tbody>` +
     (filas.length ? filas.slice(0, 1500).map(p => `<tr>${uno ? "" : `<td><b>${esc(rpNomSuc(p.r))}</b></td>`}<td><code>${esc(p.it.c)}</code></td><td><b>${esc(p.it.n)}</b></td><td>${esc(p.it.lab)}</td><td class="der"><b>${nf(R.ver === "sd" ? p.q : p.at)}</b>${R.ver !== "sd" && p.at < p.q ? ` <small class="muted">de ${nf(p.q)}</small>` : ""}</td>
-      ${det ? `<td class="der">${n2(p.venta)} <small class="muted">${p.dias} d</small></td><td class="der">${n2(p.stock)}</td><td class="der">${R.drog ? n2(p.sd) : "–"}</td>` : ""}</tr>`).join("")
+      ${det ? `<td class="der">${n2(p.venta)} <small class="muted">${p.dias} d</small></td><td class="der">${n2(p.stock)}</td><td class="der">${p.sd == null ? "–" : n2(p.sd)}</td>` : ""}</tr>`).join("")
       : `<tr class="vacia"><td colspan="10">Nada con estos filtros.</td></tr>`) + "</tbody>";
 }
 function rpFilas() {
@@ -2621,7 +2624,7 @@ $("rpXls").addEventListener("click", () => {
   const R = S.rp, filas = rpFilas(); if (!filas.length) return toast("No hay nada para descargar.");
   const uno = R.suc || R.sucs.length === 1, sd = R.ver === "sd";
   const datos = filas.map(p => ({ ...(uno ? {} : { Sucursal: rpNomSuc(p.r) }), "Código": p.it.c, Medicamento: p.it.n, Laboratorio: p.it.lab, [sd ? "Necesita pedir" : "Cantidad"]: sd ? p.q : p.at,
-    ...(R.det ? { [`Vendió (${p.dias} días)`]: Math.round(p.venta * 100) / 100, "Stock sucursal": Math.round(p.stock * 100) / 100, "Stock droguería": R.drog ? Math.round(p.sd * 100) / 100 : "" } : {}) }));
+    ...(R.det ? { [`Vendió (${p.dias} días)`]: Math.round(p.venta * 100) / 100, "Stock sucursal": Math.round(p.stock * 100) / 100, "Stock droguería": p.sd == null ? "" : Math.round(p.sd * 100) / 100 } : {}) }));
   const nom = (uno ? rpNomSuc(filas[0].r) : "sucursales").toLowerCase().replace(/\W+/g, "_");
   excelDe(datos, sd ? "Sin stock droguería" : "Atender", `${sd ? "sin_stock_drogueria" : "atender"}_${nom}`);
 });
