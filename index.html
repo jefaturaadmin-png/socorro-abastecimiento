@@ -409,10 +409,8 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
       <div class="card rp-sube">
         <label class="rp-arch"><b>1. Reporte de droguería</b><small class="muted">(su stock limita lo que se puede atender)</small><input type="file" id="rpDrog" accept=".xls,.xlsx"><span id="rpDrogTxt" class="muted">Sin archivo</span></label>
         <label class="rp-arch"><b>2. Reportes de sucursales</b><small class="muted">(uno o varios)</small><input type="file" id="rpSucs" accept=".xls,.xlsx" multiple><span id="rpSucsTxt" class="muted">Sin archivos</span></label>
-        <div class="filtros"><label class="filtro">Días de stock <input type="number" id="rpC" min="1" max="120" value="15" style="width:80px"></label>
-          <label class="filtro">Días de seguridad <input type="number" id="rpSg" min="0" max="120" value="7" style="width:80px"></label>
-          <button class="btn sm" type="button" id="rpLimpiar">Quitar archivos</button></div>
-        <p class="muted rp-regla">Venta diaria = lo vendido en los días del reporte ÷ esos días · Necesita = venta diaria × (días de stock + seguridad) · Atender = necesita − su stock, con el redondeo de siempre (hasta ,45 abajo; desde ,46 arriba; si su stock no le alcanza, al menos 1) y sin pasar el stock de droguería (si no alcanza para todas, se reparte en proporción).</p>
+        <div class="filtros"><button class="btn sm" type="button" id="rpLimpiar">Quitar archivos</button></div>
+        <p class="muted rp-regla">Se entrega lo que vendió en los días del reporte menos lo que tiene ahora (tiene 4 y vendió 10 → se entregan 6), sin pasar el stock de droguería (si no alcanza para todas, se reparte en proporción).</p>
       </div>
       <div class="msg" id="rpMsg" hidden></div>
       <div class="ent-lista" id="rpRes"></div>
@@ -755,6 +753,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 
 <div class="toast" id="toast" hidden></div>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="app.js?v=202611200100"></script>
+<script type="module" src="app.js?v=202611200200"></script>
 </body>
 </html>

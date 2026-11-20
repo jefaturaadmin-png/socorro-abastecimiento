@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611200100";
+const VERSION_PROY = "202611200200";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2505,7 +2505,6 @@ $("entDlg").addEventListener("click", async ev => {
    C-Alterno (código), agrupado por «Laboratorio :». El de droguería da su stock (y el StkMin = stock de todas las sucursales);
    el de cada sucursal, su venta en los días filtrados y su stock. Se calcula lo que se le debe atender a cada sucursal. */
 S.rp = { drog: null, sucs: [], suc: "", q: "", ver: "at", det: false };
-try { const g = JSON.parse(localStorage.getItem("rp_dias") || "null"); if (g) { S.rpC = g.C; S.rpSg = g.Sg; } } catch {}
 const rpNum = v => { const x = String(v ?? "").trim().replace(/,/g, ""); return x === "" ? 0 : +x || 0; };
 const rpDia = t => { const m = String(t).match(/(\d{2})-(\d{2})-(\d{4})/); return m ? new Date(+m[3], m[2] - 1, +m[1]) : null; };
 function leerReporte(filas, archivo) {
@@ -2546,18 +2545,16 @@ function rpFracc(reps) {
   return (c, n) => fr.get(c) || +(String(n).match(/X\s*(\d+)\s*(?:TAB|COM|CAP|CAPS|GRAG|AMP|SOB|SCH|UND|UDS|CPR|COMP|TB|TABS|SOBRES|PERLAS|OVULOS|PARCHES)/i)?.[1] || 0) || null;
 }
 function rpCalcular() {
-  const R = S.rp, C = Math.max(1, +$("rpC").value || 15), Sg = Math.max(0, +$("rpSg").value || 0), H = C + Sg;
-  try { localStorage.setItem("rp_dias", JSON.stringify({ C, Sg })); } catch {}
-  const frDe = rpFracc([R.drog, ...R.sucs].filter(Boolean));
+  // CÁLCULO SIMPLE: lo que vendió en los días del reporte − lo que tiene ahora = lo que se le entrega (tiene 4 y vendió 10 → 6)
+  const R = S.rp, frDe = rpFracc([R.drog, ...R.sucs].filter(Boolean));
   const drog = new Map((R.drog?.items || []).map(it => [it.c, it]));
-  const pedidos = [];   // {suc, it, q, ...}
+  const pedidos = [];
   for (const r of R.sucs) {
-    const dias = r.dias || 45;
+    const dias = r.dias || 0;
     for (const it of r.items) {
       const fr = frDe(it.c, it.n), venta = it.ce + (fr ? it.cf / fr : 0), stock = it.se + (fr ? it.sf / fr : 0);
-      const vd = venta / dias, nec = vd * H, x = nec - stock;
-      let q = redPed(x); if (!q && x > 1e-9) q = 1;
-      if (q > 0) pedidos.push({ r, it, q, venta, stock, vd, nec, fr, dias });
+      const q = redPed(venta - stock);
+      if (q > 0) pedidos.push({ r, it, q, venta, stock, fr, dias });
     }
   }
   // stock de droguería: si no alcanza para todas, se reparte en proporción a lo que necesita cada una
@@ -2569,12 +2566,11 @@ function rpCalcular() {
     l.forEach(p => { p.at = Math.floor(disp * p.q / tot); p.resto = disp * p.q / tot - p.at; });
     let sobra = disp - l.reduce((a, p) => a + p.at, 0); [...l].sort((a, b) => b.resto - a.resto).forEach(p => { if (sobra > 0) { p.at++; sobra--; } });
   }
-  R.res = pedidos; R.H = H; R.C = C; R.Sg = Sg;
+  R.res = pedidos;
 }
 const rpNomSuc = r => r.suc ? corto(r.suc) : r.est || r.archivo;
 function pintarRep() {
   const R = S.rp;
-  if (S.rpC && !$("rpC").dataset.ok) { $("rpC").value = S.rpC; $("rpSg").value = S.rpSg; $("rpC").dataset.ok = 1; }
   const fD = d => d ? d.toLocaleDateString("es-PE") : "?";
   $("rpDrogTxt").innerHTML = R.drog ? `<b>${esc(R.drog.est)}</b> · ${fD(R.drog.desde)} al ${fD(R.drog.hasta)} · ${nf(R.drog.items.length)} productos` : "Sin archivo";
   $("rpSucsTxt").innerHTML = R.sucs.length ? R.sucs.map(r => `<b>${esc(rpNomSuc(r))}</b> · ${fD(r.desde)} al ${fD(r.hasta)} (${r.dias || "?"} días) · ${nf(r.items.length)} productos`).join("<br>") : "Sin archivos";
@@ -2591,11 +2587,11 @@ function pintarRep() {
   $("rpLista").hidden = false;
   $("rpSuc").innerHTML = `<option value="">Todas</option>` + R.sucs.map(r => `<option value="${esc(r.archivo)}">${esc(rpNomSuc(r))}</option>`).join(""); $("rpSuc").value = R.suc;
   const filas = rpFilas(), uno = R.suc || R.sucs.length === 1, det = R.det;
-  $("rpTit").textContent = (R.ver === "sd" ? "Sin stock en droguería" : "Lo que se debe atender") + ` · ${nf(filas.length)} productos · ${R.C} + ${R.Sg} días`;
+  $("rpTit").textContent = (R.ver === "sd" ? "Sin stock en droguería" : "Lo que se debe atender") + ` · ${nf(filas.length)} productos`;
   const n2 = v => nf(Math.round(v * 100) / 100);
-  $("rpTabla").innerHTML = `<thead><tr>${uno ? "" : "<th>Sucursal</th>"}<th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">${R.ver === "sd" ? "Necesita pedir" : "Cantidad"}</th>${det ? `<th class="der">Stock suc.</th><th class="der">Vendió</th><th class="der">Venta diaria</th><th class="der">Necesita</th><th class="der">Stock droguería</th>` : ""}</tr></thead><tbody>` +
+  $("rpTabla").innerHTML = `<thead><tr>${uno ? "" : "<th>Sucursal</th>"}<th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">${R.ver === "sd" ? "Necesita pedir" : "Cantidad"}</th>${det ? `<th class="der">Vendió</th><th class="der">Stock suc.</th><th class="der">Stock droguería</th>` : ""}</tr></thead><tbody>` +
     (filas.length ? filas.slice(0, 1500).map(p => `<tr>${uno ? "" : `<td><b>${esc(rpNomSuc(p.r))}</b></td>`}<td><code>${esc(p.it.c)}</code></td><td><b>${esc(p.it.n)}</b></td><td>${esc(p.it.lab)}</td><td class="der"><b>${nf(R.ver === "sd" ? p.q : p.at)}</b>${R.ver !== "sd" && p.at < p.q ? ` <small class="muted">de ${nf(p.q)}</small>` : ""}</td>
-      ${det ? `<td class="der">${n2(p.stock)}</td><td class="der">${n2(p.venta)} <small class="muted">${p.dias} d</small></td><td class="der">${n2(p.vd)}</td><td class="der">${n2(p.nec)}</td><td class="der">${R.drog ? n2(p.sd) : "–"}</td>` : ""}</tr>`).join("")
+      ${det ? `<td class="der">${n2(p.venta)} <small class="muted">${p.dias} d</small></td><td class="der">${n2(p.stock)}</td><td class="der">${R.drog ? n2(p.sd) : "–"}</td>` : ""}</tr>`).join("")
       : `<tr class="vacia"><td colspan="10">Nada con estos filtros.</td></tr>`) + "</tbody>";
 }
 function rpFilas() {
@@ -2615,7 +2611,6 @@ async function rpCargar(files, drog) {
 }
 $("rpDrog").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (f.length) rpCargar(f, true); });
 $("rpSucs").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (f.length) rpCargar(f, false); });
-["rpC", "rpSg"].forEach(id => $(id).addEventListener("change", pintarRep));
 $("rpLimpiar").addEventListener("click", () => { S.rp = { drog: null, sucs: [], suc: "", q: "", ver: "at", det: false }; pintarRep(); });
 $("rpSuc").addEventListener("change", e => { S.rp.suc = e.target.value; pintarRep(); });
 $("rpQ").addEventListener("input", e => { S.rp.q = e.target.value; pintarRep(); });
@@ -2626,9 +2621,9 @@ $("rpXls").addEventListener("click", () => {
   const R = S.rp, filas = rpFilas(); if (!filas.length) return toast("No hay nada para descargar.");
   const uno = R.suc || R.sucs.length === 1, sd = R.ver === "sd";
   const datos = filas.map(p => ({ ...(uno ? {} : { Sucursal: rpNomSuc(p.r) }), "Código": p.it.c, Medicamento: p.it.n, Laboratorio: p.it.lab, [sd ? "Necesita pedir" : "Cantidad"]: sd ? p.q : p.at,
-    ...(R.det ? { "Stock sucursal": Math.round(p.stock * 100) / 100, [`Vendió (${p.dias} días)`]: Math.round(p.venta * 100) / 100, "Venta diaria": Math.round(p.vd * 1000) / 1000, Necesita: Math.round(p.nec * 100) / 100, "Stock droguería": R.drog ? Math.round(p.sd * 100) / 100 : "" } : {}) }));
+    ...(R.det ? { [`Vendió (${p.dias} días)`]: Math.round(p.venta * 100) / 100, "Stock sucursal": Math.round(p.stock * 100) / 100, "Stock droguería": R.drog ? Math.round(p.sd * 100) / 100 : "" } : {}) }));
   const nom = (uno ? rpNomSuc(filas[0].r) : "sucursales").toLowerCase().replace(/\W+/g, "_");
-  excelDe(datos, sd ? "Sin stock droguería" : "Atender", `${sd ? "sin_stock_drogueria" : "atender"}_${nom}_${R.C}+${R.Sg}`);
+  excelDe(datos, sd ? "Sin stock droguería" : "Atender", `${sd ? "sin_stock_drogueria" : "atender"}_${nom}`);
 });
 
 /* ===================== vista previa: el administrador ve la página como la ve un usuario ===================== */
