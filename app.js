@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611201800";
+const VERSION_PROY = "202611201900";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -169,7 +169,7 @@ function escucharKardex() {
       const b64 = q.docs.sort((x, y) => x.id - y.id).map(d => d.data().d).join(""), bin = atob(b64), u = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
       const m = JSON.parse(await new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream("gzip"))).text());
-      S.ultAbast = m.ua || {}; if (S.vista === "vPed") pintarPedidos();
+      S.ultAbast = m.ua || {}; S.karStock = m.stock || {}; if (S.vista === "vPed") pintarPedidos(); else if (S.vista === "vRep") pintarRpCmp();
       let n = 0;
       for (const [c, pr] of Object.entries(m.prod || {})) {
         const nom = String(pr?.[0] || "").trim(); if (!c || !nom) continue;
@@ -2678,7 +2678,9 @@ function rpComparar() {
     const el = S.rpEleg?.get(rpElKey(r, c)), base = qe == null || qe === 0 ? "rep" : qe === p.qRep ? "ok" : "dif", usa = el && base !== "ok";
     out.push({ c, n: p.it.n, l: p.it.lab, qr: p.qRep, qe, venta: p.venta, stock: p.stock, base, res: usa ? (el.de === "del" || el.de === "pen" ? el.de : "ok") : base, el: usa ? el : null }); }
   for (const [c, e] of E.items) { if (calc.has(c) || !(e.q > 0)) continue; const it = rep.get(c), fr = it ? frDe(it.c, it.n) : null, el = S.rpEleg?.get(rpElKey(r, c));
-    out.push({ c, n: e.n || it?.n || "", l: e.l || it?.lab || "", qr: 0, qe: e.q, venta: it ? it.ce + (fr ? it.cf / fr : 0) : null, stock: it ? it.se + (fr ? it.sf / fr : 0) : null,
+    // si no está en el reporte (no vendió en esos días): vendió 0 y su stock es el del kardex (el mismo que en el módulo de la sucursal)
+    const stK = !it && r.suc ? S.karStock?.[c]?.[r.suc]?.[0] : null;
+    out.push({ c, n: e.n || it?.n || "", l: e.l || it?.lab || "", qr: 0, qe: e.q, venta: it ? it.ce + (fr ? it.cf / fr : 0) : 0, stock: it ? it.se + (fr ? it.sf / fr : 0) : stK != null ? +stK : 0,
       base: "exc", res: el ? (el.de === "del" || el.de === "pen" ? el.de : "ok") : "exc", el: el || null,
       por: !it ? "no vendió en los días del reporte" : "su stock alcanza para lo que vendió" }); }
   return out.sort((a, b) => a.l.localeCompare(b.l) || a.n.localeCompare(b.n));
