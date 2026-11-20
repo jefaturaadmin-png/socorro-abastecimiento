@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611201100";
+const VERSION_PROY = "202611201200";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2672,6 +2672,28 @@ function rpComparar() {
       por: !it ? "no vendió en los días del reporte" : "su stock alcanza para lo que vendió" }); }
   return out.sort((a, b) => a.l.localeCompare(b.l) || a.n.localeCompare(b.n));
 }
+// NOTAS de cada producto (en vivo, las mismas que en el Kardex y el módulo de cada sucursal): comunicado de droguería,
+// comentario de la sucursal, atención bloqueada, bloqueo en la sucursal o general, reemplazo
+const RESP_TXT_RP = { si_requiere: "Sí se requiere", no_requiere: "No se requiere en esta sucursal", no_se_mueve: "No se mueve", otro_medicamento: "Existe otro producto en su cambio", otros: "Otro" };
+function escucharRpNotas() {
+  if (S.rpNotSub) return; S.rpNotSub = true; S.rpN = { gest: new Map(), resp: new Map(), bat: new Map(), reemp: new Map() };
+  const vivo = (col, k) => S.subs.push(onSnapshot(collection(db, col), sn => { S.rpN[k] = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === "vRep") pintarRpCmp(); }, () => {}));
+  vivo("gestion", "gest"); vivo("atencion_resp", "resp"); vivo("bloq_aten", "bat"); vivo("reemplazos", "reemp");
+  S.subs.push(() => { S.rpNotSub = false; });
+}
+const quienFecha = d => { const f = d?.fecha?.toDate ? d.fecha.toDate() : d?.fecha ? new Date(d.fecha) : null;
+  return [d?.porNombre || "", f && !isNaN(f) ? f.toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""].filter(Boolean).join(" · "); };
+function rpNotas(suc, c) {
+  const N = S.rpN || {}, l = [];
+  const g = N.gest?.get(c); if (g) l.push({ t: "📢 " + (g.nota || "Comunicado de droguería"), q: quienFecha(g), k: "gest" });
+  const r = suc && N.resp?.get(suc + "__" + c);
+  if (r) { const alt = r.alternativa || (r.altCod ? String(r.altCod) : ""); l.push({ t: "💬 " + (RESP_TXT_RP[r.estado] || r.estado) + (alt ? ": " + alt : "") + (r.comentario ? (alt ? " · " : ": ") + r.comentario : ""), q: quienFecha(r), k: "resp" }); }
+  const b = N.bat?.get(c); if (b) l.push({ t: "🚫 Atención bloqueada" + (b.motivo ? ": " + b.motivo : ""), q: quienFecha(b), k: "bat" });
+  for (const id of [suc + "__" + c, "TODAS__" + c, "DROGUERIA FS__" + c]) { const x = S.bloqueos?.get(id); if (x?.estado === "bloqueado") l.push({ t: "⛔ Bloqueado" + (id.startsWith("TODAS") ? " en todas" : id.startsWith("DROG") ? " en droguería" : " en la sucursal") + (x.motivo ? ": " + x.motivo : ""), q: "", k: "bloq" }); }
+  const rv = N.reemp?.get(c); if (rv) l.push({ t: "🔁 Reemplazado por " + rv.nuevo + (rv.nNuevo ? " – " + rv.nNuevo : ""), q: "", k: "kr" });
+  for (const [v, x] of N.reemp || []) if (x.nuevo === c) l.push({ t: "🔁 Reemplaza a " + v + (x.nViejo ? " – " + x.nViejo : ""), q: "", k: "kr" });
+  return l;
+}
 // lo que se va a entregar de cada fila: la elegida; si son iguales o solo sale del reporte, la del reporte; solo en su Excel: 0
 const rpAt = x => x.el ? x.el.q : x.res === "dif" ? null : x.res === "exc" ? 0 : x.qr;
 function pintarRpCmp() {
@@ -2682,17 +2704,18 @@ function pintarRpCmp() {
   // stock de droguería (solo para ver; del último kardex del sistema)
   if (!S.drogStk) cargarDrogStk().then(() => { if (S.vista === "vRep") pintarRpCmp(); });
   const sdV = c => S.drogStk ? +(S.drogStk[c]?.[0] || 0) : null, sdTxt = c => { const v = sdV(c); return v == null ? "…" : v > 0 ? `<b>${nf(Math.round(v * 100) / 100)}</b>` : '<span class="rojo-t">0</span>'; };
+  escucharRpNotas(); const sucCmp = (R.sucs.find(x => x.archivo === S.rpCmpSuc) || {}).suc || "";
   const l = rpComparar(), cuenta = k => l.filter(x => x.res === k).length, n2 = v => v == null ? "–" : nf(Math.round(v * 100) / 100);
   $("rpCmpTxt").innerHTML = `Su Excel <b>${esc(S.rpCmp.archivo)}</b> (${nf(S.rpCmp.items.size)} productos) contra lo que sale del reporte de <b>${esc(rpNomSuc(R.sucs.find(x => x.archivo === S.rpCmpSuc)))}</b>.`;
   $("rpCmpRes").innerHTML = ["ok", "dif", "rep", "exc"].map(k => `<button type="button" class="card ent-card${S.rpCmpVer === k ? " act" : ""}" data-rpcmpver="${k}"><b>${nf(cuenta(k))}</b><small><span class="chip ${RP_RES[k][1]}">${RP_RES[k][0]}</span></small></button>`).join("");
   $("rpCmpVer").value = S.rpCmpVer;
   const v = l.filter(x => !S.rpCmpVer || x.res === S.rpCmpVer);
-  $("rpCmpTabla").innerHTML = `<thead><tr><th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">Reporte</th><th class="der">Su Excel</th><th class="der" title="Lo que se va a entregar: si son iguales, esa cantidad; si eligió, la elegida">Atender</th><th class="der">Diferencia</th><th class="der">Vendió</th><th class="der">Stock</th><th class="der" title="Stock de droguería del último kardex subido">Stock droguería</th><th>Resultado</th></tr></thead><tbody>` +
+  $("rpCmpTabla").innerHTML = `<thead><tr><th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">Reporte</th><th class="der">Su Excel</th><th class="der" title="Lo que se va a entregar: si son iguales, esa cantidad; si eligió, la elegida">Atender</th><th class="der">Diferencia</th><th class="der">Vendió</th><th class="der">Stock</th><th class="der" title="Stock de droguería del último kardex subido">Stock droguería</th><th>Notas y comentarios</th><th>Resultado</th></tr></thead><tbody>` +
     (v.length ? v.map(x => `<tr><td><code>${esc(x.c)}</code></td><td><b>${esc(x.n)}</b></td><td>${esc(x.l)}</td><td class="der"><b>${nf(x.qr)}</b></td><td class="der"><b>${x.qe == null ? "–" : nf(x.qe)}</b></td><td class="der rp-at">${rpAt(x) == null ? '<span class="muted">elegir →</span>' : `<b>${nf(rpAt(x))}</b>`}</td>
-      <td class="der ${(x.qe || 0) - x.qr ? "rojo-t" : ""}">${(x.qe || 0) - x.qr > 0 ? "+" : ""}${nf((x.qe || 0) - x.qr)}</td><td class="der">${n2(x.venta)}</td><td class="der">${n2(x.stock)}</td><td class="der">${sdTxt(x.c)}</td>
+      <td class="der ${(x.qe || 0) - x.qr ? "rojo-t" : ""}">${(x.qe || 0) - x.qr > 0 ? "+" : ""}${nf((x.qe || 0) - x.qr)}</td><td class="der">${n2(x.venta)}</td><td class="der">${n2(x.stock)}</td><td class="der">${sdTxt(x.c)}</td><td class="rp-notas">${rpNotas(sucCmp, x.c).map(n => `<div class="rp-nota ${n.k}">${esc(n.t)}${n.q ? ` <small>${esc(n.q)}</small>` : ""}</div>`).join("")}</td>
       <td>${x.res === "dif" ? `<div class="rp-eleg"><button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qr}" data-de="rep">Reporte: ${nf(x.qr)}</button><button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qe}" data-de="exc">Excel: ${nf(x.qe)}</button></div>`
         : `<span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.el ? `<br><small class="muted">elegido: <b>${nf(x.el.q)}</b> (${x.el.de === "rep" ? "del reporte" : "de su Excel"}) <button type="button" class="ab-x rp-desh" data-rpel="${esc(x.c)}" title="Deshacer">✕</button></small>` : ""}${x.por ? `<br><small class="muted">${esc(x.por)}</small>` : ""}`}</td></tr>`).join("")
-      : `<tr class="vacia"><td colspan="11">Nada en esta parte.</td></tr>`) + "</tbody>";
+      : `<tr class="vacia"><td colspan="12">Nada en esta parte.</td></tr>`) + "</tbody>";
 }
 $("rpCmp").addEventListener("change", async e => { const a = e.target.files[0]; e.target.value = ""; if (!a) return;
   try { S.rpCmp = await rpLeerMiExcel(a); S.rpCmpVer = ""; S.rpCmpSuc = ""; pintarRpCmp();
@@ -2706,7 +2729,7 @@ $("rpCmpRes").addEventListener("click", e => { const b = e.target.closest("[data
 $("rpCmpXls").addEventListener("click", () => {
   const l = rpComparar().filter(x => !S.rpCmpVer || x.res === S.rpCmpVer); if (!l.length) return toast("Suba primero su Excel.");
   const r2 = v => v == null ? "" : Math.round(v * 100) / 100;
-  excelDe(l.map(x => ({ "Código": x.c, Medicamento: x.n, Laboratorio: x.l, "Reporte (vendió − stock)": x.qr, "Su Excel": x.qe ?? "", Atender: rpAt(x) ?? "", Diferencia: (x.qe || 0) - x.qr, "Vendió": r2(x.venta), Stock: r2(x.stock), "Stock droguería": S.drogStk ? r2(+(S.drogStk[x.c]?.[0] || 0)) : "", Resultado: RP_RES[x.res][0] + (x.por ? ": " + x.por : "") })),
+  excelDe(l.map(x => ({ "Código": x.c, Medicamento: x.n, Laboratorio: x.l, "Reporte (vendió − stock)": x.qr, "Su Excel": x.qe ?? "", Atender: rpAt(x) ?? "", Diferencia: (x.qe || 0) - x.qr, "Vendió": r2(x.venta), Stock: r2(x.stock), "Stock droguería": S.drogStk ? r2(+(S.drogStk[x.c]?.[0] || 0)) : "", "Notas y comentarios": rpNotas((S.rp.sucs.find(y => y.archivo === S.rpCmpSuc) || {}).suc || "", x.c).map(n => n.t.replace(/^\S+ /, "") + (n.q ? " (" + n.q + ")" : "")).join(" · "), Resultado: RP_RES[x.res][0] + (x.por ? ": " + x.por : "") })),
     "Comparación", "comparacion_" + rpNomSuc(S.rp.sucs.find(x => x.archivo === S.rpCmpSuc) || {}).toLowerCase().replace(/\W+/g, "_"));
 });
 

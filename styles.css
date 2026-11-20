@@ -851,3 +851,4 @@ body.nav-abierta .top .nav button { text-align: left; justify-content: flex-star
 #vRep .tabla-wrap { max-height: 72vh; overflow: auto } #vRep .tabla thead th { position: sticky; top: 0; z-index: 2; background: #eef2f8; box-shadow: 0 1px 0 #dfe4ec }
 .rp-eleg { display: flex; gap: 6px; flex-wrap: nowrap } .rp-eleg .btn { white-space: nowrap } .rp-desh { position: static; display: inline; padding: 0 4px; font-size: 12px }
 #rpCmpTabla td.rp-at { background: #e9f6ec } #rpCmpTabla td.rp-at b { color: #1f7a2e; font-size: 15px }
+.rp-notas { min-width: 180px; max-width: 300px } .rp-nota { font-size: 12px; line-height: 1.3; padding: 2px 6px; margin: 2px 0; border-radius: 6px; background: #fff1d6; color: #8a5a00; white-space: normal } .rp-nota small { font-size: 9px; opacity: .7 } .rp-nota.resp { background: #e8f0fb; color: #2a5bb5 } .rp-nota.bat, .rp-nota.bloq { background: #fde4e1; color: #b3261e } .rp-nota.kr { background: #ede7f6; color: #4a2c82 }
