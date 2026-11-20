@@ -409,17 +409,10 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
       <div class="card rp-sube">
         <label class="rp-arch"><b>Reportes de sucursales</b><small class="muted">(uno o varios)</small><input type="file" id="rpSucs" accept=".xls,.xlsx" multiple><span id="rpSucsTxt" class="muted">Sin archivos</span></label>
         <div class="filtros"><button class="btn sm" type="button" id="rpLimpiar">Quitar archivos</button></div>
-        <p class="muted rp-regla">Se entrega lo que vendió en los días del reporte menos lo que tiene ahora (tiene 4 y vendió 10 → se entregan 6). Solo se usa el reporte que usted sube.</p>
+        <p class="muted rp-regla">Se entrega lo que vendió en los días del reporte menos lo que tiene ahora (tiene 4 y vendió 10 → se entregan 6). Solo se usa el reporte que usted sube. Los reportes y su Excel quedan guardados: no hace falta volver a subirlos (al subir otro de la misma sucursal, se reemplaza).</p>
       </div>
       <div class="msg" id="rpMsg" hidden></div>
       <div class="ent-lista" id="rpRes"></div>
-      <section class="card lista" id="rpLista" hidden>
-        <div class="lh"><h2 id="rpTit">Lo que se debe atender</h2>
-          <div class="filtros"><label class="filtro">Sucursal <select id="rpSuc"></select></label><label class="filtro">Buscar <input id="rpQ" placeholder="Producto, código, laboratorio…"></label>
-            <label class="check"><input type="checkbox" id="rpDet"> Detalle</label>
-            <button class="btn" type="button" id="rpXls"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button></div></div>
-        <div class="tabla-wrap"><table class="tabla" id="rpTabla"></table></div>
-      </section>
       <section class="card lista" id="rpCmpBox" hidden>
         <div class="lh"><h2>Comparar con mi Excel</h2>
           <div class="filtros"><label class="filtro">Su Excel <input type="file" id="rpCmp" accept=".xlsx,.xls"></label>
@@ -429,6 +422,13 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
         <p class="muted" id="rpCmpTxt">Suba su Excel (con las columnas Código y Se atenderá o Cantidad) para ver qué coincide, qué cantidades son distintas, qué falta en su Excel y qué tiene su Excel que no sale del reporte.</p>
         <div class="ent-lista" id="rpCmpRes"></div>
         <div class="tabla-wrap"><table class="tabla" id="rpCmpTabla"></table></div>
+      </section>
+      <section class="card lista" id="rpLista" hidden>
+        <div class="lh"><h2 id="rpTit">Lo que se debe atender</h2>
+          <div class="filtros"><label class="filtro">Sucursal <select id="rpSuc"></select></label><label class="filtro">Buscar <input id="rpQ" placeholder="Producto, código, laboratorio…"></label>
+            <label class="check"><input type="checkbox" id="rpDet"> Detalle</label>
+            <button class="btn" type="button" id="rpXls"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button></div></div>
+        <div class="tabla-wrap"><table class="tabla" id="rpTabla"></table></div>
       </section>
     </div>
   </section>
@@ -761,6 +761,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 
 <div class="toast" id="toast" hidden></div>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="app.js?v=202611200700"></script>
+<script type="module" src="app.js?v=202611200800"></script>
 </body>
 </html>

@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611200700";
+const VERSION_PROY = "202611200800";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -425,6 +425,7 @@ function render() {
   else if (S.vista === "vCompL") { cargarCompras(); pintarCompras(); }   // escucharFalt vuelve a conectar si se había cortado
   else if (S.vista === "vNue") { escucharNue(); marcarNueVisto(); pintarNue(); }
   else if (S.vista === "vEnt") { escucharEnt(); pintarEnt(); }
+  else if (S.vista === "vRep") { escucharRp(); pintarRep(); }
  
   else if (S.vista === "vFlujo") pintarFlujo();
   else if (S.vista === "vFlued") abrirFlued();
@@ -2561,7 +2562,7 @@ function rpCalcular() {
 const rpNomSuc = r => r.esDrog ? r.est : r.suc ? corto(r.suc) : r.est || r.archivo;
 function pintarRep() {
   const R = S.rp, fD = d => d ? d.toLocaleDateString("es-PE") : "?";
-  $("rpSucsTxt").innerHTML = R.sucs.length ? R.sucs.map(r => `<b>${esc(rpNomSuc(r))}</b> · ${fD(r.desde)} al ${fD(r.hasta)} (${r.dias || "?"} días) · ${nf(r.items.length)} productos`).join("<br>") : "Sin archivos";
+  $("rpSucsTxt").innerHTML = R.sucs.length ? R.sucs.map(r => `<b>${esc(rpNomSuc(r))}</b> · ${fD(r.desde)} al ${fD(r.hasta)} (${r.dias || "?"} días) · ${nf(r.items.length)} productos${r.subido ? ` <small class="muted">· guardado el ${new Date(r.subido).toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}${r.porNombre ? " por " + esc(r.porNombre) : ""}</small>` : ""}`).join("<br>") : "Sin archivos";
   const avisos = [];
   for (const r of R.sucs) if (r.sinCod.length) avisos.push(`${rpNomSuc(r)}: ${r.sinCod.length} producto${r.sinCod.length === 1 ? "" : "s"} del reporte sin código: ${r.sinCod.map(x => x.n).join(", ")}.`);
   msg("rpMsg", avisos.join(" "), false);
@@ -2584,16 +2585,40 @@ function rpFilas() {
   return (R.res || []).filter(p => (!R.suc || p.r.archivo === R.suc) && (!q || norm(`${p.it.c} ${p.it.n} ${p.it.lab}`).includes(q)))
     .sort((a, b) => rpNomSuc(a.r).localeCompare(rpNomSuc(b.r)) || a.it.lab.localeCompare(b.it.lab) || a.it.n.localeCompare(b.it.n));
 }
+// GUARDADO: cada reporte de sucursal (y su Excel para comparar) se guarda en proy_config/rp_… y se lee en vivo
+const rpISO = d => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : "";
+const rpId = r => "rp_" + norm(r.suc || r.est || r.archivo).replace(/[^A-Z0-9]+/g, "_");
+const rpEmpacar = r => ({ tipo: "rp", archivo: r.archivo, est: r.est, suc: r.suc, desde: rpISO(r.desde), hasta: rpISO(r.hasta), dias: r.dias || 0,
+  items: JSON.stringify(r.items.map(it => [it.c, it.n, it.lab, it.sig, it.se, it.sf, it.ce, it.cf, it.pvf, it.par])), sinCod: JSON.stringify(r.sinCod.map(it => it.n)),
+  subido: new Date().toISOString(), porNombre: S.perfil?.nombre || S.perfil?.usuario || "" });
+const rpDesempacar = d => { const f = t => t ? new Date(t + "T12:00:00") : null;
+  return { archivo: d.archivo, est: d.est, suc: d.suc, desde: f(d.desde), hasta: f(d.hasta), dias: d.dias, subido: d.subido, porNombre: d.porNombre,
+    items: JSON.parse(d.items || "[]").map(([c, n, lab, sig, se, sf, ce, cf, pvf, par]) => ({ c, n, lab, sig, se, sf, ce, cf, pvf, par })), sinCod: JSON.parse(d.sinCod || "[]").map(n => ({ n })) }; };
+function escucharRp() {
+  if (S.rpSub) return; S.rpSub = true;
+  S.subs.push(onSnapshot(query(collection(db, "proy_config"), where("tipo", "in", ["rp", "rpcmp"])), sn => {
+    S.rp.sucs = sn.docs.filter(d => d.data().tipo === "rp").map(d => ({ ...rpDesempacar(d.data()), id: d.id })).sort((a, b) => rpNomSuc(a).localeCompare(rpNomSuc(b)));
+    const c = sn.docs.find(d => d.data().tipo === "rpcmp")?.data();
+    S.rpCmp = c ? { archivo: c.archivo, suc: c.suc, items: new Map(JSON.parse(c.items || "[]").map(([cod, n, l, q]) => [cod, { c: cod, n, l, q }])) } : null;
+    if (S.vista === "vRep") pintarRep();
+  }, e => { S.rpSub = false; msg("rpMsg", "No se pudieron leer los reportes guardados: " + textoError(e), true); }));
+  S.subs.push(() => { S.rpSub = false; });
+}
 async function rpCargar(files) {
   msg("rpMsg", "Leyendo…");
   for (const a of files) {
-    try { const r = await rpLeerArchivo(a); S.rp.sucs = S.rp.sucs.filter(x => x.archivo !== r.archivo && !(r.suc && x.suc === r.suc)); S.rp.sucs.push(r); }
-    catch (e) { msg("rpMsg", `«${a.name}»: ${e.message || e}`, true); return; }
+    try { const r = await rpLeerArchivo(a);
+      S.rp.sucs = S.rp.sucs.filter(x => x.archivo !== r.archivo && !(r.suc && x.suc === r.suc)); S.rp.sucs.push(r);
+      if (!S.prev) await setDoc(doc(db, "proy_config", rpId(r)), rpEmpacar(r));   // se guarda (reemplaza al anterior de esa sucursal)
+    } catch (e) { msg("rpMsg", `«${a.name}»: ${e.message || e}`, true); return; }
   }
-  pintarRep();
+  pintarRep(); toast("Reporte guardado");
 }
 $("rpSucs").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (f.length) rpCargar(f); });
-$("rpLimpiar").addEventListener("click", () => { S.rp = { sucs: [], suc: "", q: "", det: false }; pintarRep(); });
+$("rpLimpiar").addEventListener("click", async () => {
+  if (!S.rp.sucs.length && !S.rpCmp) return; if (!confirm("¿Quitar los reportes guardados y su Excel de comparación?")) return;
+  try { for (const r of S.rp.sucs) await deleteDoc(doc(db, "proy_config", r.id || rpId(r))); await deleteDoc(doc(db, "proy_config", "rp_mi_excel")); } catch (x) { avisar(x); }
+  S.rp = { sucs: [], suc: "", q: "", det: false }; S.rpCmp = null; pintarRep(); });
 $("rpSuc").addEventListener("change", e => { S.rp.suc = e.target.value; pintarRep(); });
 $("rpQ").addEventListener("input", e => { S.rp.q = e.target.value; pintarRep(); });
 $("rpDet").addEventListener("change", e => { S.rp.det = e.target.checked; pintarRep(); });
@@ -2651,7 +2676,10 @@ function pintarRpCmp() {
       : `<tr class="vacia"><td colspan="9">Nada en esta parte.</td></tr>`) + "</tbody>";
 }
 $("rpCmp").addEventListener("change", async e => { const a = e.target.files[0]; e.target.value = ""; if (!a) return;
-  try { S.rpCmp = await rpLeerMiExcel(a); S.rpCmpVer = ""; S.rpCmpSuc = ""; pintarRpCmp(); } catch (x) { toast(`«${a.name}»: ${x.message || x}`); } });
+  try { S.rpCmp = await rpLeerMiExcel(a); S.rpCmpVer = ""; S.rpCmpSuc = ""; pintarRpCmp();
+    if (!S.prev) await setDoc(doc(db, "proy_config", "rp_mi_excel"), { tipo: "rpcmp", archivo: S.rpCmp.archivo, suc: S.rpCmp.suc || "", items: JSON.stringify([...S.rpCmp.items.values()].map(x => [x.c, x.n, x.l, x.q])), subido: new Date().toISOString() });
+    toast("Su Excel quedó guardado para comparar");
+  } catch (x) { toast(`«${a.name}»: ${x.message || x}`); } });
 $("rpCmpSuc").addEventListener("change", e => { S.rpCmpSuc = e.target.value; pintarRpCmp(); });
 $("rpCmpVer").addEventListener("change", e => { S.rpCmpVer = e.target.value; pintarRpCmp(); });
 $("rpCmpRes").addEventListener("click", e => { const b = e.target.closest("[data-rpcmpver]"); if (!b) return; S.rpCmpVer = S.rpCmpVer === b.dataset.rpcmpver ? "" : b.dataset.rpcmpver; pintarRpCmp(); });
