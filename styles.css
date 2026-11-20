@@ -848,3 +848,4 @@ body.nav-abierta .top .nav button { text-align: left; justify-content: flex-star
 #vRep .check { display: flex; align-items: center; gap: 6px; align-self: flex-end; padding-bottom: 10px } #rpDet { width: 18px; height: 18px; min-height: 0; margin: 0; accent-color: var(--brand) }
 .rp-opc summary { cursor: pointer; font-size: 13px; color: var(--muted, #6b7280) } .rp-opc[open] summary { margin-bottom: 8px }
 #rpCmpTabla .chip { white-space: nowrap; font-size: 11.5px }
+#vRep .tabla-wrap { max-height: 72vh; overflow: auto } #vRep .tabla thead th { position: sticky; top: 0; z-index: 2; background: #eef2f8; box-shadow: 0 1px 0 #dfe4ec }
