@@ -403,22 +403,19 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
   <!-- ============ REPOSICIÓN POR REPORTES: reporte «Reposición Ventas» de droguería y de cada sucursal → qué atender ============ -->
   <section id="vRep" hidden>
     <div class="wrap ancho cabeza">
-      <div><h1>Reposición por reportes</h1><p class="muted">Suba el reporte «Reposición Ventas» de droguería y el de cada sucursal (los días que usted filtró). Con la venta de esos días, el stock de la sucursal y el de droguería, sale lo que se le debe atender a cada una.</p></div>
+      <div><h1>Reposición por reportes</h1><p class="muted">Suba el reporte «Reposición Ventas» de cada sucursal (los días que usted filtró): sale lo que se le va a entregar.</p></div>
     </div>
     <div class="wrap ancho cuerpo">
       <div class="card rp-sube">
         <label class="rp-arch"><b>Reportes de sucursales</b><small class="muted">(uno o varios)</small><input type="file" id="rpSucs" accept=".xls,.xlsx" multiple><span id="rpSucsTxt" class="muted">Sin archivos</span></label>
-        <details class="rp-opc"><summary>Reporte de droguería (opcional)</summary>
-          <label class="rp-arch"><small class="muted">No hace falta: el stock de droguería se toma del último kardex del sistema. Súbalo solo si quiere usar un stock más reciente.</small><input type="file" id="rpDrog" accept=".xls,.xlsx"><span id="rpDrogTxt" class="muted">Sin archivo</span></label></details>
         <div class="filtros"><button class="btn sm" type="button" id="rpLimpiar">Quitar archivos</button></div>
-        <p class="muted rp-regla">Se entrega lo que vendió en los días del reporte menos lo que tiene ahora (tiene 4 y vendió 10 → se entregan 6), sin pasar el stock de droguería del último kardex (si no alcanza para todas, se reparte en proporción).</p>
+        <p class="muted rp-regla">Se entrega lo que vendió en los días del reporte menos lo que tiene ahora (tiene 4 y vendió 10 → se entregan 6). Solo se usa el reporte que usted sube.</p>
       </div>
       <div class="msg" id="rpMsg" hidden></div>
       <div class="ent-lista" id="rpRes"></div>
       <section class="card lista" id="rpLista" hidden>
         <div class="lh"><h2 id="rpTit">Lo que se debe atender</h2>
           <div class="filtros"><label class="filtro">Sucursal <select id="rpSuc"></select></label><label class="filtro">Buscar <input id="rpQ" placeholder="Producto, código, laboratorio…"></label>
-            <label class="filtro">Ver <select id="rpVer"><option value="at">Lo que se atiende</option><option value="sd">Sin stock en droguería</option></select></label>
             <label class="check"><input type="checkbox" id="rpDet"> Detalle</label>
             <button class="btn" type="button" id="rpXls"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button></div></div>
         <div class="tabla-wrap"><table class="tabla" id="rpTabla"></table></div>
@@ -754,6 +751,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 
 <div class="toast" id="toast" hidden></div>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="app.js?v=202611200300"></script>
+<script type="module" src="app.js?v=202611200400"></script>
 </body>
 </html>

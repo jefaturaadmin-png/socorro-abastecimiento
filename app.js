@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611200300";
+const VERSION_PROY = "202611200400";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -425,7 +425,7 @@ function render() {
   else if (S.vista === "vCompL") { cargarCompras(); pintarCompras(); }   // escucharFalt vuelve a conectar si se había cortado
   else if (S.vista === "vNue") { escucharNue(); marcarNueVisto(); pintarNue(); }
   else if (S.vista === "vEnt") { escucharEnt(); pintarEnt(); }
-  else if (S.vista === "vRep") pintarRep();
+ 
   else if (S.vista === "vFlujo") pintarFlujo();
   else if (S.vista === "vFlued") abrirFlued();
   else if (S.vista === "vRutas") abrirRutas();
@@ -2043,7 +2043,7 @@ async function cargarDrogStk() {
   // stock y venta diaria de cada sucursal (red/stk_SUCURSAL): para ofrecer de dónde sacarlo cuando droguería no tiene
   S.sucStk = new Map();
   await Promise.all(FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(async f => { try { const d = await getDoc(doc(db, "red", "stk_" + f)); if (d.exists()) S.sucStk.set(f, d.data().p || {}); } catch {} }));
-  S.drogStkCargando = false; if (S.vista === "vPed") pintarPedidos(); else if (S.vista === "vRep") pintarRep();
+  S.drogStkCargando = false; if (S.vista === "vPed") pintarPedidos();
 }
 const puedeMarcarUrg = () => esAdmin() || ["sucursales", "kardex"].some(v => (S.perfil?.vistas || []).includes(v));
 const ESTADO_U = { "": ["🔴 Pedido recién", "rojo"], viendo: ["🟠 Droguería lo está viendo", "amb"], atendido: ["🟢 Atendido", "verde"] };
@@ -2504,7 +2504,7 @@ $("entDlg").addEventListener("click", async ev => {
    Lee el reporte «Reposición Ventas» del sistema (.XLS): Producto, C-Lab, Stk-E, Stk-F, StkMin, Cant-E, Cant-F, P.V.F, Parcial,
    C-Alterno (código), agrupado por «Laboratorio :». El de droguería da su stock (y el StkMin = stock de todas las sucursales);
    el de cada sucursal, su venta en los días filtrados y su stock. Se calcula lo que se le debe atender a cada sucursal. */
-S.rp = { drog: null, sucs: [], suc: "", q: "", ver: "at", det: false };
+S.rp = { sucs: [], suc: "", q: "", det: false };
 const rpNum = v => { const x = String(v ?? "").trim().replace(/,/g, ""); return x === "" ? 0 : +x || 0; };
 const rpDia = t => { const m = String(t).match(/(\d{2})-(\d{2})-(\d{4})/); return m ? new Date(+m[3], m[2] - 1, +m[1]) : null; };
 function leerReporte(filas, archivo) {
@@ -2545,88 +2545,65 @@ function rpFracc(reps) {
   return (c, n) => fr.get(c) || +(String(n).match(/X\s*(\d+)\s*(?:TAB|COM|CAP|CAPS|GRAG|AMP|SOB|SCH|UND|UDS|CPR|COMP|TB|TABS|SOBRES|PERLAS|OVULOS|PARCHES)/i)?.[1] || 0) || null;
 }
 function rpCalcular() {
-  // CÁLCULO SIMPLE: lo que vendió en los días del reporte − lo que tiene ahora = lo que se le entrega (tiene 4 y vendió 10 → 6)
-  const R = S.rp, frDe = rpFracc([R.drog, ...R.sucs].filter(Boolean));
-  const drog = new Map((R.drog?.items || []).map(it => [it.c, it]));
-  const pedidos = [];
+  // SOLO con el reporte de la sucursal: lo que vendió en los días del reporte − lo que tiene ahora = lo que se le entrega
+  // (tiene 4 y vendió 10 → 6). No se usa ninguna otra información.
+  const R = S.rp, pedidos = [];
   for (const r of R.sucs) {
-    const dias = r.dias || 0;
+    const frDe = rpFracc([r]), dias = r.dias || 0;
     for (const it of r.items) {
       const fr = frDe(it.c, it.n), venta = it.ce + (fr ? it.cf / fr : 0), stock = it.se + (fr ? it.sf / fr : 0);
       const q = redPed(venta - stock);
-      if (q > 0) pedidos.push({ r, it, q, venta, stock, fr, dias });
+      if (q > 0) pedidos.push({ r, it, q, at: q, venta, stock, fr, dias });
     }
-  }
-  // stock de droguería: si no alcanza para todas, se reparte en proporción a lo que necesita cada una
-  const porCod = new Map(); for (const p of pedidos) (porCod.get(p.it.c) ?? porCod.set(p.it.c, []).get(p.it.c)).push(p);
-  for (const [c, l] of porCod) {
-    // stock de droguería: el del reporte si se subió; si no, el del último kardex del sistema
-    const d = drog.get(c), sdv = R.drog ? (d ? d.se : 0) : S.drogStk ? +(S.drogStk[c]?.[0] || 0) : null;
-    const disp = sdv == null ? Infinity : Math.max(0, Math.floor(sdv)), tot = l.reduce((a, p) => a + p.q, 0);
-    l.forEach(p => { p.sd = sdv; });
-    if (tot <= disp) { l.forEach(p => p.at = p.q); continue; }
-    l.forEach(p => { p.at = Math.floor(disp * p.q / tot); p.resto = disp * p.q / tot - p.at; });
-    let sobra = disp - l.reduce((a, p) => a + p.at, 0); [...l].sort((a, b) => b.resto - a.resto).forEach(p => { if (sobra > 0) { p.at++; sobra--; } });
   }
   R.res = pedidos;
 }
 const rpNomSuc = r => r.esDrog ? r.est : r.suc ? corto(r.suc) : r.est || r.archivo;
 function pintarRep() {
-  const R = S.rp;
-  const fD = d => d ? d.toLocaleDateString("es-PE") : "?";
-  $("rpDrogTxt").innerHTML = R.drog ? `<b>${esc(R.drog.est)}</b> · ${fD(R.drog.desde)} al ${fD(R.drog.hasta)} · ${nf(R.drog.items.length)} productos` : "Sin archivo";
+  const R = S.rp, fD = d => d ? d.toLocaleDateString("es-PE") : "?";
   $("rpSucsTxt").innerHTML = R.sucs.length ? R.sucs.map(r => `<b>${esc(rpNomSuc(r))}</b> · ${fD(r.desde)} al ${fD(r.hasta)} (${r.dias || "?"} días) · ${nf(r.items.length)} productos`).join("<br>") : "Sin archivos";
   const avisos = [];
-  if (!S.drogStk) cargarDrogStk().then(() => { if (S.vista === "vRep") pintarRep(); });
-  if (R.sucs.length && !R.drog && !S.drogStk) avisos.push("Leyendo el stock de droguería del sistema…");
-  for (const r of [R.drog, ...R.sucs].filter(Boolean)) if (r.sinCod.length) avisos.push(`${rpNomSuc(r)}: ${r.sinCod.length} producto${r.sinCod.length === 1 ? "" : "s"} sin código en el reporte (no se pueden cruzar): ${r.sinCod.map(x => x.n).join(", ")}.`);
-  for (const r of R.sucs) if (!r.suc) avisos.push(`No reconocí la sucursal de «${r.archivo}» (dice «${r.est}»).`);
+  for (const r of R.sucs) if (r.sinCod.length) avisos.push(`${rpNomSuc(r)}: ${r.sinCod.length} producto${r.sinCod.length === 1 ? "" : "s"} del reporte sin código: ${r.sinCod.map(x => x.n).join(", ")}.`);
   msg("rpMsg", avisos.join(" "), false);
   if (!R.sucs.length) { $("rpRes").innerHTML = ""; $("rpLista").hidden = true; return; }
   rpCalcular();
-  $("rpRes").innerHTML = R.sucs.map(r => { const l = R.res.filter(p => p.r === r), at = l.filter(p => p.at > 0), sd = l.filter(p => !(p.at > 0));
+  $("rpRes").innerHTML = R.sucs.map(r => { const l = R.res.filter(p => p.r === r);
     return `<button type="button" class="card ent-card${R.suc === r.archivo ? " act" : ""}" data-rpsuc="${esc(r.archivo)}"><b>${esc(rpNomSuc(r))}</b>
-      <small>Atender <b>${nf(at.length)}</b> productos · ${nf(at.reduce((a, p) => a + p.at, 0))} unidades${sd.length ? ` · <span class="rojo-t">${nf(sd.length)} sin stock en droguería</span>` : ""}</small></button>`; }).join("");
+      <small>Entregar <b>${nf(l.length)}</b> productos · ${nf(l.reduce((a, p) => a + p.q, 0))} unidades</small></button>`; }).join("");
   $("rpLista").hidden = false;
   $("rpSuc").innerHTML = `<option value="">Todas</option>` + R.sucs.map(r => `<option value="${esc(r.archivo)}">${esc(rpNomSuc(r))}</option>`).join(""); $("rpSuc").value = R.suc;
-  const filas = rpFilas(), uno = R.suc || R.sucs.length === 1, det = R.det;
-  $("rpTit").textContent = (R.ver === "sd" ? "Sin stock en droguería" : "Lo que se debe atender") + ` · ${nf(filas.length)} productos`;
-  const n2 = v => nf(Math.round(v * 100) / 100);
-  $("rpTabla").innerHTML = `<thead><tr>${uno ? "" : "<th>Sucursal</th>"}<th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">${R.ver === "sd" ? "Necesita pedir" : "Cantidad"}</th>${det ? `<th class="der">Vendió</th><th class="der">Stock suc.</th><th class="der">Stock droguería</th>` : ""}</tr></thead><tbody>` +
-    (filas.length ? filas.slice(0, 1500).map(p => `<tr>${uno ? "" : `<td><b>${esc(rpNomSuc(p.r))}</b></td>`}<td><code>${esc(p.it.c)}</code></td><td><b>${esc(p.it.n)}</b></td><td>${esc(p.it.lab)}</td><td class="der"><b>${nf(R.ver === "sd" ? p.q : p.at)}</b>${R.ver !== "sd" && p.at < p.q ? ` <small class="muted">de ${nf(p.q)}</small>` : ""}</td>
-      ${det ? `<td class="der">${n2(p.venta)} <small class="muted">${p.dias} d</small></td><td class="der">${n2(p.stock)}</td><td class="der">${p.sd == null ? "–" : n2(p.sd)}</td>` : ""}</tr>`).join("")
-      : `<tr class="vacia"><td colspan="10">Nada con estos filtros.</td></tr>`) + "</tbody>";
+  const filas = rpFilas(), uno = R.suc || R.sucs.length === 1, det = R.det, n2 = v => nf(Math.round(v * 100) / 100);
+  $("rpTit").textContent = `Lo que se va a entregar · ${nf(filas.length)} productos`;
+  $("rpTabla").innerHTML = `<thead><tr>${uno ? "" : "<th>Sucursal</th>"}<th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">Cantidad</th>${det ? `<th class="der">Vendió</th><th class="der">Stock</th>` : ""}</tr></thead><tbody>` +
+    (filas.length ? filas.slice(0, 2000).map(p => `<tr>${uno ? "" : `<td><b>${esc(rpNomSuc(p.r))}</b></td>`}<td><code>${esc(p.it.c)}</code></td><td><b>${esc(p.it.n)}</b></td><td>${esc(p.it.lab)}</td><td class="der"><b>${nf(p.q)}</b></td>
+      ${det ? `<td class="der">${n2(p.venta)}</td><td class="der">${n2(p.stock)}</td>` : ""}</tr>`).join("")
+      : `<tr class="vacia"><td colspan="7">Nada con estos filtros.</td></tr>`) + "</tbody>";
 }
 function rpFilas() {
   const R = S.rp, q = norm(R.q || "").trim();
-  return (R.res || []).filter(p => (!R.suc || p.r.archivo === R.suc) && (R.ver === "sd" ? !(p.at > 0) : p.at > 0) && (!q || norm(`${p.it.c} ${p.it.n} ${p.it.lab}`).includes(q)))
+  return (R.res || []).filter(p => (!R.suc || p.r.archivo === R.suc) && (!q || norm(`${p.it.c} ${p.it.n} ${p.it.lab}`).includes(q)))
     .sort((a, b) => rpNomSuc(a.r).localeCompare(rpNomSuc(b.r)) || a.it.lab.localeCompare(b.it.lab) || a.it.n.localeCompare(b.it.n));
 }
-async function rpCargar(files, drog) {
+async function rpCargar(files) {
   msg("rpMsg", "Leyendo…");
   for (const a of files) {
-    try { const r = await rpLeerArchivo(a);
-      if (drog || r.esDrog) { S.rp.drog = r; if (!drog) toast(`«${a.name}» es de droguería: se usó como reporte de droguería`); }
-      else { S.rp.sucs = S.rp.sucs.filter(x => x.archivo !== r.archivo && !(r.suc && x.suc === r.suc)); S.rp.sucs.push(r); }
-    } catch (e) { msg("rpMsg", `«${a.name}»: ${e.message || e}`, true); return; }
+    try { const r = await rpLeerArchivo(a); S.rp.sucs = S.rp.sucs.filter(x => x.archivo !== r.archivo && !(r.suc && x.suc === r.suc)); S.rp.sucs.push(r); }
+    catch (e) { msg("rpMsg", `«${a.name}»: ${e.message || e}`, true); return; }
   }
   pintarRep();
 }
-$("rpDrog").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (f.length) rpCargar(f, true); });
-$("rpSucs").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (f.length) rpCargar(f, false); });
-$("rpLimpiar").addEventListener("click", () => { S.rp = { drog: null, sucs: [], suc: "", q: "", ver: "at", det: false }; pintarRep(); });
+$("rpSucs").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (f.length) rpCargar(f); });
+$("rpLimpiar").addEventListener("click", () => { S.rp = { sucs: [], suc: "", q: "", det: false }; pintarRep(); });
 $("rpSuc").addEventListener("change", e => { S.rp.suc = e.target.value; pintarRep(); });
 $("rpQ").addEventListener("input", e => { S.rp.q = e.target.value; pintarRep(); });
-$("rpVer").addEventListener("change", e => { S.rp.ver = e.target.value; pintarRep(); });
 $("rpDet").addEventListener("change", e => { S.rp.det = e.target.checked; pintarRep(); });
 $("rpRes").addEventListener("click", e => { const b = e.target.closest("[data-rpsuc]"); if (!b) return; S.rp.suc = S.rp.suc === b.dataset.rpsuc ? "" : b.dataset.rpsuc; pintarRep(); });
 $("rpXls").addEventListener("click", () => {
   const R = S.rp, filas = rpFilas(); if (!filas.length) return toast("No hay nada para descargar.");
-  const uno = R.suc || R.sucs.length === 1, sd = R.ver === "sd";
-  const datos = filas.map(p => ({ ...(uno ? {} : { Sucursal: rpNomSuc(p.r) }), "Código": p.it.c, Medicamento: p.it.n, Laboratorio: p.it.lab, [sd ? "Necesita pedir" : "Cantidad"]: sd ? p.q : p.at,
-    ...(R.det ? { [`Vendió (${p.dias} días)`]: Math.round(p.venta * 100) / 100, "Stock sucursal": Math.round(p.stock * 100) / 100, "Stock droguería": p.sd == null ? "" : Math.round(p.sd * 100) / 100 } : {}) }));
-  const nom = (uno ? rpNomSuc(filas[0].r) : "sucursales").toLowerCase().replace(/\W+/g, "_");
-  excelDe(datos, sd ? "Sin stock droguería" : "Atender", `${sd ? "sin_stock_drogueria" : "atender"}_${nom}`);
+  const uno = R.suc || R.sucs.length === 1;
+  const datos = filas.map(p => ({ ...(uno ? {} : { Sucursal: rpNomSuc(p.r) }), "Código": p.it.c, Medicamento: p.it.n, Laboratorio: p.it.lab, Cantidad: p.q,
+    ...(R.det ? { [`Vendió (${p.dias} días)`]: Math.round(p.venta * 100) / 100, Stock: Math.round(p.stock * 100) / 100 } : {}) }));
+  excelDe(datos, "Entregar", `entregar_${(uno ? rpNomSuc(filas[0].r) : "sucursales").toLowerCase().replace(/\W+/g, "_")}`);
 });
 
 /* ===================== vista previa: el administrador ve la página como la ve un usuario ===================== */
