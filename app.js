@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611190600";
+const VERSION_PROY = "202611200100";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -92,6 +92,7 @@ const VISTAS = [
   { id: "nuevos", nombre: "Productos que buscan los clientes", vista: "vNue", c: "suc", ic: "i-mas", desc: "Registrar con foto lo que piden y no tenemos; lo ven todas las sucursales", ayuda: "ve lo que reportan todas las sucursales" },
   { id: "flujo", nombre: "Flujograma de abastecimiento", vista: "vFlujo", c: "mapa", ic: "i-lista", desc: "Cómo se trabaja: de la compra al proveedor hasta la atención a sucursales", todos: true },
   { id: "rutas", nombre: "Rutas de reparto", vista: "vRutas", c: "mapa", ic: "i-grafico", desc: "La ruta más corta para repartir a un grupo de sucursales, en el mapa y en Google Maps" },
+  { id: "reporep", nombre: "Reposición por reportes", vista: "vRep", c: "suc", ic: "i-lista", desc: "Subir el reporte de ventas de droguería y de cada sucursal y sacar lo que se debe atender (en pantalla y en Excel)" },
   { id: "flued", nombre: "Editor de flujogramas", vista: "vFlued", c: "est", ic: "i-grafico", desc: "Crear y editar flujogramas con figuras, flechas, textos y tiempos" }];
 // v.todos: módulo abierto a todos los usuarios (no hace falta activarlo en Usuarios)
 // «Módulos por sucursal» se abre en un módulo por cada sucursal (ordenadas por prioridad de ventas, la que más vende primero)
@@ -390,7 +391,7 @@ function pintarNav() {
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vCompL", "vNue", "vEnt", "vFlujo", "vFlued", "vRutas", "vDrog", "vSucx", "vInd", "vKar", "vFicha"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vCompL", "vNue", "vEnt", "vFlujo", "vFlued", "vRutas", "vDrog", "vSucx", "vInd", "vKar", "vFicha", "vRep"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
@@ -424,6 +425,7 @@ function render() {
   else if (S.vista === "vCompL") { cargarCompras(); pintarCompras(); }   // escucharFalt vuelve a conectar si se había cortado
   else if (S.vista === "vNue") { escucharNue(); marcarNueVisto(); pintarNue(); }
   else if (S.vista === "vEnt") { escucharEnt(); pintarEnt(); }
+  else if (S.vista === "vRep") pintarRep();
   else if (S.vista === "vFlujo") pintarFlujo();
   else if (S.vista === "vFlued") abrirFlued();
   else if (S.vista === "vRutas") abrirRutas();
@@ -2496,6 +2498,137 @@ $("entDlg").addEventListener("click", async ev => {
       await setDoc(doc(db, "entregas", id), { suc: x.suc, fecha: x.fecha, items: x.items, archivo: x.archivo, porNombre: S.perfil.nombre || S.perfil.usuario, creado: new Date().toISOString() }); }
     $("entDlg").close(); toast(`Publicadas ${ok.length} lista${ok.length === 1 ? "" : "s"} a las sucursales`);
   } catch (x) { msg("entDlgMsg", textoError(x), true); }
+});
+
+/* ===================== REPOSICIÓN POR REPORTES =====================
+   Lee el reporte «Reposición Ventas» del sistema (.XLS): Producto, C-Lab, Stk-E, Stk-F, StkMin, Cant-E, Cant-F, P.V.F, Parcial,
+   C-Alterno (código), agrupado por «Laboratorio :». El de droguería da su stock (y el StkMin = stock de todas las sucursales);
+   el de cada sucursal, su venta en los días filtrados y su stock. Se calcula lo que se le debe atender a cada sucursal. */
+S.rp = { drog: null, sucs: [], suc: "", q: "", ver: "at", det: false };
+try { const g = JSON.parse(localStorage.getItem("rp_dias") || "null"); if (g) { S.rpC = g.C; S.rpSg = g.Sg; } } catch {}
+const rpNum = v => { const x = String(v ?? "").trim().replace(/,/g, ""); return x === "" ? 0 : +x || 0; };
+const rpDia = t => { const m = String(t).match(/(\d{2})-(\d{2})-(\d{4})/); return m ? new Date(+m[3], m[2] - 1, +m[1]) : null; };
+function leerReporte(filas, archivo) {
+  const txt = v => String(v ?? "").trim();
+  const iCab = filas.findIndex(f => f.some(v => txt(v) === "Producto") && f.some(v => /C-Alterno/i.test(txt(v))));
+  if (iCab < 0) throw new Error("no es un reporte «Reposición Ventas» (no tiene las columnas Producto … C-Alterno)");
+  const cab = filas[iCab].map(txt), col = n => cab.findIndex(h => h.toUpperCase() === n.toUpperCase());
+  const C = { lab: col("C-Lab"), se: col("Stk-E"), sf: col("Stk-F"), smin: col("StkMin"), ce: col("Cant-E"), cf: col("Cant-F"), pvf: col("P.V.F"), par: col("Parcial"), cod: col("C-Alterno") };
+  // el valor puede caer en la celda de al lado (celdas combinadas del reporte)
+  const val = (f, j) => j < 0 ? "" : txt(f[j]) !== "" ? txt(f[j]) : txt(f[j + 1]) !== "" && !cab[j + 1] ? txt(f[j + 1]) : txt(f[j - 1]) !== "" && !cab[j - 1] ? txt(f[j - 1]) : "";
+  let est = "", desde = null, hasta = null, lab = "";
+  for (const f of filas.slice(0, iCab)) for (const v of f) { const t = txt(v);
+    if (/^Establecimiento\s*:/i.test(t)) est = t.replace(/^Establecimiento\s*:\s*/i, "");
+    const m = t.match(/Desde\s+Fecha:\s*(\S+)\s+Hasta\s+Fecha:\s*(\S+)/i); if (m) { desde = rpDia(m[1]); hasta = rpDia(m[2]); } }
+  const items = [], sinCod = [];
+  for (const f of filas.slice(iCab + 1)) {
+    const a = txt(f[0]); if (!a || a === "Producto") continue;
+    if (/^Laboratorio\s*:/i.test(a)) { lab = f.slice(1).map(txt).find(Boolean) || lab; continue; }
+    if (/^\*+\s*(Sub-)?Total|^Total Registros/i.test(a)) continue;   // (no «TOTAL» a secas: hay productos como «SIMILAC TOTAL…»)
+    if (val(f, C.se) === "" && val(f, C.ce) === "") continue;
+    const it = { n: a, lab, sig: val(f, C.lab), se: rpNum(val(f, C.se)), sf: rpNum(val(f, C.sf)), smin: rpNum(val(f, C.smin)), ce: rpNum(val(f, C.ce)), cf: rpNum(val(f, C.cf)),
+      pvf: rpNum(val(f, C.pvf)), par: rpNum(val(f, C.par)), c: val(f, C.cod).replace(/\.0$/, "") };
+    if (/^\d+$/.test(it.c)) it.c = it.c.padStart(5, "0");
+    (it.c ? items : sinCod).push(it);
+  }
+  const dias = desde && hasta ? Math.round((hasta - desde) / 864e5) + 1 : null;
+  return { archivo, est, desde, hasta, dias, items, sinCod, esDrog: /DROGUER/i.test(est), suc: sucDeNombre(est) || sucDeNombre(archivo) || "" };
+}
+async function rpLeerArchivo(a) {
+  XLSX ??= await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
+  const wb = XLSX.read(await a.arrayBuffer()), ws = wb.Sheets[wb.SheetNames[0]];
+  return leerReporte(XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false }), a.name);
+}
+// fraccionero de cada producto: sale de la venta en fracciones (Parcial = (enteros + fracciones ÷ fraccionero) × P.V.F); si no, del nombre («X100TAB»)
+function rpFracc(reps) {
+  const fr = new Map();
+  for (const r of reps) for (const it of r.items) if (it.cf > 0 && it.pvf > 0.05) { const q = it.par / it.pvf - it.ce; if (q > 1e-6) { const x = Math.round(it.cf / q); if (x > 0) fr.set(it.c, x); } }
+  return (c, n) => fr.get(c) || +(String(n).match(/X\s*(\d+)\s*(?:TAB|COM|CAP|CAPS|GRAG|AMP|SOB|SCH|UND|UDS|CPR|COMP|TB|TABS|SOBRES|PERLAS|OVULOS|PARCHES)/i)?.[1] || 0) || null;
+}
+function rpCalcular() {
+  const R = S.rp, C = Math.max(1, +$("rpC").value || 15), Sg = Math.max(0, +$("rpSg").value || 0), H = C + Sg;
+  try { localStorage.setItem("rp_dias", JSON.stringify({ C, Sg })); } catch {}
+  const frDe = rpFracc([R.drog, ...R.sucs].filter(Boolean));
+  const drog = new Map((R.drog?.items || []).map(it => [it.c, it]));
+  const pedidos = [];   // {suc, it, q, ...}
+  for (const r of R.sucs) {
+    const dias = r.dias || 45;
+    for (const it of r.items) {
+      const fr = frDe(it.c, it.n), venta = it.ce + (fr ? it.cf / fr : 0), stock = it.se + (fr ? it.sf / fr : 0);
+      const vd = venta / dias, nec = vd * H, x = nec - stock;
+      let q = redPed(x); if (!q && x > 1e-9) q = 1;
+      if (q > 0) pedidos.push({ r, it, q, venta, stock, vd, nec, fr, dias });
+    }
+  }
+  // stock de droguería: si no alcanza para todas, se reparte en proporción a lo que necesita cada una
+  const porCod = new Map(); for (const p of pedidos) (porCod.get(p.it.c) ?? porCod.set(p.it.c, []).get(p.it.c)).push(p);
+  for (const [c, l] of porCod) {
+    const d = drog.get(c), disp = R.drog ? Math.max(0, Math.floor(d ? d.se : 0)) : Infinity, tot = l.reduce((a, p) => a + p.q, 0);
+    l.forEach(p => { p.sd = d ? d.se : 0; });
+    if (tot <= disp) { l.forEach(p => p.at = p.q); continue; }
+    l.forEach(p => { p.at = Math.floor(disp * p.q / tot); p.resto = disp * p.q / tot - p.at; });
+    let sobra = disp - l.reduce((a, p) => a + p.at, 0); [...l].sort((a, b) => b.resto - a.resto).forEach(p => { if (sobra > 0) { p.at++; sobra--; } });
+  }
+  R.res = pedidos; R.H = H; R.C = C; R.Sg = Sg;
+}
+const rpNomSuc = r => r.suc ? corto(r.suc) : r.est || r.archivo;
+function pintarRep() {
+  const R = S.rp;
+  if (S.rpC && !$("rpC").dataset.ok) { $("rpC").value = S.rpC; $("rpSg").value = S.rpSg; $("rpC").dataset.ok = 1; }
+  const fD = d => d ? d.toLocaleDateString("es-PE") : "?";
+  $("rpDrogTxt").innerHTML = R.drog ? `<b>${esc(R.drog.est)}</b> · ${fD(R.drog.desde)} al ${fD(R.drog.hasta)} · ${nf(R.drog.items.length)} productos` : "Sin archivo";
+  $("rpSucsTxt").innerHTML = R.sucs.length ? R.sucs.map(r => `<b>${esc(rpNomSuc(r))}</b> · ${fD(r.desde)} al ${fD(r.hasta)} (${r.dias || "?"} días) · ${nf(r.items.length)} productos`).join("<br>") : "Sin archivos";
+  const avisos = [];
+  if (R.sucs.length && !R.drog) avisos.push("Falta el reporte de droguería: se calcula sin límite de su stock.");
+  for (const r of [R.drog, ...R.sucs].filter(Boolean)) if (r.sinCod.length) avisos.push(`${rpNomSuc(r)}: ${r.sinCod.length} producto${r.sinCod.length === 1 ? "" : "s"} sin código en el reporte (no se pueden cruzar): ${r.sinCod.map(x => x.n).join(", ")}.`);
+  for (const r of R.sucs) if (!r.suc) avisos.push(`No reconocí la sucursal de «${r.archivo}» (dice «${r.est}»).`);
+  msg("rpMsg", avisos.join(" "), false);
+  if (!R.sucs.length) { $("rpRes").innerHTML = ""; $("rpLista").hidden = true; return; }
+  rpCalcular();
+  $("rpRes").innerHTML = R.sucs.map(r => { const l = R.res.filter(p => p.r === r), at = l.filter(p => p.at > 0), sd = l.filter(p => !(p.at > 0));
+    return `<button type="button" class="card ent-card${R.suc === r.archivo ? " act" : ""}" data-rpsuc="${esc(r.archivo)}"><b>${esc(rpNomSuc(r))}</b>
+      <small>Atender <b>${nf(at.length)}</b> productos · ${nf(at.reduce((a, p) => a + p.at, 0))} unidades${sd.length ? ` · <span class="rojo-t">${nf(sd.length)} sin stock en droguería</span>` : ""}</small></button>`; }).join("");
+  $("rpLista").hidden = false;
+  $("rpSuc").innerHTML = `<option value="">Todas</option>` + R.sucs.map(r => `<option value="${esc(r.archivo)}">${esc(rpNomSuc(r))}</option>`).join(""); $("rpSuc").value = R.suc;
+  const filas = rpFilas(), uno = R.suc || R.sucs.length === 1, det = R.det;
+  $("rpTit").textContent = (R.ver === "sd" ? "Sin stock en droguería" : "Lo que se debe atender") + ` · ${nf(filas.length)} productos · ${R.C} + ${R.Sg} días`;
+  const n2 = v => nf(Math.round(v * 100) / 100);
+  $("rpTabla").innerHTML = `<thead><tr>${uno ? "" : "<th>Sucursal</th>"}<th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">${R.ver === "sd" ? "Necesita pedir" : "Cantidad"}</th>${det ? `<th class="der">Stock suc.</th><th class="der">Vendió</th><th class="der">Venta diaria</th><th class="der">Necesita</th><th class="der">Stock droguería</th>` : ""}</tr></thead><tbody>` +
+    (filas.length ? filas.slice(0, 1500).map(p => `<tr>${uno ? "" : `<td><b>${esc(rpNomSuc(p.r))}</b></td>`}<td><code>${esc(p.it.c)}</code></td><td><b>${esc(p.it.n)}</b></td><td>${esc(p.it.lab)}</td><td class="der"><b>${nf(R.ver === "sd" ? p.q : p.at)}</b>${R.ver !== "sd" && p.at < p.q ? ` <small class="muted">de ${nf(p.q)}</small>` : ""}</td>
+      ${det ? `<td class="der">${n2(p.stock)}</td><td class="der">${n2(p.venta)} <small class="muted">${p.dias} d</small></td><td class="der">${n2(p.vd)}</td><td class="der">${n2(p.nec)}</td><td class="der">${R.drog ? n2(p.sd) : "–"}</td>` : ""}</tr>`).join("")
+      : `<tr class="vacia"><td colspan="10">Nada con estos filtros.</td></tr>`) + "</tbody>";
+}
+function rpFilas() {
+  const R = S.rp, q = norm(R.q || "").trim();
+  return (R.res || []).filter(p => (!R.suc || p.r.archivo === R.suc) && (R.ver === "sd" ? !(p.at > 0) : p.at > 0) && (!q || norm(`${p.it.c} ${p.it.n} ${p.it.lab}`).includes(q)))
+    .sort((a, b) => rpNomSuc(a.r).localeCompare(rpNomSuc(b.r)) || a.it.lab.localeCompare(b.it.lab) || a.it.n.localeCompare(b.it.n));
+}
+async function rpCargar(files, drog) {
+  msg("rpMsg", "Leyendo…");
+  for (const a of files) {
+    try { const r = await rpLeerArchivo(a);
+      if (drog || r.esDrog) { S.rp.drog = r; if (!drog) toast(`«${a.name}» es de droguería: se usó como reporte de droguería`); }
+      else { S.rp.sucs = S.rp.sucs.filter(x => x.archivo !== r.archivo && !(r.suc && x.suc === r.suc)); S.rp.sucs.push(r); }
+    } catch (e) { msg("rpMsg", `«${a.name}»: ${e.message || e}`, true); return; }
+  }
+  pintarRep();
+}
+$("rpDrog").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (f.length) rpCargar(f, true); });
+$("rpSucs").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (f.length) rpCargar(f, false); });
+["rpC", "rpSg"].forEach(id => $(id).addEventListener("change", pintarRep));
+$("rpLimpiar").addEventListener("click", () => { S.rp = { drog: null, sucs: [], suc: "", q: "", ver: "at", det: false }; pintarRep(); });
+$("rpSuc").addEventListener("change", e => { S.rp.suc = e.target.value; pintarRep(); });
+$("rpQ").addEventListener("input", e => { S.rp.q = e.target.value; pintarRep(); });
+$("rpVer").addEventListener("change", e => { S.rp.ver = e.target.value; pintarRep(); });
+$("rpDet").addEventListener("change", e => { S.rp.det = e.target.checked; pintarRep(); });
+$("rpRes").addEventListener("click", e => { const b = e.target.closest("[data-rpsuc]"); if (!b) return; S.rp.suc = S.rp.suc === b.dataset.rpsuc ? "" : b.dataset.rpsuc; pintarRep(); });
+$("rpXls").addEventListener("click", () => {
+  const R = S.rp, filas = rpFilas(); if (!filas.length) return toast("No hay nada para descargar.");
+  const uno = R.suc || R.sucs.length === 1, sd = R.ver === "sd";
+  const datos = filas.map(p => ({ ...(uno ? {} : { Sucursal: rpNomSuc(p.r) }), "Código": p.it.c, Medicamento: p.it.n, Laboratorio: p.it.lab, [sd ? "Necesita pedir" : "Cantidad"]: sd ? p.q : p.at,
+    ...(R.det ? { "Stock sucursal": Math.round(p.stock * 100) / 100, [`Vendió (${p.dias} días)`]: Math.round(p.venta * 100) / 100, "Venta diaria": Math.round(p.vd * 1000) / 1000, Necesita: Math.round(p.nec * 100) / 100, "Stock droguería": R.drog ? Math.round(p.sd * 100) / 100 : "" } : {}) }));
+  const nom = (uno ? rpNomSuc(filas[0].r) : "sucursales").toLowerCase().replace(/\W+/g, "_");
+  excelDe(datos, sd ? "Sin stock droguería" : "Atender", `${sd ? "sin_stock_drogueria" : "atender"}_${nom}_${R.C}+${R.Sg}`);
 });
 
 /* ===================== vista previa: el administrador ve la página como la ve un usuario ===================== */

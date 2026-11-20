@@ -844,3 +844,5 @@ body.nav-abierta .top .nav button { text-align: left; justify-content: flex-star
 .ent-conf { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; max-width: 320px } .ent-conf small { color: #6b7280; font-size: 11.5px; text-align: right; line-height: 1.3 }
 .pd-ultab { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; white-space: nowrap }
 .pd-endrog { min-width: 200px } .pd-endrog .pd-otras { margin-top: 4px }
+.rp-sube { display: flex; flex-direction: column; gap: 12px } .rp-arch { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center } .rp-arch input[type=file] { max-width: 320px } .rp-arch > span { flex-basis: 100%; font-size: 13px } .rp-regla { font-size: 12.5px; margin: 0 }
+#vRep .check { display: flex; align-items: center; gap: 6px; align-self: flex-end; padding-bottom: 10px } #rpDet { width: 18px; height: 18px; min-height: 0; margin: 0; accent-color: var(--brand) }
