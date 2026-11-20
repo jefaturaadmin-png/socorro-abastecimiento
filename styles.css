@@ -847,3 +847,4 @@ body.nav-abierta .top .nav button { text-align: left; justify-content: flex-star
 .rp-sube { display: flex; flex-direction: column; gap: 12px } .rp-arch { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center } .rp-arch input[type=file] { max-width: 320px } .rp-arch > span { flex-basis: 100%; font-size: 13px } .rp-regla { font-size: 12.5px; margin: 0 }
 #vRep .check { display: flex; align-items: center; gap: 6px; align-self: flex-end; padding-bottom: 10px } #rpDet { width: 18px; height: 18px; min-height: 0; margin: 0; accent-color: var(--brand) }
 .rp-opc summary { cursor: pointer; font-size: 13px; color: var(--muted, #6b7280) } .rp-opc[open] summary { margin-bottom: 8px }
+#rpCmpTabla .chip { white-space: nowrap; font-size: 11.5px }

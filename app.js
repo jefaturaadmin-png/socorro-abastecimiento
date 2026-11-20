@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611200600";
+const VERSION_PROY = "202611200700";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2565,8 +2565,8 @@ function pintarRep() {
   const avisos = [];
   for (const r of R.sucs) if (r.sinCod.length) avisos.push(`${rpNomSuc(r)}: ${r.sinCod.length} producto${r.sinCod.length === 1 ? "" : "s"} del reporte sin código: ${r.sinCod.map(x => x.n).join(", ")}.`);
   msg("rpMsg", avisos.join(" "), false);
-  if (!R.sucs.length) { $("rpRes").innerHTML = ""; $("rpLista").hidden = true; return; }
-  rpCalcular();
+  if (!R.sucs.length) { $("rpRes").innerHTML = ""; $("rpLista").hidden = true; pintarRpCmp(); return; }
+  rpCalcular(); pintarRpCmp();
   $("rpRes").innerHTML = R.sucs.map(r => { const l = R.res.filter(p => p.r === r);
     return `<button type="button" class="card ent-card${R.suc === r.archivo ? " act" : ""}" data-rpsuc="${esc(r.archivo)}"><b>${esc(rpNomSuc(r))}</b>
       <small>Entregar <b>${nf(l.length)}</b> productos · ${nf(l.reduce((a, p) => a + p.q, 0))} unidades</small></button>`; }).join("");
@@ -2604,6 +2604,62 @@ $("rpXls").addEventListener("click", () => {
   const datos = filas.map(p => ({ ...(uno ? {} : { Sucursal: rpNomSuc(p.r) }), "Código": p.it.c, Medicamento: p.it.n, Laboratorio: p.it.lab, Cantidad: p.q,
     ...(R.det ? { [`Vendió (${p.dias} días)`]: Math.round(p.venta * 100) / 100, Stock: Math.round(p.stock * 100) / 100 } : {}) }));
   excelDe(datos, "Entregar", `entregar_${(uno ? rpNomSuc(filas[0].r) : "sucursales").toLowerCase().replace(/\W+/g, "_")}`);
+});
+
+// ---- comparar con el Excel del usuario: lo que está en los dos (igual o con otra cantidad), lo que falta en uno u otro ----
+S.rpCmp = null; S.rpCmpVer = ""; S.rpCmpSuc = "";
+const RP_RES = { ok: ["Igual", "verde", "Igual"], dif: ["Cantidad distinta", "amb", "Cantidad distinta"], rep: ["Solo en el reporte (no está en su Excel)", "rojo", "Falta en su Excel"], exc: ["Solo en su Excel (no sale del reporte)", "rojo", "Solo en su Excel"] };
+async function rpLeerMiExcel(a) {
+  XLSX ??= await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
+  const wb = XLSX.read(await a.arrayBuffer()), filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "", raw: false });
+  const iCab = filas.findIndex(f => f.some(v => /^C[OÓ]DIGO$/i.test(String(v).trim()))); if (iCab < 0) throw new Error("no tiene la columna «Código»");
+  const cab = filas[iCab].map(v => norm(String(v)).trim()), col = re => cab.findIndex(h => re.test(h));
+  const iC = col(/^CODIGO$/), iN = col(/MEDICAMENTO|PRODUCTO|DESCRIPCION/), iL = col(/^LABORATORIO$/), iQ = col(/SE ATENDERA|CANTIDAD|ENTREGAR|ATENDER|ENVIAR|PEDIR/);
+  if (iQ < 0) throw new Error("no tiene la columna «Se atenderá» o «Cantidad»");
+  const m = new Map();
+  for (const f of filas.slice(iCab + 1)) { let c = String(f[iC] ?? "").trim().replace(/\.0$/, ""); if (!/^\d+$/.test(c)) continue; c = c.padStart(5, "0");
+    const q = +String(f[iQ] ?? "").replace(",", ".") || 0, x = m.get(c);
+    m.set(c, { c, n: iN >= 0 ? String(f[iN]).trim() : "", l: iL >= 0 ? String(f[iL]).trim() : "", q: (x?.q || 0) + q }); }
+  return { archivo: a.name, items: m, suc: sucDeNombre(a.name) };
+}
+function rpComparar() {
+  const R = S.rp, E = S.rpCmp; if (!E) return [];
+  const r = R.sucs.find(x => x.archivo === S.rpCmpSuc) || R.sucs[0]; if (!r) return [];
+  const calc = new Map((R.res || []).filter(p => p.r === r).map(p => [p.it.c, p])), rep = new Map(r.items.map(it => [it.c, it])), frDe = rpFracc([r]);
+  const out = [];
+  for (const [c, p] of calc) { const e = E.items.get(c), qe = e ? e.q : null;
+    out.push({ c, n: p.it.n, l: p.it.lab, qr: p.q, qe, venta: p.venta, stock: p.stock, res: qe == null || qe === 0 ? "rep" : qe === p.q ? "ok" : "dif" }); }
+  for (const [c, e] of E.items) { if (calc.has(c) || !(e.q > 0)) continue; const it = rep.get(c), fr = it ? frDe(it.c, it.n) : null;
+    out.push({ c, n: e.n || it?.n || "", l: e.l || it?.lab || "", qr: 0, qe: e.q, venta: it ? it.ce + (fr ? it.cf / fr : 0) : null, stock: it ? it.se + (fr ? it.sf / fr : 0) : null, res: "exc",
+      por: !it ? "no vendió en los días del reporte" : "su stock alcanza para lo que vendió" }); }
+  return out.sort((a, b) => a.l.localeCompare(b.l) || a.n.localeCompare(b.n));
+}
+function pintarRpCmp() {
+  const R = S.rp, box = $("rpCmpBox"); box.hidden = !R.sucs.length; if (!R.sucs.length) return;
+  if (!S.rpCmpSuc || !R.sucs.some(x => x.archivo === S.rpCmpSuc)) S.rpCmpSuc = (R.sucs.find(x => S.rpCmp?.suc && x.suc === S.rpCmp.suc) || R.sucs[0]).archivo;
+  $("rpCmpSuc").innerHTML = R.sucs.map(r => `<option value="${esc(r.archivo)}">${esc(rpNomSuc(r))}</option>`).join(""); $("rpCmpSuc").value = S.rpCmpSuc;
+  if (!S.rpCmp) { $("rpCmpRes").innerHTML = ""; $("rpCmpTabla").innerHTML = ""; return; }
+  const l = rpComparar(), cuenta = k => l.filter(x => x.res === k).length, n2 = v => v == null ? "–" : nf(Math.round(v * 100) / 100);
+  $("rpCmpTxt").innerHTML = `Su Excel <b>${esc(S.rpCmp.archivo)}</b> (${nf(S.rpCmp.items.size)} productos) contra lo que sale del reporte de <b>${esc(rpNomSuc(R.sucs.find(x => x.archivo === S.rpCmpSuc)))}</b>.`;
+  $("rpCmpRes").innerHTML = ["ok", "dif", "rep", "exc"].map(k => `<button type="button" class="card ent-card${S.rpCmpVer === k ? " act" : ""}" data-rpcmpver="${k}"><b>${nf(cuenta(k))}</b><small><span class="chip ${RP_RES[k][1]}">${RP_RES[k][0]}</span></small></button>`).join("");
+  $("rpCmpVer").value = S.rpCmpVer;
+  const v = l.filter(x => !S.rpCmpVer || x.res === S.rpCmpVer);
+  $("rpCmpTabla").innerHTML = `<thead><tr><th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">Reporte</th><th class="der">Su Excel</th><th class="der">Diferencia</th><th class="der">Vendió</th><th class="der">Stock</th><th>Resultado</th></tr></thead><tbody>` +
+    (v.length ? v.map(x => `<tr><td><code>${esc(x.c)}</code></td><td><b>${esc(x.n)}</b></td><td>${esc(x.l)}</td><td class="der"><b>${nf(x.qr)}</b></td><td class="der"><b>${x.qe == null ? "–" : nf(x.qe)}</b></td>
+      <td class="der ${(x.qe || 0) - x.qr ? "rojo-t" : ""}">${(x.qe || 0) - x.qr > 0 ? "+" : ""}${nf((x.qe || 0) - x.qr)}</td><td class="der">${n2(x.venta)}</td><td class="der">${n2(x.stock)}</td>
+      <td><span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.por ? `<br><small class="muted">${esc(x.por)}</small>` : ""}</td></tr>`).join("")
+      : `<tr class="vacia"><td colspan="9">Nada en esta parte.</td></tr>`) + "</tbody>";
+}
+$("rpCmp").addEventListener("change", async e => { const a = e.target.files[0]; e.target.value = ""; if (!a) return;
+  try { S.rpCmp = await rpLeerMiExcel(a); S.rpCmpVer = ""; S.rpCmpSuc = ""; pintarRpCmp(); } catch (x) { toast(`«${a.name}»: ${x.message || x}`); } });
+$("rpCmpSuc").addEventListener("change", e => { S.rpCmpSuc = e.target.value; pintarRpCmp(); });
+$("rpCmpVer").addEventListener("change", e => { S.rpCmpVer = e.target.value; pintarRpCmp(); });
+$("rpCmpRes").addEventListener("click", e => { const b = e.target.closest("[data-rpcmpver]"); if (!b) return; S.rpCmpVer = S.rpCmpVer === b.dataset.rpcmpver ? "" : b.dataset.rpcmpver; pintarRpCmp(); });
+$("rpCmpXls").addEventListener("click", () => {
+  const l = rpComparar().filter(x => !S.rpCmpVer || x.res === S.rpCmpVer); if (!l.length) return toast("Suba primero su Excel.");
+  const r2 = v => v == null ? "" : Math.round(v * 100) / 100;
+  excelDe(l.map(x => ({ "Código": x.c, Medicamento: x.n, Laboratorio: x.l, "Reporte (vendió − stock)": x.qr, "Su Excel": x.qe ?? "", Diferencia: (x.qe || 0) - x.qr, "Vendió": r2(x.venta), Stock: r2(x.stock), Resultado: RP_RES[x.res][0] + (x.por ? ": " + x.por : "") })),
+    "Comparación", "comparacion_" + rpNomSuc(S.rp.sucs.find(x => x.archivo === S.rpCmpSuc) || {}).toLowerCase().replace(/\W+/g, "_"));
 });
 
 /* ===================== vista previa: el administrador ve la página como la ve un usuario ===================== */
