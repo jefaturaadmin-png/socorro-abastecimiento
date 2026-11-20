@@ -858,3 +858,4 @@ body.nav-abierta .top .nav button { text-align: left; justify-content: flex-star
 .rp-nota.urg { background: #f3e8ff; color: #6b21a8 }
 .rp-nota.fija { background: #e3f4e6; color: #1f7a2e }
 #vRep .wrap.ancho { max-width: 100%; padding-inline: clamp(10px, 3vw, 60px) } #vRep .tabla th, #vRep .tabla td { padding-left: 10px; padding-right: 10px } #rpCmpTabla td:nth-child(3) { max-width: 120px; font-size: 12px } #rpCmpTabla td:nth-child(2) { min-width: 170px; max-width: 240px } #rpCmpTabla .rp-notas { min-width: 150px; max-width: 200px } #vRep .tabla th { font-size: 11px; letter-spacing: .02em; white-space: normal } #rpCmpTabla .rp-eleg { flex-wrap: nowrap }
+.rp-b.rp-mini { width: 22px; height: 22px; font-size: 11px; vertical-align: middle; margin-left: 4px }

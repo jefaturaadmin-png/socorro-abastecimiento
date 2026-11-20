@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611202400";
+const VERSION_PROY = "202611202500";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2684,7 +2684,7 @@ function rpComparar() {
   const calc = new Map(rpBase(r).map(p => [p.it.c, p])), rep = new Map(r.items.map(it => [it.c, it])), frDe = rpFracc([r]);
   const out = [];
   for (const [c, p] of calc) { const e = E.items.get(c), qe = e ? e.q : null;
-    const el = S.rpEleg?.get(rpElKey(r, c)), base = qe == null || qe === 0 ? "rep" : qe === p.qRep ? "ok" : "dif", usa = el && base !== "ok";
+    const el = S.rpEleg?.get(rpElKey(r, c)), base = qe == null || qe === 0 ? "rep" : qe === p.qRep ? "ok" : "dif", usa = !!el;
     out.push({ c, n: p.it.n, l: p.it.lab, qr: p.qRep, qe, venta: p.venta, stock: p.stock, base, res: usa ? rpTipoEl(el) : base, el: usa ? el : null }); }
   for (const [c, e] of E.items) { if (calc.has(c) || !(e.q > 0)) continue; const it = rep.get(c), fr = it ? frDe(it.c, it.n) : null, el = S.rpEleg?.get(rpElKey(r, c));
     // si no está en el reporte (no vendió en esos días): vendió 0 y su stock es el del kardex (el mismo que en el módulo de la sucursal)
@@ -2751,7 +2751,7 @@ function pintarRpCmp() {
       <td>${x.res === "dif" || x.res === "rep" || x.res === "exc" ? `${x.res === "dif" ? "" : `<span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.por ? `<br><small class="muted">${esc(x.por)}</small>` : ""}`}<div class="rp-eleg">${x.res === "dif"
           ? `<button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qr}" data-de="rep">Reporte: ${nf(x.qr)}</button><button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qe}" data-de="exc">Excel: ${nf(x.qe)}</button><button type="button" class="rp-b del-b" data-rpel="${esc(x.c)}" data-q="0" data-de="del" title="Eliminar (no se entrega)">✕</button>`
           : `<button type="button" class="rp-b ok-b" data-rpel="${esc(x.c)}" data-q="${x.res === "rep" ? x.qr : x.qe}" data-de="add" title="Añadir ${nf(x.res === "rep" ? x.qr : x.qe)}">✔</button><button type="button" class="rp-b del-b" data-rpel="${esc(x.c)}" data-q="0" data-de="del" title="Eliminar (no se entrega)">✕</button>`}<button type="button" class="rp-b pen-b" data-rpel="${esc(x.c)}" data-q="0" data-de="pen" title="Pendiente (decidir después)">/</button><input type="number" min="0" step="1" class="rp-man" data-rpman="${esc(x.c)}" placeholder="Otro" title="Escriba otra cantidad y pulse Enter"></div>`
-        : `<span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.el ? `<br><small class="muted">${x.el.de === "del" ? "eliminado" : x.el.de === "pen" ? "pendiente" : `elegido: <b>${nf(x.el.q)}</b> (${rpDeTxt(x.el.de)})`} <button type="button" class="ab-x rp-desh" data-rpel="${esc(x.c)}" title="Deshacer">✕</button></small>` : ""}${x.por && !x.el ? `<br><small class="muted">${esc(x.por)}</small>` : ""}`}</td></tr>`).join("")
+        : `<span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.res === "ok" ? ` <button type="button" class="rp-b del-b rp-mini" data-rpel="${esc(x.c)}" data-q="0" data-de="del" title="Cancelar: no se entrega (pasa a Eliminados)">✕</button>` : ""}${x.el ? `<br><small class="muted">${x.el.de === "del" ? "eliminado" : x.el.de === "pen" ? "pendiente" : `elegido: <b>${nf(x.el.q)}</b> (${rpDeTxt(x.el.de)})`} <button type="button" class="ab-x rp-desh" data-rpel="${esc(x.c)}" title="Deshacer (vuelve a como estaba)">↺</button></small>` : ""}${x.por && !x.el ? `<br><small class="muted">${esc(x.por)}</small>` : ""}`}</td></tr>`).join("")
       : `<tr class="vacia"><td colspan="13">Nada en esta parte.</td></tr>`) + "</tbody>";
 }
 $("rpCmp").addEventListener("change", async e => { const a = e.target.files[0]; e.target.value = ""; if (!a) return;
