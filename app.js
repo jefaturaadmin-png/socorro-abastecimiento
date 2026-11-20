@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611201200";
+const VERSION_PROY = "202611201300";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2578,7 +2578,7 @@ function pintarRep() {
   const filas = rpFilas(), uno = R.suc || R.sucs.length === 1, det = R.det, n2 = v => nf(Math.round(v * 100) / 100);
   $("rpTit").textContent = `Lo que se va a entregar · ${nf(filas.length)} productos`;
   $("rpTabla").innerHTML = `<thead><tr>${uno ? "" : "<th>Sucursal</th>"}<th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">Cantidad</th>${det ? `<th class="der">Vendió</th><th class="der">Stock</th>` : ""}</tr></thead><tbody>` +
-    (filas.length ? filas.slice(0, 2000).map(p => `<tr>${uno ? "" : `<td><b>${esc(rpNomSuc(p.r))}</b></td>`}<td><code>${esc(p.it.c)}</code></td><td><b>${esc(p.it.n)}</b></td><td>${esc(p.it.lab)}</td><td class="der"><b>${nf(p.q)}</b>${p.el ? ` <small class="muted" title="cantidad elegida en «Comparar con mi Excel» (${p.el.de === "rep" ? "del reporte" : "de su Excel"})">✎</small>` : ""}</td>
+    (filas.length ? filas.slice(0, 2000).map(p => `<tr>${uno ? "" : `<td><b>${esc(rpNomSuc(p.r))}</b></td>`}<td><code>${esc(p.it.c)}</code></td><td><b>${esc(p.it.n)}</b></td><td>${esc(p.it.lab)}</td><td class="der"><b>${nf(p.q)}</b>${p.el ? ` <small class="muted" title="cantidad elegida en «Comparar con mi Excel» (${p.el.de === "rep" ? "del reporte" : p.el.de === "man" ? "escrita a mano" : "de su Excel"})">✎</small>` : ""}</td>
       ${det ? `<td class="der">${n2(p.venta)}</td><td class="der">${n2(p.stock)}</td>` : ""}</tr>`).join("")
       : `<tr class="vacia"><td colspan="7">Nada con estos filtros.</td></tr>`) + "</tbody>";
 }
@@ -2713,8 +2713,8 @@ function pintarRpCmp() {
   $("rpCmpTabla").innerHTML = `<thead><tr><th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">Reporte</th><th class="der">Su Excel</th><th class="der" title="Lo que se va a entregar: si son iguales, esa cantidad; si eligió, la elegida">Atender</th><th class="der">Diferencia</th><th class="der">Vendió</th><th class="der">Stock</th><th class="der" title="Stock de droguería del último kardex subido">Stock droguería</th><th>Notas y comentarios</th><th>Resultado</th></tr></thead><tbody>` +
     (v.length ? v.map(x => `<tr><td><code>${esc(x.c)}</code></td><td><b>${esc(x.n)}</b></td><td>${esc(x.l)}</td><td class="der"><b>${nf(x.qr)}</b></td><td class="der"><b>${x.qe == null ? "–" : nf(x.qe)}</b></td><td class="der rp-at">${rpAt(x) == null ? '<span class="muted">elegir →</span>' : `<b>${nf(rpAt(x))}</b>`}</td>
       <td class="der ${(x.qe || 0) - x.qr ? "rojo-t" : ""}">${(x.qe || 0) - x.qr > 0 ? "+" : ""}${nf((x.qe || 0) - x.qr)}</td><td class="der">${n2(x.venta)}</td><td class="der">${n2(x.stock)}</td><td class="der">${sdTxt(x.c)}</td><td class="rp-notas">${rpNotas(sucCmp, x.c).map(n => `<div class="rp-nota ${n.k}">${esc(n.t)}${n.q ? ` <small>${esc(n.q)}</small>` : ""}</div>`).join("")}</td>
-      <td>${x.res === "dif" ? `<div class="rp-eleg"><button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qr}" data-de="rep">Reporte: ${nf(x.qr)}</button><button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qe}" data-de="exc">Excel: ${nf(x.qe)}</button></div>`
-        : `<span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.el ? `<br><small class="muted">elegido: <b>${nf(x.el.q)}</b> (${x.el.de === "rep" ? "del reporte" : "de su Excel"}) <button type="button" class="ab-x rp-desh" data-rpel="${esc(x.c)}" title="Deshacer">✕</button></small>` : ""}${x.por ? `<br><small class="muted">${esc(x.por)}</small>` : ""}`}</td></tr>`).join("")
+      <td>${x.res === "dif" ? `<div class="rp-eleg"><button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qr}" data-de="rep">Reporte: ${nf(x.qr)}</button><button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qe}" data-de="exc">Excel: ${nf(x.qe)}</button><input type="number" min="0" step="1" class="rp-man" data-rpman="${esc(x.c)}" placeholder="Otro" title="Escriba otra cantidad y pulse Enter"></div>`
+        : `<span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.el ? `<br><small class="muted">elegido: <b>${nf(x.el.q)}</b> (${x.el.de === "rep" ? "del reporte" : x.el.de === "man" ? "escrita a mano" : "de su Excel"}) <button type="button" class="ab-x rp-desh" data-rpel="${esc(x.c)}" title="Deshacer">✕</button></small>` : ""}${x.por ? `<br><small class="muted">${esc(x.por)}</small>` : ""}`}</td></tr>`).join("")
       : `<tr class="vacia"><td colspan="12">Nada en esta parte.</td></tr>`) + "</tbody>";
 }
 $("rpCmp").addEventListener("change", async e => { const a = e.target.files[0]; e.target.value = ""; if (!a) return;
@@ -2723,6 +2723,9 @@ $("rpCmp").addEventListener("change", async e => { const a = e.target.files[0]; 
     toast("Su Excel quedó guardado para comparar");
   } catch (x) { toast(`«${a.name}»: ${x.message || x}`); } });
 $("rpCmpSuc").addEventListener("change", e => { S.rpCmpSuc = e.target.value; pintarRpCmp(); });
+// cantidad escrita a mano (si no está de acuerdo con ninguna de las dos): se guarda al pulsar Enter o al salir del cuadro
+$("rpCmpTabla").addEventListener("change", e => { const i = e.target.closest("[data-rpman]"); if (!i || i.value === "") return;
+  const q = Math.max(0, Math.round(+i.value || 0)); rpElegir(i.dataset.rpman, q, "man"); });
 $("rpCmpTabla").addEventListener("click", e => { const b = e.target.closest("[data-rpel]"); if (!b) return; rpElegir(b.dataset.rpel, +b.dataset.q || 0, b.dataset.de || ""); });
 $("rpCmpVer").addEventListener("change", e => { S.rpCmpVer = e.target.value; pintarRpCmp(); });
 $("rpCmpRes").addEventListener("click", e => { const b = e.target.closest("[data-rpcmpver]"); if (!b) return; S.rpCmpVer = S.rpCmpVer === b.dataset.rpcmpver ? "" : b.dataset.rpcmpver; pintarRpCmp(); });
