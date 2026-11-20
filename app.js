@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611200400";
+const VERSION_PROY = "202611200500";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1703,7 +1703,7 @@ function pintarAten() {
       <td class="der">${fCaja(i.d, i.fr)}</td><td class="der">${fCaja(i.st, i.fr)}</td>
       <td class="der">${noEnvia(i) ? '<span class="muted">No</span>' : `<b>${i.pide ? nf(i.pide) : "–"}</b>`}</td>
       <td class="at-nota">${noEnvia(i) ? `<span class="tag t-rech at-drog">No se te envía: ${esc(noEnvia(i))}</span>`
-        : `${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${(i.de || []).map(x => `<span class="tag t-ok">${nf(x.q)} de ${esc(x.f)}</span>`).join(" ")}${i.cmp ? `<span class="tag t-rech">${nf(i.cmp)} por comprar</span>` : ""}`}${i.cmb ? `<span class="tag t-ok">En cambio de ${esc(i.cmb)}</span>` : ""}${tagDrog(i)}${i.enl ? `<span class="tag t-ok at-drog">Se te envía en lugar de ${esc(i.enl)} (${esc(quienEnl(i.enl))})</span>` : ""}${S.gest?.has(i.c) ? `<span class="tag t-pend at-drog">📢 Gestionado por droguería${S.gest.get(i.c).nota ? ": " + esc(S.gest.get(i.c).nota) : ""}</span>` : ""}${i.krv ? `<span class="tag t-pend at-drog">🔁 Se termina lo que queda: ahora se trabaja con ${esc(i.krv)}</span>` : ""}${i.krn ? `<span class="tag t-ok at-drog">🔁 Reemplaza a ${esc(i.krn)}</span>` : ""}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td>
+        : `${i.urg ? '<span class="tag t-rech">Urgente</span> ' : ""}${i.pide && i.falta ? `<span class="tag t-pend">${nf(i.falta)} sin stock en droguería</span>` : ""}${(i.de || []).map(x => `<span class="tag t-ok">${nf(x.q)} de ${esc(x.f)}</span>`).join(" ")}${i.cmp ? `<span class="tag t-rech">${nf(i.cmp)} por comprar</span>` : ""}`}${i.cmb ? `<span class="tag t-ok">En cambio de ${esc(i.cmb)}</span>` : ""}${tagDrog(i)}${i.enl ? `<span class="tag t-ok at-drog">Se te envía en lugar de ${esc(i.enl)} (${esc(quienEnl(i.enl))})</span>` : ""}${S.gest?.has(i.c) ? `<span class="tag t-pend at-drog">📢 ${esc(S.gest.get(i.c).nota || "Comunicado de droguería")}</span>` : ""}${i.krv ? `<span class="tag t-pend at-drog">🔁 Se termina lo que queda: ahora se trabaja con ${esc(i.krv)}</span>` : ""}${i.krn ? `<span class="tag t-ok at-drog">🔁 Reemplaza a ${esc(i.krn)}</span>` : ""}${i.aj ? `<small class="at-aj">Criterio propio: ${esc(i.aj)}</small>` : ""}</td>
       <td class="at-resp">${celdaResp(i)}</td>${admin ? `<td>${visAten(i) ? `<button type="button" class="btn sm at-vis" data-atvis="${esc(i.c)}" title="Ocultar este producto a la sucursal">👁 Visible</button>` : `<button type="button" class="btn sm at-vis no" data-atvis="${esc(i.c)}" title="Mostrar este producto a la sucursal">🚫 Oculto</button>`}</td>` : ""}</tr>`).join("")
       : `<tr class="vacia"><td colspan="10">Nada que mostrar.</td></tr>`) + "</tbody>";
   const iEd = S.atEdit && (A.items || []).find(x => x.c === S.atEdit);
