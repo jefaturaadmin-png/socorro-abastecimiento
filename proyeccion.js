@@ -554,7 +554,8 @@ async function recalcular() {
   await setDoc(doc(db, "proy_config", "datos"), { asset: id, archivo: "kardex", corte, subido: new Date().toISOString() });
   if (prev.exists() && prev.data().asset && prev.data().asset !== base?.id) assetsShim.delete(prev.data().asset).catch(() => {});
   window.STOCK_TODOS = maestro.stock;
-  usarPron(o, false); pintarFuente(`kardex al ${corte.split("-").reverse().join("/")}`); msg("");
+  window.CORTE_FULL = String(maestro.corte || "");
+  usarPron(o, false); pintarFuente(`kardex al ${window.corteTxt ? window.corteTxt(corte) : corte.split("-").reverse().join("/")}`); msg("");
   return "";
 }
 window.stockKardex = async () => { try { return await leerMaestro(); } catch (e) { console.warn(e); return null; } };

@@ -1082,11 +1082,16 @@ function usarPron(o, ejemplo) {
   $('rMes').innerHTML = S.objs.map(m => `<option value="${m}" ${m === S.mesObj ? 'selected' : ''}>${nombreMes(m)}</option>`).join('');
   pintarFuente(); render();
 }
+// fecha de los datos con la hora del último movimiento del kardex subido («20/11/2026 18:40»)
+const corteTxt = c => { c = c || ''; const d = c.split('-').reverse().join('/'), h = String(window.CORTE_FULL || '').startsWith(c) ? String(window.CORTE_FULL).slice(11, 16) : '';
+  return d + (h ? ' ' + h : ''); };
+window.corteTxt = corteTxt;
 function pintarFuente(info) {
+  if (info !== undefined) S.fuenteInfo = info; else info = S.fuenteInfo;
   const o = S.P;
   $('source').innerHTML = S.ejemplo
     ? `<span class="pill">Datos de ejemplo</span><span>Carga <code>pronosticos.json.gz</code> (botón naranja o arrastra el archivo aquí). Se guarda en la página y ya no tendrás que volver a subirlo.</span>`
-    : `<span class="pill real">Tus pronósticos</span><span>${nf0.format(o.p.length)} medicamentos · ${o.farmacias.length} farmacias</span><span>datos al ${o.corte.split('-').reverse().join('/')}</span>${info ? `<span>${esc(info)}</span>` : ''}`;
+    : `<span class="pill real">Tus pronósticos</span><span>${nf0.format(o.p.length)} medicamentos · ${o.farmacias.length} farmacias</span><span>datos al ${corteTxt(o.corte)}</span>${info ? `<span>${esc(info)}</span>` : ''}`;
   $('pEyebrow').textContent = `Prueba: ${etL(o.bm[0])} a ${etL(o.bm[o.bm.length - 1])} · pronóstico: ${etL(o.fm[0])} a ${etL(o.fm[o.fm.length - 1])}`;
 }
 
@@ -1191,7 +1196,7 @@ async function iniciar() {
       const r = await S.assets.fetch(cfg.data().asset);
       if (!r.ok) throw new Error('El archivo guardado ya no está disponible. Vuelve a cargarlo.');
       usarPron(validar(await r.json()), false);
-      pintarFuente(`cargado el ${new Date(cfg.data().subido).toLocaleDateString('es-PE')}`);
+      pintarFuente(`cargado el ${new Date(cfg.data().subido).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`);
       msg('');
       const m = window.stockKardex ? await window.stockKardex() : null; // el stock del último kardex, si es más nuevo
       if (m) window.aplicarStock(m);
@@ -1215,7 +1220,7 @@ async function iniciar() {
     try {
       const r = await S.assets.fetch(a); if (!r.ok) return;
       usarPron(validar(await r.json()), false);
-      pintarFuente(`actualizado el ${new Date(sn.data().subido || Date.now()).toLocaleString('es-PE')}`);
+      pintarFuente(`actualizado el ${new Date(sn.data().subido || Date.now()).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`);
       const m = window.stockKardex ? await window.stockKardex() : null; if (m) window.aplicarStock(m);
       if (!S.P.dias && m?.corte && window.ventasDiarias) {
         const v = await window.ventasDiarias(m.corte);
@@ -1234,6 +1239,7 @@ window.aplicarStock = function (m) {
   const o = S.P, corte = String(m?.corte || '').slice(0, 10);
   if (m?.stock) window.STOCK_TODOS = m.stock;
   if (m) window.MAESTRO = m;
+  if (m?.corte) { window.CORTE_FULL = String(m.corte); if (!S.ejemplo && S.P) pintarFuente(); }
   if (!o || S.ejemplo || !m) return false;
   for (const p of o.p) { const pr = m.prod?.[p.c]; if (pr && +pr[1] > 1) p.fr = +pr[1]; } // unidades por caja (para mostrar las fracciones)
   // productos con stock en el kardex pero sin ventas en el historial de pronósticos: se agregan sin pronóstico ("Sin ventas")
@@ -1255,7 +1261,7 @@ window.aplicarStock = function (m) {
   }
   o.corte = corte;
   usarPron(o, false);
-  pintarFuente(`stock del kardex al ${corte.split('-').reverse().join('/')}`);
+  pintarFuente(`stock del kardex al ${corteTxt(corte)}`);
   return true;
 };
 
@@ -1761,7 +1767,7 @@ function pintarKar() {
   const o = S.P, farms = o.farmacias, conv = (p, v) => soles() ? v * p.k : v, cel = (p, v) => v ? fmtS(p, conv(p, v)) : '<span class="z">0</span>';
   const filas = filasKar(), vis = window.fxActivo?.('kar') ? filas : filas.slice(0, S.kMostrar);
   const dd = o.dias ? Math.max(0, o.dias.n - (o.dias.primero ?? 0)) : 0;   // días del kardex con venta por día
-  $('kEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · en ${soles() ? 'soles' : 'enteros y fracciones'} · del último kardex subido · venta diaria: ${!S.kFte ? 'criterio de cada sucursal' : S.kFte === 'motor' ? 'motor (Estadística Proyx)' : `ventas de los últimos ${S.kFte} días` + (dd && +S.kFte > dd ? ` (el kardex trae ${dd} días por día; el resto, de su historial mensual)` : '')}`;
+  $('kEyebrow').textContent = `Stock al ${corteTxt(o.corte)} · en ${soles() ? 'soles' : 'enteros y fracciones'} · del último kardex subido · venta diaria: ${!S.kFte ? 'criterio de cada sucursal' : S.kFte === 'motor' ? 'motor (Estadística Proyx)' : `ventas de los últimos ${S.kFte} días` + (dd && +S.kFte > dd ? ` (el kardex trae ${dd} días por día; el resto, de su historial mensual)` : '')}`;
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th class="drog">Droguería</th><th class="sobra" title="Droguería − total que requieren las sucursales para ${S.kCob} + ${S.kSeg} días. Negativo: falta">Sobra / falta</th><th class="suc" title="Stock de todas las sucursales juntas">Sucursales</th><th class="tot" title="Stock total: droguería + sucursales">Total</th><th class="req" title="Suma de lo que requiere cada sucursal">Total requieren</th>${farms.map(f => `<th class="sep">${esc(nomSuc(f))}</th><th class="req" title="Lo que requiere ${esc(nomSuc(f))} para ${S.kCob} + ${S.kSeg} días (venta diaria × días − su stock)">Requiere</th><th class="ate" title="Si droguería alcanza: lo que requiere. Si falta: requiere ÷ total que requieren × stock de droguería">Se atenderá</th>`).join('')}<th class="sep" title="Lo que necesita la red para los días elegidos (pronóstico)">Necesita ${S.kCob} + ${S.kSeg} d</th><th title="Necesita − stock total (droguería + sucursales)">Comprar</th></tr></thead><tbody>`;
   for (const r of vis) {
     const p = r.p, cx = compraKar(p), rq = reqKar(p, r.sf), sob = r.drog - rq.tot;
@@ -2070,7 +2076,7 @@ function pintarStk() {
   const f = drog ? 'DROGUERIA FS' : S.xFarm, H = S.xCob + S.xSeg, filas = filasStk(), fxk = 'stk-' + f, vis = window.fxActivo?.(fxk) ? filas : filas.slice(0, S.xMostrar);
   const prio = drog ? -1 : prioridadSucs().findIndex(([x]) => x === f);
   $('xTit').textContent = drog ? 'Droguería' : nomSuc(f) + (prio >= 0 && esAdminP() ? ` · prioridad ${prio + 1} de ${prioridadSucs().length}` : '');
-  $('xEyebrow').textContent = `Stock al ${(o.corte || '').split('-').reverse().join('/')} · necesita para ${S.xCob} + ${S.xSeg} días · ${drog ? 'Comprar = necesita de la red − stock de droguería' : `venta diaria: ${$('xFte').value === 'motor' ? 'motor de Estadística Proyx' : 'sus ventas de los últimos ' + $('xFte').value + ' días'} · igual que Atención a sucursales; con su criterio, Pedir = lo que se le envía`}`;
+  $('xEyebrow').textContent = `Stock al ${corteTxt(o.corte)} · necesita para ${S.xCob} + ${S.xSeg} días · ${drog ? 'Comprar = necesita de la red − stock de droguería' : `venta diaria: ${$('xFte').value === 'motor' ? 'motor de Estadística Proyx' : 'sus ventas de los últimos ' + $('xFte').value + ' días'} · igual que Atención a sucursales; con su criterio, Pedir = lo que se le envía`}`;
   let h = `<thead><tr><th class="c0">Código</th><th class="c1">Medicamento</th><th>Tipo</th><th>Stock actual</th>${false ? mets.map((m, i) => `<th class="${i === 0 ? 'sep' : ''}" title="Error del método (WAPE). Clic para usarlo.">${esc(corto(m))}</th>`).join('') : ''}
     <th class="sep" title="Venta por día según ${!drog && $('xFte').value !== 'motor' ? 'las ventas de la sucursal en los últimos ' + $('xFte').value + ' días' : 'el motor de Estadística Proyx'}">Venta diaria${!drog && $('xFte').value !== 'motor' ? ` (${$('xFte').value} d)` : ''}</th><th title="Para cuántos días le alcanza el stock que tiene: stock actual ÷ venta diaria">Le dura</th><th class="sep">Necesita ${S.xCob} + ${S.xSeg} d</th><th>${drog ? 'Comprar' : 'Pedir'}</th>${drog ? '' : `<th class="sep ate" title="Igual que «Se atenderá» del Kardex con estos días: si droguería alcanza, lo que se pide; si falta, en proporción a lo que pide cada sucursal">Se atenderá</th><th title="Fracciones (unidades) que trae cada entero">Fraccionero</th><th title="Lo que le queda después de cubrir lo que necesita: stock + se atenderá − necesita, en enteros y fracciones. En rojo: lo que le va a faltar">Va a sobrar / faltar</th><th class="rs-th">Comentario</th>`}</tr></thead><tbody>`;
   // «se atenderá» de esta sucursal (el reparto del Kardex) y lo que le va a sobrar
@@ -2761,6 +2767,6 @@ window.iniciarKardex = iniciar;
 <script src="sucursales.js?v=202611190600"></script>
 <script src="estadistica.js?v=202611190300"></script>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="proyeccion.js?v=202611190600"></script>
+<script type="module" src="proyeccion.js?v=202611200600"></script>
 
 </body></html>
