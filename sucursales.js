@@ -163,24 +163,27 @@
         let pide = 0, nota = '';
         // redondeo (,45 abajo / ,46 arriba) pero si su stock es menor a lo que va a necesitar (o está en cero) y sí se mueve,
         // se le atiende al menos 1 (stock 0,02 y necesita 0,3: el redondeo daría 0, se manda 1)
-        const sinStock = st <= 1e-9, ped = x => { const q = Math.max(0, redPed(x)); return !q && x > 1e-9 ? 1 : q; };
+        // producto que NO se vende en fracciones (fraccionero 1): lo que necesita va en enteros (2,3 → 2, con el mismo redondeo);
+        // así, si tiene 2 y necesita «2,3», no se le manda nada. Si está en cero y sí se mueve, igual se le manda al menos 1.
+        const necP = frDe(p) <= 1 ? redPed(nec) : nec;
+        const sinStock = st <= 1e-9, ped = x => { const q = Math.max(0, redPed(x)); return !q && x > 1e-9 ? 1 : !q && sinStock && nec > 1e-9 ? 1 : q; };
         if (usa) return { p, f, st, cat: c, d, metodo: dv.metodo, nec, seg, cob, pide: 0, nota: 'usa en su cambio ' + usa, bloq, exceso: 0, o, aj, urgente: false, usa };
         if (bloq) nota = 'bloqueado';
-        else if (cambio) { pide = d > 0 ? ped(nec - st) : 0; nota = 'en cambio de ' + cambio.orig.c; }
+        else if (cambio) { pide = d > 0 ? ped(necP - st) : 0; nota = 'en cambio de ' + cambio.orig.c; }
         else if (o.modo === 'excluir') nota = 'no atender (ajuste)';
-        else if (o.modo === 'forzar') pide = d > 0 ? ped(nec - st) : 0;
+        else if (o.modo === 'forzar') pide = d > 0 ? ped(necP - st) : 0;
         else if (c === 'C' || c === 'D') {   // (vale también con «atender todo lo que se vende»)
           // C y D: se atienden SOLO si se vendieron en esta sucursal dentro de los días elegidos (ventas de los últimos N días;
           // con el motor, los días a cubrir). Si no se vendieron en ese tiempo, quedan a pedido.
           const N = +o.fte > 0 ? +o.fte : (H ?? (o.C + o.Sg));
-          if (d > 0 && window.vendioEn?.(base, f, N)) { pide = ped(nec - st); nota = `tipo ${c}: se vendió en los últimos ${N} días`; }
+          if (d > 0 && window.vendioEn?.(base, f, N)) { pide = ped(necP - st); nota = `tipo ${c}: se vendió en los últimos ${N} días`; }
           else nota = `a pedido (tipo ${c}: sin venta en los últimos ${N} días)`;
         }
-        else if (o.tipos === 'todos' ? d > 0 : (c === 'A' || c === 'B')) pide = ped(nec - st);   // A y B: lo que necesita (B es el nivel siguiente a A)
-        if (!bloq && extra > 0) { pide = Math.max(pide, ped(nec - st)); nota = 'en lugar de ' + enLugar.join(', ') + ' (droguería)'; }
+        else if (o.tipos === 'todos' ? d > 0 : (c === 'A' || c === 'B')) pide = ped(necP - st);   // A y B: lo que necesita (B es el nivel siguiente a A)
+        if (!bloq && extra > 0) { pide = Math.max(pide, ped(necP - st)); nota = 'en lugar de ' + enLugar.join(', ') + ' (droguería)'; }
         // lo que necesita menos su stock, menos lo que le queda del anterior y lo que se le envía del anterior
         const krN = viejos.length && !bloq ? viejos.map(q => q.c + ' - ' + q.n).join(', ') : '';
-        if (krN && o.modo !== 'excluir') { pide = d > 0 ? (stV + envV > 1e-9 ? Math.max(0, redPed(nec - st - stV - envV)) : ped(nec - st)) : 0; nota = 'reemplaza a ' + viejos.map(q => q.c).join(', ') + ' (kardex)' + (stV + envV ? ` · ya tiene/recibe ${Math.round((stV + envV) * 10) / 10} del anterior` : ''); }
+        if (krN && o.modo !== 'excluir') { pide = d > 0 ? (stV + envV > 1e-9 ? Math.max(0, redPed(necP - st - stV - envV)) : ped(necP - st)) : 0; nota = 'reemplaza a ' + viejos.map(q => q.c).join(', ') + ' (kardex)' + (stV + envV ? ` · ya tiene/recibe ${Math.round((stV + envV) * 10) / 10} del anterior` : ''); }
         // el original sin stock en droguería y con reemplazo: no se pide (se atiende el reemplazo)
         const rd = reempDe.get(p.c); let reemp = '', pideOrig = 0;
         if (rd && pide > 0 && !cambio && !(+(window.STOCK_TODOS?.[p.c]?.['DROGUERIA FS']?.[0] ?? p.sd ?? 0) > 0)) { pideOrig = pide; pide = 0; reemp = rd.c + ' - ' + rd.n; nota = 'droguería lo reemplaza por ' + rd.c; }
