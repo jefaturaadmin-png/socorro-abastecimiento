@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611202200";
+const VERSION_PROY = "202611202400";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2675,6 +2675,8 @@ function rpBase(r) { const frDe = rpFracc([r]), out = [];
   for (const it of r.items) { const fr = frDe(it.c, it.n), venta = it.ce + (fr ? it.cf / fr : 0), stock = it.se + (fr ? it.sf / fr : 0), q = redPed(venta - stock);
     if (q > 0) out.push({ it, qRep: q, venta, stock }); }
   return out; }
+// para cuántos días le alcanza el stock actual: stock ÷ venta diaria (lo vendido ÷ días del reporte)
+const rpDiasDura = (x, dias) => x.venta > 0 && dias > 0 ? Math.round((x.stock || 0) / (x.venta / dias)) : null;
 // una elección con cantidad 0 cuenta como eliminada (no se entrega): así «Igual» = lo que se entrega
 const rpTipoEl = el => el.de === "pen" ? "pen" : el.de === "del" || !(el.q > 0) ? "del" : "ok";
 function rpComparar() {
@@ -2738,18 +2740,19 @@ function pintarRpCmp() {
   const sdV = c => S.drogStk ? +(S.drogStk[c]?.[0] || 0) : null, sdTxt = c => { const v = sdV(c); return v == null ? "…" : v > 0 ? `<b>${nf(Math.round(v * 100) / 100)}</b>` : '<span class="rojo-t">0</span>'; };
   escucharRpNotas(); const sucCmp = (R.sucs.find(x => x.archivo === S.rpCmpSuc) || {}).suc || "";
   const l = rpComparar(), cuenta = k => l.filter(x => x.res === k).length, n2 = v => v == null ? "–" : nf(Math.round(v * 100) / 100);
+  const dias = rpCmpR()?.dias || 0, leDura = x => { const d = rpDiasDura(x, dias); return d == null ? (x.stock > 0 ? '<span class="muted">sin venta</span>' : '<span class="muted">·</span>') : `<span class="${d < 7 ? "rojo-t" : ""}">${nf(d)} d</span>`; };
   $("rpCmpTxt").innerHTML = `Su Excel <b>${esc(E.archivo)}</b> (${nf(E.items.size)} productos) contra lo que sale del reporte de <b>${esc(rpNomSuc(R.sucs.find(x => x.archivo === S.rpCmpSuc)))}</b>.`;
   $("rpCmpRes").innerHTML = ["ok", "dif", "rep", "exc", "pen", "del"].map(k => `<button type="button" class="card ent-card${S.rpCmpVer === k ? " act" : ""}" data-rpcmpver="${k}"><b>${nf(cuenta(k))}</b><small><span class="chip ${RP_RES[k][1]}">${RP_RES[k][0]}</span></small></button>`).join("");
   $("rpCmpVer").value = S.rpCmpVer;
   const v = l.filter(x => !S.rpCmpVer || x.res === S.rpCmpVer);
-  $("rpCmpTabla").innerHTML = `<thead><tr><th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">Reporte</th><th class="der">Su Excel</th><th class="der" title="Lo que se va a entregar: si son iguales, esa cantidad; si eligió, la elegida">Atender</th><th class="der">Diferencia</th><th class="der">Vendió</th><th class="der">Stock</th><th class="der" title="Stock de droguería del último kardex subido">Stock droguería</th><th>Notas y comentarios</th><th>Resultado</th></tr></thead><tbody>` +
+  $("rpCmpTabla").innerHTML = `<thead><tr><th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">Reporte</th><th class="der">Su Excel</th><th class="der" title="Lo que se va a entregar: si son iguales, esa cantidad; si eligió, la elegida">Atender</th><th class="der">Diferencia</th><th class="der">Vendió</th><th class="der">Stock</th><th class="der" title="Para cuántos días le alcanza el stock que tiene: stock ÷ (lo que vendió ÷ días del reporte)">Le dura</th><th class="der" title="Stock de droguería del último kardex subido">Stock droguería</th><th>Notas y comentarios</th><th>Resultado</th></tr></thead><tbody>` +
     (v.length ? v.map(x => `<tr><td><code>${esc(x.c)}</code></td><td><b>${esc(x.n)}</b></td><td>${esc(x.l)}</td><td class="der"><b>${nf(x.qr)}</b></td><td class="der"><b>${x.qe == null ? "–" : nf(x.qe)}</b></td><td class="der rp-at">${rpAt(x) == null ? '<span class="muted">elegir →</span>' : `<b>${nf(rpAt(x))}</b>`}</td>
-      <td class="der ${(x.qe || 0) - x.qr ? "rojo-t" : ""}">${(x.qe || 0) - x.qr > 0 ? "+" : ""}${nf((x.qe || 0) - x.qr)}</td><td class="der">${n2(x.venta)}</td><td class="der">${n2(x.stock)}</td><td class="der">${sdTxt(x.c)}</td><td class="rp-notas">${rpNotas(sucCmp, x.c).map(n => `<div class="rp-nota ${n.k}">${esc(n.t)}${n.q ? ` <small>${esc(n.q)}</small>` : ""}</div>`).join("")}</td>
+      <td class="der ${(x.qe || 0) - x.qr ? "rojo-t" : ""}">${(x.qe || 0) - x.qr > 0 ? "+" : ""}${nf((x.qe || 0) - x.qr)}</td><td class="der">${n2(x.venta)}</td><td class="der">${n2(x.stock)}</td><td class="der">${leDura(x)}</td><td class="der">${sdTxt(x.c)}</td><td class="rp-notas">${rpNotas(sucCmp, x.c).map(n => `<div class="rp-nota ${n.k}">${esc(n.t)}${n.q ? ` <small>${esc(n.q)}</small>` : ""}</div>`).join("")}</td>
       <td>${x.res === "dif" || x.res === "rep" || x.res === "exc" ? `${x.res === "dif" ? "" : `<span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.por ? `<br><small class="muted">${esc(x.por)}</small>` : ""}`}<div class="rp-eleg">${x.res === "dif"
           ? `<button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qr}" data-de="rep">Reporte: ${nf(x.qr)}</button><button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qe}" data-de="exc">Excel: ${nf(x.qe)}</button><button type="button" class="rp-b del-b" data-rpel="${esc(x.c)}" data-q="0" data-de="del" title="Eliminar (no se entrega)">✕</button>`
           : `<button type="button" class="rp-b ok-b" data-rpel="${esc(x.c)}" data-q="${x.res === "rep" ? x.qr : x.qe}" data-de="add" title="Añadir ${nf(x.res === "rep" ? x.qr : x.qe)}">✔</button><button type="button" class="rp-b del-b" data-rpel="${esc(x.c)}" data-q="0" data-de="del" title="Eliminar (no se entrega)">✕</button>`}<button type="button" class="rp-b pen-b" data-rpel="${esc(x.c)}" data-q="0" data-de="pen" title="Pendiente (decidir después)">/</button><input type="number" min="0" step="1" class="rp-man" data-rpman="${esc(x.c)}" placeholder="Otro" title="Escriba otra cantidad y pulse Enter"></div>`
         : `<span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.el ? `<br><small class="muted">${x.el.de === "del" ? "eliminado" : x.el.de === "pen" ? "pendiente" : `elegido: <b>${nf(x.el.q)}</b> (${rpDeTxt(x.el.de)})`} <button type="button" class="ab-x rp-desh" data-rpel="${esc(x.c)}" title="Deshacer">✕</button></small>` : ""}${x.por && !x.el ? `<br><small class="muted">${esc(x.por)}</small>` : ""}`}</td></tr>`).join("")
-      : `<tr class="vacia"><td colspan="12">Nada en esta parte.</td></tr>`) + "</tbody>";
+      : `<tr class="vacia"><td colspan="13">Nada en esta parte.</td></tr>`) + "</tbody>";
 }
 $("rpCmp").addEventListener("change", async e => { const a = e.target.files[0]; e.target.value = ""; if (!a) return;
   try { const x = await rpLeerMiExcel(a);
@@ -2770,7 +2773,7 @@ $("rpCmpRes").addEventListener("click", e => { const b = e.target.closest("[data
 $("rpCmpXls").addEventListener("click", () => {
   const l = rpComparar().filter(x => !S.rpCmpVer || x.res === S.rpCmpVer); if (!l.length) return toast("Suba primero su Excel.");
   const r2 = v => v == null ? "" : Math.round(v * 100) / 100;
-  excelDe(l.map(x => ({ "Código": x.c, Medicamento: x.n, Laboratorio: x.l, "Reporte (vendió − stock)": x.qr, "Su Excel": x.qe ?? "", Atender: rpAt(x) ?? "", Diferencia: (x.qe || 0) - x.qr, "Vendió": r2(x.venta), Stock: r2(x.stock), "Stock droguería": S.drogStk ? r2(+(S.drogStk[x.c]?.[0] || 0)) : "", "Notas y comentarios": rpNotas((S.rp.sucs.find(y => y.archivo === S.rpCmpSuc) || {}).suc || "", x.c).map(n => n.t.replace(/^\S+ /, "") + (n.q ? " (" + n.q + ")" : "")).join(" · "), Resultado: RP_RES[x.res][0] + (x.por ? ": " + x.por : "") })),
+  excelDe(l.map(x => ({ "Código": x.c, Medicamento: x.n, Laboratorio: x.l, "Reporte (vendió − stock)": x.qr, "Su Excel": x.qe ?? "", Atender: rpAt(x) ?? "", Diferencia: (x.qe || 0) - x.qr, "Vendió": r2(x.venta), Stock: r2(x.stock), "Le dura (días)": rpDiasDura(x, rpCmpR()?.dias || 0) ?? (x.stock > 0 ? "sin venta" : ""), "Stock droguería": S.drogStk ? r2(+(S.drogStk[x.c]?.[0] || 0)) : "", "Notas y comentarios": rpNotas((S.rp.sucs.find(y => y.archivo === S.rpCmpSuc) || {}).suc || "", x.c).map(n => n.t.replace(/^\S+ /, "") + (n.q ? " (" + n.q + ")" : "")).join(" · "), Resultado: RP_RES[x.res][0] + (x.por ? ": " + x.por : "") })),
     "Comparación", "comparacion_" + rpNomSuc(S.rp.sucs.find(x => x.archivo === S.rpCmpSuc) || {}).toLowerCase().replace(/\W+/g, "_"));
 });
 
