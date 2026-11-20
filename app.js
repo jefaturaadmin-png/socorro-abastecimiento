@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611200900";
+const VERSION_PROY = "202611201000";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2554,7 +2554,9 @@ function rpCalcular() {
     for (const it of r.items) {
       const fr = frDe(it.c, it.n), venta = it.ce + (fr ? it.cf / fr : 0), stock = it.se + (fr ? it.sf / fr : 0);
       const q = redPed(venta - stock);
-      if (q > 0) pedidos.push({ r, it, q, at: q, venta, stock, fr, dias });
+      // si en «Comparar con mi Excel» se eligió otra cantidad para este producto, se entrega la elegida
+      const el = S.rpEleg?.get(rpElKey(r, it.c)), qf = el ? el.q : q;
+      if (qf > 0) pedidos.push({ r, it, qRep: q, q: qf, at: qf, el, venta, stock, fr, dias });
     }
   }
   R.res = pedidos;
@@ -2576,7 +2578,7 @@ function pintarRep() {
   const filas = rpFilas(), uno = R.suc || R.sucs.length === 1, det = R.det, n2 = v => nf(Math.round(v * 100) / 100);
   $("rpTit").textContent = `Lo que se va a entregar · ${nf(filas.length)} productos`;
   $("rpTabla").innerHTML = `<thead><tr>${uno ? "" : "<th>Sucursal</th>"}<th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">Cantidad</th>${det ? `<th class="der">Vendió</th><th class="der">Stock</th>` : ""}</tr></thead><tbody>` +
-    (filas.length ? filas.slice(0, 2000).map(p => `<tr>${uno ? "" : `<td><b>${esc(rpNomSuc(p.r))}</b></td>`}<td><code>${esc(p.it.c)}</code></td><td><b>${esc(p.it.n)}</b></td><td>${esc(p.it.lab)}</td><td class="der"><b>${nf(p.q)}</b></td>
+    (filas.length ? filas.slice(0, 2000).map(p => `<tr>${uno ? "" : `<td><b>${esc(rpNomSuc(p.r))}</b></td>`}<td><code>${esc(p.it.c)}</code></td><td><b>${esc(p.it.n)}</b></td><td>${esc(p.it.lab)}</td><td class="der"><b>${nf(p.q)}</b>${p.el ? ` <small class="muted" title="cantidad elegida en «Comparar con mi Excel» (${p.el.de === "rep" ? "del reporte" : "de su Excel"})">✎</small>` : ""}</td>
       ${det ? `<td class="der">${n2(p.venta)}</td><td class="der">${n2(p.stock)}</td>` : ""}</tr>`).join("")
       : `<tr class="vacia"><td colspan="7">Nada con estos filtros.</td></tr>`) + "</tbody>";
 }
@@ -2596,10 +2598,11 @@ const rpDesempacar = d => { const f = t => t ? new Date(t + "T12:00:00") : null;
     items: JSON.parse(d.items || "[]").map(([c, n, lab, sig, se, sf, ce, cf, pvf, par]) => ({ c, n, lab, sig, se, sf, ce, cf, pvf, par })), sinCod: JSON.parse(d.sinCod || "[]").map(n => ({ n })) }; };
 function escucharRp() {
   if (S.rpSub) return; S.rpSub = true;
-  S.subs.push(onSnapshot(query(collection(db, "proy_config"), where("tipo", "in", ["rp", "rpcmp"])), sn => {
+  S.subs.push(onSnapshot(query(collection(db, "proy_config"), where("tipo", "in", ["rp", "rpcmp", "rpel"])), sn => {
     S.rp.sucs = sn.docs.filter(d => d.data().tipo === "rp").map(d => ({ ...rpDesempacar(d.data()), id: d.id })).sort((a, b) => rpNomSuc(a).localeCompare(rpNomSuc(b)));
     const c = sn.docs.find(d => d.data().tipo === "rpcmp")?.data();
     S.rpCmp = c ? { archivo: c.archivo, suc: c.suc, items: new Map(JSON.parse(c.items || "[]").map(([cod, n, l, q]) => [cod, { c: cod, n, l, q }])) } : null;
+    const el = sn.docs.find(d => d.data().tipo === "rpel")?.data(); try { S.rpEleg = new Map(el ? JSON.parse(el.datos || "[]") : []); } catch { S.rpEleg = new Map(); }
     if (S.vista === "vRep") pintarRep();
   }, e => { S.rpSub = false; msg("rpMsg", "No se pudieron leer los reportes guardados: " + textoError(e), true); }));
   S.subs.push(() => { S.rpSub = false; });
@@ -2633,6 +2636,15 @@ $("rpXls").addEventListener("click", () => {
 
 // ---- comparar con el Excel del usuario: lo que está en los dos (igual o con otra cantidad), lo que falta en uno u otro ----
 S.rpCmp = null; S.rpCmpVer = ""; S.rpCmpSuc = "";
+// cantidad elegida (reporte o su Excel) para los de «Cantidad distinta»: rp_elegido = { «sucursal|código»: { q, de } }
+S.rpEleg = new Map();
+const rpElKey = (r, c) => (r.suc || r.est || r.archivo) + "|" + c;
+async function rpElegir(c, q, de) {
+  const r = S.rp.sucs.find(x => x.archivo === S.rpCmpSuc) || S.rp.sucs[0]; if (!r) return;
+  const k = rpElKey(r, c); if (de) S.rpEleg.set(k, { q, de, por: S.perfil?.nombre || S.perfil?.usuario || "", fecha: new Date().toISOString() }); else S.rpEleg.delete(k);
+  pintarRep();
+  if (!S.prev) try { await setDoc(doc(db, "proy_config", "rp_elegido"), { tipo: "rpel", datos: JSON.stringify([...S.rpEleg]) }); } catch (x) { avisar(x); }
+}
 const RP_RES = { ok: ["Igual", "verde", "Igual"], dif: ["Cantidad distinta", "amb", "Cantidad distinta"], rep: ["Solo en el reporte (no está en su Excel)", "rojo", "Falta en su Excel"], exc: ["Solo en su Excel (no sale del reporte)", "rojo", "Solo en su Excel"] };
 async function rpLeerMiExcel(a) {
   XLSX ??= await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
@@ -2650,10 +2662,11 @@ async function rpLeerMiExcel(a) {
 function rpComparar() {
   const R = S.rp, E = S.rpCmp; if (!E) return [];
   const r = R.sucs.find(x => x.archivo === S.rpCmpSuc) || R.sucs[0]; if (!r) return [];
-  const calc = new Map((R.res || []).filter(p => p.r === r).map(p => [p.it.c, p])), rep = new Map(r.items.map(it => [it.c, it])), frDe = rpFracc([r]);
+  const calc = new Map((R.res || []).filter(p => p.r === r && p.qRep > 0).map(p => [p.it.c, p])), rep = new Map(r.items.map(it => [it.c, it])), frDe = rpFracc([r]);
   const out = [];
   for (const [c, p] of calc) { const e = E.items.get(c), qe = e ? e.q : null;
-    out.push({ c, n: p.it.n, l: p.it.lab, qr: p.q, qe, venta: p.venta, stock: p.stock, res: qe == null || qe === 0 ? "rep" : qe === p.q ? "ok" : "dif" }); }
+    const el = S.rpEleg?.get(rpElKey(r, c)), base = qe == null || qe === 0 ? "rep" : qe === p.qRep ? "ok" : "dif";
+    out.push({ c, n: p.it.n, l: p.it.lab, qr: p.qRep, qe, venta: p.venta, stock: p.stock, res: el && base === "dif" ? "ok" : base, el: base === "dif" ? el : null }); }
   for (const [c, e] of E.items) { if (calc.has(c) || !(e.q > 0)) continue; const it = rep.get(c), fr = it ? frDe(it.c, it.n) : null;
     out.push({ c, n: e.n || it?.n || "", l: e.l || it?.lab || "", qr: 0, qe: e.q, venta: it ? it.ce + (fr ? it.cf / fr : 0) : null, stock: it ? it.se + (fr ? it.sf / fr : 0) : null, res: "exc",
       por: !it ? "no vendió en los días del reporte" : "su stock alcanza para lo que vendió" }); }
@@ -2675,7 +2688,8 @@ function pintarRpCmp() {
   $("rpCmpTabla").innerHTML = `<thead><tr><th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">Reporte</th><th class="der">Su Excel</th><th class="der">Diferencia</th><th class="der">Vendió</th><th class="der">Stock</th><th class="der" title="Stock de droguería del último kardex subido">Stock droguería</th><th>Resultado</th></tr></thead><tbody>` +
     (v.length ? v.map(x => `<tr><td><code>${esc(x.c)}</code></td><td><b>${esc(x.n)}</b></td><td>${esc(x.l)}</td><td class="der"><b>${nf(x.qr)}</b></td><td class="der"><b>${x.qe == null ? "–" : nf(x.qe)}</b></td>
       <td class="der ${(x.qe || 0) - x.qr ? "rojo-t" : ""}">${(x.qe || 0) - x.qr > 0 ? "+" : ""}${nf((x.qe || 0) - x.qr)}</td><td class="der">${n2(x.venta)}</td><td class="der">${n2(x.stock)}</td><td class="der">${sdTxt(x.c)}</td>
-      <td><span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.por ? `<br><small class="muted">${esc(x.por)}</small>` : ""}</td></tr>`).join("")
+      <td>${x.res === "dif" ? `<div class="rp-eleg"><button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qr}" data-de="rep">Reporte: ${nf(x.qr)}</button><button type="button" class="btn sm" data-rpel="${esc(x.c)}" data-q="${x.qe}" data-de="exc">Excel: ${nf(x.qe)}</button></div>`
+        : `<span class="chip ${RP_RES[x.res][1]}">${RP_RES[x.res][2]}</span>${x.el ? `<br><small class="muted">elegido: <b>${nf(x.el.q)}</b> (${x.el.de === "rep" ? "del reporte" : "de su Excel"}) <button type="button" class="ab-x rp-desh" data-rpel="${esc(x.c)}" title="Deshacer">✕</button></small>` : ""}${x.por ? `<br><small class="muted">${esc(x.por)}</small>` : ""}`}</td></tr>`).join("")
       : `<tr class="vacia"><td colspan="10">Nada en esta parte.</td></tr>`) + "</tbody>";
 }
 $("rpCmp").addEventListener("change", async e => { const a = e.target.files[0]; e.target.value = ""; if (!a) return;
@@ -2684,12 +2698,13 @@ $("rpCmp").addEventListener("change", async e => { const a = e.target.files[0]; 
     toast("Su Excel quedó guardado para comparar");
   } catch (x) { toast(`«${a.name}»: ${x.message || x}`); } });
 $("rpCmpSuc").addEventListener("change", e => { S.rpCmpSuc = e.target.value; pintarRpCmp(); });
+$("rpCmpTabla").addEventListener("click", e => { const b = e.target.closest("[data-rpel]"); if (!b) return; rpElegir(b.dataset.rpel, +b.dataset.q || 0, b.dataset.de || ""); });
 $("rpCmpVer").addEventListener("change", e => { S.rpCmpVer = e.target.value; pintarRpCmp(); });
 $("rpCmpRes").addEventListener("click", e => { const b = e.target.closest("[data-rpcmpver]"); if (!b) return; S.rpCmpVer = S.rpCmpVer === b.dataset.rpcmpver ? "" : b.dataset.rpcmpver; pintarRpCmp(); });
 $("rpCmpXls").addEventListener("click", () => {
   const l = rpComparar().filter(x => !S.rpCmpVer || x.res === S.rpCmpVer); if (!l.length) return toast("Suba primero su Excel.");
   const r2 = v => v == null ? "" : Math.round(v * 100) / 100;
-  excelDe(l.map(x => ({ "Código": x.c, Medicamento: x.n, Laboratorio: x.l, "Reporte (vendió − stock)": x.qr, "Su Excel": x.qe ?? "", Diferencia: (x.qe || 0) - x.qr, "Vendió": r2(x.venta), Stock: r2(x.stock), "Stock droguería": S.drogStk ? r2(+(S.drogStk[x.c]?.[0] || 0)) : "", Resultado: RP_RES[x.res][0] + (x.por ? ": " + x.por : "") })),
+  excelDe(l.map(x => ({ "Código": x.c, Medicamento: x.n, Laboratorio: x.l, "Reporte (vendió − stock)": x.qr, "Su Excel": x.qe ?? "", "Cantidad elegida": x.el ? x.el.q : x.res === "ok" ? x.qr : "", Diferencia: (x.qe || 0) - x.qr, "Vendió": r2(x.venta), Stock: r2(x.stock), "Stock droguería": S.drogStk ? r2(+(S.drogStk[x.c]?.[0] || 0)) : "", Resultado: RP_RES[x.res][0] + (x.por ? ": " + x.por : "") })),
     "Comparación", "comparacion_" + rpNomSuc(S.rp.sucs.find(x => x.archivo === S.rpCmpSuc) || {}).toLowerCase().replace(/\W+/g, "_"));
 });
 

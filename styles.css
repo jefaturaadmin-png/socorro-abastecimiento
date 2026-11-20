@@ -849,3 +849,4 @@ body.nav-abierta .top .nav button { text-align: left; justify-content: flex-star
 .rp-opc summary { cursor: pointer; font-size: 13px; color: var(--muted, #6b7280) } .rp-opc[open] summary { margin-bottom: 8px }
 #rpCmpTabla .chip { white-space: nowrap; font-size: 11.5px }
 #vRep .tabla-wrap { max-height: 72vh; overflow: auto } #vRep .tabla thead th { position: sticky; top: 0; z-index: 2; background: #eef2f8; box-shadow: 0 1px 0 #dfe4ec }
+.rp-eleg { display: flex; gap: 6px; flex-wrap: nowrap } .rp-eleg .btn { white-space: nowrap } .rp-desh { position: static; display: inline; padding: 0 4px; font-size: 12px }
