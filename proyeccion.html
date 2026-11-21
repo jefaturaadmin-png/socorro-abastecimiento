@@ -1406,7 +1406,7 @@ async function subirClas(files) {
         // con código de producto: el laboratorio también por código (no depende del nombre) y, si trae stock, para compararlo
         const cp = iP >= 0 ? String(c[iP] || '').trim() : '';
         if (cp && x.l) pc[cp] = x.l;
-        if (cp && iSE >= 0) { const fr = Math.max(1, +String(c[iFr] || '1').replace(',', '.') || 1); stockRep.set(cp, { n: String(c[iN] || '').trim(), sg: x.l, v: (+String(c[iSE] || 0).replace(',', '.') || 0) + (+String(c[iSM] || 0).replace(',', '.') || 0) / fr, fr }); }
+        if (cp && iSE >= 0) { const fr = Math.max(1, +String(c[iFr] || '1').replace(',', '.') || 1); stockRep.set(cp, { k: +String(c[h.indexOf('coscom')] ?? '').replace(',', '.') || 0, n: String(c[iN] || '').trim(), sg: x.l, v: (+String(c[iSE] || 0).replace(',', '.') || 0) + (+String(c[iSM] || 0).replace(',', '.') || 0) / fr, fr }); }
         n++;
       }
       hechos.push(`${file.name.replace(/^[0-9a-f]{8}-/, '')}: ${nf0.format(n)} leídos · ` + cols.map(([k]) => `${CAMPO[k]} ${nf0.format(cuenta[k])} actualizados`).join(', ') + ` · ${nf0.format(nuevos)} nuevos`);
@@ -1425,6 +1425,13 @@ async function subirClas(files) {
     ponerCLAS(out);
     msg('✔ Clasificación actualizada · ' + hechos.join(' · '));
     if (stockRep.size) compararStock(stockRep);
+    // productos del reporte de stock que todavía no están en el kardex (nuevos, sin ningún movimiento): se agregan para
+    // que aparezcan en el Kardex, en los buscadores y en los módulos (con stock 0 hasta que tengan movimiento)
+    if (stockRep.size && window.agregarProductos) {
+      // solo los que importan: con stock en algún lado, o códigos nuevos (26000 en adelante); no los miles de códigos viejos inactivos
+      const nuevosP = [...stockRep].filter(([c, x]) => !S.idx?.has(c) && (x.v > 0 || (/^\d+$/.test(c) && +c >= 26000))).map(([c, x]) => ({ c, n: x.n, fr: x.fr, k: x.k || 0 }));
+      if (nuevosP.length) { const n = await window.agregarProductos(nuevosP); if (n) toast(`✔ ${nf0.format(n)} productos nuevos (sin movimiento) agregados al Kardex`); }
+    }
   } catch (e) { msg('No se pudo actualizar la clasificación: ' + (e.code === 'permission-denied' ? 'falta publicar las reglas nuevas (firestore.rules).' : e.message || e)); }
 }
 let clasDe = null;
@@ -2779,6 +2786,6 @@ window.iniciarKardex = iniciar;
 <script src="sucursales.js?v=202611201800"></script>
 <script src="estadistica.js?v=202611190300"></script>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="proyeccion.js?v=202611210800"></script>
+<script type="module" src="proyeccion.js?v=202611211000"></script>
 
 </body></html>

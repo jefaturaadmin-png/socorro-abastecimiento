@@ -565,6 +565,16 @@ async function recalcular() {
   usarPron(o, false); pintarFuente(`kardex al ${window.corteTxt ? window.corteTxt(corte) : corte.split("-").reverse().join("/")}`); msg("");
   return "";
 }
+// productos que todavía no tienen ningún movimiento en el kardex (vienen del reporte de stock por laboratorio):
+// se agregan al maestro (nombre, fraccionero, costo) para que existan en toda la página. Devuelve cuántos se agregaron.
+window.agregarProductos = async lista => {
+  try {
+    const m = await leerMaestro(); m.prod ??= {}; let n = 0;
+    for (const p of lista) if (p.c && !m.prod[p.c] && p.n) { m.prod[p.c] = [p.n, +p.fr || 1, +p.k || 0, ""]; n++; }
+    if (!n) return 0;
+    await guardarMaestro(m); window.aplicarStock?.(m); return n;
+  } catch (e) { console.warn("No se pudieron agregar los productos nuevos", e); return 0; }
+};
 window.stockKardex = async () => { try { return await leerMaestro(); } catch (e) { console.warn(e); return null; } };
 window.recalcularPron = recalcular;
 window.pronosticar = pronosticar; window.METODOS = METODOS;
