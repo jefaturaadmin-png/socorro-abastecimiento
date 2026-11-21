@@ -7,7 +7,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc as fsSet, updateDoc as fsUpdate, deleteDoc as fsDelete, onSnapshot, query, where,
   serverTimestamp, writeBatch as fsBatch, deleteField
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
-import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION, FORM_URGENCIA } from "./config.js?v=202611130400";
+import { firebaseConfig, DOMINIO, FARMACIAS, NOMBRES_VISIBLES, MOTIVOS_BLOQUEO, MOTIVOS_REACTIVACION, FORM_URGENCIA } from "./config.js?v=202611210300";
 import { MODELOS, COLORES_G, PUNTOS_INICIALES, leerUbicacion, fmtDMS, ordenar, linkMaps, matriz, trazo, cargarLeaflet } from "./rutas.js?v=202611091900";
 import { crearEditor, ejemploAbastecimiento, FORMAS, COLORES, svgDe, limites, fmtMin, totalMin, UNIDADES } from "./flued.js?v=202611032300";
 
@@ -2242,7 +2242,7 @@ $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) {
 // ---------- pedir desde la página: se envía al mismo formulario de Google (cae en la misma hoja de Drive) ----------
 S.urgNuevo = []; S.urgBus = "";
 const sucFormDe = f => FORM_URGENCIA.sucursales[f] || corto(f);
-function abrirNuevoUrg() { cargarCatVivo(); S.urgNuevo = []; S.urgBus = ""; S.urgSucSel = miFarm() || ""; pintarNuevoUrg(); $("urgDlg").showModal(); $("urgBus").focus(); }
+function abrirNuevoUrg() { cargarCatVivo(); S.urgNuevo = []; S.urgBus = ""; S.urgSucSel = miFarm() || ""; msg("urgMsg", ""); pintarNuevoUrg(); $("urgDlg").showModal(); $("urgBus").focus(); }
 function pintarNuevoUrg() {
   const fija = !!miFarm() && !esAdmin();
   $("urgSucBox").innerHTML = fija ? `<b>${esc(nombreFarm(miFarm()))}</b> <small class="muted">(tu sucursal)</small>`
@@ -2255,7 +2255,7 @@ $("pdNuevo").addEventListener("click", abrirNuevoUrg);
 $("pdNuevoA").addEventListener("click", abrirNuevoUrg);
 $("urgBus").addEventListener("input", e => {
   S.urgBus = e.target.value; const box = $("urgRes");
-  const t = S.urgBus.trim(), libre = /^\d{3,6}$/.test(t) && !prodCat(t) && !S.urgNuevo.some(a => a.c === t);
+  const t = S.urgBus.trim(), libre = /^\d{3,5}$/.test(t) && !prodCat(t) && !S.urgNuevo.some(a => a.c === t);
   if (libre && Date.now() - (S.catVivoT || 0) > 60000) cargarCatVivo(true).then(n => { if (n && $("urgBus").value === e.target.value) $("urgBus").dispatchEvent(new Event("input")); });
   box.innerHTML = resBusqueda({ c: "" }, S.urgBus, p => S.urgNuevo.some(a => a.c === p.c), "data-urg-add")
     + (libre ? `<button type="button" data-urg-cod="${esc(t)}"><b>${esc(t)}</b> Agregar este código tal cual (no está en el catálogo)</button>` : ""); box.hidden = !t;
@@ -2279,7 +2279,10 @@ $("urgDlg").addEventListener("click", async e => {
     // Google no deja leer la respuesta desde otra página (no-cors): se envía y luego se confirma al releer la hoja
     // como en el formulario: SOLO los códigos, separados por coma ("21648, 00052"). El formulario no acepta otra cosa en ese campo
     // (si se manda texto, Google rechaza la respuesta sin avisar). La cantidad se guarda aparte, en la página (urgencia_cant).
-    const items = S.urgNuevo.map(p => ({ c: p.c, q: Math.max(1, Math.round(+p.q || 1)) })), hoy = new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+    // el formulario solo acepta códigos de 5 dígitos (^\d{5}$): los más cortos se completan con ceros
+    const items = S.urgNuevo.map(p => ({ c: /^\d{1,5}$/.test(String(p.c).trim()) ? String(p.c).trim().padStart(5, "0") : String(p.c).trim(), q: Math.max(1, Math.round(+p.q || 1)) })), hoy = new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+    const malos = items.filter(p => !/^\d{5}$/.test(p.c));
+    if (malos.length) { b.disabled = false; return msg("urgMsg", `El formulario solo acepta códigos de 5 dígitos: ${malos.map(p => p.c).join(", ")}. Quítelos e inténtelo de nuevo.`, true); }
     // UN ENVÍO POR CÓDIGO: si una celda trae varios códigos («25843, 26456»), Google la exporta vacía a la página
     for (let i = 0; i < items.length; i++) {
       msg("urgMsg", items.length > 1 ? `Enviando ${i + 1} de ${items.length}…` : "Enviando…");
