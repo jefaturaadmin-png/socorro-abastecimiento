@@ -182,7 +182,8 @@ window.subirKardex = async function (files) {
     let filas = 0, nuevas = 0, repetidas = 0, ignoradas = 0, stockCambio = false, diarias = 0;
     const cambioDia = new Set();
     maestro.uv ??= {};
-    maestro.ua ??= {};   // último abastecimiento de cada producto en cada sucursal: {cod: {alm: [fecha, cantidad, [numkar…]]}}
+    maestro.ua ??= {};
+    maestro.uc ??= {};   // último ingreso por compra (facturación) de cada producto: {cod: [fecha, cantidad, [numkar…]]}   // último abastecimiento de cada producto en cada sucursal: {cod: {alm: [fecha, cantidad, [numkar…]]}}
     const malas = [];
     for (const f of files) {
       COL = COL0; const ign0 = ignoradas;
@@ -207,6 +208,12 @@ window.subirKardex = async function (files) {
         const ing = num(x[COL.iE]) + num(x[COL.iM]) / fra, sal = num(x[COL.sE]) + num(x[COL.sM]) / fra;
         // última venta del producto (para los que dejaron de moverse)
         if (tipo === VENTA && (!maestro.uv[cod] || fecha > maestro.uv[cod])) { maestro.uv[cod] = fecha; stockCambio = true; }
+        // último ingreso por compra («CARGO COMPRA…», en droguería o en el almacén principal): fecha y cantidad
+        if (/^CARGO COMPRA/i.test(tipo) && ing > 0) {
+          const u = maestro.uc[cod];
+          if (!u || fecha > u[0]) { maestro.uc[cod] = [fecha, Math.round(ing * 1000) / 1000, [nk]]; stockCambio = true; }
+          else if (fecha === u[0] && !(u[2] || []).includes(nk)) { u[1] = Math.round((u[1] + ing) * 1000) / 1000; (u[2] ??= []).push(nk); stockCambio = true; }
+        }
         // último abastecimiento a la sucursal («CARGO ENVIO» en su almacén): fecha y cantidad (varios a la misma hora se suman una vez cada uno)
         if (ENVIO.test(tipo) && alm !== DROG && ing > 0) {
           const ua = (maestro.ua[cod] ??= {}), u = ua[alm];
