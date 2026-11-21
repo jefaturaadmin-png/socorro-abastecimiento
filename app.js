@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611202500";
+const VERSION_PROY = "202611210100";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2704,6 +2704,7 @@ function escucharRpNotas() {
   // pedidos de urgencia (los mismos que usa el módulo de cada sucursal) y los días que se consideran (criterio de Atención)
   S.subs.push(onSnapshot(doc(db, "proy_config", "atencion_cfg"), d => { S.rpUrgDias = +d.data()?.def?.urgDias || 14; S.rpCfgProd = d.data()?.prod || {}; if (S.vista === "vRep") pintarRpCmp(); }, () => {}));
   cargarPedidos().then(() => { if (S.vista === "vRep") pintarRpCmp(); }).catch(() => {});
+  window.cargarClasificacion?.().then(c => { S.rpClas = c; if (S.vista === "vRep") pintarRpCmp(); }).catch(() => {});
   S.subs.push(() => { S.rpNotSub = false; });
 }
 const quienFecha = d => { const f = d?.fecha?.toDate ? d.fecha.toDate() : d?.fecha ? new Date(d.fecha) : null;
@@ -2726,6 +2727,11 @@ function rpNotas(suc, c) {
   for (const [v, x] of N.reemp || []) if (x.nuevo === c) l.push({ t: "🔁 Reemplaza a " + v + (x.nViejo ? " – " + x.nViejo : ""), q: "", k: "kr" });
   return l;
 }
+// línea y familia de cada producto (la misma clasificación del Kardex), para filtrar la comparación
+S.rpLin = ""; S.rpFam = "";
+const nomNrp = t => String(t || "").trim().toUpperCase().replace(/\s+/g, " ");
+function rpClasDe(n) { const C = S.rpClas; if (!C?.p) return { t: "", f: "" }; const a = C.p[nomNrp(n)] || [-1, -1, -1]; return { t: C.t[a[0]] || "", f: C.f[a[2]] || "" }; }
+const rpPasaClas = x => { if (!S.rpLin && !S.rpFam) return true; const k = rpClasDe(x.n); return (!S.rpLin || k.t === S.rpLin) && (!S.rpFam || k.f === S.rpFam); };
 // lo que se va a entregar de cada fila: la elegida; si son iguales o solo sale del reporte, la del reporte; solo en su Excel: 0
 const rpAt = x => x.el ? x.el.q : x.res === "dif" ? null : x.res === "exc" ? 0 : x.qr;
 const rpDeTxt = de => ({ rep: "del reporte", exc: "de su Excel", man: "escrita a mano", add: "añadido", del: "eliminado", pen: "pendiente" })[de] || "";
@@ -2739,7 +2745,12 @@ function pintarRpCmp() {
   if (!S.drogStk) cargarDrogStk().then(() => { if (S.vista === "vRep") pintarRpCmp(); });
   const sdV = c => S.drogStk ? +(S.drogStk[c]?.[0] || 0) : null, sdTxt = c => { const v = sdV(c); return v == null ? "…" : v > 0 ? `<b>${nf(Math.round(v * 100) / 100)}</b>` : '<span class="rojo-t">0</span>'; };
   escucharRpNotas(); const sucCmp = (R.sucs.find(x => x.archivo === S.rpCmpSuc) || {}).suc || "";
-  const l = rpComparar(), cuenta = k => l.filter(x => x.res === k).length, n2 = v => v == null ? "–" : nf(Math.round(v * 100) / 100);
+  const todos = rpComparar();
+  // filtros de línea y familia (opciones: las de los productos de esta comparación)
+  const opc = (k, sel, act) => { const v = [...new Set(todos.map(x => rpClasDe(x.n)[k]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    $(sel).innerHTML = `<option value="">Todas</option>` + v.map(o => `<option ${o === act ? "selected" : ""}>${esc(o)}</option>`).join(""); };
+  opc("t", "rpLin", S.rpLin); opc("f", "rpFam", S.rpFam);
+  const l = todos.filter(rpPasaClas), cuenta = k => l.filter(x => x.res === k).length, n2 = v => v == null ? "–" : nf(Math.round(v * 100) / 100);
   const dias = rpCmpR()?.dias || 0, leDura = x => { const d = rpDiasDura(x, dias); return d == null ? (x.stock > 0 ? '<span class="muted">sin venta</span>' : '<span class="muted">·</span>') : `<span class="${d < 7 ? "rojo-t" : ""}">${nf(d)} d</span>`; };
   $("rpCmpTxt").innerHTML = `Su Excel <b>${esc(E.archivo)}</b> (${nf(E.items.size)} productos) contra lo que sale del reporte de <b>${esc(rpNomSuc(R.sucs.find(x => x.archivo === S.rpCmpSuc)))}</b>.`;
   $("rpCmpRes").innerHTML = ["ok", "dif", "rep", "exc", "pen", "del"].map(k => `<button type="button" class="card ent-card${S.rpCmpVer === k ? " act" : ""}" data-rpcmpver="${k}"><b>${nf(cuenta(k))}</b><small><span class="chip ${RP_RES[k][1]}">${RP_RES[k][0]}</span></small></button>`).join("");
@@ -2763,6 +2774,8 @@ $("rpCmp").addEventListener("change", async e => { const a = e.target.files[0]; 
     if (!S.prev) await setDoc(doc(db, "proy_config", id), { tipo: "rpcmp", sk, archivo: x.archivo, suc: r.suc || "", items: JSON.stringify([...x.items.values()].map(y => [y.c, y.n, y.l, y.q])), subido: new Date().toISOString() });
     toast(`Su Excel quedó guardado para comparar con ${rpNomSuc(r)}`);
   } catch (x) { toast(`«${a.name}»: ${x.message || x}`); } });
+$("rpLin").addEventListener("change", e => { S.rpLin = e.target.value; pintarRpCmp(); });
+$("rpFam").addEventListener("change", e => { S.rpFam = e.target.value; pintarRpCmp(); });
 $("rpCmpSuc").addEventListener("change", e => { S.rpCmpSuc = e.target.value; S.rp.suc = e.target.value; S.rpCmpVer = ""; pintarRep(); });
 // cantidad escrita a mano (si no está de acuerdo con ninguna de las dos): se guarda al pulsar Enter o al salir del cuadro
 $("rpCmpTabla").addEventListener("change", e => { const i = e.target.closest("[data-rpman]"); if (!i || i.value === "") return;
@@ -2771,7 +2784,7 @@ $("rpCmpTabla").addEventListener("click", e => { const b = e.target.closest("[da
 $("rpCmpVer").addEventListener("change", e => { S.rpCmpVer = e.target.value; pintarRpCmp(); });
 $("rpCmpRes").addEventListener("click", e => { const b = e.target.closest("[data-rpcmpver]"); if (!b) return; S.rpCmpVer = S.rpCmpVer === b.dataset.rpcmpver ? "" : b.dataset.rpcmpver; pintarRpCmp(); });
 $("rpCmpXls").addEventListener("click", () => {
-  const l = rpComparar().filter(x => !S.rpCmpVer || x.res === S.rpCmpVer); if (!l.length) return toast("Suba primero su Excel.");
+  const l = rpComparar().filter(x => (!S.rpCmpVer || x.res === S.rpCmpVer) && rpPasaClas(x)); if (!l.length) return toast("No hay nada para descargar con estos filtros.");
   const r2 = v => v == null ? "" : Math.round(v * 100) / 100;
   excelDe(l.map(x => ({ "Código": x.c, Medicamento: x.n, Laboratorio: x.l, "Reporte (vendió − stock)": x.qr, "Su Excel": x.qe ?? "", Atender: rpAt(x) ?? "", Diferencia: (x.qe || 0) - x.qr, "Vendió": r2(x.venta), Stock: r2(x.stock), "Le dura (días)": rpDiasDura(x, rpCmpR()?.dias || 0) ?? (x.stock > 0 ? "sin venta" : ""), "Stock droguería": S.drogStk ? r2(+(S.drogStk[x.c]?.[0] || 0)) : "", "Notas y comentarios": rpNotas((S.rp.sucs.find(y => y.archivo === S.rpCmpSuc) || {}).suc || "", x.c).map(n => n.t.replace(/^\S+ /, "") + (n.q ? " (" + n.q + ")" : "")).join(" · "), Resultado: RP_RES[x.res][0] + (x.por ? ": " + x.por : "") })),
     "Comparación", "comparacion_" + rpNomSuc(S.rp.sucs.find(x => x.archivo === S.rpCmpSuc) || {}).toLowerCase().replace(/\W+/g, "_"));
