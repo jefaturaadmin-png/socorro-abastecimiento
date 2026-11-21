@@ -233,6 +233,15 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ---------- comentarios de mejora que deja cada sucursal (en Productos agotados o de extrema urgencia); los lee Abastecimiento ----------
+    match /sugerencias/{id} {
+      allow read: if esAdmin() || (conSucursal() && resource.data.suc == perfil().get('farmacia', ''));
+      allow create: if conPerfil() && request.resource.data.porUid == request.auth.uid
+        && request.resource.data.txt is string && request.resource.data.txt.size() >= 3 && request.resource.data.txt.size() <= 1000
+        && (esAdmin() || request.resource.data.suc == perfil().get('farmacia', ''));
+      allow update, delete: if esAdmin();
+    }
+
     // ---------- cantidad de cada pedido de urgencia (el formulario de Google solo guarda los códigos) ----------
     match /urgencia_cant/{id} {
       allow read: if conPerfil();

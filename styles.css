@@ -859,3 +859,13 @@ body.nav-abierta .top .nav button { text-align: left; justify-content: flex-star
 .rp-nota.fija { background: #e3f4e6; color: #1f7a2e }
 #vRep .wrap.ancho { max-width: 100%; padding-inline: clamp(10px, 3vw, 60px) } #vRep .tabla th, #vRep .tabla td { padding-left: 10px; padding-right: 10px } #rpCmpTabla td:nth-child(3) { max-width: 120px; font-size: 12px } #rpCmpTabla td:nth-child(2) { min-width: 170px; max-width: 240px } #rpCmpTabla .rp-notas { min-width: 150px; max-width: 200px } #vRep .tabla th { font-size: 11px; letter-spacing: .02em; white-space: normal } #rpCmpTabla .rp-eleg { flex-wrap: nowrap }
 .rp-b.rp-mini { width: 22px; height: 22px; font-size: 11px; vertical-align: middle; margin-left: 4px }
+.pd-b-grid:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start }
+@media (max-width: 1000px) { .pd-b-grid:not([hidden]) { grid-template-columns: 1fr } }
+.pd-lado { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 84px } .pd-lado .card { padding: 16px }
+.pd-ind h3, .pd-sug h3 { margin: 0 0 10px; font-size: 16px } .pd-ind-g { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center }
+.pd-ind-g div { background: #eef2f8; border-radius: 10px; padding: 8px 4px } .pd-ind-g b { display: block; font-size: 22px; color: #14306B } .pd-ind-g small { font-size: 11px; color: #6b7280 }
+.pd-ind-t { font-size: 12.5px; margin: 10px 0 } .pd-barras { display: flex; align-items: flex-end; gap: 3px; height: 70px; margin-bottom: 4px }
+.pd-barras span { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100% } .pd-barras i { display: block; width: 100%; background: #F28C1E; border-radius: 3px 3px 0 0; min-height: 2px } .pd-barras small { font-size: 9px; color: #888 }
+.pd-sug textarea, #urgCom { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; padding: 8px; border: 1px solid #d6dbe4; border-radius: 8px } .pd-sug .btn { margin-top: 8px; width: 100% }
+.sug-it { font-size: 12.5px; background: #f6f7fa; border-radius: 8px; padding: 6px 8px; margin-top: 6px } .sug-it small { display: block; font-size: 10px; color: #888 }
+.pd-com { display: block; font-size: 12px; color: #2a5bb5; margin-top: 2px } .urg-stk { font-size: 12px; margin-left: 6px }

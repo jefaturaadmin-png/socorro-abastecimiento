@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611210500";
+const VERSION_PROY = "202611210600";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2151,18 +2151,63 @@ function pintarPedidos() {
   if (!P) { $("pdTabla").innerHTML = `<tbody><tr class="vacia"><td>${S.pdErr ? "" : "Leyendo los pedidos…"}</td></tr></tbody>`; if (!admin) $("pdLista").hidden = false; return; }
   $("pdHora").textContent = "Actualizado " + new Date(P.t).toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
   if (!admin && P.cS < 0) { msg("pdMsg", "La hoja no tiene una columna de sucursal; consulta con Abastecimiento.", true); $("pdB").hidden = true; return; }
-  if (admin) pintarTableroUrg(P); else pintarTarjetasUrg();
+  if (admin) { pintarTableroUrg(P); if (esAdmin()) escucharSugAdm(); } else pintarTarjetasUrg();
 }
 // ---------- usuarios: tabla simple (medicamento, fecha y hora, si hay en droguería) ----------
 const hayDrog = c => { if (S.drogStk == null) return '<span class="muted">…</span>'; const v = S.drogStk[c]?.[0];
   return v > 0 ? `<span class="chip verde">✓ Sí hay (${nf(v)})</span>` : c ? '<span class="chip rojo">✗ No hay</span>' : '<span class="muted">–</span>'; };
 function pintarTarjetasUrg() {
   const lista = pedidosVisibles();
-  $("pdTablaU").innerHTML = `<thead><tr><th>Medicamento</th><th>Fecha y hora del pedido</th><th>¿Hay en droguería?</th></tr></thead><tbody>` +
-    (lista.length ? lista.map(d => `<tr><td class="p"><b>${esc(nomProd(d))}</b>${d.cod && d.nom ? `<code>${esc(d.cod)}</code>` : ""}</td>
+  $("pdTablaU").innerHTML = `<thead><tr><th>Medicamento</th><th class="der">Cant.</th><th class="der" title="Lo que tiene hoy su sucursal (último kardex)">Stock en tu sucursal</th><th>Fecha y hora del pedido</th><th>¿Hay en droguería?</th></tr></thead><tbody>` +
+    (lista.length ? lista.map(d => `<tr><td class="p"><b>${esc(nomProd(d))}</b>${d.cod && d.nom ? `<code>${esc(d.cod)}</code>` : ""}${d.mot ? `<small class="pd-com">💬 ${esc(d.mot)}</small>` : ""}</td>
+      <td class="der">${d.q ? nf(d.q) : ""}</td><td class="der">${stockMio(d.cod)}</td>
       <td class="f">${d.f ? d.f.toLocaleString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : esc(d.x[S.ped.cF] || "")}</td><td>${hayDrog(d.cod)}</td></tr>`).join("")
-      : '<tr class="vacia"><td colspan="3">No hay pedidos en esas fechas.</td></tr>') + "</tbody>";
+      : '<tr class="vacia"><td colspan="5">No hay pedidos en esas fechas.</td></tr>') + "</tbody>";
+  pintarIndUrg(); escucharSug();
 }
+// stock de la sucursal del usuario (último kardex subido; el mismo que en su módulo)
+const stockMioV = c => { const f = miFarm(); if (!f || !c || !S.karStock) return null; return +(S.karStock[c]?.[f]?.[0] || 0); };
+const stockMio = c => { const v = stockMioV(c); return v == null ? '<span class="muted">–</span>' : v > 0 ? `<b>${nf(Math.round(v * 100) / 100)}</b>` : '<span class="rojo-t">0</span>'; };
+// indicador: cuánto está pidiendo la sucursal (hoy, 7 días, el mes) y los últimos 14 días en barras
+function pintarIndUrg() {
+  const f = miFarm(), l = (S.ped?.datos || []).filter(d => d.suc === f && d.f), box = $("pdInd"); if (!box) return;
+  const desde = n => +inicioDia(n), mes = new Date(); mes.setDate(1); mes.setHours(0, 0, 0, 0);
+  const cuenta = t => { const x = l.filter(d => +d.f >= t); return { n: x.length, u: x.reduce((a, d) => a + (+d.q || 1), 0), p: new Set(x.map(d => d.cod || d.nom)).size }; };
+  const hoy = cuenta(desde(0)), sem = cuenta(desde(6)), m = cuenta(+mes), red = (S.ped?.datos || []).filter(d => d.f && +d.f >= desde(6));
+  const sucs = new Set(red.map(d => d.suc).filter(Boolean)).size || 1, prom = red.length / sucs;
+  const dias = Array.from({ length: 14 }, (_, i) => { const a = desde(13 - i), b = a + 864e5; return { d: new Date(a), n: l.filter(d => +d.f >= a && +d.f < b).length }; });
+  const max = Math.max(1, ...dias.map(x => x.n));
+  box.innerHTML = `<h3>📊 Tus pedidos de urgencia</h3>
+    <div class="pd-ind-g"><div><b>${nf(hoy.n)}</b><small>hoy</small></div><div><b>${nf(sem.n)}</b><small>últimos 7 días</small></div><div><b>${nf(m.n)}</b><small>este mes</small></div></div>
+    <p class="muted pd-ind-t">Este mes: <b>${nf(m.p)}</b> productos distintos · <b>${nf(m.u)}</b> unidades.<br>Últimos 7 días: tu sucursal <b>${nf(sem.n)}</b> · promedio de las sucursales <b>${nf(Math.round(prom))}</b>.</p>
+    <div class="pd-barras">${dias.map(x => `<span title="${x.d.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit" })}: ${x.n} pedidos"><i style="height:${Math.round(x.n / max * 100)}%"></i><small>${x.d.getDate()}</small></span>`).join("")}</div>
+    <small class="muted">Pedidos por día (últimos 14 días)</small>`;
+}
+// Abastecimiento: todos los comentarios de mejora, en vivo
+function escucharSugAdm() {
+  if (S.sugAdmSub) return pintarSugAdm(); S.sugAdmSub = true;
+  S.subs.push(onSnapshot(collection(db, "sugerencias"), sn => { S.sugAdm = sn.docs.map(d => d.data()).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))); pintarSugAdm(); },
+    e => { S.sugAdmSub = false; $("pdSugAdmL").innerHTML = `<p class="muted">${esc(textoError(e))}</p>`; }));
+  S.subs.push(() => { S.sugAdmSub = false; });
+}
+function pintarSugAdm() { const l = S.sugAdm; if (!l) return;
+  $("pdSugAdmL").innerHTML = l.length ? l.slice(0, 100).map(x => `<div class="sug-it"><b>${esc(x.suc ? corto(x.suc) : "")}</b> · ${esc(x.txt)}<small>${esc(x.porNombre || "")} · ${new Date(x.fecha).toLocaleString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</small></div>`).join("") : '<p class="muted">Todavía no hay comentarios.</p>'; }
+// comentarios de mejora (sugerencias/{id}): los escribe cada sucursal; los lee Abastecimiento
+function escucharSug() {
+  if (S.sugSub || !miFarm()) return; S.sugSub = true;
+  S.subs.push(onSnapshot(query(collection(db, "sugerencias"), where("suc", "==", miFarm())), sn => {
+    S.sugMias = sn.docs.map(d => d.data()).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))); pintarSugMias(); }, () => { S.sugSub = false; }));
+  S.subs.push(() => { S.sugSub = false; });
+}
+function pintarSugMias() { const l = S.sugMias || [];
+  $("sugMias").innerHTML = l.length ? `<small class="muted">Tus comentarios enviados:</small>${l.slice(0, 5).map(x => `<div class="sug-it">${esc(x.txt)}<small>${esc(x.porNombre || "")} · ${new Date(x.fecha).toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</small></div>`).join("")}` : ""; }
+$("sugEnviar").addEventListener("click", async () => {
+  if (S.prev) return msg("sugMsg", PREVIA.message, true);
+  const t = $("sugTxt").value.trim(); if (t.length < 3) return msg("sugMsg", "Escribe tu comentario.", true);
+  try { await setDoc(doc(collection(db, "sugerencias")), { suc: miFarm() || "", txt: t.slice(0, 1000), porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario || "", fecha: new Date().toISOString() });
+    $("sugTxt").value = ""; msg("sugMsg", "✔ Gracias, tu comentario llegó a Abastecimiento."); }
+  catch (x) { msg("sugMsg", textoError(x), true); }
+});
 // ---------- administrador: tablero ----------
 function pintarTableroUrg(P) {
   // periodo: el de los filtros de arriba (Desde / Hasta); sin fechas, los últimos 7 días
@@ -2321,12 +2366,12 @@ $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) {
 
 // ---------- pedir desde la página: se guarda en la plataforma (urgencias). Se guarda TODO, aunque el código no esté en el catálogo. ----------
 S.urgNuevo = []; S.urgBus = "";
-function abrirNuevoUrg() { cargarCatVivo(); S.urgNuevo = []; S.urgBus = ""; S.urgSucSel = miFarm() || ""; msg("urgMsg", ""); pintarNuevoUrg(); $("urgDlg").showModal(); $("urgBus").focus(); }
+function abrirNuevoUrg() { cargarCatVivo(); $("urgCom").value = ""; S.urgNuevo = []; S.urgBus = ""; S.urgSucSel = miFarm() || ""; msg("urgMsg", ""); pintarNuevoUrg(); $("urgDlg").showModal(); $("urgBus").focus(); }
 function pintarNuevoUrg() {
   const fija = !!miFarm() && !esAdmin();
   $("urgSucBox").innerHTML = fija ? `<b>${esc(nombreFarm(miFarm()))}</b> <small class="muted">(tu sucursal)</small>`
     : `<select id="urgSuc"><option value="">Elige la sucursal…</option>${FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => `<option value="${esc(f)}" ${S.urgSucSel === f ? "selected" : ""}>${esc(corto(f))}</option>`).join("")}</select>`;
-  $("urgSel").innerHTML = S.urgNuevo.length ? S.urgNuevo.map((p, k) => `<span class="fs-alt urg-it"><b>${esc(p.c)}</b> ${p.n ? esc(p.n) : '<i class="muted">(no está en el catálogo)</i>'} <label class="urg-q">Cantidad <input type="number" min="1" step="1" value="${p.q || 1}" data-urg-q="${k}" inputmode="numeric"></label> <button type="button" class="enlace" data-urg-quitar="${k}">Quitar</button></span>`).join("")
+  $("urgSel").innerHTML = S.urgNuevo.length ? S.urgNuevo.map((p, k) => `<span class="fs-alt urg-it"><b>${esc(p.c)}</b> ${p.n ? esc(p.n) : '<i class="muted">(no está en el catálogo)</i>'} ${(() => { const v = stockMioV(p.c); return v == null ? "" : `<small class="urg-stk">Tu stock: <b class="${v > 0 ? "" : "rojo-t"}">${nf(Math.round(v * 100) / 100)}</b></small>`; })()} <label class="urg-q">Cantidad <input type="number" min="1" step="1" value="${p.q || 1}" data-urg-q="${k}" inputmode="numeric"></label> <button type="button" class="enlace" data-urg-quitar="${k}">Quitar</button></span>`).join("")
     : '<small class="muted">Busca y agrega los productos que necesitas (puedes agregar varios).</small>';
   $("urgEnviar").textContent = S.urgNuevo.length > 1 ? `Enviar pedido (${S.urgNuevo.length} productos)` : "Enviar pedido";
 }
@@ -2355,7 +2400,7 @@ $("urgDlg").addEventListener("click", async e => {
   if (!S.urgNuevo.length) return msg("urgMsg", "Agrega al menos un producto.", true);
   const b = $("urgEnviar"); b.disabled = true; msg("urgMsg", "Guardando en la plataforma…");
   const ahora = new Date().toISOString(), por = S.perfil.nombre || S.perfil.usuario || "";
-  const regs = S.urgNuevo.map(p => ({ id: doc(collection(db, "urgencias")).id, data: { suc, cod: String(p.c || "").trim(), nom: p.n || "", q: Math.max(1, Math.round(+p.q || 1)), mot: "",
+  const regs = S.urgNuevo.map(p => ({ id: doc(collection(db, "urgencias")).id, data: { suc, cod: String(p.c || "").trim(), nom: p.n || "", q: Math.max(1, Math.round(+p.q || 1)), mot: ($("urgCom").value || "").trim().slice(0, 300),
     porUid: S.perfil.uid, porNombre: por, f: ahora, origen: "pagina" } }));
   guardarPend([...leerPend(), ...regs]);   // primero, una copia en este equipo: si algo falla, no se pierde
   S.urgVuelo = new Set(regs.map(r => r.id));

@@ -16,7 +16,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611202500">
+<link rel="stylesheet" href="styles.css?v=202611210600">
 </head>
 <body>
   <!-- instalar la página como app en el celular -->
@@ -547,9 +547,10 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
         <section class="card pd-card" id="pdMovBox" hidden><h3 id="pdMovH">¿Qué sucursal tiene más movimiento? (% del total)</h3><div class="tabla-wrap"><table class="tabla" id="pdMov"></table></div><p class="muted" id="pdMovNota"></p></section>
         <section class="card pd-card"><h3 id="pdTopH">Top 5 productos más pedidos (últimos 7 días)</h3><div class="tabla-wrap"><table class="tabla" id="pdTop"></table></div></section>
         <div class="pd-res" id="pdRes" hidden></div>
+        <section class="card pd-card" id="pdSugAdm"><h3>💡 Comentarios de mejora de las sucursales</h3><div id="pdSugAdmL"><p class="muted">Leyendo…</p></div></section>
       </div>
       <!-- usuarios: tarjetas por estado -->
-      <div id="pdB" hidden>
+      <div id="pdB" hidden class="pd-b-grid">
         <section class="card lista">
           <div class="lh">
             <button class="btn primario" type="button" id="pdNuevo">➕ Nuevo pedido de urgencia</button>
@@ -562,6 +563,17 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
           </div>
           <div class="tabla-wrap"><table class="tabla" id="pdTablaU"></table></div>
         </section>
+        <aside class="pd-lado">
+          <section class="card pd-ind" id="pdInd"></section>
+          <section class="card pd-sug">
+            <h3>💡 Deja tu comentario de mejora</h3>
+            <p class="muted">¿Algo que mejorar en los pedidos, la atención o la página? Abastecimiento lo lee.</p>
+            <textarea id="sugTxt" rows="5" maxlength="1000" placeholder="Escribe aquí tu comentario o sugerencia…"></textarea>
+            <button class="btn primario" type="button" id="sugEnviar">Enviar comentario</button>
+            <div class="msg" id="sugMsg" hidden></div>
+            <div id="sugMias"></div>
+          </section>
+        </aside>
       </div>
       <section class="card lista" id="pdLista">
         <div class="lh">
@@ -620,6 +632,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
       <div class="campo"><span class="lbl">Sucursal</span><div id="urgSucBox"></div></div>
       <div class="campo buscador"><span class="lbl">Producto (código o nombre)</span><input id="urgBus" type="search" autocomplete="off" placeholder="Busca en todos los medicamentos"><div class="resultados" id="urgRes" hidden></div></div>
       <div class="fs-alts" id="urgSel"></div>
+      <div class="campo"><span class="lbl">Comentario (opcional)</span><textarea id="urgCom" rows="2" maxlength="300" placeholder="Por ejemplo: cliente lo espera hoy, receta…"></textarea></div>
       <div class="msg" id="urgMsg" hidden></div>
       <div class="botones-fila"><button class="btn primario" type="button" id="urgEnviar">Enviar pedido</button><button class="btn" type="button" data-cerrar-dlg>Cancelar</button></div>
     </div></div></dialog>
@@ -765,6 +778,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 
 <div class="toast" id="toast" hidden></div>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="app.js?v=202611210500"></script>
+<script type="module" src="app.js?v=202611210600"></script>
 </body>
 </html>
