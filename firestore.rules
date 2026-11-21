@@ -222,6 +222,17 @@ service cloud.firestore {
       allow write: if esAdmin();
     }
 
+    // ---------- pedidos de urgencia: se guardan SOLO aquí (ya no en el formulario de Google). Nunca se cambian ni se borran. ----------
+    match /urgencias/{id} {
+      allow read: if conPerfil();
+      allow create: if conPerfil() && request.resource.data.porUid == request.auth.uid
+        && (esAdmin() || publica() || request.resource.data.suc == perfil().get('farmacia', ''));
+      // un reintento del mismo pedido (mismo id) solo puede volver a poner la hora del servidor: el contenido no cambia
+      allow update: if conPerfil() && resource.data.porUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['creado']);
+      allow delete: if false;
+    }
+
     // ---------- cantidad de cada pedido de urgencia (el formulario de Google solo guarda los códigos) ----------
     match /urgencia_cant/{id} {
       allow read: if conPerfil();
@@ -281,7 +292,10 @@ service cloud.firestore {
             && request.resource.data.farmacia == miFarmacia()
             && request.resource.data.tipo in ['bloqueo', 'solicitud']);
 
-      allow update, delete: if false;
+      // un reintento del mismo pedido (mismo id) solo puede volver a poner la hora del servidor: el contenido no cambia
+      allow update: if conPerfil() && resource.data.porUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['creado']);
+      allow delete: if false;
     }
   }
 }

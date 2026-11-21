@@ -75,19 +75,21 @@ export const FORM_URGENCIA = {
   // enlace de la hoja de respuestas «Publicada en la web» como CSV (Archivo → Compartir → Publicar en la Web → CSV).
   // Con él la página lee también las celdas con varios códigos. Vacío = se usa la exportación normal.
   csvPublicado: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQj_I2MOc3YD7PuNm3QXsoDAisOaD6tm3GLI6ILVVNumfAu-yAgbp2V0Ae15K-fDoLk3FDSSHpN6G3h/pub?output=csv",
+  // OJO: cada valor debe ser IDÉNTICO a la opción del formulario (tildes y mayúsculas incluidas);
+  // si no coincide, Google rechaza la respuesta sin avisar y el pedido no llega a la hoja.
   sucursales: {
     "ALMACEN PRINCIPAL": "Real",
     "ALMACEN MERCADO": "Mercado",
     "ALMACEN TUPAC": "Tupac",
     "ALMACEN ORTEGA": "Ortega",
     "ALMACEN HUANCAS": "Huancas",
-    "ALMACEN HEROES": "Heroes",
-    "ALMACEN MCDO.TAMBO": "Mcdo. Tambo",
+    "ALMACEN HEROES": "Héroes",
+    "ALMACEN MCDO.TAMBO": "Tambo",
     "ALMACEN PARRA": "Parra",
     "ALMACEN SUMAR": "Sumar",
     "ALMACEN SUCURSAL": "Puno",
-    "ALMACEN PIOPATA": "Piopata",
-    "ALMACEN CONCEPCION": "Concepcion",
+    "ALMACEN PIOPATA": "PioPata",
+    "ALMACEN CONCEPCION": "Concepción",
     "ALMACEN LIBERTAD": "Libertad",
     "ALMACEN ANDALUZ": "Andaluz"
   }
