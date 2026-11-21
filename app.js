@@ -2020,9 +2020,11 @@ async function cargarPedidos(forzar) {
       });
     });
     // cantidades guardadas desde la página (urgencia_cant/{sucursal__código__día})
-    if (!S.urgCant) { S.urgCant = new Map(); try { (await getDocs(collection(db, "urgencia_cant"))).docs.forEach(d => S.urgCant.set(d.id, +d.data().q || 0)); } catch {} }
+    // y quién lo pidió (el formulario de Google no guarda el usuario): { q, por }
+    if (!S.urgCant) { S.urgCant = new Map(); try { (await getDocs(collection(db, "urgencia_cant"))).docs.forEach(d => { const x = d.data(); S.urgCant.set(d.id, { q: +x.q || 0, por: x.porNombre || "" }); }); } catch {} }
     const iso = f => f ? new Date(f.getTime() - f.getTimezoneOffset() * 6e4).toISOString().slice(0, 10) : "";
-    for (const d of datos) if (!d.q && d.cod && d.suc) { const q = S.urgCant.get(`${d.suc}__${d.cod}__${iso(d.f)}`) || S.urgCant.get(`${d.suc}__${d.cod}__${d.f?.toISOString().slice(0, 10)}`); if (q) d.q = q; }
+    for (const d of datos) if (d.cod && d.suc && (!d.q || !d.quien)) { const u = S.urgCant.get(`${d.suc}__${d.cod}__${iso(d.f)}`) || S.urgCant.get(`${d.suc}__${d.cod}__${d.f?.toISOString().slice(0, 10)}`);
+      if (u) { if (!d.q && u.q) d.q = u.q; if (!d.quien && u.por) d.quien = u.por; } }
     S.ped = { t: Date.now(), cab, cS, cF, datos: datos.filter(d => d.cod || d.nom) }; S.pdErr = "";
   } catch (e) {
     S.pdErr = "No se pudo leer la hoja de pedidos. Revisa tu internet, y que la hoja esté compartida como «Cualquier persona con el enlace puede ver». (" + (e.message || e) + ")";
@@ -2185,7 +2187,7 @@ function pintarTableroUrg(P) {
   $("pdTabla").innerHTML = `<thead><tr><th>Fecha</th>${P.cS >= 0 ? "<th>Sucursal</th>" : ""}<th>Producto</th><th class="der">Cant.</th>${verStkSuc ? '<th class="der" title="Stock de esa sucursal según el último kardex publicado">Stock suc.</th><th title="Último «CARGO ENVIO» de ese producto en esa sucursal (kardex general)">Último abastecimiento</th><th>En droguería</th>' : ""}<th>Motivo</th><th>Pidió</th><th>Estado</th><th>Nota de droguería</th></tr></thead><tbody>` +
     (vis.length ? vis.map(d => { const e = estU(d), k = e.estado || "";
       return `<tr data-uid="${esc(d.id)}"><td class="f">${d.f ? d.f.toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}</td>${P.cS >= 0 ? `<td><b>${esc(d.suc ? corto(d.suc) : "¿" + (d.x[P.cS] || "") + "?")}</b></td>` : ""}
-        <td class="p"><b>${esc(nomProd(d))}</b><code>${esc(d.cod)}</code></td><td class="der">${d.q ? nf(d.q) : ""}</td>${verStkSuc ? `<td class="der">${stkSucTxt(d)}</td><td>${ultAbTxt(d)}</td><td class="pd-endrog">${stDrog(d.cod, new Set([d.suc]))}</td>` : ""}<td>${esc(d.mot)}</td><td>${esc(d.quien)}</td>
+        <td class="p"><b>${esc(nomProd(d))}</b><code>${esc(d.cod)}</code></td><td class="der">${d.q ? nf(d.q) : ""}</td>${verStkSuc ? `<td class="der">${stkSucTxt(d)}</td><td>${ultAbTxt(d)}</td><td class="pd-endrog">${stDrog(d.cod, new Set([d.suc]))}</td>` : ""}<td>${esc(d.mot)}</td><td>${d.quien ? esc(d.quien) : '<span class="muted">–</span>'}</td>
         <td>${marca ? `<select class="pd-est ${ESTADO_U[k][1]}" data-uest>${Object.entries(ESTADO_U).map(([v, [t]]) => `<option value="${v}" ${v === k ? "selected" : ""}>${t}</option>`).join("")}</select>` : `<span class="chip ${ESTADO_U[k][1]}">${ESTADO_U[k][0]}</span>`}</td>
         <td>${marca ? `<input class="pd-nota" data-unota maxlength="120" placeholder="Ej. en tránsito, guía GR…" value="${esc(e.nota || "")}">` : esc(e.nota || "")}</td></tr>`; }).join("")
       : `<tr class="vacia"><td colspan="11">No hay pedidos con estos filtros.</td></tr>`) + "</tbody>";
@@ -2227,7 +2229,7 @@ $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) {
     const r2 = v => Math.round((+v || 0) * 100) / 100, stS = d.suc && S.sucStk?.get(d.suc), u = d.suc && S.ultAbast?.[d.cod]?.[d.suc];
     const dias = u ? Math.round((new Date().setHours(0, 0, 0, 0) - new Date(+u[0].slice(0, 4), +u[0].slice(5, 7) - 1, +u[0].slice(8, 10))) / 864e5) : "";
     const sd = S.drogStk?.[d.cod]?.[0], ot = sd > 0 ? [] : otrasSucs(d.cod, new Set([d.suc]));
-    return Object.fromEntries([["Sucursal (reconocida)", d.suc ? corto(d.suc) : ""], ["Código", d.cod], ["Producto (catálogo)", d.nom], ["Cantidad pedida", d.q || ""],
+    return Object.fromEntries([["Sucursal (reconocida)", d.suc ? corto(d.suc) : ""], ["Código", d.cod], ["Producto (catálogo)", d.nom], ["Cantidad pedida", d.q || ""], ["Pidió", d.quien || ""],
       ["Stock de la sucursal", stS ? r2(stS[d.cod]?.[0]) : ""], ["Último abastecimiento", u ? u[0].slice(0, 10).split("-").reverse().join("/") : ""], ["Cantidad abastecida", u ? r2(u[1]) : ""], ["Días desde el abastecimiento", dias],
       ["Stock droguería", S.drogStk ? r2(sd) : ""], ["Pedir a otra sucursal", ot.map(x => `${corto(x.f)} ${r2(x.st)} (${x.d > 0 ? "lento, " + Math.round(x.cob) + " d" : "sin movimiento"})`).join(" · ")],
       ["Estado", ESTADO_U[e.estado || ""][0].slice(3)], ["Nota de droguería", e.nota || ""],
@@ -2285,8 +2287,9 @@ $("urgDlg").addEventListener("click", async e => {
       const ctl = new AbortController(), tope = setTimeout(() => ctl.abort(), 20000);
       await fetch(FORM_URGENCIA.url, { method: "POST", mode: "no-cors", body: datos, signal: ctl.signal }); clearTimeout(tope);
     }
-    // cantidades (si no son 1): por sucursal, código y día
-    for (const p of items) if (p.q > 1) try { await setDoc(doc(db, "urgencia_cant", `${suc}__${p.c}__${hoy}`), { suc, cod: p.c, q: p.q, dia: hoy, porUid: S.perfil.uid, fecha: new Date().toISOString() }); S.urgCant?.set(`${suc}__${p.c}__${hoy}`, p.q); } catch {}
+    // cantidad y quién lo pidió: por sucursal, código y día
+    const por = S.perfil.nombre || S.perfil.usuario || "";
+    for (const p of items) try { await setDoc(doc(db, "urgencia_cant", `${suc}__${p.c}__${hoy}`), { suc, cod: p.c, q: p.q, dia: hoy, porUid: S.perfil.uid, porNombre: por, fecha: new Date().toISOString() }); S.urgCant?.set(`${suc}__${p.c}__${hoy}`, { q: p.q, por }); } catch {}
     const n = items.length; $("urgDlg").close(); toast(`Enviando ${n} producto${n === 1 ? "" : "s"}… se confirma en unos segundos.`);
     S.urgNuevo = [];
     // confirmación: se relee la hoja hasta ver el pedido; si no aparece, se avisa (nunca más un «enviado» que no llegó)
