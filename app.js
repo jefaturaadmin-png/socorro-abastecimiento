@@ -2042,7 +2042,7 @@ function cargarPedidos() {
   S.pedListo = new Promise(listo => {
     const un = onSnapshot(collection(db, "urgencias"), sn => {
       S.pedDocs = sn.docs.map(d => ({ id: d.id, ...d.data() })); armarPed(); S.pdErr = ""; S.pdCargando = false; listo();
-      if (S.vista === "vPed") pintarPedidos();
+      if (S.vista === "vPed") pintarPedidos(); else if (S.vista === "vRep") pintarRpCmp();   // urgencias en «Notas y comentarios», en vivo
     }, e => {
       S.pdErr = "No se pudieron leer los pedidos de la plataforma. " + textoError(e); S.pdCargando = false; S.pedSub = false; listo();
       if (S.vista === "vPed") pintarPedidos();
