@@ -150,7 +150,7 @@ function escucharCatVivo() {
     const x = sn.data(), nuevo = S.catPub && x.publicado && x.publicado !== S.catPub;
     S.catPub = x.publicado; S.catVivoT = Date.now(); usarCatVivo(x);
     if (nuevo) {
-      S.cp = null; S.evStock = null; S.evR = null; S.ped = null;
+      S.cp = null; S.evStock = null; S.evR = null; armarPed();
       if (["vCompL", "vEval", "vPed", "vAten", "vNue"].includes(S.vista)) render();
       toast("Datos actualizados con el kardex nuevo");
     }
@@ -179,7 +179,7 @@ function escucharKardex() {
       }
       for (const x of S.ped?.datos || []) if (!x.nom && x.cod) { const pc = prodCat(x.cod); if (pc) { x.cod = pc.c; x.nom = pc.n; x.lab = pc.ln; } }
       if (n && S.vista === "vPed") pintarPedidos();
-      if (nuevo) { S.cp = null; S.evStock = null; S.evR = null; S.ped = null; if (["vCompL", "vEval", "vPed", "vNue"].includes(S.vista)) render(); toast("Datos actualizados con el kardex nuevo"); }
+      if (nuevo) { S.cp = null; S.evStock = null; S.evR = null; armarPed(); if (["vCompL", "vEval", "vPed", "vNue"].includes(S.vista)) render(); toast("Datos actualizados con el kardex nuevo"); }
     } catch (e) { S.karAsset = ""; console.warn("No se pudo leer el kardex general", e); }
   }, () => { S.karSub = false; }));
 }
@@ -1972,20 +1972,15 @@ const idFila = x => { let h = 5381; for (const ch of x.join("\u0001")) h = ((h *
 // el código que escribieron, en el catálogo (también si le faltan los ceros de adelante)
 const prodCat = c => { c = String(c || "").trim(); return c ? S.catIdx.get(c) || (/^\d+$/.test(c) ? S.catIdx.get(c.padStart(5, "0")) : null) : null; };
 // pedidos de urgencia de los últimos N días (para que Atención y el módulo de cada sucursal los consideren)
-window.urgenciasRecientes = async (dias = 14, fresco = false) => {
-  // se vuelve a leer la hoja si lo leído tiene más de 5 minutos (1 minuto si se pide fresco, p. ej. al descargar el Excel)
-  // si otra parte de la página ya está leyendo la hoja, se espera a que termine (antes devolvía la lista vacía)
-  const esperar = async () => { for (let i = 0; i < 120 && S.pdCargando; i++) await new Promise(r => setTimeout(r, 250)); };
-  await esperar();
-  if (!S.ped || Date.now() - S.ped.t > (fresco ? 60e3 : 5 * 60e3)) { try { await cargarPedidos(!!S.ped); } catch {} await esperar(); }
+window.urgenciasRecientes = async (dias = 14) => {
+  // los pedidos están en la plataforma y llegan en vivo: basta con esperar la primera lectura
+  try { await cargarPedidos(); } catch {}
   const desde = Date.now() - dias * 864e5;
   return (S.ped?.datos || []).filter(d => d.cod && d.suc && d.f && +d.f >= desde).map(d => ({ suc: d.suc, cod: String(d.cod), q: +d.q || 1, f: d.f.toISOString().slice(0, 10) }));
 };
-async function cargarPedidos(forzar) {
-  escucharUrg(); cargarDrogStk();
-  if (S.pdCargando || (!forzar && S.ped && Date.now() - S.ped.t < 120000)) return;
-  S.pdCargando = true;
-  try {
+// ---------- HISTÓRICO: la hoja de Drive del formulario de Google. Solo se lee para importarla a la plataforma (botón del administrador) ----------
+async function leerHojaPedidos() {
+  {
     // dos lecturas de la misma hoja: gviz (al instante, pero deja VACÍAS las celdas con varios códigos «25843, 26456» porque toma
     // la columna como numérica) y la «publicada en la web» como CSV (trae todo tal cual, pero Google la actualiza cada ~5 minutos).
     // Se usa gviz y sus celdas vacías se completan con la publicada (misma marca temporal y sucursal).
@@ -2025,13 +2020,97 @@ async function cargarPedidos(forzar) {
     const iso = f => f ? new Date(f.getTime() - f.getTimezoneOffset() * 6e4).toISOString().slice(0, 10) : "";
     for (const d of datos) if (d.cod && d.suc && (!d.q || !d.quien)) { const u = S.urgCant.get(`${d.suc}__${d.cod}__${iso(d.f)}`) || S.urgCant.get(`${d.suc}__${d.cod}__${d.f?.toISOString().slice(0, 10)}`);
       if (u) { if (!d.q && u.q) d.q = u.q; if (!d.quien && u.por) d.quien = u.por; } }
-    S.ped = { t: Date.now(), cab, cS, cF, datos: datos.filter(d => d.cod || d.nom) }; S.pdErr = "";
-  } catch (e) {
-    S.pdErr = "No se pudo leer la hoja de pedidos. Revisa tu internet, y que la hoja esté compartida como «Cualquier persona con el enlace puede ver». (" + (e.message || e) + ")";
+    return { cab, cS, datos };
   }
-  S.pdCargando = false; if (S.vista === "vPed") pintarPedidos();
 }
-setInterval(() => { if (S.vista === "vPed" && !document.hidden) cargarPedidos(true); }, 120000);
+// ---------- pedidos de urgencia: se guardan SOLO en la plataforma (urgencias/{id}), en vivo. Nada se borra ni se cambia. ----------
+const URG_CAB = ["Fecha", "Sucursal", "Código", "Producto", "Cantidad", "Motivo", "Pidió", "Origen"];
+function armarPed() {
+  if (!S.pedDocs) { S.ped = null; return; }
+  const datos = S.pedDocs.map(r => {
+    const f0 = r.f ? new Date(r.f) : null, f = f0 && !isNaN(f0) ? f0 : null, pc = prodCat(r.cod);
+    const d = { id: r.id, k: f ? +f : 0, suc: r.suc || "", f, cod: pc?.c || String(r.cod || "").trim(), nom: pc?.n || r.nom || "", lab: pc?.ln || "",
+      q: +r.q || 0, mot: r.mot || "", quien: r.porNombre || "", origen: r.origen || "pagina" };
+    d.x = [f ? f.toLocaleString("es-PE") : "", r.sucTexto || (d.suc ? corto(d.suc) : ""), d.cod, d.nom, d.q || "", d.mot, d.quien, d.origen === "hoja" ? "Hoja de Drive (importado)" : "Plataforma"];
+    return d; }).filter(d => d.cod || d.nom);
+  S.ped = { t: Date.now(), cab: URG_CAB, cS: 1, cF: 0, datos };
+}
+function cargarPedidos() {
+  escucharUrg(); cargarDrogStk(); reintentarPend();
+  if (S.pedSub) return S.pedListo;
+  S.pedSub = true; S.pdCargando = true;
+  S.pedListo = new Promise(listo => {
+    const un = onSnapshot(collection(db, "urgencias"), sn => {
+      S.pedDocs = sn.docs.map(d => ({ id: d.id, ...d.data() })); armarPed(); S.pdErr = ""; S.pdCargando = false; listo();
+      if (S.vista === "vPed") pintarPedidos();
+    }, e => {
+      S.pdErr = "No se pudieron leer los pedidos de la plataforma. " + textoError(e); S.pdCargando = false; S.pedSub = false; listo();
+      if (S.vista === "vPed") pintarPedidos();
+    });
+    S.subs.push(() => { un(); S.pedSub = false; S.pedDocs = null; S.ped = null; });
+  });
+  return S.pedListo;
+}
+// copia en ESTE equipo de lo que todavía no confirmó el servidor: no se pierde aunque se cierre la página o falle internet
+const PEND_K = () => "urgPend_" + (S.perfil?.uid || "");
+const leerPend = () => { try { return JSON.parse(localStorage.getItem(PEND_K()) || "[]"); } catch { return []; } };
+const guardarPend = l => { try { l.length ? localStorage.setItem(PEND_K(), JSON.stringify(l)) : localStorage.removeItem(PEND_K()); } catch {} };
+// escribe los pedidos y ESPERA la confirmación del servidor (máx. 25 s); si no la hay, lanza error
+async function guardarUrg(regs, reintento) {
+  let falta = regs;
+  if (reintento) { falta = []; for (const r of regs) { const s = await getDoc(doc(db, "urgencias", r.id)); if (!s.exists()) falta.push(r); } }
+  if (!falta.length) return;
+  const bt = writeBatch(db);
+  for (const r of falta) bt.set(doc(db, "urgencias", r.id), { ...r.data, creado: serverTimestamp() });
+  let tope; const plazo = new Promise((_, no) => { tope = setTimeout(() => no({ code: "timeout" }), 25000); });
+  try { await Promise.race([bt.commit(), plazo]); } finally { clearTimeout(tope); }
+}
+const errUrg = x => x?.code === "timeout" ? "El servidor no confirmó en 25 segundos (internet lento o sin conexión)." : textoError(x);
+function pintarPend() {
+  const el = $("pdPend"); if (!el) return; const l = leerPend();
+  el.hidden = !l.length; if (!l.length) return;
+  el.innerHTML = `⚠ <b>${l.length} producto${l.length === 1 ? "" : "s"} pedido${l.length === 1 ? "" : "s"} desde este equipo todavía NO se guardaron en la plataforma</b>
+    (${l.slice(0, 8).map(r => esc(r.data.cod || r.data.nom)).join(", ")}${l.length > 8 ? "…" : ""}). Están a salvo en este equipo y se reintenta solo cada 30 segundos.
+    ${S.pendErr ? `<br><small>Último error: ${esc(S.pendErr)}</small>` : ""} <button class="btn sm" type="button" id="pdPendBtn">Reintentar ahora</button>`;
+}
+async function reintentarPend(aviso) {
+  // los que se están guardando ahora mismo desde la ventana de pedido no se tocan (evita escribirlos dos veces)
+  if (S.pendCorre || !S.perfil || S.prev) return; const l = leerPend().filter(r => !S.urgVuelo?.has(r.id)); if (!l.length) return pintarPend();
+  S.pendCorre = true;
+  try { await guardarUrg(l, true); guardarPend(leerPend().filter(x => !l.some(r => r.id === x.id))); S.pendErr = "";
+    toast(`✔ Se guardaron en la plataforma ${l.length} producto${l.length === 1 ? "" : "s"} que habían quedado pendientes.`); }
+  catch (x) { S.pendErr = errUrg(x); if (aviso) alert("⚠ Todavía NO se pudo guardar.\n\n" + S.pendErr); }
+  finally { S.pendCorre = false; pintarPend(); }
+}
+setInterval(() => { if (!document.hidden && navigator.onLine !== false) reintentarPend(); }, 30000);
+window.addEventListener("online", () => reintentarPend());
+document.addEventListener("click", e => { if (e.target.closest("#pdPendBtn")) reintentarPend(true); });
+// importa la hoja de Drive (histórico del formulario de Google): lo que ya está en la plataforma no se repite.
+// Conserva el mismo id de cada fila, así siguen valiendo los estados y notas que droguería ya marcó.
+async function importarHoja() {
+  if (!esAdmin() || S.prev) return;
+  if (!confirm("Se copiarán a la plataforma TODOS los pedidos de la hoja de Drive del formulario de Google que todavía no estén aquí. ¿Continuar?")) return;
+  const b = $("pdImp"); b.disabled = true; msg("pdImpMsg", "Leyendo la hoja de Drive…");
+  try {
+    await cargarPedidos(); if (!S.pedDocs) throw new Error("no se pudieron leer los pedidos de la plataforma");
+    const hoja = await leerHojaPedidos();
+    const clave = (suc, cod, nom, f) => [suc || "", cod || nom || "", f ? Math.floor(+new Date(f) / 60000) : ""].join("|");
+    const ids = new Set(S.pedDocs.map(r => r.id)), claves = new Set(S.pedDocs.filter(r => r.origen === "hoja").map(r => clave(r.suc, r.cod, r.nom, r.f)));
+    const nuevos = hoja.datos.filter(d => !ids.has(d.id) && !claves.has(clave(d.suc, d.cod, d.nom, d.f)));
+    const llaves = hoja.cab.map((h, j, a) => { const k = (h || "").replace(/^_+|_+$/g, "") || "Columna " + (j + 1); return a.indexOf(h) === j ? k : k + " (" + (j + 1) + ")"; });
+    let n = 0;
+    for (let i = 0; i < nuevos.length; i += 100) {
+      const bt = writeBatch(db);
+      for (const d of nuevos.slice(i, i + 100)) bt.set(doc(db, "urgencias", d.id), { suc: d.suc || "", sucTexto: hoja.cS >= 0 ? String(d.x[hoja.cS] ?? "").trim() : "",
+        cod: d.cod || "", nom: d.nom || "", q: +d.q || 0, mot: d.mot || "", porNombre: d.quien || "", porUid: S.perfil.uid, f: d.f ? d.f.toISOString() : "",
+        origen: "hoja", fila: Object.fromEntries(llaves.map((k, j) => [k, String(d.x[j] ?? "")])), creado: serverTimestamp() });
+      await bt.commit(); n += Math.min(100, nuevos.length - i);
+      msg("pdImpMsg", `Importando… ${n} de ${nuevos.length}`);
+    }
+    msg("pdImpMsg", `✔ Importación terminada: ${n} pedido${n === 1 ? "" : "s"} nuevo${n === 1 ? "" : "s"} de la hoja (${hoja.datos.length - nuevos.length} ya estaban en la plataforma).`);
+  } catch (x) { msg("pdImpMsg", "⚠ La importación NO terminó: " + (x?.code ? textoError(x) : x?.message || x) + " Lo ya importado quedó guardado; puede volver a pulsar «Importar» y seguirá donde se quedó.", true); }
+  finally { b.disabled = false; }
+}
 // lo que marca droguería en cada pedido (urgencia_estado/{id}): viendo | atendido, con una nota
 function escucharUrg() {
   if (S.urgSub) return; S.urgSub = true;
@@ -2064,12 +2143,12 @@ function pedidosVisibles() {
 }
 function pintarPedidos() {
   const P = S.ped, admin = esAdmin() || !miFarm();
-  $("pdNuevoA").hidden = !esAdmin(); $("pdDrive").hidden = !esAdmin(); $("pdDrive").href = `https://docs.google.com/spreadsheets/d/${HOJA_PEDIDOS}/edit`;
+  $("pdNuevoA").hidden = !esAdmin(); $("pdDrive").hidden = !esAdmin(); $("pdImp").hidden = !esAdmin(); pintarPend(); $("pdDrive").href = `https://docs.google.com/spreadsheets/d/${HOJA_PEDIDOS}/edit`;
   $("pdSucF").hidden = !admin; $("pdA").hidden = !admin || !P; $("pdLista").hidden = !admin; $("pdB").hidden = admin || !P;
-  $("pdSub").textContent = admin ? "Lo que cada sucursal pidió de urgencia. Se actualiza desde el formulario."
-    : `Lo que ${nombreFarm(miFarm())} pidió de urgencia. Se actualiza desde el formulario.`;
+  $("pdSub").textContent = admin ? "Lo que cada sucursal pidió de urgencia. Se guarda en la plataforma y se actualiza al instante."
+    : `Lo que ${nombreFarm(miFarm())} pidió de urgencia. Se guarda en la plataforma y se actualiza al instante.`;
   msg("pdMsg", S.pdErr || "", true);
-  if (!P) { $("pdTabla").innerHTML = `<tbody><tr class="vacia"><td>${S.pdErr ? "" : "Leyendo la hoja de pedidos…"}</td></tr></tbody>`; if (!admin) $("pdLista").hidden = false; return; }
+  if (!P) { $("pdTabla").innerHTML = `<tbody><tr class="vacia"><td>${S.pdErr ? "" : "Leyendo los pedidos…"}</td></tr></tbody>`; if (!admin) $("pdLista").hidden = false; return; }
   $("pdHora").textContent = "Actualizado " + new Date(P.t).toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
   if (!admin && P.cS < 0) { msg("pdMsg", "La hoja no tiene una columna de sucursal; consulta con Abastecimiento.", true); $("pdB").hidden = true; return; }
   if (admin) pintarTableroUrg(P); else pintarTarjetasUrg();
@@ -2208,7 +2287,8 @@ async function marcarUrg(tr) {
   } catch (x) { toast(textoError(x)); }
 }
 $("pdTabla").addEventListener("change", e => { const tr = e.target.closest("tr[data-uid]"); if (tr && e.target.matches("[data-uest],[data-unota]")) marcarUrg(tr); });
-$("pdAct").addEventListener("click", () => cargarPedidos(true));
+$("pdAct").addEventListener("click", () => { cargarPedidos(); reintentarPend(true); pintarPedidos(); });
+$("pdImp").addEventListener("click", importarHoja);
 $("pdSuc").addEventListener("change", e => { S.pdSuc = e.target.value; pintarPedidos(); });
 $("pdTopH").addEventListener("click", e => { const b = e.target.closest("[data-pdtopn]"); if (b) { S.pdTopN = +b.dataset.pdtopn; pintarPedidos(); return; } const k = e.target.closest("[data-pdstk]"); if (k) { S.pdStk = k.dataset.pdstk; pintarPedidos(); } });
 $("pdLimpiar").addEventListener("click", () => { S.pdSuc = S.pdDesde = S.pdHasta = ""; $("pdDesde").value = $("pdHasta").value = $("pdDesde2").value = $("pdHasta2").value = ""; pintarPedidos(); });
@@ -2239,15 +2319,14 @@ $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) {
   excelDe(datos, "Urgencias", "agotados_urgencia_" + (suc ? corto(suc) : "todas").replace(/\W+/g, "_").toLowerCase());
 }));
 
-// ---------- pedir desde la página: se envía al mismo formulario de Google (cae en la misma hoja de Drive) ----------
+// ---------- pedir desde la página: se guarda en la plataforma (urgencias). Se guarda TODO, aunque el código no esté en el catálogo. ----------
 S.urgNuevo = []; S.urgBus = "";
-const sucFormDe = f => FORM_URGENCIA.sucursales[f] || corto(f);
 function abrirNuevoUrg() { cargarCatVivo(); S.urgNuevo = []; S.urgBus = ""; S.urgSucSel = miFarm() || ""; msg("urgMsg", ""); pintarNuevoUrg(); $("urgDlg").showModal(); $("urgBus").focus(); }
 function pintarNuevoUrg() {
   const fija = !!miFarm() && !esAdmin();
   $("urgSucBox").innerHTML = fija ? `<b>${esc(nombreFarm(miFarm()))}</b> <small class="muted">(tu sucursal)</small>`
-    : `<select id="urgSuc"><option value="">Elige la sucursal…</option>${Object.keys(FORM_URGENCIA.sucursales).map(f => `<option value="${esc(f)}" ${S.urgSucSel === f ? "selected" : ""}>${esc(corto(f))}</option>`).join("")}</select>`;
-  $("urgSel").innerHTML = S.urgNuevo.length ? S.urgNuevo.map((p, k) => `<span class="fs-alt urg-it"><b>${esc(p.c)}</b> ${esc(p.n)} <label class="urg-q">Cantidad <input type="number" min="1" step="1" value="${p.q || 1}" data-urg-q="${k}" inputmode="numeric"></label> <button type="button" class="enlace" data-urg-quitar="${k}">Quitar</button></span>`).join("")
+    : `<select id="urgSuc"><option value="">Elige la sucursal…</option>${FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => `<option value="${esc(f)}" ${S.urgSucSel === f ? "selected" : ""}>${esc(corto(f))}</option>`).join("")}</select>`;
+  $("urgSel").innerHTML = S.urgNuevo.length ? S.urgNuevo.map((p, k) => `<span class="fs-alt urg-it"><b>${esc(p.c)}</b> ${p.n ? esc(p.n) : '<i class="muted">(no está en el catálogo)</i>'} <label class="urg-q">Cantidad <input type="number" min="1" step="1" value="${p.q || 1}" data-urg-q="${k}" inputmode="numeric"></label> <button type="button" class="enlace" data-urg-quitar="${k}">Quitar</button></span>`).join("")
     : '<small class="muted">Busca y agrega los productos que necesitas (puedes agregar varios).</small>';
   $("urgEnviar").textContent = S.urgNuevo.length > 1 ? `Enviar pedido (${S.urgNuevo.length} productos)` : "Enviar pedido";
 }
@@ -2255,10 +2334,10 @@ $("pdNuevo").addEventListener("click", abrirNuevoUrg);
 $("pdNuevoA").addEventListener("click", abrirNuevoUrg);
 $("urgBus").addEventListener("input", e => {
   S.urgBus = e.target.value; const box = $("urgRes");
-  const t = S.urgBus.trim(), libre = /^\d{3,5}$/.test(t) && !prodCat(t) && !S.urgNuevo.some(a => a.c === t);
-  if (libre && Date.now() - (S.catVivoT || 0) > 60000) cargarCatVivo(true).then(n => { if (n && $("urgBus").value === e.target.value) $("urgBus").dispatchEvent(new Event("input")); });
+  const t = S.urgBus.trim(), num = /^\d{3,6}$/.test(t), libre = t.length >= 2 && !prodCat(t) && !S.urgNuevo.some(a => (a.c || a.n) === t);
+  if (libre && num && Date.now() - (S.catVivoT || 0) > 60000) cargarCatVivo(true).then(n => { if (n && $("urgBus").value === e.target.value) $("urgBus").dispatchEvent(new Event("input")); });
   box.innerHTML = resBusqueda({ c: "" }, S.urgBus, p => S.urgNuevo.some(a => a.c === p.c), "data-urg-add")
-    + (libre ? `<button type="button" data-urg-cod="${esc(t)}"><b>${esc(t)}</b> Agregar este código tal cual (no está en el catálogo)</button>` : ""); box.hidden = !t;
+    + (libre ? `<button type="button" data-urg-cod="${esc(t)}"><b>${esc(t)}</b> Agregar ${num ? "este código" : "este texto"} tal cual (no está en el catálogo)</button>` : ""); box.hidden = !t;
 });
 $("urgDlg").addEventListener("change", e => { if (e.target.id === "urgSuc") S.urgSucSel = e.target.value; });
 $("urgDlg").addEventListener("input", e => { const q = e.target.closest("[data-urg-q]"); if (q) { const p = S.urgNuevo[+q.dataset.urgQ]; if (p) p.q = Math.max(1, Math.round(+q.value || 1)); } });
@@ -2267,41 +2346,30 @@ $("urgDlg").addEventListener("click", async e => {
   const a = e.target.closest("[data-urg-add]");
   if (a) { const p = S.catIdx.get(a.dataset.urgAdd); if (p) S.urgNuevo.push({ c: p.c, n: p.n, q: 1 }); $("urgBus").value = S.urgBus = ""; $("urgRes").hidden = true; pintarNuevoUrg(); $("urgBus").focus(); return; }
   const lc = e.target.closest("[data-urg-cod]");
-  if (lc) { S.urgNuevo.push({ c: lc.dataset.urgCod, n: "(código sin nombre en el catálogo)", q: 1 }); $("urgBus").value = S.urgBus = ""; $("urgRes").hidden = true; pintarNuevoUrg(); $("urgBus").focus(); return; }
+  if (lc) { const t = lc.dataset.urgCod; S.urgNuevo.push(/^\d+$/.test(t) ? { c: t, n: "", q: 1 } : { c: "", n: t, q: 1 }); $("urgBus").value = S.urgBus = ""; $("urgRes").hidden = true; pintarNuevoUrg(); $("urgBus").focus(); return; }
   const q = e.target.closest("[data-urg-quitar]"); if (q) { S.urgNuevo.splice(+q.dataset.urgQuitar, 1); return pintarNuevoUrg(); }
   if (!e.target.closest("#urgEnviar")) return;
   if (S.prev) return msg("urgMsg", PREVIA.message, true);
   const suc = !esAdmin() && miFarm() ? miFarm() : S.urgSucSel;
   if (!suc) return msg("urgMsg", "Elige la sucursal.", true);
   if (!S.urgNuevo.length) return msg("urgMsg", "Agrega al menos un producto.", true);
-  const b = $("urgEnviar"); b.disabled = true; msg("urgMsg", "Enviando…");
+  const b = $("urgEnviar"); b.disabled = true; msg("urgMsg", "Guardando en la plataforma…");
+  const ahora = new Date().toISOString(), por = S.perfil.nombre || S.perfil.usuario || "";
+  const regs = S.urgNuevo.map(p => ({ id: doc(collection(db, "urgencias")).id, data: { suc, cod: String(p.c || "").trim(), nom: p.n || "", q: Math.max(1, Math.round(+p.q || 1)), mot: "",
+    porUid: S.perfil.uid, porNombre: por, f: ahora, origen: "pagina" } }));
+  guardarPend([...leerPend(), ...regs]);   // primero, una copia en este equipo: si algo falla, no se pierde
+  S.urgVuelo = new Set(regs.map(r => r.id));
+  S.urgNuevo = [];
   try {
-    // Google no deja leer la respuesta desde otra página (no-cors): se envía y luego se confirma al releer la hoja
-    // como en el formulario: SOLO los códigos, separados por coma ("21648, 00052"). El formulario no acepta otra cosa en ese campo
-    // (si se manda texto, Google rechaza la respuesta sin avisar). La cantidad se guarda aparte, en la página (urgencia_cant).
-    // el formulario solo acepta códigos de 5 dígitos (^\d{5}$): los más cortos se completan con ceros
-    const items = S.urgNuevo.map(p => ({ c: /^\d{1,5}$/.test(String(p.c).trim()) ? String(p.c).trim().padStart(5, "0") : String(p.c).trim(), q: Math.max(1, Math.round(+p.q || 1)) })), hoy = new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
-    const malos = items.filter(p => !/^\d{5}$/.test(p.c));
-    if (malos.length) { b.disabled = false; return msg("urgMsg", `El formulario solo acepta códigos de 5 dígitos: ${malos.map(p => p.c).join(", ")}. Quítelos e inténtelo de nuevo.`, true); }
-    // UN ENVÍO POR CÓDIGO: si una celda trae varios códigos («25843, 26456»), Google la exporta vacía a la página
-    for (let i = 0; i < items.length; i++) {
-      msg("urgMsg", items.length > 1 ? `Enviando ${i + 1} de ${items.length}…` : "Enviando…");
-      const datos = new URLSearchParams({ [FORM_URGENCIA.campoSucursal]: sucFormDe(suc), [FORM_URGENCIA.campoProducto]: items[i].c });
-      const ctl = new AbortController(), tope = setTimeout(() => ctl.abort(), 20000);
-      await fetch(FORM_URGENCIA.url, { method: "POST", mode: "no-cors", body: datos, signal: ctl.signal }); clearTimeout(tope);
-    }
-    // cantidad y quién lo pidió: por sucursal, código y día
-    const por = S.perfil.nombre || S.perfil.usuario || "";
-    for (const p of items) try { await setDoc(doc(db, "urgencia_cant", `${suc}__${p.c}__${hoy}`), { suc, cod: p.c, q: p.q, dia: hoy, porUid: S.perfil.uid, porNombre: por, fecha: new Date().toISOString() }); S.urgCant?.set(`${suc}__${p.c}__${hoy}`, { q: p.q, por }); } catch {}
-    const n = items.length; $("urgDlg").close(); toast(`Enviando ${n} producto${n === 1 ? "" : "s"}… se confirma en unos segundos.`);
-    S.urgNuevo = [];
-    // confirmación: se relee la hoja hasta ver el pedido; si no aparece, se avisa (nunca más un «enviado» que no llegó)
-    const llego = () => items.every(p => (S.ped?.datos || []).some(d => d.suc === suc && (d.cod === p.c || d.cod === p.c.replace(/^0+/, '')) && d.f && Date.now() - d.f < 10 * 60000));
-    let ok = false; for (const espera of [4000, 8000, 15000]) { await new Promise(r => setTimeout(r, espera)); await cargarPedidos(true); if (llego()) { ok = true; break; } }
-    if (ok) toast(`✔ Pedido registrado en la hoja (${n} producto${n === 1 ? "" : "s"}).`);
-    else alert(`⚠ El pedido NO aparece en la hoja de Drive todavía.\n\nProductos: ${items.map(p => p.c).join(", ")}\n\nVuelva a intentarlo en un momento o regístrelo en el formulario de Google. Si sigue igual, avise a Abastecimiento.`);
-  } catch (x) { msg("urgMsg", x?.name === "AbortError" ? "Google no respondió (más de 20 segundos). Revisa tu internet e inténtalo de nuevo." : "No se pudo enviar. Revisa tu internet e inténtalo de nuevo.", true); }
-  finally { b.disabled = false; }
+    await guardarUrg(regs);
+    guardarPend(leerPend().filter(x => !regs.some(r => r.id === x.id)));
+    $("urgDlg").close(); const n = regs.length; toast(`✔ Pedido guardado en la plataforma (${n} producto${n === 1 ? "" : "s"}).`);
+  } catch (x) {
+    S.pendErr = errUrg(x); pintarNuevoUrg();
+    const t = `⚠ EL PEDIDO NO SE GUARDÓ EN LA PLATAFORMA.\n\n${S.pendErr}\n\nNo se perdió: quedó guardado en este equipo y se reintenta solo cada 30 segundos (también con «Reintentar ahora» en Pedidos). No lo vuelva a registrar.`;
+    msg("urgMsg", t.replace(/\n+/g, " "), true); alert(t);
+  }
+  finally { b.disabled = false; S.urgVuelo = null; pintarPend(); }
 });
 
 /* ===================== RECEPCIÓN DE PEDIDOS =====================

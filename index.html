@@ -523,10 +523,12 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
         <h1>Productos agotados o de extrema urgencia</h1>
         <p class="muted" id="pdSub">Lo que cada sucursal pidió de urgencia. Se actualiza desde el formulario.</p>
       </div>
-      <div class="pd-acc"><small class="muted" id="pdHora"></small><button class="btn sm" type="button" id="pdAct">↻ Actualizar</button><a class="btn sm" id="pdDrive" target="_blank" rel="noopener" hidden>Abrir la hoja</a><button class="btn sm" type="button" id="pdNuevoA" hidden>➕ Registrar pedido</button></div>
+      <div class="pd-acc"><small class="muted" id="pdHora"></small><button class="btn sm" type="button" id="pdAct">↻ Actualizar</button><a class="btn sm" id="pdDrive" target="_blank" rel="noopener" hidden title="Histórico del formulario de Google (ya no recibe pedidos nuevos)">Hoja antigua</a><button class="btn sm" type="button" id="pdImp" hidden title="Copia a la plataforma los pedidos de la hoja de Drive que todavía no estén aquí">⇩ Importar hoja antigua</button><button class="btn sm" type="button" id="pdNuevoA" hidden>➕ Registrar pedido</button></div>
     </div>
     <div class="wrap ancho cuerpo">
       <div class="msg" id="pdMsg" hidden></div>
+      <div class="msg error" id="pdPend" hidden></div>
+      <div class="msg" id="pdImpMsg" hidden></div>
       <!-- administrador: tablero -->
       <div id="pdA" hidden>
         <!-- filtros arriba: mandan en el tablero y en la lista de abajo -->
@@ -614,7 +616,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
       <div class="botones-fila"><button class="btn primario" type="button" id="prevOk">Ver como este usuario</button></div></div></div></dialog>
   <!-- nuevo pedido de urgencia: se envía al mismo formulario de Google -->
   <dialog id="urgDlg" class="at-info resp-dlg"><div><button type="button" class="ab-x resp-x" data-cerrar-dlg aria-label="Cerrar">✕</button>
-    <div class="resp-c"><h2>➕ Nuevo pedido de urgencia</h2><p class="muted">Se registra en el mismo formulario y en la misma hoja de Drive que revisa Abastecimiento.</p>
+    <div class="resp-c"><h2>➕ Nuevo pedido de urgencia</h2><p class="muted">Se guarda en la plataforma y Abastecimiento lo ve al instante. Si no se puede guardar, se avisa y queda a salvo en este equipo.</p>
       <div class="campo"><span class="lbl">Sucursal</span><div id="urgSucBox"></div></div>
       <div class="campo buscador"><span class="lbl">Producto (código o nombre)</span><input id="urgBus" type="search" autocomplete="off" placeholder="Busca en todos los medicamentos"><div class="resultados" id="urgRes" hidden></div></div>
       <div class="fs-alts" id="urgSel"></div>
@@ -763,6 +765,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 
 <div class="toast" id="toast" hidden></div>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="app.js?v=202611210300"></script>
+<script type="module" src="app.js?v=202611210400"></script>
 </body>
 </html>
