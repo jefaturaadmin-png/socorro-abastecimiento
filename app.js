@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611211100";
+const VERSION_PROY = "202611211200";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -353,7 +353,7 @@ function iniciar() {
     }));
     ir("vInicio");
   }
-  montarAyuda(); escucharAvisos(); escucharVersion();
+  montarAyuda(); escucharAvisos(); escucharVersion(); vigilarVersionPublicada();
   // enlace directo a un módulo (p. ej. ?m=nuevos, el que abre la app instalada en el celular); en el celular se recuerda
   if (misVistas().some(v => v.id === "nuevos")) escucharNue();   // para avisar de lo que registran otros
   const vDir = MODO_M && misVistas().find(v => v.id === MODO_M);
@@ -550,6 +550,22 @@ function escucharVersion() {
   let primera = true;
   S.subs.push(onSnapshot(doc(db, "app", "version"), sn => { const d = sn.data(); if (primera) { primera = false; S.recargaVista = d?.recarga; return; }
     if (d?.recarga && d.recarga !== S.recargaVista && !esAdmin()) location.reload(); }, () => {}));
+}
+// VERSIÓN NUEVA PUBLICADA: cada 3 minutos se mira qué versión tiene la página publicada (index.html → app.js?v=…).
+// Si es más nueva que la que está abierta, se recarga sola apenas el usuario no esté escribiendo ni con una ventana abierta,
+// para que nadie trabaje con una versión vieja (p. ej. la que todavía enviaba los pedidos al formulario de Google).
+function vigilarVersionPublicada() {
+  if (vigilarVersionPublicada.ok) return; vigilarVersionPublicada.ok = true;
+  const revisar = async () => {
+    try {
+      const t = await (await fetch("index.html?_=" + Date.now(), { cache: "no-store" })).text(), v = t.match(/app\.js\?v=(\d+)/)?.[1];
+      if (!v || v <= VERSION_PROY) return;
+      const ocupado = () => document.querySelector("dialog[open]") || ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName) && document.activeElement.value;
+      if (!ocupado()) return location.reload();
+      const av = $("avisoGlobal"); av.hidden = false; av.innerHTML = 'Hay una versión nueva de la página. <button type="button" class="btn sm" onclick="location.reload()">Actualizar ahora</button>';
+    } catch {}
+  };
+  setInterval(revisar, 3 * 60e3); document.addEventListener("visibilitychange", () => { if (!document.hidden) revisar(); });
 }
 function escucharAvisos() {
   S.subs.push(onSnapshot(collection(db, "avisos"), sn => {
