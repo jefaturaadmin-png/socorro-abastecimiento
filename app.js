@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611210100";
+const VERSION_PROY = "202611210200";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1981,6 +1981,22 @@ window.urgenciasRecientes = async (dias = 14, fresco = false) => {
   const desde = Date.now() - dias * 864e5;
   return (S.ped?.datos || []).filter(d => d.cod && d.suc && d.f && +d.f >= desde).map(d => ({ suc: d.suc, cod: String(d.cod), q: +d.q || 1, f: d.f.toISOString().slice(0, 10) }));
 };
+// urgencia_cant: lo que se guarda al pedir desde la página (el formulario de Google solo recibe el código):
+// cantidad y nombre del usuario que lo pidió. Se escucha en vivo y se completa en los pedidos leídos de la hoja.
+function escucharUrgCant() {
+  if (S.urgCantSub) return; S.urgCantSub = true; S.urgCant ??= new Map();
+  S.subs.push(onSnapshot(collection(db, "urgencia_cant"), sn => {
+    S.urgCant = new Map(sn.docs.map(d => [d.id, { q: +d.data().q || 0, por: d.data().porNombre || "" }])); S.urgCantOk = true;
+    if (S.ped) { mezclarUrgCant(); if (S.vista === "vPed") pintarPedidos(); }
+  }, () => { S.urgCantSub = false; S.urgCantOk = true; }));
+  S.subs.push(() => { S.urgCantSub = false; S.urgCantOk = false; });
+}
+function mezclarUrgCant() {
+  const iso = f => f ? new Date(f.getTime() - f.getTimezoneOffset() * 6e4).toISOString().slice(0, 10) : "";
+  for (const d of S.ped?.datos || []) { if (!d.cod || !d.suc) continue;
+    const x = S.urgCant?.get(`${d.suc}__${d.cod}__${iso(d.f)}`) || S.urgCant?.get(`${d.suc}__${d.cod}__${d.f?.toISOString().slice(0, 10)}`); if (!x) continue;
+    if (!d.q && x.q) d.q = x.q; if (!d.quien && x.por) d.quien = x.por; }
+}
 async function cargarPedidos(forzar) {
   escucharUrg(); cargarDrogStk();
   if (S.pdCargando || (!forzar && S.ped && Date.now() - S.ped.t < 120000)) return;
@@ -2019,11 +2035,9 @@ async function cargarPedidos(forzar) {
           q: conQ?.[j]?.[1] || (cQ >= 0 ? parseFloat(String(x[cQ]).replace(",", ".")) || 0 : 0), mot: cM >= 0 ? x[cM].trim() : "", quien: cU >= 0 ? x[cU].trim() : "" };
       });
     });
-    // cantidades guardadas desde la página (urgencia_cant/{sucursal__código__día})
-    if (!S.urgCant) { S.urgCant = new Map(); try { (await getDocs(collection(db, "urgencia_cant"))).docs.forEach(d => S.urgCant.set(d.id, +d.data().q || 0)); } catch {} }
-    const iso = f => f ? new Date(f.getTime() - f.getTimezoneOffset() * 6e4).toISOString().slice(0, 10) : "";
-    for (const d of datos) if (!d.q && d.cod && d.suc) { const q = S.urgCant.get(`${d.suc}__${d.cod}__${iso(d.f)}`) || S.urgCant.get(`${d.suc}__${d.cod}__${d.f?.toISOString().slice(0, 10)}`); if (q) d.q = q; }
-    S.ped = { t: Date.now(), cab, cS, cF, datos: datos.filter(d => d.cod || d.nom) }; S.pdErr = "";
+    // cantidades y quién lo pidió, guardados desde la página (urgencia_cant/{sucursal__código__día}), en vivo
+    escucharUrgCant(); if (!S.urgCantOk) for (let i = 0; i < 20 && !S.urgCantOk; i++) await new Promise(r => setTimeout(r, 150));
+    S.ped = { t: Date.now(), cab, cS, cF, datos: datos.filter(d => d.cod || d.nom) }; S.pdErr = ""; mezclarUrgCant();
   } catch (e) {
     S.pdErr = "No se pudo leer la hoja de pedidos. Revisa tu internet, y que la hoja esté compartida como «Cualquier persona con el enlace puede ver». (" + (e.message || e) + ")";
   }
@@ -2286,7 +2300,9 @@ $("urgDlg").addEventListener("click", async e => {
       await fetch(FORM_URGENCIA.url, { method: "POST", mode: "no-cors", body: datos, signal: ctl.signal }); clearTimeout(tope);
     }
     // cantidades (si no son 1): por sucursal, código y día
-    for (const p of items) if (p.q > 1) try { await setDoc(doc(db, "urgencia_cant", `${suc}__${p.c}__${hoy}`), { suc, cod: p.c, q: p.q, dia: hoy, porUid: S.perfil.uid, fecha: new Date().toISOString() }); S.urgCant?.set(`${suc}__${p.c}__${hoy}`, p.q); } catch {}
+    // se guarda en todos (también con cantidad 1): la cantidad y QUIÉN lo pidió (su nombre de usuario)
+    const quien = S.perfil.nombre || S.perfil.usuario || "";
+    for (const p of items) try { await setDoc(doc(db, "urgencia_cant", `${suc}__${p.c}__${hoy}`), { suc, cod: p.c, q: Math.max(1, p.q || 1), dia: hoy, porUid: S.perfil.uid, porNombre: quien, fecha: new Date().toISOString() }); S.urgCant?.set(`${suc}__${p.c}__${hoy}`, { q: Math.max(1, p.q || 1), por: quien }); } catch {}
     const n = items.length; $("urgDlg").close(); toast(`Enviando ${n} producto${n === 1 ? "" : "s"}… se confirma en unos segundos.`);
     S.urgNuevo = [];
     // confirmación: se relee la hoja hasta ver el pedido; si no aparece, se avisa (nunca más un «enviado» que no llegó)
