@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611211200";
+const VERSION_PROY = "202611211300";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -1124,7 +1124,7 @@ $("recargarTodos").addEventListener("click", async () => {
     }
     // y para las páginas con la versión nueva: aviso de versión
     try { await setDoc(doc(db, "app", "version"), { v: VERSION_PROY, recarga: marca, fecha: new Date().toISOString() }); } catch {}
-    toast(`Listo: se recargará la página a ${us.length} usuarios.`);
+    toast(`✔ Listo: las páginas abiertas de ${us.length} usuarios se recargan ahora mismo; quien la tenga cerrada, la abrirá ya actualizada.`);
   } catch (x) { avisar(x); }
 });
 function pintarUsuarios() {
