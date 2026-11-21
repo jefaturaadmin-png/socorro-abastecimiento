@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611210800";
+const VERSION_PROY = "202611210900";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2444,12 +2444,16 @@ function escucharEnt() {
   const subs = [];
   S.entUnsub = () => { subs.forEach(u => u()); subs.length = 0; };
   S.subs.push(() => { S.entUnsub?.(); S.entUnsub = null; S.entSub = false; S.ent = null; S.entResp = new Map(); S.entSel = ""; });
-  subs.push(onSnapshot(qE, sn => { S.ent = sn.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "") || (b.creado || "").localeCompare(a.creado || "")); S.entErr = ""; if (S.vista === "vEnt") pintarEnt(); },
+  subs.push(onSnapshot(qE, sn => { S.ent = sn.docs.map(d => { const x = d.data(); return { id: d.id, ...x, items: unirItems(x.items) }; }).sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "") || (b.creado || "").localeCompare(a.creado || "")); S.entErr = ""; if (S.vista === "vEnt") pintarEnt(); },
     e => { S.entErr = textoError(e); S.entSub = false; if (S.vista === "vEnt") pintarEnt(); }));
   // respuestas: la sucursal las suyas; Abastecimiento, las de los últimos 120 días
   const qR = suc ? query(collection(db, "entrega_resp"), where("suc", "==", suc)) : query(collection(db, "entrega_resp"), where("dia", ">=", new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10)));
   subs.push(onSnapshot(qR, sn => { S.entResp = new Map(sn.docs.map(d => [d.id, d.data()])); if (S.vista === "vEnt") pintarEnt(); }, () => {}));
 }
+// el mismo producto repetido en la lista (varias filas del Excel): una sola fila con la cantidad sumada
+function unirItems(l) { const m = new Map();
+  for (const it of l || []) { const x = m.get(it.c); if (x) x.q = Math.round(((+x.q || 0) + (+it.q || 0)) * 1000) / 1000; else m.set(it.c, { ...it }); }
+  return [...m.values()]; }
 const respEnt = (e, c) => S.entResp.get(e.id + "__" + c);
 function resumenEnt(e) { let rev = 0, prob = 0; for (const it of e.items || []) { const r = respEnt(e, it.c); if (r) { rev++; if (r.estado !== "ok") prob++; } } return { rev, prob, n: (e.items || []).length }; }
 function pintarEnt() {
@@ -2603,7 +2607,7 @@ $("entArch").addEventListener("change", async ev => {
       if (iQ < 0) { S.entNuevas.push({ archivo: a.name, error: "no tiene la columna «Se atenderá» o «Cantidad»" }); continue; }
       const items = filas.slice(iCab + 1).map(f => ({ c: String(f[iC] ?? "").trim(), n: String(f[iN] ?? "").trim(), l: iL >= 0 ? String(f[iL] ?? "").trim() : "", q: +String(f[iQ] ?? "").replace(",", ".") || 0 }))
         .filter(x => /^\d+$/.test(x.c) && x.q > 0).map(x => ({ ...x, c: x.c.padStart(5, "0") }));
-      S.entNuevas.push({ archivo: a.name, suc: sucDeNombre(a.name) || sucDeNombre(wb.SheetNames[0]), fecha: fechaDeNombre(a.name), items });
+      S.entNuevas.push({ archivo: a.name, suc: sucDeNombre(a.name) || sucDeNombre(wb.SheetNames[0]), fecha: fechaDeNombre(a.name), items: unirItems(items) });
     } catch (x) { S.entNuevas.push({ archivo: a.name, error: "no se pudo leer (" + (x.message || x) + ")" }); }
   }
   const ops = FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => `<option value="${esc(f)}">${esc(corto(f))}</option>`).join("");
