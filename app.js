@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611210600";
+const VERSION_PROY = "202611210700";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2158,13 +2158,16 @@ const hayDrog = c => { if (S.drogStk == null) return '<span class="muted">…</s
   return v > 0 ? `<span class="chip verde">✓ Sí hay (${nf(v)})</span>` : c ? '<span class="chip rojo">✗ No hay</span>' : '<span class="muted">–</span>'; };
 function pintarTarjetasUrg() {
   const lista = pedidosVisibles();
-  $("pdTablaU").innerHTML = `<thead><tr><th>Medicamento</th><th class="der">Cant.</th><th class="der" title="Lo que tiene hoy su sucursal (último kardex)">Stock en tu sucursal</th><th>Fecha y hora del pedido</th><th>¿Hay en droguería?</th></tr></thead><tbody>` +
+  $("pdTablaU").innerHTML = `<thead><tr><th>Medicamento</th><th class="der">Cant.</th><th class="der" title="Lo que tiene hoy su sucursal (último kardex)">Stock en tu sucursal</th><th>Fecha y hora del pedido</th><th>¿Hay en droguería?</th><th>Respuesta de Abastecimiento</th></tr></thead><tbody>` +
     (lista.length ? lista.map(d => `<tr><td class="p"><b>${esc(nomProd(d))}</b>${d.cod && d.nom ? `<code>${esc(d.cod)}</code>` : ""}${d.mot ? `<small class="pd-com">💬 ${esc(d.mot)}</small>` : ""}</td>
       <td class="der">${d.q ? nf(d.q) : ""}</td><td class="der">${stockMio(d.cod)}</td>
-      <td class="f">${d.f ? d.f.toLocaleString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : esc(d.x[S.ped.cF] || "")}</td><td>${hayDrog(d.cod)}</td></tr>`).join("")
-      : '<tr class="vacia"><td colspan="5">No hay pedidos en esas fechas.</td></tr>') + "</tbody>";
+      <td class="f">${d.f ? d.f.toLocaleString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : esc(d.x[S.ped.cF] || "")}</td><td>${hayDrog(d.cod)}</td><td>${respUrg(d)}</td></tr>`).join("")
+      : '<tr class="vacia"><td colspan="6">No hay pedidos en esas fechas.</td></tr>') + "</tbody>";
   pintarIndUrg(); escucharSug();
 }
+// lo que respondió Abastecimiento (estado y nota): solo si respondió; si no, en blanco
+const respUrg = d => { const e = S.urgEst?.get(d.id); if (!e || (!e.estado && !e.nota)) return "";
+  return `${e.estado ? `<span class="chip ${ESTADO_U[e.estado]?.[1] || ""}">${esc((ESTADO_U[e.estado]?.[0] || e.estado).replace(/^\S+ /, ""))}</span>` : ""}${e.nota ? `<small class="pd-com">📝 ${esc(e.nota)}</small>` : ""}`; };
 // stock de la sucursal del usuario (último kardex subido; el mismo que en su módulo)
 const stockMioV = c => { const f = miFarm(); if (!f || !c || !S.karStock) return null; return +(S.karStock[c]?.[f]?.[0] || 0); };
 const stockMio = c => { const v = stockMioV(c); return v == null ? '<span class="muted">–</span>' : v > 0 ? `<b>${nf(Math.round(v * 100) / 100)}</b>` : '<span class="rojo-t">0</span>'; };
@@ -2308,7 +2311,7 @@ function pintarTableroUrg(P) {
     const [a, m, di] = u[0].slice(0, 10).split("-"), dias = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(+a, m - 1, +di)) / 864e5);
     return `${di}/${m}/${a.slice(2)} · <b>${nf(Math.round(u[1] * 100) / 100)}</b><br><small class="muted">hace ${nf(dias)} día${dias === 1 ? "" : "s"}</small>`; };
   $("pdTit").textContent = `Pedidos recientes · ${nf(lista.length)}`;
-  $("pdTabla").innerHTML = `<thead><tr><th>Fecha</th>${P.cS >= 0 ? "<th>Sucursal</th>" : ""}<th>Producto</th><th class="der">Cant.</th>${verStkSuc ? '<th class="der" title="Stock de esa sucursal según el último kardex publicado">Stock suc.</th><th title="Último «CARGO ENVIO» de ese producto en esa sucursal (kardex general)">Último abastecimiento</th><th>En droguería</th>' : ""}<th>Motivo</th><th>Pidió</th><th>Estado</th><th>Nota de droguería</th></tr></thead><tbody>` +
+  $("pdTabla").innerHTML = `<thead><tr><th>Fecha</th>${P.cS >= 0 ? "<th>Sucursal</th>" : ""}<th>Producto</th><th class="der">Cant.</th>${verStkSuc ? '<th class="der" title="Stock de esa sucursal según el último kardex publicado">Stock suc.</th><th title="Último «CARGO ENVIO» de ese producto en esa sucursal (kardex general)">Último abastecimiento</th><th>En droguería</th>' : ""}<th>Motivo</th><th>Pidió</th><th>Estado</th><th>Nota</th></tr></thead><tbody>` +
     (vis.length ? vis.map(d => { const e = estU(d), k = e.estado || "";
       return `<tr data-uid="${esc(d.id)}"><td class="f">${d.f ? d.f.toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}</td>${P.cS >= 0 ? `<td><b>${esc(d.suc ? corto(d.suc) : "¿" + (d.x[P.cS] || "") + "?")}</b></td>` : ""}
         <td class="p"><b>${esc(nomProd(d))}</b><code>${esc(d.cod)}</code></td><td class="der">${d.q ? nf(d.q) : ""}</td>${verStkSuc ? `<td class="der">${stkSucTxt(d)}</td><td>${ultAbTxt(d)}</td><td class="pd-endrog">${stDrog(d.cod, new Set([d.suc]))}</td>` : ""}<td>${esc(d.mot)}</td><td>${d.quien ? esc(d.quien) : '<span class="muted">–</span>'}</td>
@@ -2347,7 +2350,7 @@ $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) {
 ["pdXls", "pdXls2"].forEach(id => $(id).addEventListener("click", () => {
   const P = S.ped; if (!P) return;
   const cols = P.cab.map((h, i) => i).filter(i => P.cab[i]);
-  if (!(esAdmin() || !miFarm())) { const ds = pedidosVisibles().map(d => ({ "Código": d.cod, Medicamento: nomProd(d), "Fecha y hora": d.f || "", "¿Hay en droguería?": S.drogStk?.[d.cod]?.[0] > 0 ? "Sí (" + S.drogStk[d.cod][0] + ")" : "No" }));
+  if (!(esAdmin() || !miFarm())) { const ds = pedidosVisibles().map(d => ({ "Código": d.cod, Medicamento: nomProd(d), "Fecha y hora": d.f || "", "¿Hay en droguería?": S.drogStk?.[d.cod]?.[0] > 0 ? "Sí (" + S.drogStk[d.cod][0] + ")" : "No", "Estado (Abastecimiento)": (() => { const e = S.urgEst?.get(d.id); return e?.estado ? ESTADO_U[e.estado][0].slice(3) : ""; })(), Nota: S.urgEst?.get(d.id)?.nota || "" }));
     if (!ds.length) return toast("No hay pedidos para descargar."); return excelDe(ds, "Urgencias", "agotados_urgencia_" + corto(miFarm()).replace(/\W+/g, "_").toLowerCase()); }
   const datos = pedidosVisibles().map(d => { const e = estU(d);
     // lo mismo que se ve en la tabla: stock de la sucursal, último abastecimiento, droguería y otras sucursales
@@ -2357,7 +2360,7 @@ $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) {
     return Object.fromEntries([["Sucursal (reconocida)", d.suc ? corto(d.suc) : ""], ["Código", d.cod], ["Producto (catálogo)", d.nom], ["Cantidad pedida", d.q || ""], ["Pidió", d.quien || ""],
       ["Stock de la sucursal", stS ? r2(stS[d.cod]?.[0]) : ""], ["Último abastecimiento", u ? u[0].slice(0, 10).split("-").reverse().join("/") : ""], ["Cantidad abastecida", u ? r2(u[1]) : ""], ["Días desde el abastecimiento", dias],
       ["Stock droguería", S.drogStk ? r2(sd) : ""], ["Pedir a otra sucursal", ot.map(x => `${corto(x.f)} ${r2(x.st)} (${x.d > 0 ? "lento, " + Math.round(x.cob) + " d" : "sin movimiento"})`).join(" · ")],
-      ["Estado", ESTADO_U[e.estado || ""][0].slice(3)], ["Nota de droguería", e.nota || ""],
+      ["Estado", ESTADO_U[e.estado || ""][0].slice(3)], ["Nota", e.nota || ""],
       ...cols.map(i => [P.cab[i], d.x[i] || ""])]); });
   if (!datos.length) return toast("No hay pedidos para descargar.");
   const suc = esAdmin() || !miFarm() ? S.pdSuc : miFarm();
