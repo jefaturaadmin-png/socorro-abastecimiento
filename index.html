@@ -407,7 +407,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
     </div>
     <div class="wrap ancho cuerpo">
       <div class="card rp-sube">
-        <label class="rp-arch"><b>Reportes de sucursales</b><small class="muted">(uno o varios)</small><input type="file" id="rpSucs" accept=".xls,.xlsx" multiple><span id="rpSucsTxt" class="muted">Sin archivos</span></label>
+        <label class="rp-arch"><b>Reportes de sucursales</b><small class="muted">(uno o varios)</small><input type="file" id="rpSucs" accept=".xls,.xlsx,.txt,.TXT" multiple><span id="rpSucsTxt" class="muted">Sin archivos</span></label>
         <div class="filtros"><button class="btn sm" type="button" id="rpLimpiar">Quitar archivos</button></div>
         <p class="muted rp-regla">Se entrega lo que vendió en los días del reporte menos lo que tiene ahora (tiene 4 y vendió 10 → se entregan 6). Solo se usa el reporte que usted sube. Los reportes y su Excel quedan guardados: no hace falta volver a subirlos (al subir otro de la misma sucursal, se reemplaza).</p>
       </div>
@@ -779,6 +779,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 
 <div class="toast" id="toast" hidden></div>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="app.js?v=202611211300"></script>
+<script type="module" src="app.js?v=202611230100"></script>
 </body>
 </html>

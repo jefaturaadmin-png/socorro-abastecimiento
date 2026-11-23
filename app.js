@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611211300";
+const VERSION_PROY = "202611230100";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2684,14 +2684,37 @@ function leerReporte(filas, archivo) {
   return { archivo, est, desde, hasta, dias, items, sinCod, esDrog: /DROGUER/i.test(est), suc: sucDeNombre(est) || sucDeNombre(archivo) || "" };
 }
 async function rpLeerArchivo(a) {
+  if (/\.txt$/i.test(a.name)) return leerReporteTxt(new TextDecoder("windows-1252").decode(await a.arrayBuffer()), a.name);
   XLSX ??= await import("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm");
   const wb = XLSX.read(await a.arrayBuffer()), ws = wb.Sheets[wb.SheetNames[0]];
   return leerReporte(XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false }), a.name);
 }
-// fraccionero de cada producto: sale de la venta en fracciones (Parcial = (enteros + fracciones ÷ fraccionero) × P.V.F); si no, del nombre («X100TAB»)
+// Reporte en TEXTO (separado por tabulaciones): codpro, despro, codlab, cant_e, cant_m (lo vendido), stkalm, stkalm_m (stock),
+// stkfra (fraccionero), precio, deslab… No trae sucursal ni fechas: salen del NOMBRE del archivo («Ortega__1_al_21-11.TXT»).
+function fechasDeNombre(t) {
+  const y = new Date().getFullYear(), m = String(t).match(/(\d{1,2})(?:[-.](\d{1,2}))?(?:[-.](\d{2,4}))?[_\s-]*al[_\s-]*(\d{1,2})[-.](\d{1,2})(?:[-.](\d{2,4}))?/i);
+  if (!m) return { desde: null, hasta: null };
+  const ano = v => !v ? y : v.length === 2 ? 2000 + +v : +v, mh = +m[5], ah = ano(m[6]);
+  const hasta = new Date(ah, mh - 1, +m[4]), md = m[2] ? +m[2] : mh, desde = new Date(m[3] ? ano(m[3]) : md > mh ? ah - 1 : ah, md - 1, +m[1]);
+  return { desde, hasta };
+}
+function leerReporteTxt(txt, archivo) {
+  const L = txt.split(/\r?\n/).filter(l => l.trim()), h = (L[0] || "").split("\t").map(x => x.trim().toLowerCase()), i = n => h.indexOf(n);
+  if (i("codpro") < 0 || i("cant_e") < 0 || i("stkalm") < 0) throw new Error("no es el reporte de reposición en texto (faltan las columnas codpro, cant_e, stkalm…)");
+  const items = [], sinCod = [];
+  for (const l of L.slice(1)) { const c = l.split("\t"), v = k => i(k) >= 0 ? String(c[i(k)] ?? "").trim() : "";
+    let cod = v("codpro"); const it = { n: v("despro"), lab: v("deslab") || v("codlab"), sig: v("codlab"), ce: rpNum(v("cant_e")), cf: rpNum(v("cant_m")),
+      se: rpNum(v("stkalm")), sf: rpNum(v("stkalm_m")), smin: rpNum(v("stkmin")), pvf: rpNum(v("precio")), fr: Math.max(1, rpNum(v("stkfra")) || 1) };
+    it.par = (it.ce + it.cf / it.fr) * it.pvf;
+    if (/^\d+$/.test(cod)) cod = cod.padStart(5, "0"); it.c = cod;
+    if (!it.n && !cod) continue; (cod ? items : sinCod).push(it); }
+  const { desde, hasta } = fechasDeNombre(archivo.replace(/^[0-9a-f]{8}-/, "")), suc = sucDeNombre(archivo.replace(/^[0-9a-f]{8}-/, ""));
+  return { archivo, est: suc ? nombreFarm(suc) : archivo, desde, hasta, dias: desde && hasta ? Math.round((hasta - desde) / 864e5) + 1 : null, items, sinCod, esDrog: false, suc };
+}
 function rpFracc(reps) {
   const fr = new Map();
-  for (const r of reps) for (const it of r.items) if (it.cf > 0 && it.pvf > 0.05) { const q = it.par / it.pvf - it.ce; if (q > 1e-6) { const x = Math.round(it.cf / q); if (x > 0) fr.set(it.c, x); } }
+  for (const r of reps) for (const it of r.items) if (it.fr > 0) fr.set(it.c, it.fr);   // el reporte en texto ya trae el fraccionero
+  for (const r of reps) for (const it of r.items) if (!fr.has(it.c) && it.cf > 0 && it.pvf > 0.05) { const q = it.par / it.pvf - it.ce; if (q > 1e-6) { const x = Math.round(it.cf / q); if (x > 0) fr.set(it.c, x); } }
   return (c, n) => fr.get(c) || +(String(n).match(/X\s*(\d+)\s*(?:TAB|COM|CAP|CAPS|GRAG|AMP|SOB|SCH|UND|UDS|CPR|COMP|TB|TABS|SOBRES|PERLAS|OVULOS|PARCHES)/i)?.[1] || 0) || null;
 }
 function rpCalcular() {
@@ -2744,11 +2767,11 @@ function rpFilas() {
 const rpISO = d => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : "";
 const rpId = r => "rp_" + norm(r.suc || r.est || r.archivo).replace(/[^A-Z0-9]+/g, "_");
 const rpEmpacar = r => ({ tipo: "rp", archivo: r.archivo, est: r.est, suc: r.suc, desde: rpISO(r.desde), hasta: rpISO(r.hasta), dias: r.dias || 0,
-  items: JSON.stringify(r.items.map(it => [it.c, it.n, it.lab, it.sig, it.se, it.sf, it.ce, it.cf, it.pvf, it.par])), sinCod: JSON.stringify(r.sinCod.map(it => it.n)),
+  items: JSON.stringify(r.items.map(it => [it.c, it.n, it.lab, it.sig, it.se, it.sf, it.ce, it.cf, it.pvf, Math.round(it.par * 1000) / 1000, it.fr || 0])), sinCod: JSON.stringify(r.sinCod.map(it => it.n)),
   subido: new Date().toISOString(), porNombre: S.perfil?.nombre || S.perfil?.usuario || "" });
 const rpDesempacar = d => { const f = t => t ? new Date(t + "T12:00:00") : null;
   return { archivo: d.archivo, est: d.est, suc: d.suc, desde: f(d.desde), hasta: f(d.hasta), dias: d.dias, subido: d.subido, porNombre: d.porNombre,
-    items: JSON.parse(d.items || "[]").map(([c, n, lab, sig, se, sf, ce, cf, pvf, par]) => ({ c, n, lab, sig, se, sf, ce, cf, pvf, par })), sinCod: JSON.parse(d.sinCod || "[]").map(n => ({ n })) }; };
+    items: JSON.parse(d.items || "[]").map(([c, n, lab, sig, se, sf, ce, cf, pvf, par, fr]) => ({ c, n, lab, sig, se, sf, ce, cf, pvf, par, ...(fr ? { fr } : {}) })), sinCod: JSON.parse(d.sinCod || "[]").map(n => ({ n })) }; };
 function escucharRp() {
   if (S.rpSub) return; S.rpSub = true;
   S.subs.push(onSnapshot(query(collection(db, "proy_config"), where("tipo", "in", ["rp", "rpcmp", "rpel"])), sn => {
