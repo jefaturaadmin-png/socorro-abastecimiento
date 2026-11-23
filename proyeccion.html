@@ -209,14 +209,6 @@ td.av b { color: var(--s2) } td.av small, tr.avance small { display: block; colo
 .pl-panel input, .pl-panel select, .pl-panel textarea { font: inherit; padding: 4px 6px; border: 1px solid #c8d0dc; border-radius: 6px }
 .pl-panel input[type=number] { width: 70px }
 .pl-panel .pl-l textarea { width: 220px; resize: vertical }
-.pl-auxs { padding: 0 16px 16px }
-.pl-auxs h3 { font-size: 14px; margin: 4px 0 10px }
-.pl-auxg { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px }
-.pl-aux { border: 2px solid var(--c); border-radius: 10px; padding: 10px 12px; background: color-mix(in srgb, var(--c) 5%, #fff) }
-.pl-aux > b { color: var(--c); margin-right: 8px }
-.pl-aux ul { margin: 6px 0 0; padding-left: 18px; columns: 2; column-gap: 18px; font-size: 12px }
-.pl-aux li { break-inside: avoid; margin: 1px 0 }
-.pl-aux small { color: #888 }
 .plano { padding: 0 12px 14px } .plano svg { width: 100%; height: auto; display: block }
 .plano .muro { fill: var(--surface); stroke: var(--fg); stroke-width: 7 } .plano .muro2 { fill: none; stroke: var(--fg); stroke-width: 7 }
 .plano .area { fill: color-mix(in srgb, var(--muted) 10%, transparent); stroke: var(--line); stroke-width: 2 }
@@ -860,12 +852,10 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
         <label>Tipo <select id="plT"></select></label>
         <label>Ancho <input id="plW" type="number" min="24" step="5"></label>
         <label>Alto <input id="plH" type="number" min="18" step="5"></label>
-        <label><span id="plAlab">Auxiliar</span> <select id="plA"><option value="">Según la zona</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label>
         <button type="button" class="btn sm" id="plDup">⧉ Duplicar</button><button type="button" class="btn sm rojo" id="plDel">🗑 Quitar</button>
         <span class="note">Arrastre el cuadro para moverlo; el cuadrito azul de la esquina cambia su tamaño.</span>
       </div>
       <div class="pl-svg" id="plSvg"></div>
-      <div class="pl-auxs" id="plAux"></div>
     </div>
     <details class="metodo" open>
       <summary>Zona de cada laboratorio</summary>
@@ -2818,7 +2808,7 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
-<script src="planos.js?v=202611231000"></script>
+<script src="planos.js?v=202611231100"></script>
 <script src="frepple.js?v=202611042300"></script>
 <script src="sucursales.js?v=202611201800"></script>
 <script src="estadistica.js?v=202611190300"></script>
