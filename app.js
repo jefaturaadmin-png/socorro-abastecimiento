@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611230400";
+const VERSION_PROY = "202611230500";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2178,7 +2178,7 @@ function pintarTarjetasUrg() {
     (lista.length ? lista.map(d => `<tr><td class="p"><b>${esc(nomProd(d))}</b>${d.cod && d.nom ? `<code>${esc(d.cod)}</code>` : ""}${d.mot ? `<small class="pd-com">💬 ${esc(d.mot)}</small>` : ""}</td>
       <td class="der">${d.q ? nf(d.q) : ""}</td><td class="der">${stockMio(d.cod)}</td>
       <td class="f">${d.f ? d.f.toLocaleString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : esc(d.x[S.ped.cF] || "")}</td><td>${hayDrog(d.cod)}</td><td>${respUrg(d)}</td></tr>`).join("")
-      : '<tr class="vacia"><td colspan="7">No hay pedidos en esas fechas.</td></tr>') + "</tbody>";
+      : '<tr class="vacia"><td colspan="8">No hay pedidos en esas fechas.</td></tr>') + "</tbody>";
   pintarIndUrg(); escucharSug();
 }
 // lo que respondió Abastecimiento (estado y nota): solo si respondió; si no, en blanco
@@ -2325,6 +2325,9 @@ function pintarTableroUrg(P) {
   const verStkSuc = esAdmin() && !!S.sucStk?.size;
   const stkSucTxt = d => { const m = d.suc && S.sucStk.get(d.suc); if (!m) return '<span class="muted">–</span>'; const v = +(m[d.cod]?.[0] || 0);
     return v > 0 ? `<b>${nf(Math.round(v * 100) / 100)}</b>` : '<span class="rojo-t">0</span>'; };
+  // cuánto le dura el stock con el que cuenta la sucursal: stock ÷ venta diaria (red/stk_SUCURSAL: [stock, venta diaria])
+  const leDuraSucV = d => { const x = d.suc && S.sucStk?.get(d.suc)?.[d.cod]; if (!x) return null; const [st, vd] = x; return vd > 0 ? Math.round((+st || 0) / vd) : (+st > 0 ? Infinity : 0); };
+  const leDuraSuc = d => { const v = leDuraSucV(d); return v == null ? '<span class="muted">–</span>' : v === Infinity ? '<span class="muted">sin venta</span>' : `<span class="${v < 7 ? "rojo-t" : ""}">${nf(v)} d</span>`; };
   const ultCompTxt = c => { const u = c && S.ultCompra?.[c]; if (!u) return '<span class="muted">–</span>';
     const [a, m, di] = u[0].slice(0, 10).split("-"), dias = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(+a, m - 1, +di)) / 864e5);
     return `${di}/${m}/${a.slice(2)} · <b>${nf(Math.round(u[1] * 100) / 100)}</b><br><small class="muted">hace ${nf(dias)} día${dias === 1 ? "" : "s"}</small>`; };
@@ -2332,10 +2335,10 @@ function pintarTableroUrg(P) {
     const [a, m, di] = u[0].slice(0, 10).split("-"), dias = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(+a, m - 1, +di)) / 864e5);
     return `${di}/${m}/${a.slice(2)} · <b>${nf(Math.round(u[1] * 100) / 100)}</b><br><small class="muted">hace ${nf(dias)} día${dias === 1 ? "" : "s"}</small>`; };
   $("pdTit").textContent = `Pedidos recientes · ${nf(lista.length)}`;
-  $("pdTabla").innerHTML = `<thead><tr><th>Fecha</th>${P.cS >= 0 ? "<th>Sucursal</th>" : ""}<th>Producto</th><th class="der">Cant.</th>${verStkSuc ? '<th class="der" title="Stock de esa sucursal según el último kardex publicado">Stock suc.</th><th title="Último «CARGO ENVIO» de ese producto en esa sucursal (kardex general)">Último abastecimiento</th><th title="Última compra que ingresó a droguería («CARGO COMPRA» del kardex general)">Último ingreso (compra)</th><th>En droguería</th>' : ""}<th>Motivo</th><th>Pidió</th><th>Estado</th><th>Nota</th></tr></thead><tbody>` +
+  $("pdTabla").innerHTML = `<thead><tr><th>Fecha</th>${P.cS >= 0 ? "<th>Sucursal</th>" : ""}<th>Producto</th><th class="der">Cant.</th>${verStkSuc ? '<th class="der" title="Stock de esa sucursal según el último kardex publicado">Stock suc.</th><th class="der" title="Para cuántos días le alcanza su stock: stock ÷ su venta diaria">Le dura</th><th title="Último «CARGO ENVIO» de ese producto en esa sucursal (kardex general)">Último abastecimiento</th><th title="Última compra que ingresó a droguería («CARGO COMPRA» del kardex general)">Último ingreso (compra)</th><th>En droguería</th>' : ""}<th>Motivo</th><th>Pidió</th><th>Estado</th><th>Nota</th></tr></thead><tbody>` +
     (vis.length ? vis.map(d => { const e = estU(d), k = e.estado || "";
       return `<tr data-uid="${esc(d.id)}"><td class="f">${d.f ? d.f.toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}</td>${P.cS >= 0 ? `<td><b>${esc(d.suc ? corto(d.suc) : "¿" + (d.x[P.cS] || "") + "?")}</b></td>` : ""}
-        <td class="p"><b>${esc(nomProd(d))}</b><code>${esc(d.cod)}</code></td><td class="der">${d.q ? nf(d.q) : ""}</td>${verStkSuc ? `<td class="der">${stkSucTxt(d)}</td><td>${ultAbTxt(d)}</td><td>${ultCompTxt(d.cod)}</td><td class="pd-endrog">${stDrog(d.cod, new Set([d.suc]))}</td>` : ""}<td>${esc(d.mot)}</td><td>${d.quien ? esc(d.quien) : '<span class="muted">–</span>'}</td>
+        <td class="p"><b>${esc(nomProd(d))}</b><code>${esc(d.cod)}</code></td><td class="der">${d.q ? nf(d.q) : ""}</td>${verStkSuc ? `<td class="der">${stkSucTxt(d)}</td><td class="der">${leDuraSuc(d)}</td><td>${ultAbTxt(d)}</td><td>${ultCompTxt(d.cod)}</td><td class="pd-endrog">${stDrog(d.cod, new Set([d.suc]))}</td>` : ""}<td>${esc(d.mot)}</td><td>${d.quien ? esc(d.quien) : '<span class="muted">–</span>'}</td>
         <td>${marca ? `<select class="pd-est ${ESTADO_U[k][1]}" data-uest>${Object.entries(ESTADO_U).map(([v, [t]]) => `<option value="${v}" ${v === k ? "selected" : ""}>${t}</option>`).join("")}</select>` : `<span class="chip ${ESTADO_U[k][1]}">${ESTADO_U[k][0]}</span>`}</td>
         <td>${marca ? `<input class="pd-nota" data-unota maxlength="120" placeholder="Ej. en tránsito, guía GR…" value="${esc(e.nota || "")}">` : esc(e.nota || "")}</td></tr>`; }).join("")
       : `<tr class="vacia"><td colspan="11">No hay pedidos con estos filtros.</td></tr>`) + "</tbody>";
@@ -2380,7 +2383,7 @@ $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) {
     const dias = u ? Math.round((new Date().setHours(0, 0, 0, 0) - new Date(+u[0].slice(0, 4), +u[0].slice(5, 7) - 1, +u[0].slice(8, 10))) / 864e5) : "";
     const sd = S.drogStk?.[d.cod]?.[0], ot = sd > 0 ? [] : otrasSucs(d.cod, new Set([d.suc]));
     return Object.fromEntries([["Sucursal (reconocida)", d.suc ? corto(d.suc) : ""], ["Código", d.cod], ["Producto (catálogo)", d.nom], ["Cantidad pedida", d.q || ""], ["Pidió", d.quien || ""],
-      ["Stock de la sucursal", stS ? r2(stS[d.cod]?.[0]) : ""], ["Último abastecimiento", u ? u[0].slice(0, 10).split("-").reverse().join("/") : ""], ["Cantidad abastecida", u ? r2(u[1]) : ""], ["Días desde el abastecimiento", dias],
+      ["Stock de la sucursal", stS ? r2(stS[d.cod]?.[0]) : ""], ["Le dura (días)", stS && stS[d.cod] ? (stS[d.cod][1] > 0 ? Math.round((+stS[d.cod][0] || 0) / stS[d.cod][1]) : (+stS[d.cod][0] > 0 ? "sin venta" : 0)) : ""], ["Último abastecimiento", u ? u[0].slice(0, 10).split("-").reverse().join("/") : ""], ["Cantidad abastecida", u ? r2(u[1]) : ""], ["Días desde el abastecimiento", dias],
       ["Último ingreso (compra)", S.ultCompra?.[d.cod] ? S.ultCompra[d.cod][0].slice(0, 10).split("-").reverse().join("/") : ""], ["Cantidad que ingresó", S.ultCompra?.[d.cod] ? r2(S.ultCompra[d.cod][1]) : ""],
       ["Stock droguería", S.drogStk ? r2(sd) : ""], ["Pedir a otra sucursal", ot.map(x => `${corto(x.f)} ${r2(x.st)} (${x.d > 0 ? "lento, " + Math.round(x.cob) + " d" : "sin movimiento"})`).join(" · ")],
       ["Estado", ESTADO_U[e.estado || ""][0].slice(3)], ["Nota", e.nota || ""],
