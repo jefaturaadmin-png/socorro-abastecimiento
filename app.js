@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611231300";
+const VERSION_PROY = "202611231400";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2746,7 +2746,7 @@ const rpNomSuc = r => { const n = rpNomSuc0(r), dd = d => d ? `${String(d.getDat
 function pintarRep() {
   const R = S.rp, fD = d => d ? d.toLocaleDateString("es-PE") : "?";
   const fila = (r, arch) => `<span class="${arch ? "rp-archivado" : ""}"><b>${esc(rpNomSuc(r))}</b> · ${fD(r.desde)} al ${fD(r.hasta)} (${r.dias || "?"} días) ${arch ? "" : `<button type="button" class="btn sm rp-fe" data-rpfe="${esc(r.id || r.archivo)}" title="Corregir las fechas del reporte">📅 fechas</button> `}· ${nf(r.items.length)} productos${r.subido ? ` <small class="muted">· guardado el ${new Date(r.subido).toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}${r.porNombre ? " por " + esc(r.porNombre) : ""}</small>` : ""}
-    <button type="button" class="btn sm" data-rparch="${esc(r.id || "")}" data-v="${arch ? "0" : "1"}" title="${arch ? "Volver a trabajar con este reporte" : "Guardarlo como terminado: sale de la lista pero no se borra (con sus decisiones y su Excel)"}">${arch ? "↩ Volver a trabajar" : "📦 Archivar"}</button>${!arch && rpAntDe(r) ? ` <button type="button" class="btn sm rp-ant" data-rpsep="${esc(r.id || "")}" title="Hay decisiones o un Excel de antes de subir este reporte: son del reporte anterior de esta sucursal">⚠ ${rpAntDe(r)} decisiones de un reporte anterior · separarlas</button>` : ""}</span>`;
+    <button type="button" class="btn sm" data-rparch="${esc(r.id || "")}" data-v="${arch ? "0" : "1"}" title="${arch ? "Volver a trabajar con este reporte" : "Guardarlo como terminado: sale de la lista pero no se borra (con sus decisiones y su Excel)"}">${arch ? "↩ Volver a trabajar" : "📦 Archivar"}</button> <button type="button" class="btn sm rp-borrar" data-rpborrar="${esc(r.id || "")}" title="Borrar TODO lo de ${esc(rpNomSuc0(r))} en este módulo: sus reportes, su Excel y sus decisiones">🗑 Eliminar todo de ${esc(rpNomSuc0(r))}</button>${!arch && rpAntDe(r) ? ` <button type="button" class="btn sm rp-ant" data-rpsep="${esc(r.id || "")}" title="Hay decisiones o un Excel de antes de subir este reporte: son del reporte anterior de esta sucursal">⚠ ${rpAntDe(r)} decisiones de un reporte anterior · separarlas</button>` : ""}</span>`;
   $("rpSucsTxt").innerHTML = (R.sucs.length ? R.sucs.map(r => fila(r, false)).join("<br>") : "Sin archivos") +
     ((R.arch || []).length ? `<br><button type="button" class="btn sm" data-rpverarch>${S.rpVerArch ? "▾" : "▸"} Archivados (${R.arch.length})</button>` + (S.rpVerArch ? "<br>" + R.arch.map(r => fila(r, true)).join("<br>") : "") : "");
   const avisos = [];
@@ -2837,6 +2837,26 @@ $("rpSucsTxt").addEventListener("click", async e => { const b = e.target.closest
 // archivar (terminado: sale de la lista, no se borra) / volver a trabajar; ver los archivados; separar lo del reporte anterior
 $("rpSucsTxt").addEventListener("click", async e => {
   if (e.target.closest("[data-rpverarch]")) { e.preventDefault(); e.stopPropagation(); S.rpVerArch = !S.rpVerArch; pintarRep(); return; }
+  // ELIMINAR TODO de una sucursal en este módulo: sus reportes (activos y archivados), su Excel y sus decisiones (también las separadas)
+  const bo = e.target.closest("[data-rpborrar]");
+  if (bo) { e.preventDefault(); e.stopPropagation();
+    const r0 = [...S.rp.sucs, ...(S.rp.arch || [])].find(x => x.id === bo.dataset.rpborrar); if (!r0) return;
+    const nom = rpNomSuc0(r0), misma = x => (r0.suc ? x.suc === r0.suc : rpNomSuc0(x) === nom), reps = [...S.rp.sucs, ...(S.rp.arch || [])].filter(misma);
+    const bases = new Set(); for (const x of reps) { bases.add(x.k || ""); bases.add(x.suc || x.est || x.archivo); } bases.delete("");
+    const esMia = k => [...bases].some(b => k === b || k === "ANT:" + b), elKeys = [...S.rpEleg.keys()].filter(k => esMia(k.slice(0, k.lastIndexOf("|"))));
+    const exs = [...S.rpCmps].filter(([k]) => esMia(k));
+    if (!confirm(`¿Eliminar TODO lo de ${nom} en este módulo?\n· ${reps.length} reporte(s)\n· ${exs.length} Excel de comparación\n· ${elKeys.length} decisiones\nNo se puede deshacer. Después puede volver a subir el reporte de ${nom} desde cero.`)) return;
+    if (S.prev) return toast("En vista previa no se borra nada.");
+    try {
+      for (const x of reps) await deleteDoc(doc(db, "proy_config", x.id || rpId(x)));
+      for (const [, x] of exs) if (x.id) await deleteDoc(doc(db, "proy_config", x.id));
+      for (const k of elKeys) S.rpEleg.delete(k);
+      await setDoc(doc(db, "proy_config", "rp_elegido"), { tipo: "rpel", datos: JSON.stringify([...S.rpEleg]) });
+      S.rp.sucs = S.rp.sucs.filter(x => !misma(x)); S.rp.arch = (S.rp.arch || []).filter(x => !misma(x)); for (const [k] of exs) S.rpCmps.delete(k);
+      if (reps.some(x => x.archivo === S.rpCmpSuc)) S.rpCmpSuc = ""; if (reps.some(x => x.archivo === S.rp.suc)) S.rp.suc = "";
+      pintarRep(); toast(`Se eliminó todo lo de ${nom}. Ya puede subir su reporte de nuevo.`);
+    } catch (x) { avisar(x); }
+    return; }
   const a = e.target.closest("[data-rparch]"), sp = e.target.closest("[data-rpsep]"); if (!a && !sp) return; e.preventDefault(); e.stopPropagation();
   if (a) { const v = a.dataset.v === "1", r = [...S.rp.sucs, ...(S.rp.arch || [])].find(x => x.id === a.dataset.rparch); if (!r) return;
     if (v && !confirm(`¿Archivar el reporte de ${rpNomSuc(r)} (${r.desde?.toLocaleDateString("es-PE") || "?"} al ${r.hasta?.toLocaleDateString("es-PE") || "?"})? Sale de la lista y de lo que se va a entregar, pero queda guardado con sus decisiones y su Excel.`)) return;
