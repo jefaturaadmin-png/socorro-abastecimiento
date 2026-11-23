@@ -7,7 +7,7 @@
   const $ = id => document.getElementById(id);
   const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const PL = { piso: 1, datos: { 1: null, 2: null }, sel: null, editar: false, cargado: false, guardando: null };
-  const TIPOS = { an: ['Anaquel', '#ffffff'], pal: ['Parihuela / pallet', '#fbf3e6'], rack: ['Rack', '#fff6c7'], oft: ['Oftalmológicos', '#eef3fb'], esp: ['Especial', '#eef3fb'], gris: ['Otro', '#f2f2f2'], vac: ['Vacío', '#f1f1f1'] };
+  const TIPOS = { an: ['Anaquel', '#ffffff'], pal: ['Parihuela / pallet', '#fbf3e6'], rack: ['Rack', '#fff6c7'], oft: ['Oftalmológicos', '#eef3fb'], esp: ['Especial', '#eef3fb'], gris: ['Otro', '#f2f2f2'], vac: ['Vacío', '#f1f1f1'], esc: ['Escalera', '#ffffff'] };
   const DEFS = '<defs><marker id="plfl" markerWidth="12" markerHeight="12" refX="8" refY="6" orient="auto"><path d="M0,0 L12,6 L0,12 z" fill="#111"/></marker></defs>';
 
   // texto de cada cuadro: los nombres largos van en dos líneas y la letra se achica si hay muchos
@@ -19,6 +19,14 @@
     return ls.length <= 2 ? ls.flatMap(partir) : ls;
   }
   function cajaSvg(b, i) {
+    if (b.t === 'esc') {   // escalera: peldaños a lo largo del lado largo y el nombre girado si es alta
+      const alta = b.h >= b.w, n = Math.max(1, Math.floor((alta ? b.h : b.w) / 24)), cx = b.x + b.w / 2, cy = b.y + b.h / 2, sel = PL.sel === i;
+      let r = `<g class="pl-c${PL.editar ? ' ed' : ''}" data-i="${i}"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="#fff" stroke="${sel ? '#1d4ed8' : '#111'}" stroke-width="${sel ? 3 : 2.2}"/>`;
+      for (let k = 1; k < n; k++) { const d = k * (alta ? b.h : b.w) / n; r += alta ? `<line x1="${b.x}" y1="${b.y + d}" x2="${b.x + b.w}" y2="${b.y + d}" stroke="#111" stroke-width="1.4"/>` : `<line x1="${b.x + d}" y1="${b.y}" x2="${b.x + d}" y2="${b.y + b.h}" stroke="#111" stroke-width="1.4"/>`; }
+      const t = (b.l || []).join(' ') || 'ESCALERA';
+      r += `<rect x="${alta ? cx - 9 : cx - t.length * 4.5}" y="${alta ? cy - t.length * 4.5 : cy - 9}" width="${alta ? 18 : t.length * 9}" height="${alta ? t.length * 9 : 18}" fill="#fff"/><text x="${cx}" y="${cy + 4}" font-size="11" font-weight="800" text-anchor="middle" fill="#111" letter-spacing="2"${alta ? ` transform="rotate(-90 ${cx} ${cy})"` : ''}>${esc(t)}</text>`;
+      return r + (sel && PL.editar ? `<rect class="pl-tam" data-tam="${i}" x="${b.x + b.w - 9}" y="${b.y + b.h - 9}" width="12" height="12" fill="#1d4ed8"/>` : '') + '</g>';
+    }
     const fill = (TIPOS[b.t] || TIPOS.an)[1], L = lineas(b), n = L.length || 1, largo = Math.max(1, ...L.map(x => x.length));
     let fs = n <= 3 && largo <= 13 ? 11 : n <= 4 && largo <= 17 ? 9.6 : 8.2; if (b.w < 70 && fs > 9) fs = 9;
     const lh = fs + 1.6, top = b.c ? 14 : 3, y0 = b.y + top + ((b.h - top) - n * lh) / 2 + fs - 1;
@@ -60,14 +68,22 @@
     }, 600);
   }
   async function originales() {
-    const [a, b] = await Promise.all([1, 2].map(n => fetch(`planos/plano_lab_piso${n}.json?v=202611230700`).then(r => r.json())));
+    const [a, b] = await Promise.all([1, 2].map(n => fetch(`planos/plano_lab_piso${n}.json?v=202611230800`).then(r => r.json())));
     return { 1: a, 2: b };
+  }
+  // la escalera del 2.º piso era parte del dibujo fijo: se vuelve un cuadro editable, puesto donde indicó el usuario (junto a la pared, debajo de los pallets)
+  const RX_ESC = /<rect x="64" y="160" width="86" height="360"[^>]*\/>(<line x1="64"[^>]*\/>)*<text[^>]*>ESCALERA<\/text>/;
+  function escaleraEditable(d) {
+    if (!d || !RX_ESC.test(d.deco || '')) return d;
+    d.deco = d.deco.replace(RX_ESC, '');
+    if (!d.cajas.some(b => b.t === 'esc')) d.cajas.push({ x: 64, y: 285, w: 86, h: 400, c: '', l: ['ESCALERA'], t: 'esc' });
+    return d;
   }
   async function cargar() {
     if (PL.cargado) return; PL.cargado = true;
     let orig = null;
     const usar = async d => {
-      if (d?.p1 && d?.p2) { PL.datos = { 1: JSON.parse(d.p1), 2: JSON.parse(d.p2) }; }
+      if (d?.p1 && d?.p2) { PL.datos = { 1: JSON.parse(d.p1), 2: escaleraEditable(JSON.parse(d.p2)) }; }
       else { orig ??= await originales(); PL.datos = { 1: orig[1], 2: orig[2] }; }
       if (!PL.guardando && !PL.arrastre) pintarPl();
     };
