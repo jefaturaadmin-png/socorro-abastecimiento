@@ -7,7 +7,9 @@
   const $ = id => document.getElementById(id);
   const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const PL = { piso: 1, datos: { 1: null, 2: null }, sel: null, editar: false, cargado: false, guardando: null };
-  const TIPOS = { an: ['Anaquel', '#ffffff'], pal: ['Parihuela / pallet', '#fbf3e6'], rack: ['Rack', '#fff6c7'], oft: ['Oftalmológicos', '#eef3fb'], esp: ['Especial', '#eef3fb'], gris: ['Otro', '#f2f2f2'], vac: ['Vacío', '#f1f1f1'], esc: ['Escalera', '#ffffff'] };
+  const TIPOS = { an: ['Anaquel', '#ffffff'], pal: ['Parihuela / pallet', '#fbf3e6'], rack: ['Rack', '#fff6c7'], oft: ['Oftalmológicos', '#eef3fb'], esp: ['Especial', '#eef3fb'], gris: ['Otro', '#f2f2f2'], vac: ['Vacío', '#f1f1f1'], esc: ['Escalera', '#ffffff'], zona: ['Zona de auxiliar', 'none'] };
+  const AUXC = ['#6b7280', '#16a34a', '#2563eb', '#ea580c', '#9333ea', '#0891b2'];   // color de cada auxiliar (1, 2, 3…)
+  const auxCol = n => AUXC[n] || AUXC[0];
   const DEFS = '<defs><marker id="plfl" markerWidth="12" markerHeight="12" refX="8" refY="6" orient="auto"><path d="M0,0 L12,6 L0,12 z" fill="#111"/></marker></defs>';
 
   // texto de cada cuadro: los nombres largos van en dos líneas y la letra se achica si hay muchos
@@ -18,7 +20,26 @@
       return best[1]; };
     return ls.length <= 2 ? ls.flatMap(partir) : ls;
   }
+  // zona de un auxiliar: un recuadro punteado de color con su nombre arriba; los cuadros que caen dentro son de ese auxiliar
+  function zonaSvg(b, i) {
+    const c = auxCol(+b.a || 0), sel = PL.sel === i, t = b.c || ('AUXILIAR ' + (b.a || '')), w = t.length * 9.5 + 28, cx = b.x + b.w / 2;
+    return `<g class="pl-c${PL.editar ? ' ed' : ''}" data-i="${i}"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="18" fill="${c}" fill-opacity=".05" stroke="${c}" stroke-width="${sel ? 5 : 3.5}" stroke-dasharray="14 8"/>`
+      + `<rect x="${cx - w / 2}" y="${b.y - 13}" width="${w}" height="26" rx="13" fill="${c}"/><text x="${cx}" y="${b.y + 5}" font-size="14" font-weight="800" text-anchor="middle" fill="#fff" letter-spacing="1">${esc(t)}</text>`
+      + (sel && PL.editar ? `<rect class="pl-tam" data-tam="${i}" x="${b.x + b.w - 12}" y="${b.y + b.h - 12}" width="16" height="16" fill="${c}"/>` : '') + '</g>';
+  }
+  // auxiliar de cada cuadro: el que se le puso a mano, o el de la zona donde está su centro
+  function auxDe(b, d) {
+    if (b.t === 'zona') return +b.a || 0;
+    if (+b.a) return +b.a;
+    const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+    const z = d.cajas.find(z => z.t === 'zona' && cx >= z.x && cx <= z.x + z.w && cy >= z.y && cy <= z.y + z.h);
+    return z ? +z.a || 0 : 0;
+  }
   function cajaSvg(b, i) {
+    if (b.t === 'zona') return zonaSvg(b, i);
+    return cajaSvg0(b, i) + (+b.a ? `<g pointer-events="none"><circle cx="${b.x + b.w}" cy="${b.y}" r="11" fill="${auxCol(+b.a)}"/><text x="${b.x + b.w}" y="${b.y + 4.5}" font-size="12" font-weight="800" text-anchor="middle" fill="#fff">${+b.a}</text></g>` : '');
+  }
+  function cajaSvg0(b, i) {
     if (b.t === 'esc') {   // escalera: peldaños a lo largo del lado largo y el nombre girado si es alta
       const alta = b.h >= b.w, n = Math.max(1, Math.floor((alta ? b.h : b.w) / 24)), cx = b.x + b.w / 2, cy = b.y + b.h / 2, sel = PL.sel === i;
       let r = `<g class="pl-c${PL.editar ? ' ed' : ''}" data-i="${i}"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="#fff" stroke="${sel ? '#1d4ed8' : '#111'}" stroke-width="${sel ? 3 : 2.2}"/>`;
@@ -45,14 +66,27 @@
     const d = PL.datos[PL.piso];
     if (!d) { box.innerHTML = '<p class="note" style="padding:16px">Cargando el plano…</p>'; $('plPanel').hidden = true; return; }
     const [vx, vy, vw, vh] = d.vb;
-    box.innerHTML = `<svg id="plSvgEl" xmlns="http://www.w3.org/2000/svg" viewBox="${vx} ${vy} ${vw} ${vh}" style="min-width:${Math.round(vw * 0.55)}px" font-family="Inter, 'Segoe UI', Arial, sans-serif">${DEFS}<rect x="${vx}" y="${vy}" width="${vw}" height="${vh}" fill="#fff"/>${d.deco || ''}${d.cajas.map(cajaSvg).join('')}</svg>`;
-    pintarPanel();
+    box.innerHTML = `<svg id="plSvgEl" xmlns="http://www.w3.org/2000/svg" viewBox="${vx} ${vy} ${vw} ${vh}" style="min-width:${Math.round(vw * 0.55)}px" font-family="Inter, 'Segoe UI', Arial, sans-serif">${DEFS}<rect x="${vx}" y="${vy}" width="${vw}" height="${vh}" fill="#fff"/>${d.deco || ''}${d.cajas.map((b, i) => b.t === 'zona' ? cajaSvg(b, i) : '').join('')}${d.cajas.map((b, i) => b.t === 'zona' ? '' : cajaSvg(b, i)).join('')}</svg>`;
+    pintarPanel(); pintarAux();
   }
   function pintarPanel() {
     const p = $('plPanel'), d = PL.datos[PL.piso], b = d?.cajas[PL.sel];
     p.hidden = !(PL.editar && b); if (p.hidden) return;
     $('plC').value = b.c || ''; $('plL').value = (b.l || []).join('\n'); $('plT').value = b.t || 'an';
-    $('plW').value = Math.round(b.w); $('plH').value = Math.round(b.h);
+    $('plW').value = Math.round(b.w); $('plH').value = Math.round(b.h); $('plA').value = +b.a || '';
+    $('plAlab').textContent = b.t === 'zona' ? 'Número de auxiliar' : 'Auxiliar';
+  }
+  // lista de laboratorios que ve cada auxiliar (según las zonas y los cuadros marcados a mano)
+  function pintarAux() {
+    const el = $('plAux'), d = PL.datos[PL.piso]; if (!el || !d) return;
+    const A = new Map();
+    for (const b of d.cajas) { if (b.t === 'zona' || b.t === 'esc') continue; const a = auxDe(b, d); if (!a) continue;
+      const m = A.get(a) || A.set(a, new Map()).get(a); for (const l of (b.l || []).filter(l => !/^\d+$/.test(l))) { const x = m.get(l) || m.set(l, []).get(l); if (b.c && !x.includes(b.c)) x.push(b.c); } }
+    if (!A.size) { el.innerHTML = ''; return; }
+    el.innerHTML = '<h3>Laboratorios de cada auxiliar · ' + esc(d.titulo || (PL.piso + '.º piso')) + '</h3><div class="pl-auxg">' + [...A.keys()].sort((a, b) => a - b).map(a => {
+      const m = A.get(a), nom = d.cajas.find(z => z.t === 'zona' && +z.a === a)?.c || 'AUXILIAR ' + a;
+      return `<div class="pl-aux" style="--c:${auxCol(a)}"><b>${esc(nom)}</b><span class="note">${m.size} laboratorios</span><ul>${[...m].sort((x, y) => x[0].localeCompare(y[0])).map(([l, cs]) => `<li>${esc(l)}${cs.length ? ` <small>${esc(cs.join(', '))}</small>` : ''}</li>`).join('')}</ul></div>`;
+    }).join('') + '</div>';
   }
   // guardar (todo el plano de los dos pisos, en un solo documento)
   function guardar() {
@@ -68,8 +102,8 @@
     }, 600);
   }
   async function originales() {
-    const [a, b] = await Promise.all([1, 2].map(n => fetch(`planos/plano_lab_piso${n}.json?v=202611230900`).then(r => r.json())));
-    return { 1: a, 2: b };
+    const [a, b] = await Promise.all([1, 2].map(n => fetch(`planos/plano_lab_piso${n}.json?v=202611231000`).then(r => r.json())));
+    return { 1: a, 2: zonasAux(b) };
   }
   // la escalera del 2.º piso era parte del dibujo fijo: se vuelve un cuadro editable, puesto donde indicó el usuario (junto a la pared, debajo de los pallets)
   const RX_ESC = /<rect x="64" y="160" width="86" height="360"[^>]*\/>(<line x1="64"[^>]*\/>)*<text[^>]*>ESCALERA<\/text>/;
@@ -94,11 +128,23 @@
     pon(b => b.t === 'esc' && b.x === 64 && b.y === 285, { x: 72, y: 306, w: 86, h: 380 });
     return d;
   }
+  // 2.º piso (pedido del usuario): tres zonas, una por auxiliar. Auxiliar 1: escalera, pallets, ABC y DEF; Auxiliar 2: GHIK y MLNP;
+  // Auxiliar 3: PQRS, UWZ y el cuarto de material médico / Química Suiza. Fuera de su zona: ZAIMELLA → 1, BABYSEC → 2, KIMBERLY → 3.
+  function zonasAux(d) {
+    if (!d || d.zonas) return d; d.zonas = 1;
+    if (!d.cajas.some(b => b.t === 'zona')) d.cajas.unshift(
+      { x: 40, y: 40, w: 670, h: 888, c: 'AUXILIAR 1', l: [], t: 'zona', a: 1 },
+      { x: 718, y: 40, w: 534, h: 888, c: 'AUXILIAR 2', l: [], t: 'zona', a: 2 },
+      { x: 1260, y: 40, w: 1196, h: 888, c: 'AUXILIAR 3', l: [], t: 'zona', a: 3 });
+    for (const b of d.cajas) { if (b.t === 'zona' || b.a) continue; const t = (b.l || []).join(' ').toUpperCase();
+      if (/ZAIMELLA/.test(t)) b.a = 1; else if (/BABYSEC/.test(t)) b.a = 2; else if (/KIMBER/.test(t)) b.a = 3; }
+    return d;
+  }
   async function cargar() {
     if (PL.cargado) return; PL.cargado = true;
     let orig = null;
     const usar = async d => {
-      if (d?.p1 && d?.p2) { PL.datos = { 1: JSON.parse(d.p1), 2: franjaIzquierda(escaleraEditable(JSON.parse(d.p2))) }; }
+      if (d?.p1 && d?.p2) { PL.datos = { 1: JSON.parse(d.p1), 2: zonasAux(franjaIzquierda(escaleraEditable(JSON.parse(d.p2)))) }; }
       else { orig ??= await originales(); PL.datos = { 1: orig[1], 2: orig[2] }; }
       if (!PL.guardando && !PL.arrastre) pintarPl();
     };
@@ -134,6 +180,7 @@
     if (e.target.id === 'plT') b.t = e.target.value;
     if (e.target.id === 'plW') b.w = Math.max(24, +e.target.value || b.w);
     if (e.target.id === 'plH') b.h = Math.max(18, +e.target.value || b.h);
+    if (e.target.id === 'plA') { b.a = +e.target.value || 0; if (!b.a) delete b.a; }
     const ae = document.activeElement?.id; pintarPl(); if (ae) { const el = $(ae); el?.focus(); } guardar();
   });
   $('plPanel').addEventListener('click', e => {
