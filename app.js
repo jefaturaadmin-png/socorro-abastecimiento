@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611230100";
+const VERSION_PROY = "202611230200";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2740,7 +2740,7 @@ function rpCalcular() {
 const rpNomSuc = r => r.esDrog ? r.est : r.suc ? corto(r.suc) : r.est || r.archivo;
 function pintarRep() {
   const R = S.rp, fD = d => d ? d.toLocaleDateString("es-PE") : "?";
-  $("rpSucsTxt").innerHTML = R.sucs.length ? R.sucs.map(r => `<b>${esc(rpNomSuc(r))}</b> · ${fD(r.desde)} al ${fD(r.hasta)} (${r.dias || "?"} días) · ${nf(r.items.length)} productos${r.subido ? ` <small class="muted">· guardado el ${new Date(r.subido).toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}${r.porNombre ? " por " + esc(r.porNombre) : ""}</small>` : ""}`).join("<br>") : "Sin archivos";
+  $("rpSucsTxt").innerHTML = R.sucs.length ? R.sucs.map(r => `<b>${esc(rpNomSuc(r))}</b> · ${fD(r.desde)} al ${fD(r.hasta)} (${r.dias || "?"} días) <button type="button" class="btn sm rp-fe" data-rpfe="${esc(r.archivo)}" title="Corregir las fechas del reporte">📅 fechas</button> · ${nf(r.items.length)} productos${r.subido ? ` <small class="muted">· guardado el ${new Date(r.subido).toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}${r.porNombre ? " por " + esc(r.porNombre) : ""}</small>` : ""}`).join("<br>") : "Sin archivos";
   const avisos = [];
   for (const r of R.sucs) if (r.sinCod.length) avisos.push(`${rpNomSuc(r)}: ${r.sinCod.length} producto${r.sinCod.length === 1 ? "" : "s"} del reporte sin código: ${r.sinCod.map(x => x.n).join(", ")}.`);
   msg("rpMsg", avisos.join(" "), false);
@@ -2783,16 +2783,39 @@ function escucharRp() {
   }, e => { S.rpSub = false; msg("rpMsg", "No se pudieron leer los reportes guardados: " + textoError(e), true); }));
   S.subs.push(() => { S.rpSub = false; });
 }
+// período del reporte: el TXT no trae fechas, se preguntan (con lo que dice el nombre del archivo ya puesto)
+function pedirFechasRp(r) {
+  return new Promise(ok => {
+    const dl = $("rpFeDlg"), iso = d => d ? rpISO(d) : "";
+    $("rpFeTxt").innerHTML = `<b>${esc(rpNomSuc(r))}</b> · ${esc(r.archivo.replace(/^[0-9a-f]{8}-/, ""))} · ${nf(r.items.length)} productos. Ponga el período que filtró en el sistema (se usa para la venta por día y «Le dura»).`;
+    $("rpFeD").value = iso(r.desde); $("rpFeH").value = iso(r.hasta); msg("rpFeMsg", "");
+    const dias = () => { const d = $("rpFeD").value, h = $("rpFeH").value; $("rpFeDias").textContent = d && h && h >= d ? `${nf(Math.round((new Date(h) - new Date(d)) / 864e5) + 1)} días` : ""; };
+    dias(); $("rpFeD").oninput = $("rpFeH").oninput = dias;
+    let listo = false;
+    $("rpFeOk").onclick = () => { const d = $("rpFeD").value, h = $("rpFeH").value;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !/^\d{4}-\d{2}-\d{2}$/.test(h) || h < d) return msg("rpFeMsg", "Ponga las dos fechas (la final no puede ser antes que la inicial).", true);
+      listo = true; dl.close(); const de = new Date(d + "T12:00:00"), ha = new Date(h + "T12:00:00"); ok({ desde: de, hasta: ha, dias: Math.round((ha - de) / 864e5) + 1 }); };
+    dl.onclose = () => { if (!listo) ok(null); };
+    dl.onclick = e => { if (e.target.closest("[data-cerrar-dlg]") || e.target === dl) dl.close(); };
+    dl.showModal();
+  });
+}
 async function rpCargar(files) {
   msg("rpMsg", "Leyendo…");
   for (const a of files) {
     try { const r = await rpLeerArchivo(a);
+      if (/\.txt$/i.test(a.name)) { const f = await pedirFechasRp(r); if (!f) { msg("rpMsg", `«${a.name}»: no se subió (faltan las fechas).`, true); continue; } Object.assign(r, f); }
       S.rp.sucs = S.rp.sucs.filter(x => x.archivo !== r.archivo && !(r.suc && x.suc === r.suc)); S.rp.sucs.push(r);
       if (!S.prev) await setDoc(doc(db, "proy_config", rpId(r)), rpEmpacar(r));   // se guarda (reemplaza al anterior de esa sucursal)
     } catch (e) { msg("rpMsg", `«${a.name}»: ${e.message || e}`, true); return; }
   }
   pintarRep(); toast("Reporte guardado");
 }
+// corregir las fechas de un reporte ya guardado
+$("rpSucsTxt").addEventListener("click", async e => { const b = e.target.closest("[data-rpfe]"); if (!b) return; e.preventDefault(); e.stopPropagation();
+  const r = S.rp.sucs.find(x => x.archivo === b.dataset.rpfe); if (!r) return; const f = await pedirFechasRp(r); if (!f) return;
+  Object.assign(r, f); pintarRep();
+  if (!S.prev) try { await setDoc(doc(db, "proy_config", r.id || rpId(r)), { desde: rpISO(f.desde), hasta: rpISO(f.hasta), dias: f.dias }, { merge: true }); toast("Fechas guardadas"); } catch (x) { avisar(x); } });
 $("rpSucs").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (f.length) rpCargar(f); });
 $("rpLimpiar").addEventListener("click", async () => {
   if (!S.rp.sucs.length && !S.rpCmps.size) return; if (!confirm("¿Quitar los reportes guardados y su Excel de comparación?")) return;
