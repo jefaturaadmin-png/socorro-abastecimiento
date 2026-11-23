@@ -68,7 +68,7 @@
     }, 600);
   }
   async function originales() {
-    const [a, b] = await Promise.all([1, 2].map(n => fetch(`planos/plano_lab_piso${n}.json?v=202611230800`).then(r => r.json())));
+    const [a, b] = await Promise.all([1, 2].map(n => fetch(`planos/plano_lab_piso${n}.json?v=202611230900`).then(r => r.json())));
     return { 1: a, 2: b };
   }
   // la escalera del 2.º piso era parte del dibujo fijo: se vuelve un cuadro editable, puesto donde indicó el usuario (junto a la pared, debajo de los pallets)
@@ -79,11 +79,26 @@
     if (!d.cajas.some(b => b.t === 'esc')) d.cajas.push({ x: 64, y: 285, w: 86, h: 400, c: '', l: ['ESCALERA'], t: 'esc' });
     return d;
   }
+  // 2.º piso (pedido del usuario): la pared izquierda se corre hacia el pasadizo y en esa franja, junto a la pared,
+  // van arriba el Pallet 2 (MARKOS / ABBOTT), debajo el Pallet 1 (PLENITUD) y después la escalera. Solo mueve los que siguen en su lugar original.
+  function franjaIzquierda(d) {
+    if (!d || !(d.deco || '').includes('160,70 1684,70')) return d;
+    d.deco = d.deco.replace('160,70 1684,70 1704,584 2460,584 2460,916 160,916', '40,70 1684,70 1704,584 2460,584 2460,916 40,916')
+      .replace('160,130 -90,130 -90,580 160,580', '40,130 -90,130 -90,580 40,580')
+      .replace('x="-16" y="566" font-size="9.5"', 'x="-25" y="566" font-size="8.2"')
+      .replace('x="-16" y="548"', 'x="-25" y="548"')
+      .replace('x="-16" y="532" font-size="10.5"', 'x="-25" y="532" font-size="9.5"');
+    const pon = (f, v) => { const b = d.cajas.find(f); if (b) Object.assign(b, v); };
+    pon(b => b.t === 'pal' && b.x === -76 && b.y === 350, { x: 60, y: 84, w: 110, h: 100 });
+    pon(b => b.t === 'pal' && b.x === -76 && b.y === 190, { x: 60, y: 194, w: 110, h: 100 });
+    pon(b => b.t === 'esc' && b.x === 64 && b.y === 285, { x: 72, y: 306, w: 86, h: 380 });
+    return d;
+  }
   async function cargar() {
     if (PL.cargado) return; PL.cargado = true;
     let orig = null;
     const usar = async d => {
-      if (d?.p1 && d?.p2) { PL.datos = { 1: JSON.parse(d.p1), 2: escaleraEditable(JSON.parse(d.p2)) }; }
+      if (d?.p1 && d?.p2) { PL.datos = { 1: JSON.parse(d.p1), 2: franjaIzquierda(escaleraEditable(JSON.parse(d.p2))) }; }
       else { orig ??= await originales(); PL.datos = { 1: orig[1], 2: orig[2] }; }
       if (!PL.guardando && !PL.arrastre) pintarPl();
     };
