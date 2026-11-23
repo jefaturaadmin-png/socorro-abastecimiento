@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611230300";
+const VERSION_PROY = "202611230400";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2944,7 +2944,8 @@ function rpNotas(suc, c) {
 S.rpLin = ""; S.rpFam = "";
 const nomNrp = t => String(t || "").trim().toUpperCase().replace(/\s+/g, " ");
 function rpClasDe(n) { const C = S.rpClas; if (!C?.p) return { t: "", f: "" }; const a = C.p[nomNrp(n)] || [-1, -1, -1]; return { t: C.t[a[0]] || "", f: C.f[a[2]] || "" }; }
-const rpPasaClas = x => { if (!S.rpLin && !S.rpFam) return true; const k = rpClasDe(x.n); return (!S.rpLin || k.t === S.rpLin) && (!S.rpFam || k.f === S.rpFam); };
+const rpPasaClas = x => { if (S.rpConNotas && !rpNotas(rpCmpR()?.suc || "", x.c).length) return false;   // «solo con notas y comentarios»
+  if (!S.rpLin && !S.rpFam) return true; const k = rpClasDe(x.n); return (!S.rpLin || k.t === S.rpLin) && (!S.rpFam || k.f === S.rpFam); };
 // lo que se va a entregar de cada fila: la elegida; si son iguales o solo sale del reporte, la del reporte; solo en su Excel: 0
 const rpAt = x => x.el ? x.el.q : x.res === "dif" ? null : x.res === "exc" ? 0 : x.qr;
 const rpDeTxt = de => ({ rep: "del reporte", exc: "de su Excel", man: "escrita a mano", add: "añadido", del: "eliminado", pen: "pendiente" })[de] || "";
@@ -2990,6 +2991,7 @@ $("rpCmp").addEventListener("change", async e => { const a = e.target.files[0]; 
     toast(`Su Excel quedó guardado para comparar con ${rpNomSuc(r)}`);
   } catch (x) { toast(`«${a.name}»: ${x.message || x}`); } });
 $("rpLin").addEventListener("change", e => { S.rpLin = e.target.value; pintarRpCmp(); });
+$("rpConNotas").addEventListener("change", e => { S.rpConNotas = e.target.checked; pintarRpCmp(); });
 $("rpFam").addEventListener("change", e => { S.rpFam = e.target.value; pintarRpCmp(); });
 $("rpCmpSuc").addEventListener("change", e => { S.rpCmpSuc = e.target.value; S.rp.suc = e.target.value; S.rpCmpVer = ""; pintarRep(); });
 // cantidad escrita a mano (si no está de acuerdo con ninguna de las dos): se guarda al pulsar Enter o al salir del cuadro
