@@ -198,6 +198,17 @@ tr.avance td { background: color-mix(in srgb, var(--s2) 8%, transparent) }
 td.av b { color: var(--s2) } td.av small, tr.avance small { display: block; color: var(--muted); font-size: 11px; font-family: inherit; white-space: nowrap }
 .mapa-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start }
 .mapa-grid > .card { margin: 0 }
+.pl-card { margin: 16px 0 }
+.pl-card .seg { margin-right: 6px }
+.pl-svg { padding: 8px 12px 14px; overflow: auto }
+.pl-svg svg { width: 100%; height: auto; display: block }
+.pl-c.ed { cursor: move }
+.pl-tam { cursor: nwse-resize }
+.pl-panel { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; padding: 10px 16px; background: #f3f6fb; border-bottom: 1px solid #dde3ec }
+.pl-panel label { display: flex; flex-direction: column; font-size: 12px; gap: 3px }
+.pl-panel input, .pl-panel select, .pl-panel textarea { font: inherit; padding: 4px 6px; border: 1px solid #c8d0dc; border-radius: 6px }
+.pl-panel input[type=number] { width: 70px }
+.pl-panel .pl-l textarea { width: 220px; resize: vertical }
 .plano { padding: 0 12px 14px } .plano svg { width: 100%; height: auto; display: block }
 .plano .muro { fill: var(--surface); stroke: var(--fg); stroke-width: 7 } .plano .muro2 { fill: none; stroke: var(--fg); stroke-width: 7 }
 .plano .area { fill: color-mix(in srgb, var(--muted) 10%, transparent); stroke: var(--line); stroke-width: 2 }
@@ -831,6 +842,21 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
       </div>
       <div class="card"><div class="ch"><h2>Anaqueles</h2><span class="note">Clic para resaltar</span></div><ul class="mlista" id="mLista"></ul></div>
     </div>
+    <div class="card pl-card" id="plCard">
+      <div class="ch"><h2>Planos por laboratorio</h2><span class="note" id="plEstado">Plano de cada piso con el laboratorio de cada anaquel, parihuela y rack</span>
+        <span class="mbtns"><span class="seg" id="plPiso"><button type="button" data-p="1">Primer piso</button><button type="button" data-p="2">Segundo piso</button></span>
+        <button type="button" class="btn sm" id="plEdit">✎ Editar</button><button type="button" class="btn sm" id="plAdd" hidden>＋ Añadir cuadro</button><button type="button" class="btn sm" id="plReset" hidden title="Deshacer todos los cambios de este piso">⤺ Plano original</button><button type="button" class="btn sm" id="plPNG">⬇ Imagen</button></span></div>
+      <div class="pl-panel" id="plPanel" hidden>
+        <label>Código <input id="plC" maxlength="12"></label>
+        <label class="pl-l">Laboratorios (uno por línea) <textarea id="plL" rows="3"></textarea></label>
+        <label>Tipo <select id="plT"></select></label>
+        <label>Ancho <input id="plW" type="number" min="24" step="5"></label>
+        <label>Alto <input id="plH" type="number" min="18" step="5"></label>
+        <button type="button" class="btn sm" id="plDup">⧉ Duplicar</button><button type="button" class="btn sm rojo" id="plDel">🗑 Quitar</button>
+        <span class="note">Arrastre el cuadro para moverlo; el cuadrito azul de la esquina cambia su tamaño.</span>
+      </div>
+      <div class="pl-svg" id="plSvg"></div>
+    </div>
     <details class="metodo" open>
       <summary>Zona de cada laboratorio</summary>
       <p><b>Anaqueles:</b> con "✎ Editar anaqueles" puedes añadir uno nuevo dibujándolo sobre el plano, moverlo arrastrándolo, dividirlo en 2, cambiarle el nombre o la zona, o quitarlo. "Volver al croquis original" deshace los cambios del piso.</p>
@@ -1304,7 +1330,7 @@ function render() {
   $('vMov').hidden = v !== 'mov'; $('vPed').hidden = v !== 'ped'; $('vFre').hidden = v !== 'fre'; $('vSuc').hidden = v !== 'suc'; $('vKar').hidden = v !== 'kar'; $('vStk').hidden = v !== 'stk'; $('vMapa').hidden = v !== 'mapa'; $('vFichaM').hidden = v !== 'fichaM'; $('vInd').hidden = v !== 'ind';
   if (!S.P) return;
   if (v === 'pron') pintarPron(); else if (v === 'fichaP') pintarFichaP(); else if (v === 'rep') pintarRep();
-  else if (v === 'ped') pintarPed(); else if (v === 'fre') window.pintarEst?.(); else if (v === 'kar') pintarKar(); else if (v === 'stk') pintarStk(); else if (v === 'suc') window.pintarSuc?.(); else if (v === 'mapa') window.pintarMapa?.(); else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM(); else if (v === 'ind') pintarInd();
+  else if (v === 'ped') pintarPed(); else if (v === 'fre') window.pintarEst?.(); else if (v === 'kar') pintarKar(); else if (v === 'stk') pintarStk(); else if (v === 'suc') window.pintarSuc?.(); else if (v === 'mapa') { window.pintarMapa?.(); window.pintarPlanosLab?.(); } else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM(); else if (v === 'ind') pintarInd();
 }
 function abrirFichaP(c, origen) { S.fpDesde = ''; S.cur = c; S.origen = origen; S.fpFarm = origen === 'rep' ? S.farm : ''; S.vista = 'fichaP'; render(); scrollTo({ top: 0 }); }
 
@@ -2782,6 +2808,7 @@ addEventListener('resize', () => ['pTabla', 'rTabla', 'lTabla'].forEach(id => aj
 window.iniciarKardex = iniciar;
 </script>
 <script src="mapa.js?v=202610270100"></script>
+<script src="planos.js?v=202611230700"></script>
 <script src="frepple.js?v=202611042300"></script>
 <script src="sucursales.js?v=202611201800"></script>
 <script src="estadistica.js?v=202611190300"></script>
