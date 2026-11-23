@@ -873,3 +873,4 @@ body.nav-abierta .top .nav button { text-align: left; justify-content: flex-star
 .rp-fe { padding: 1px 6px; font-size: 11px; min-height: 0; height: 22px; vertical-align: middle }
 .rp-bloque { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; margin: 0 0 10px; background: #fff7f6; border: 1px solid #f3c9c4; border-radius: 10px; font-size: 13px } .rp-bloque input { width: 64px; min-height: 0; height: 30px; padding: 2px 6px } .rp-sep { color: #bbb }
 .rp-connot { display: flex; align-items: center; gap: 6px; align-self: flex-end; padding-bottom: 8px; font-size: 13px; white-space: nowrap } .rp-connot input { width: 17px; height: 17px; min-height: 0; margin: 0 }
+.rp-hoy { display: block; font-size: 10px; color: #2a5bb5; white-space: nowrap }
