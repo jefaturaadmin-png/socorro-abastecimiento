@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611230200";
+const VERSION_PROY = "202611230300";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2844,6 +2844,24 @@ const rpCmpDe = r => S.rpCmps.get(rpSk(r)) || null;
 // cantidad elegida (reporte o su Excel) para los de «Cantidad distinta»: rp_elegido = { «sucursal|código»: { q, de } }
 S.rpEleg = new Map();
 const rpElKey = (r, c) => (r.suc || r.est || r.archivo) + "|" + c;
+// ELIMINAR EN BLOQUE (lo que se está viendo): los que les dura más de N días, o los que droguería tiene en 0
+async function rpEliminarBloque(cond, txt) {
+  const r = rpCmpR(); if (!r) return;
+  const dias = r.dias || 0, l = rpComparar().filter(x => (!S.rpCmpVer || x.res === S.rpCmpVer) && rpPasaClas(x) && x.res !== "del" && cond(x, dias));
+  if (!l.length) return toast("No hay productos que cumplan eso en lo que está viendo.");
+  if (!confirm(`¿Eliminar ${l.length} producto${l.length === 1 ? "" : "s"} (${txt})? Pasan a «Eliminados» y no se entregan. Se puede deshacer.`)) return;
+  const por = S.perfil?.nombre || S.perfil?.usuario || "", fecha = new Date().toISOString(), antes = [];
+  for (const x of l) { const k = rpElKey(r, x.c); antes.push([k, S.rpEleg.get(k) || null]); S.rpEleg.set(k, { q: 0, de: "del", n: x.n, l: x.l, por, fecha, bloque: txt }); }
+  S.rpBlUlt = antes; pintarRep(); toast(`${l.length} productos eliminados (${txt})`);
+  if (!S.prev) try { await setDoc(doc(db, "proy_config", "rp_elegido"), { tipo: "rpel", datos: JSON.stringify([...S.rpEleg]) }); } catch (x) { avisar(x); }
+}
+$("rpBlDura").addEventListener("click", () => { const n = Math.max(1, Math.round(+$("rpBlDias").value || 0));
+  rpEliminarBloque((x, d) => { const ld = rpDiasDura(x, d); return ld != null ? ld > n : (x.stock || 0) > 0 && !(x.venta > 0); }, `le dura más de ${n} días`); });
+$("rpBlDrog").addEventListener("click", () => { if (!S.drogStk) return toast("Todavía se está leyendo el stock de droguería; intente en unos segundos.");
+  rpEliminarBloque(x => !((S.drogStk[x.c]?.[0] || 0) > 0), "droguería en 0"); });
+$("rpBlDesh").addEventListener("click", async () => { const a = S.rpBlUlt; if (!a) return;
+  for (const [k, v] of a) v ? S.rpEleg.set(k, v) : S.rpEleg.delete(k); S.rpBlUlt = null; pintarRep(); toast("Se deshizo el último bloque");
+  if (!S.prev) try { await setDoc(doc(db, "proy_config", "rp_elegido"), { tipo: "rpel", datos: JSON.stringify([...S.rpEleg]) }); } catch (x) { avisar(x); } });
 async function rpElegir(c, q, de) {
   const r = S.rp.sucs.find(x => x.archivo === S.rpCmpSuc) || S.rp.sucs[0]; if (!r) return;
   const e = rpCmpDe(r)?.items.get(c);
@@ -2935,6 +2953,7 @@ function pintarRpCmp() {
   if (!S.rpCmpSuc || !R.sucs.some(x => x.archivo === S.rpCmpSuc)) S.rpCmpSuc = R.sucs[0].archivo;
   $("rpCmpSuc").innerHTML = R.sucs.map(r => `<option value="${esc(r.archivo)}">${esc(rpNomSuc(r))}</option>`).join(""); $("rpCmpSuc").value = S.rpCmpSuc;
   const E = rpCmpDe(rpCmpR());
+  if (!E) $("rpBloque").hidden = true;
   if (!E) { $("rpCmpTxt").innerHTML = `Todavía no subió su Excel de <b>${esc(rpNomSuc(rpCmpR()))}</b>. Súbalo para compararlo (cada sucursal se compara con su propio Excel y queda guardado).`; $("rpCmpRes").innerHTML = ""; $("rpCmpTabla").innerHTML = ""; return; }
   // stock de droguería (solo para ver; del último kardex del sistema)
   if (!S.drogStk) cargarDrogStk().then(() => { if (S.vista === "vRep") pintarRpCmp(); });
@@ -2950,6 +2969,7 @@ function pintarRpCmp() {
   $("rpCmpTxt").innerHTML = `Su Excel <b>${esc(E.archivo)}</b> (${nf(E.items.size)} productos) contra lo que sale del reporte de <b>${esc(rpNomSuc(R.sucs.find(x => x.archivo === S.rpCmpSuc)))}</b>.`;
   $("rpCmpRes").innerHTML = ["ok", "dif", "rep", "exc", "pen", "del"].map(k => `<button type="button" class="card ent-card${S.rpCmpVer === k ? " act" : ""}" data-rpcmpver="${k}"><b>${nf(cuenta(k))}</b><small><span class="chip ${RP_RES[k][1]}">${RP_RES[k][0]}</span></small></button>`).join("");
   $("rpCmpVer").value = S.rpCmpVer;
+  $("rpBloque").hidden = false; $("rpBlDesh").hidden = !S.rpBlUlt;
   const v = l.filter(x => !S.rpCmpVer || x.res === S.rpCmpVer);
   $("rpCmpTabla").innerHTML = `<thead><tr><th>Código</th><th>Medicamento</th><th>Laboratorio</th><th class="der">Reporte</th><th class="der">Su Excel</th><th class="der" title="Lo que se va a entregar: si son iguales, esa cantidad; si eligió, la elegida">Atender</th><th class="der">Diferencia</th><th class="der">Vendió</th><th class="der">Stock</th><th class="der" title="Para cuántos días le alcanza el stock que tiene: stock ÷ (lo que vendió ÷ días del reporte)">Le dura</th><th class="der" title="Stock de droguería del último kardex subido">Stock droguería</th><th>Notas y comentarios</th><th>Resultado</th></tr></thead><tbody>` +
     (v.length ? v.map(x => `<tr><td><code>${esc(x.c)}</code></td><td><b>${esc(x.n)}</b></td><td>${esc(x.l)}</td><td class="der"><b>${nf(x.qr)}</b></td><td class="der"><b>${x.qe == null ? "–" : nf(x.qe)}</b></td><td class="der rp-at">${rpAt(x) == null ? '<span class="muted">elegir →</span>' : `<b>${nf(rpAt(x))}</b>`}</td>

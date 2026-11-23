@@ -16,7 +16,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611230200">
+<link rel="stylesheet" href="styles.css?v=202611230300">
 </head>
 <body>
   <!-- instalar la página como app en el celular -->
@@ -423,6 +423,12 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
             <button class="btn" type="button" id="rpCmpXls"><svg width="18" height="18"><use href="#i-bajar"/></svg>Excel de la comparación</button></div></div>
         <p class="muted" id="rpCmpTxt">Suba su Excel (con las columnas Código y Se atenderá o Cantidad) para ver qué coincide, qué cantidades son distintas, qué falta en su Excel y qué tiene su Excel que no sale del reporte.</p>
         <div class="ent-lista" id="rpCmpRes"></div>
+        <div class="rp-bloque" id="rpBloque" hidden>
+          <b>Eliminar en bloque</b> <small class="muted">(de lo que está viendo: la parte y los filtros elegidos)</small>
+          <span>los que les dura más de <input type="number" id="rpBlDias" min="1" step="1" value="15"> días</span><button class="btn sm" type="button" id="rpBlDura">✕ Eliminar</button>
+          <span class="rp-sep">·</span><button class="btn sm" type="button" id="rpBlDrog">✕ Eliminar los que droguería tiene en 0</button>
+          <button class="btn sm" type="button" id="rpBlDesh" hidden>↺ Deshacer el último bloque</button>
+        </div>
         <div class="tabla-wrap"><table class="tabla" id="rpCmpTabla"></table></div>
       </section>
       <section class="card lista" id="rpLista" hidden>
@@ -785,6 +791,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 
 <div class="toast" id="toast" hidden></div>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="app.js?v=202611230200"></script>
+<script type="module" src="app.js?v=202611230300"></script>
 </body>
 </html>
