@@ -881,3 +881,4 @@ body.nav-abierta .top .nav button { text-align: left; justify-content: flex-star
 .rp-addq { position: relative; flex: 1 1 320px; max-width: 520px } .rp-addq input { width: 100% }
 .rp-addl { position: absolute; z-index: 20; left: 0; right: 0; top: 100%; margin-top: 2px; background: #fff; border: 1px solid #cdd5e0; border-radius: 8px; box-shadow: 0 6px 18px #0002; max-height: 320px; overflow: auto }
 .rp-addl button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 7px 10px; font: inherit; cursor: pointer } .rp-addl button:hover { background: #eef4ff }
+.rp-archivado { opacity: .7 } .rp-ant { border-color: #e5a50a; color: #8a5a00; background: #fff8e6 }

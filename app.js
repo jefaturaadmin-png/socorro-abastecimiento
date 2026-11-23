@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611231200";
+const VERSION_PROY = "202611231300";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2740,10 +2740,15 @@ function rpCalcular() {
   }
   R.res = pedidos;
 }
-const rpNomSuc = r => r.esDrog ? r.est : r.suc ? corto(r.suc) : r.est || r.archivo;
+const rpNomSuc0 = r => r.esDrog ? r.est : r.suc ? corto(r.suc) : r.est || r.archivo;
+const rpNomSuc = r => { const n = rpNomSuc0(r), dd = d => d ? `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}` : "?";
+  return r && [...S.rp.sucs, ...(S.rp.arch || [])].filter(x => x !== r && rpNomSuc0(x) === n).length ? `${n} (${dd(r.desde)}–${dd(r.hasta)})` : n; };
 function pintarRep() {
   const R = S.rp, fD = d => d ? d.toLocaleDateString("es-PE") : "?";
-  $("rpSucsTxt").innerHTML = R.sucs.length ? R.sucs.map(r => `<b>${esc(rpNomSuc(r))}</b> · ${fD(r.desde)} al ${fD(r.hasta)} (${r.dias || "?"} días) <button type="button" class="btn sm rp-fe" data-rpfe="${esc(r.archivo)}" title="Corregir las fechas del reporte">📅 fechas</button> · ${nf(r.items.length)} productos${r.subido ? ` <small class="muted">· guardado el ${new Date(r.subido).toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}${r.porNombre ? " por " + esc(r.porNombre) : ""}</small>` : ""}`).join("<br>") : "Sin archivos";
+  const fila = (r, arch) => `<span class="${arch ? "rp-archivado" : ""}"><b>${esc(rpNomSuc(r))}</b> · ${fD(r.desde)} al ${fD(r.hasta)} (${r.dias || "?"} días) ${arch ? "" : `<button type="button" class="btn sm rp-fe" data-rpfe="${esc(r.id || r.archivo)}" title="Corregir las fechas del reporte">📅 fechas</button> `}· ${nf(r.items.length)} productos${r.subido ? ` <small class="muted">· guardado el ${new Date(r.subido).toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}${r.porNombre ? " por " + esc(r.porNombre) : ""}</small>` : ""}
+    <button type="button" class="btn sm" data-rparch="${esc(r.id || "")}" data-v="${arch ? "0" : "1"}" title="${arch ? "Volver a trabajar con este reporte" : "Guardarlo como terminado: sale de la lista pero no se borra (con sus decisiones y su Excel)"}">${arch ? "↩ Volver a trabajar" : "📦 Archivar"}</button>${!arch && rpAntDe(r) ? ` <button type="button" class="btn sm rp-ant" data-rpsep="${esc(r.id || "")}" title="Hay decisiones o un Excel de antes de subir este reporte: son del reporte anterior de esta sucursal">⚠ ${rpAntDe(r)} decisiones de un reporte anterior · separarlas</button>` : ""}</span>`;
+  $("rpSucsTxt").innerHTML = (R.sucs.length ? R.sucs.map(r => fila(r, false)).join("<br>") : "Sin archivos") +
+    ((R.arch || []).length ? `<br><button type="button" class="btn sm" data-rpverarch>${S.rpVerArch ? "▾" : "▸"} Archivados (${R.arch.length})</button>` + (S.rpVerArch ? "<br>" + R.arch.map(r => fila(r, true)).join("<br>") : "") : "");
   const avisos = [];
   for (const r of R.sucs) if (r.sinCod.length) avisos.push(`${rpNomSuc(r)}: ${r.sinCod.length} producto${r.sinCod.length === 1 ? "" : "s"} del reporte sin código: ${r.sinCod.map(x => x.n).join(", ")}.`);
   msg("rpMsg", avisos.join(" "), false);
@@ -2768,19 +2773,20 @@ function rpFilas() {
 }
 // GUARDADO: cada reporte de sucursal (y su Excel para comparar) se guarda en proy_config/rp_… y se lee en vivo
 const rpISO = d => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : "";
-const rpId = r => "rp_" + norm(r.suc || r.est || r.archivo).replace(/[^A-Z0-9]+/g, "_");
-const rpEmpacar = r => ({ tipo: "rp", archivo: r.archivo, est: r.est, suc: r.suc, desde: rpISO(r.desde), hasta: rpISO(r.hasta), dias: r.dias || 0,
+const rpId = r => r.id || r.k || "rp_" + norm(r.suc || r.est || r.archivo).replace(/[^A-Z0-9]+/g, "_");
+const rpEmpacar = r => ({ tipo: "rp", k: r.k || "", archivado: !!r.archivado, archivo: r.archivo, est: r.est, suc: r.suc, desde: rpISO(r.desde), hasta: rpISO(r.hasta), dias: r.dias || 0,
   items: JSON.stringify(r.items.map(it => [it.c, it.n, it.lab, it.sig, it.se, it.sf, it.ce, it.cf, it.pvf, Math.round(it.par * 1000) / 1000, it.fr || 0])), sinCod: JSON.stringify(r.sinCod.map(it => it.n)),
   subido: new Date().toISOString(), porNombre: S.perfil?.nombre || S.perfil?.usuario || "" });
 const rpDesempacar = d => { const f = t => t ? new Date(t + "T12:00:00") : null;
-  return { archivo: d.archivo, est: d.est, suc: d.suc, desde: f(d.desde), hasta: f(d.hasta), dias: d.dias, subido: d.subido, porNombre: d.porNombre,
+  return { k: d.k || "", archivado: !!d.archivado, archivo: d.archivo, est: d.est, suc: d.suc, desde: f(d.desde), hasta: f(d.hasta), dias: d.dias, subido: d.subido, porNombre: d.porNombre,
     items: JSON.parse(d.items || "[]").map(([c, n, lab, sig, se, sf, ce, cf, pvf, par, fr]) => ({ c, n, lab, sig, se, sf, ce, cf, pvf, par, ...(fr ? { fr } : {}) })), sinCod: JSON.parse(d.sinCod || "[]").map(n => ({ n })) }; };
 function escucharRp() {
   if (S.rpSub) return; S.rpSub = true;
   S.subs.push(onSnapshot(query(collection(db, "proy_config"), where("tipo", "in", ["rp", "rpcmp", "rpel"])), sn => {
-    S.rp.sucs = sn.docs.filter(d => d.data().tipo === "rp").map(d => ({ ...rpDesempacar(d.data()), id: d.id })).sort((a, b) => rpNomSuc(a).localeCompare(rpNomSuc(b)));
+    const todos = sn.docs.filter(d => d.data().tipo === "rp").map(d => ({ ...rpDesempacar(d.data()), id: d.id })).sort((a, b) => rpNomSuc0(a).localeCompare(rpNomSuc0(b)) || (a.desde || 0) - (b.desde || 0));
+    S.rp.sucs = todos.filter(r => !r.archivado); S.rp.arch = todos.filter(r => r.archivado);
     S.rpCmps = new Map(sn.docs.filter(d => d.data().tipo === "rpcmp").map(d => { const c = d.data();
-      return [c.sk || c.suc || "", { id: d.id, archivo: c.archivo, suc: c.suc, items: new Map(JSON.parse(c.items || "[]").map(([cod, n, l, q]) => [cod, { c: cod, n, l, q }])) }]; }));
+      return [c.sk || c.suc || "", { id: d.id, subido: c.subido || "", archivo: c.archivo, suc: c.suc, items: new Map(JSON.parse(c.items || "[]").map(([cod, n, l, q]) => [cod, { c: cod, n, l, q }])) }]; }));
     const el = sn.docs.find(d => d.data().tipo === "rpel")?.data(); try { S.rpEleg = new Map(el ? JSON.parse(el.datos || "[]") : []); } catch { S.rpEleg = new Map(); }
     if (S.vista === "vRep") pintarRep();
   }, e => { S.rpSub = false; msg("rpMsg", "No se pudieron leer los reportes guardados: " + textoError(e), true); }));
@@ -2808,21 +2814,48 @@ async function rpCargar(files) {
   for (const a of files) {
     try { const r = await rpLeerArchivo(a);
       if (/\.txt$/i.test(a.name)) { const f = await pedirFechasRp(r); if (!f) { msg("rpMsg", `«${a.name}»: no se subió (faltan las fechas).`, true); continue; } Object.assign(r, f); }
-      S.rp.sucs = S.rp.sucs.filter(x => x.archivo !== r.archivo && !(r.suc && x.suc === r.suc)); S.rp.sucs.push(r);
-      if (!S.prev) await setDoc(doc(db, "proy_config", rpId(r)), rpEmpacar(r));   // se guarda (reemplaza al anterior de esa sucursal)
+      // cada reporte es un trabajo aparte: NO reemplaza al anterior de la misma sucursal (solo si es el mismo archivo otra vez)
+      const mismo = [...S.rp.sucs, ...(S.rp.arch || [])].find(x => x.k && x.archivo === r.archivo && x.suc === r.suc);
+      r.k = mismo?.k || "rp_" + norm(r.suc || r.est || r.archivo).replace(/[^A-Z0-9]+/g, "_") + "_" + Date.now().toString(36); r.id = r.k;
+      S.rp.sucs = S.rp.sucs.filter(x => x.id !== r.id); S.rp.sucs.push(r);
+      if (!S.prev) await setDoc(doc(db, "proy_config", r.id), rpEmpacar(r));
+      // ¿es el reporte anterior de esta sucursal? se le devuelven sus decisiones y su Excel (los que se separaron)
+      const pa = "ANT:" + (r.suc || r.est || r.archivo) + "|", ant = [...S.rpEleg].filter(([k]) => k.startsWith(pa)), exA = S.rpCmps.get("ANT:" + (r.suc || r.est || r.archivo));
+      if ((ant.length || exA) && confirm(`¿Este es el reporte ANTERIOR de ${rpNomSuc0(r)}? Se le devuelven ${ant.length} decisiones${exA ? " y su Excel (" + exA.archivo + ")" : ""} que se habían separado.`)) {
+        for (const [k, v] of ant) { S.rpEleg.delete(k); S.rpEleg.set(r.k + "|" + k.slice(pa.length), v); }
+        if (!S.prev) { await setDoc(doc(db, "proy_config", "rp_elegido"), { tipo: "rpel", datos: JSON.stringify([...S.rpEleg]) });
+          if (exA?.id) await setDoc(doc(db, "proy_config", exA.id), { sk: r.k }, { merge: true }); } }
     } catch (e) { msg("rpMsg", `«${a.name}»: ${e.message || e}`, true); return; }
   }
   pintarRep(); toast("Reporte guardado");
 }
 // corregir las fechas de un reporte ya guardado
 $("rpSucsTxt").addEventListener("click", async e => { const b = e.target.closest("[data-rpfe]"); if (!b) return; e.preventDefault(); e.stopPropagation();
-  const r = S.rp.sucs.find(x => x.archivo === b.dataset.rpfe); if (!r) return; const f = await pedirFechasRp(r); if (!f) return;
+  const r = S.rp.sucs.find(x => (x.id || x.archivo) === b.dataset.rpfe); if (!r) return; const f = await pedirFechasRp(r); if (!f) return;
   Object.assign(r, f); pintarRep();
   if (!S.prev) try { await setDoc(doc(db, "proy_config", r.id || rpId(r)), { desde: rpISO(f.desde), hasta: rpISO(f.hasta), dias: f.dias }, { merge: true }); toast("Fechas guardadas"); } catch (x) { avisar(x); } });
+// archivar (terminado: sale de la lista, no se borra) / volver a trabajar; ver los archivados; separar lo del reporte anterior
+$("rpSucsTxt").addEventListener("click", async e => {
+  if (e.target.closest("[data-rpverarch]")) { e.preventDefault(); e.stopPropagation(); S.rpVerArch = !S.rpVerArch; pintarRep(); return; }
+  const a = e.target.closest("[data-rparch]"), sp = e.target.closest("[data-rpsep]"); if (!a && !sp) return; e.preventDefault(); e.stopPropagation();
+  if (a) { const v = a.dataset.v === "1", r = [...S.rp.sucs, ...(S.rp.arch || [])].find(x => x.id === a.dataset.rparch); if (!r) return;
+    if (v && !confirm(`¿Archivar el reporte de ${rpNomSuc(r)} (${r.desde?.toLocaleDateString("es-PE") || "?"} al ${r.hasta?.toLocaleDateString("es-PE") || "?"})? Sale de la lista y de lo que se va a entregar, pero queda guardado con sus decisiones y su Excel.`)) return;
+    const todos = [...S.rp.sucs, ...(S.rp.arch || [])]; r.archivado = v; S.rp.sucs = todos.filter(x => !x.archivado); S.rp.arch = todos.filter(x => x.archivado);
+    if (S.rpCmpSuc === r.archivo) S.rpCmpSuc = ""; pintarRep();
+    if (!S.prev) try { await setDoc(doc(db, "proy_config", r.id), { archivado: v }, { merge: true }); toast(v ? "Reporte archivado" : "Reporte activo otra vez"); } catch (x) { avisar(x); }
+    return; }
+  const r = S.rp.sucs.find(x => x.id === sp.dataset.rpsep); if (!r) return; const t0 = Date.parse(r.subido), pre = rpElKey(r, ""), base = rpSk(r);
+  const l = [...S.rpEleg].filter(([k, el]) => k.startsWith(pre) && el.fecha && Date.parse(el.fecha) < t0), e2 = S.rpCmps.get(base), exOld = e2?.subido && Date.parse(e2.subido) < t0;
+  if (!confirm(`Estas ${l.length} decisiones${exOld ? " y su Excel (" + e2.archivo + ")" : ""} son de ANTES de subir este reporte de ${rpNomSuc(r)}: eran del reporte anterior. ¿Separarlas? Este reporte queda limpio para trabajar de nuevo; lo anterior NO se borra: si vuelve a subir el reporte anterior, se le devuelve.`)) return;
+  for (const [k, v] of l) { S.rpEleg.delete(k); S.rpEleg.set("ANT:" + k, v); }
+  if (exOld) { S.rpCmps.delete(base); S.rpCmps.set("ANT:" + base, e2); }
+  pintarRep();
+  if (!S.prev) try { await setDoc(doc(db, "proy_config", "rp_elegido"), { tipo: "rpel", datos: JSON.stringify([...S.rpEleg]) }); if (exOld && e2.id) await setDoc(doc(db, "proy_config", e2.id), { sk: "ANT:" + base }, { merge: true }); toast("Separado: este reporte quedó limpio"); } catch (x) { avisar(x); }
+});
 $("rpSucs").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (f.length) rpCargar(f); });
 $("rpLimpiar").addEventListener("click", async () => {
   if (!S.rp.sucs.length && !S.rpCmps.size) return; if (!confirm("¿Quitar los reportes guardados y su Excel de comparación?")) return;
-  try { for (const r of S.rp.sucs) await deleteDoc(doc(db, "proy_config", r.id || rpId(r))); for (const e of S.rpCmps.values()) if (e.id) await deleteDoc(doc(db, "proy_config", e.id)); } catch (x) { avisar(x); }
+  try { for (const r of [...S.rp.sucs, ...(S.rp.arch || [])]) await deleteDoc(doc(db, "proy_config", r.id || rpId(r))); for (const e of S.rpCmps.values()) if (e.id) await deleteDoc(doc(db, "proy_config", e.id)); } catch (x) { avisar(x); }
   S.rp = { sucs: [], suc: "", q: "", det: false }; S.rpCmps = new Map(); pintarRep(); });
 $("rpSuc").addEventListener("change", e => { S.rp.suc = e.target.value; pintarRep(); });
 $("rpQ").addEventListener("input", e => { S.rp.q = e.target.value; pintarRep(); });
@@ -2841,12 +2874,16 @@ $("rpXls").addEventListener("click", () => {
 // ---- comparar con el Excel del usuario: lo que está en los dos (igual o con otra cantidad), lo que falta en uno u otro ----
 S.rpCmps = new Map(); S.rpCmpVer = ""; S.rpCmpSuc = "";
 // cada sucursal se compara con SU Excel (se guarda uno por sucursal: proy_config/rpcmp_…)
-const rpSk = r => r?.suc || r?.est || r?.archivo || "";
+const rpSk = r => r?.k || r?.suc || r?.est || r?.archivo || "";
 const rpCmpR = () => S.rp.sucs.find(x => x.archivo === S.rpCmpSuc) || S.rp.sucs[0];
 const rpCmpDe = r => S.rpCmps.get(rpSk(r)) || null;
 // cantidad elegida (reporte o su Excel) para los de «Cantidad distinta»: rp_elegido = { «sucursal|código»: { q, de } }
 S.rpEleg = new Map();
-const rpElKey = (r, c) => (r.suc || r.est || r.archivo) + "|" + c;
+const rpElKey = (r, c) => (r.k || r.suc || r.est || r.archivo) + "|" + c;
+// reportes de antes (guardados por sucursal): decisiones y Excel de ANTES de subir el reporte actual = eran del reporte anterior
+const rpAntDe = r => { if (r.k || !r.subido) return 0; const t0 = Date.parse(r.subido), pre = rpElKey(r, ""); let n = 0;
+  for (const [k, el] of S.rpEleg || []) if (k.startsWith(pre) && el.fecha && Date.parse(el.fecha) < t0) n++;
+  const e = S.rpCmps.get(rpSk(r)); if (e?.subido && Date.parse(e.subido) < t0) n = n || 1; return n; };
 // ELIMINAR EN BLOQUE (lo que se está viendo): los que les dura más de N días, o los que droguería tiene en 0
 async function rpEliminarBloque(cond, txt) {
   const r = rpCmpR(); if (!r) return;

@@ -16,7 +16,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611231200">
+<link rel="stylesheet" href="styles.css?v=202611231300">
 </head>
 <body>
   <!-- instalar la página como app en el celular -->
@@ -409,7 +409,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
       <div class="card rp-sube">
         <label class="rp-arch"><b>Reportes de sucursales</b><small class="muted">(uno o varios)</small><input type="file" id="rpSucs" accept=".xls,.xlsx,.txt,.TXT" multiple><span id="rpSucsTxt" class="muted">Sin archivos</span></label>
         <div class="filtros"><button class="btn sm" type="button" id="rpLimpiar">Quitar archivos</button></div>
-        <p class="muted rp-regla">Se entrega lo que vendió en los días del reporte menos lo que tiene ahora (tiene 4 y vendió 10 → se entregan 6). Solo se usa el reporte que usted sube. Los reportes y su Excel quedan guardados: no hace falta volver a subirlos (al subir otro de la misma sucursal, se reemplaza).</p>
+        <p class="muted rp-regla">Se entrega lo que vendió en los días del reporte menos lo que tiene ahora (tiene 4 y vendió 10 → se entregan 6). Solo se usa el reporte que usted sube. Los reportes y su Excel quedan guardados: no hace falta volver a subirlos. Cada reporte que sube es un trabajo aparte (no reemplaza al anterior de la misma sucursal); cuando termine uno, use «📦 Archivar».</p>
       </div>
       <div class="msg" id="rpMsg" hidden></div>
       <div class="ent-lista" id="rpRes"></div>
@@ -795,6 +795,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 
 <div class="toast" id="toast" hidden></div>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="app.js?v=202611231200"></script>
+<script type="module" src="app.js?v=202611231300"></script>
 </body>
 </html>
