@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611231400";
+const VERSION_PROY = "202611241400";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2146,6 +2146,9 @@ async function cargarDrogStk() {
 const puedeMarcarUrg = () => esAdmin() || ["sucursales", "kardex"].some(v => (S.perfil?.vistas || []).includes(v));
 const ESTADO_U = { "": ["🔴 Pedido recién", "rojo"], viendo: ["🟠 Droguería lo está viendo", "amb"], atendido: ["🟢 Atendido", "verde"] };
 const estU = d => S.urgEst.get(d.id) || {};
+// filtros de la lista de urgencias: con / sin stock en droguería, y atendido / no atendido
+const pdPasaFiltros = d => (!S.pdStkL || !S.drogStk || ((S.drogStk[d.cod]?.[0] || 0) > 0) === (S.pdStkL === "con"))
+  && (!S.pdAtL || ((estU(d).estado || "") === "atendido") === (S.pdAtL === "si"));
 const inicioDia = (n = 0) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - n); return d; };
 const inicioDiaDe = x => { const d = new Date(x); d.setHours(0, 0, 0, 0); return d; };
 const hace = f => { if (!f) return ""; const m = Math.round((Date.now() - f) / 60000); return m < 1 ? "recién" : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : f.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit" }); };
@@ -2319,8 +2322,9 @@ function pintarTableroUrg(P) {
   if (!$("pdSuc").options.length) $("pdSuc").innerHTML = `<option value="">Todas</option>` + FARMACIAS.filter(f => /^ALMACEN /.test(f)).map(f => `<option value="${esc(f)}">${esc(corto(f))}</option>`).join("");
   $("pdSuc").value = S.pdSuc;
   // filtro de la lista: con stock / sin stock en droguería (o todos)
-  const lista = pedidosVisibles().filter(d => !S.pdStkL || !S.drogStk || ((S.drogStk[d.cod]?.[0] || 0) > 0) === (S.pdStkL === "con")), vis = lista.slice(0, S.pdMostrar), marca = puedeMarcarUrg();
+  const lista = pedidosVisibles().filter(pdPasaFiltros), vis = lista.slice(0, S.pdMostrar), marca = puedeMarcarUrg();
   document.querySelectorAll("#pdStkL [data-pdstkl]").forEach(b => b.classList.toggle("act", b.dataset.pdstkl === (S.pdStkL || "")));
+  document.querySelectorAll("#pdAtL [data-pdatl]").forEach(b => b.classList.toggle("act", b.dataset.pdatl === (S.pdAtL || "")));
   // stock de la sucursal que pidió (solo el administrador): red/stk_SUCURSAL, se publica con las listas de atención
   const verStkSuc = esAdmin() && !!S.sucStk?.size;
   const stkSucTxt = d => { const m = d.suc && S.sucStk.get(d.suc); if (!m) return '<span class="muted">–</span>'; const v = +(m[d.cod]?.[0] || 0);
@@ -2370,6 +2374,7 @@ const fechaOk = v => !v || (/^\d{4}-\d{2}-\d{2}$/.test(v) && +v.slice(0, 4) >= 2
 ["pdDesde", "pdDesde2"].forEach(id => $(id).addEventListener("change", e => { if (!fechaOk(e.target.value)) return; S.pdDesde = e.target.value; pintarPedidos(); }));
 ["pdHasta", "pdHasta2"].forEach(id => $(id).addEventListener("change", e => { if (!fechaOk(e.target.value)) return; S.pdHasta = e.target.value; pintarPedidos(); }));
 ["pdRes", "pdBarras"].forEach(id => $(id).addEventListener("click", e => { const b = e.target.closest("[data-pdsuc]"); if (!b) return; S.pdSuc = S.pdSuc === b.dataset.pdsuc ? "" : b.dataset.pdsuc; pintarPedidos(); }));
+$("pdAtL").addEventListener("click", e => { const b = e.target.closest("[data-pdatl]"); if (!b) return; S.pdAtL = b.dataset.pdatl; S.pdMostrar = 200; pintarPedidos(); });
 $("pdStkL").addEventListener("click", e => { const b = e.target.closest("[data-pdstkl]"); if (!b) return; S.pdStkL = b.dataset.pdstkl; S.pdMostrar = 200; pintarPedidos(); });
 $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) { S.pdMostrar += 200; pintarPedidos(); } });
 ["pdXls", "pdXls2"].forEach(id => $(id).addEventListener("click", () => {
@@ -2377,7 +2382,7 @@ $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) {
   const cols = P.cab.map((h, i) => i).filter(i => P.cab[i]);
   if (!(esAdmin() || !miFarm())) { const ds = pedidosVisibles().map(d => ({ "Código": d.cod, Medicamento: nomProd(d), "Fecha y hora": d.f || "", "¿Hay en droguería?": S.drogStk?.[d.cod]?.[0] > 0 ? "Sí (" + S.drogStk[d.cod][0] + ")" : "No", "Estado (Abastecimiento)": (() => { const e = S.urgEst?.get(d.id); return e?.estado ? ESTADO_U[e.estado][0].slice(3) : ""; })(), Nota: S.urgEst?.get(d.id)?.nota || "" }));
     if (!ds.length) return toast("No hay pedidos para descargar."); return excelDe(ds, "Urgencias", "agotados_urgencia_" + corto(miFarm()).replace(/\W+/g, "_").toLowerCase()); }
-  const datos = pedidosVisibles().filter(d => !S.pdStkL || !S.drogStk || ((S.drogStk[d.cod]?.[0] || 0) > 0) === (S.pdStkL === "con")).map(d => { const e = estU(d);
+  const datos = pedidosVisibles().filter(pdPasaFiltros).map(d => { const e = estU(d);
     // lo mismo que se ve en la tabla: stock de la sucursal, último abastecimiento, droguería y otras sucursales
     const r2 = v => Math.round((+v || 0) * 100) / 100, stS = d.suc && S.sucStk?.get(d.suc), u = d.suc && S.ultAbast?.[d.cod]?.[d.suc];
     const dias = u ? Math.round((new Date().setHours(0, 0, 0, 0) - new Date(+u[0].slice(0, 4), +u[0].slice(5, 7) - 1, +u[0].slice(8, 10))) / 864e5) : "";
