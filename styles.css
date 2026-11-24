@@ -883,3 +883,4 @@ body.nav-abierta .top .nav button { text-align: left; justify-content: flex-star
 .rp-addl button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 7px 10px; font: inherit; cursor: pointer } .rp-addl button:hover { background: #eef4ff }
 .rp-archivado { opacity: .7 } .rp-ant { border-color: #e5a50a; color: #8a5a00; background: #fff8e6 }
 .rp-borrar { color: #b42318; border-color: #f3c9c4 }
+.pd-rep { display: block; margin-top: 3px; font-size: 11px; color: #8a5a00; font-weight: 600 } .pd-rep.viejo { color: #999; font-weight: 500 }
