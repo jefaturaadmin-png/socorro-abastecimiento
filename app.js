@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611241700";
+const VERSION_PROY = "202611241800";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -77,6 +77,7 @@ const VISTAS = [
   { id: "drogueria", nombre: "Droguería", vista: "vDrog", c: "kar", ic: "i-tienda", desc: "Stock de droguería, modelo, lo que se necesita y lo que hay que comprar" },
   { id: "porsucursal", nombre: "Módulos por sucursal", vista: "vSucx", c: "suc", ic: "i-tienda", desc: "Un módulo por cada sucursal: stock, lo que necesita y lo que hay que pedir", porSuc: true },
   { id: "kardex", nombre: "Kardex", vista: "vKar", c: "kar", ic: "i-bajar", desc: "Subir el kardex del día y publicar las listas", ayuda: "también publica las listas" },
+  { id: "kmov", nombre: "Kardex por producto", vista: "vKmov", c: "kar", ic: "i-buscar", desc: "Los movimientos de un producto uno por uno, por almacén y fechas (como en el sistema)" },
   { id: "indicadores", nombre: "Indicadores", vista: "vInd", c: "est", ic: "i-grafico", desc: "Participación de las sucursales por línea y por familia" },
   { id: "proyeccion", nombre: "Proyección de compras", vista: "vProy", ic: "i-grafico", desc: "Pronóstico, reposición y alertas" },
   { id: "comparativo", nombre: "Comparativo", vista: "vComp", c: "comp", ic: "i-lista", desc: "Comparar precios y proveedores" },
@@ -372,7 +373,7 @@ function vigilarPerfil() {
 window.pintarNavExt = () => { if (!S.perfil) return; pintarNav(); if (S.vista === "vInicio") pintarInicio(); };
 // Después de subir un kardex, los demás módulos abiertos (proyección, estadística, sucursales, mapa) se recargan con los datos nuevos.
 window.recargarModulos = origen => {
-  for (const id of ["proyFrame", "estFrame", "sucFrame", "mapaFrame", "karFrame", "drogFrame", "sucxFrame", "indFrame"]) {
+  for (const id of ["proyFrame", "estFrame", "sucFrame", "mapaFrame", "karFrame", "drogFrame", "sucxFrame", "indFrame", "kmovFrame"]) {
     const fr = $(id); if (fr?.src && fr.contentWindow !== origen) try { fr.contentWindow.location.reload(); } catch {}
   }
 };
@@ -391,11 +392,12 @@ function pintarNav() {
 }
 $("nav").addEventListener("click", e => { const b = e.target.closest("[data-ir]"); if (b) ir(b.dataset.ir); });
 
-function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vCompL", "vNue", "vEnt", "vFlujo", "vFlued", "vRutas", "vDrog", "vSucx", "vInd", "vKar", "vFicha", "vRep"].forEach(v => $(v).hidden = v !== id); }
+function mostrar(id) { ["vLogin", "vClave", "vInicio", "vQuimico", "vAdmin", "vUsuarios", "vProy", "vComp", "vMapa", "vEst", "vSuc", "vFalt", "vAten", "vPed", "vEval", "vCompL", "vNue", "vEnt", "vFlujo", "vFlued", "vRutas", "vDrog", "vSucx", "vInd", "vKar", "vFicha", "vRep", "vKmov"].forEach(v => $(v).hidden = v !== id); }
 function ir(vista) {
   // La proyección se carga la primera vez que se abre (es pesada y solo la usa el administrador).
   if (vista === "vProy" && !$("proyFrame").src) $("proyFrame").src = "proyeccion.html?v=" + VERSION_PROY;
   if (vista === "vKar" && !$("karFrame").src) $("karFrame").src = "proyeccion.html?solo=kar&v=" + VERSION_PROY;
+  if (vista === "vKmov" && !$("kmovFrame").src) $("kmovFrame").src = "proyeccion.html?solo=kmov&v=" + VERSION_PROY;
   if (vista === "vSuc" && !$("sucFrame").src) $("sucFrame").src = "proyeccion.html?solo=suc&v=" + VERSION_PROY;
   if (vista === "vEst" && !$("estFrame").src) $("estFrame").src = "proyeccion.html?solo=est&v=" + VERSION_PROY;
   if (vista === "vInd" && !$("indFrame").src) $("indFrame").src = "proyeccion.html?solo=ind&v=" + VERSION_PROY;

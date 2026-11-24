@@ -353,6 +353,13 @@ main.sin-sesion > section { display: none !important }
 .bi-flecha.der { left: 63% } .bi-flecha.izq { right: 63% }
 .bi-flecha small { font-family: var(--f-body, inherit); color: var(--muted) }
 body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { display: none }
+.km-filtros { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; padding: 14px 16px; margin-bottom: 12px }
+.km-prod { position: relative; flex: 1 1 340px; max-width: 520px } .km-prod input { width: 100% }
+.km-sug { position: absolute; z-index: 30; left: 0; right: 0; top: 100%; background: #fff; border: 1px solid #cdd5e0; border-radius: 8px; box-shadow: 0 8px 20px #0002; max-height: 340px; overflow: auto }
+.km-sug button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 7px 10px; font: inherit; font-size: 13px; cursor: pointer } .km-sug button:hover { background: #eef4ff }
+.km-info { display: flex; flex-wrap: wrap; gap: 6px 28px; padding: 12px 16px; margin-bottom: 12px; font-size: 13px } .km-info b { font-weight: 700 } .km-info span { color: #667 }
+.km-scroll { max-height: 70vh } .km-tabla th { position: sticky; top: 0; background: #12b886; color: #fff; z-index: 2; white-space: nowrap }
+.km-tabla td, .km-tabla th { white-space: nowrap; font-size: 12.5px; text-align: left } .km-tabla td.r { text-align: right } body.km-solo .bar .seg { display: none } .km-tabla td.antes { color: #d6336c } .km-tabla td.ing { color: #0b7a3e; font-weight: 700 } .km-tabla td.sal { color: #c92a2a; font-weight: 700 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important } }
 </style>
 
@@ -718,6 +725,24 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
       <div class="more" id="xMore"></div>
     </div>
   </section>
+  <!-- KARDEX POR PRODUCTO: los movimientos uno por uno, como en el sistema (se guardan al subir el kardex) -->
+  <section id="vKmov" hidden>
+    <div class="head">
+      <div><div class="eyebrow">Movimientos guardados al subir el kardex</div><h1>Kardex por producto</h1></div>
+    </div>
+    <div class="card km-filtros">
+      <label class="field km-prod"><span>Producto (código o nombre)</span><input id="kmQ" type="search" placeholder="Ej. 16833 o PARACETAMOL 120MG…" autocomplete="off"><div class="km-sug" id="kmSug" hidden></div></label>
+      <label class="field"><span>Almacén</span><select id="kmAlm"><option value="">Todos</option></select></label>
+      <label class="field"><span>Desde fecha</span><input id="kmDe" type="date"></label>
+      <label class="field"><span>Hasta fecha</span><input id="kmHa" type="date"></label>
+      <label class="field"><span>Tipo de movimiento</span><select id="kmTipo"><option value="">Todos</option></select></label>
+      <button type="button" class="btn" id="kmXls">⬇ Excel</button>
+    </div>
+    <div class="card km-info" id="kmInfo"><p class="note" style="margin:0">Busque un producto por código o nombre.</p></div>
+    <div class="card"><div class="scroll km-scroll"><table class="cells km-tabla" id="kmTabla"></table></div></div>
+    <p class="note" id="kmNota"></p>
+  </section>
+
   <section id="vInd" hidden>
     <div class="head">
       <div><div class="eyebrow" id="iEyebrow"></div><h1 id="iTit">Participación de las sucursales</h1></div>
@@ -1315,6 +1340,10 @@ else if (SOLO === 'ind') {
   S.tab = S.vista = 'ind'; document.body.classList.add('solo-kar', 'solo-ind');
   document.querySelector('.bar .brand').innerHTML = '<i></i>Indicadores';
 }
+else if (SOLO === 'kmov') {
+  S.tab = S.vista = 'kmov'; document.body.classList.add('solo-kar', 'ancho-total', 'km-solo');
+  document.querySelector('.bar .brand').innerHTML = '<i></i>Kardex por producto';
+}
 else if (SOLO === 'kar') {
   S.tab = S.vista = 'kar'; document.body.classList.add('solo-kar', 'ancho-total');
   document.querySelector('.bar .brand').innerHTML = '<i></i>Kardex';
@@ -1327,11 +1356,75 @@ document.querySelectorAll('[data-volver]').forEach(b => b.onclick = () => { S.vi
 function render() {
   const v = S.vista;
   $('vPron').hidden = v !== 'pron'; $('vFichaP').hidden = v !== 'fichaP'; $('vRep').hidden = v !== 'rep';
-  $('vMov').hidden = v !== 'mov'; $('vPed').hidden = v !== 'ped'; $('vFre').hidden = v !== 'fre'; $('vSuc').hidden = v !== 'suc'; $('vKar').hidden = v !== 'kar'; $('vStk').hidden = v !== 'stk'; $('vMapa').hidden = v !== 'mapa'; $('vFichaM').hidden = v !== 'fichaM'; $('vInd').hidden = v !== 'ind';
+  $('vMov').hidden = v !== 'mov'; $('vPed').hidden = v !== 'ped'; $('vFre').hidden = v !== 'fre'; $('vSuc').hidden = v !== 'suc'; $('vKar').hidden = v !== 'kar'; $('vStk').hidden = v !== 'stk'; $('vMapa').hidden = v !== 'mapa'; $('vFichaM').hidden = v !== 'fichaM'; $('vInd').hidden = v !== 'ind'; $('vKmov').hidden = v !== 'kmov';
+  if (v === 'kmov') return pintarKmov();   // no necesita los pronósticos
   if (!S.P) return;
   if (v === 'pron') pintarPron(); else if (v === 'fichaP') pintarFichaP(); else if (v === 'rep') pintarRep();
-  else if (v === 'ped') pintarPed(); else if (v === 'fre') window.pintarEst?.(); else if (v === 'kar') pintarKar(); else if (v === 'stk') pintarStk(); else if (v === 'suc') window.pintarSuc?.(); else if (v === 'mapa') { window.pintarMapa?.(); window.pintarPlanosLab?.(); } else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM(); else if (v === 'ind') pintarInd();
+  else if (v === 'ped') pintarPed(); else if (v === 'fre') window.pintarEst?.(); else if (v === 'kar') pintarKar(); else if (v === 'stk') pintarStk(); else if (v === 'suc') window.pintarSuc?.(); else if (v === 'mapa') { window.pintarMapa?.(); window.pintarPlanosLab?.(); } else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM(); else if (v === 'ind') pintarInd(); else if (v === 'kmov') pintarKmov();
 }
+/* ---------- KARDEX POR PRODUCTO: movimientos uno por uno de un producto, por almacén y fechas ---------- */
+S.km = { cod: "", movs: null, cargando: false };
+{ const hoy = new Date(), iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  $('kmHa').value = iso(hoy); $('kmDe').value = iso(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)); }
+// productos para buscar: los de la proyección; si no están cargados, los del maestro del kardex (código → nombre y fracción)
+const kmLista = () => { if (S.km.lista && S.km.listaDe === S.P) return S.km.lista; const m = new Map((S.km.maestro || []).map(p => [p.c, p]));
+  for (const p of S.P?.p || []) m.set(p.c, p); if (S.km.maestro) { S.km.lista = [...m.values()]; S.km.listaDe = S.P; } return [...m.values()]; };
+const kmProd = c => S.idx?.get(c) || kmLista().find(p => p.c === c) || null;
+async function kmCargarMaestro() { if (S.km.maestro || !window.stockKardex) return; const m = await window.stockKardex();
+  S.km.maestro = Object.entries(m?.prod || {}).map(([c, v]) => ({ c, n: v[0], fr: +v[1] || 1 })); }
+kmCargarMaestro().catch(() => {});
+async function kmBuscar(c) {
+  S.km.cod = c; S.km.movs = null; S.km.cargando = true; pintarKmov();
+  try { const r = await window.kardexMovimientos(c); S.km.movs = r.movs; S.km.meses = r.meses; kmSaldos(r.movs, kmProd(c)?.fr > 0 ? +kmProd(c).fr : 1); }
+  catch (e) { S.km.movs = []; S.km.err = e.message || String(e); }
+  S.km.cargando = false; pintarKmov();
+}
+function kmFiltrados() {
+  const de = $('kmDe').value, ha = $('kmHa').value, alm = $('kmAlm').value, tipo = $('kmTipo').value;
+  return (S.km.movs || []).filter(m => (!de || m.fecha.slice(0, 10) >= de) && (!ha || m.fecha.slice(0, 10) <= ha) && (!alm || m.alm === alm) && (!tipo || m.tipo === tipo));
+}
+// SALDOS de cada movimiento: el kardex trae en cada fila el stock del almacén al momento de DESCARGAR el archivo, no el de ese movimiento.
+// Por eso se parte del stock del movimiento más reciente de cada almacén y se va hacia atrás: antes = después − lo que entró + lo que salió
+// (en unidades sueltas, para cuando se abre una caja). Si faltan meses de kardex sin subir, los saldos de antes de ese hueco no cuadran.
+const kmEF = (t, fr) => fr > 1 ? [Math.floor(Math.round(t * 1000) / 1000 / fr), Math.round((t - Math.floor(Math.round(t * 1000) / 1000 / fr) * fr) * 1000) / 1000] : [Math.round(t * 1000) / 1000, 0];
+function kmSaldos(movs, fr) {
+  const porAlm = new Map(); for (const m of movs) (porAlm.get(m.alm) || porAlm.set(m.alm, []).get(m.alm)).push(m);
+  for (const l of porAlm.values()) { let desp = l[l.length - 1].stE * fr + l[l.length - 1].stM;
+    for (let i = l.length - 1; i >= 0; i--) { const m = l[i], antes = desp - (m.iE * fr + m.iM) + (m.sE * fr + m.sM);
+      m.d = kmEF(desp, fr); m.a = kmEF(antes, fr); desp = antes; } }
+}
+const kmAntes = m => m.a || [0, 0];
+const kmFecha = f => f ? `${f.slice(8, 10)}-${f.slice(5, 7)}-${f.slice(0, 4)} ${f.slice(11, 19)}` : "";
+function pintarKmov() {
+  const c = S.km.cod, p = c ? kmProd(c) : null, fr = p?.fr > 0 ? +p.fr : 1;
+  if (!c) return;
+  $('kmInfo').innerHTML = `<div><span>C-Producto:</span> <b>${esc(c)}</b></div><div><span>Producto:</span> <b>${esc(p?.n || S.km.movs?.[0]?.nom || "")}</b></div><div><span>Laboratorio:</span> <b>${esc(labDe(c) || "")}</b></div><div><span>Fracción:</span> <b>${fr}</b></div>`;
+  if (S.km.cargando) { $('kmTabla').innerHTML = '<tbody><tr><td style="padding:16px">Leyendo los movimientos…</td></tr></tbody>'; return; }
+  const todos = S.km.movs || [];
+  // almacenes y tipos que tiene este producto (se conserva lo elegido)
+  const opc = (id, vals) => { const v = $(id).value; $(id).innerHTML = '<option value="">Todos</option>' + [...new Set(vals)].sort().map(x => `<option ${x === v ? "selected" : ""}>${esc(x)}</option>`).join(""); };
+  opc('kmAlm', todos.map(m => m.alm)); opc('kmTipo', todos.map(m => m.tipo));
+  const l = kmFiltrados(), uno = !!$('kmAlm').value;
+  $('kmTabla').innerHTML = `<thead><tr><th>Item</th>${uno ? "" : "<th>Almacén</th>"}<th>Secuencia</th><th>S-Movimiento</th><th>Ti-Movimiento</th><th>Documento</th><th>Fecha</th><th>StkA-E</th><th>StkA-F</th><th>Cant-E</th><th>Cant-F</th><th>Stk-E</th><th>Stk-F</th><th>Costo</th><th>Responsable</th><th>Cliente / proveedor</th></tr></thead><tbody>` +
+    (l.length ? l.map((m, i) => { const a = kmAntes(m, fr), ing = m.iE + m.iM > 0, cE = ing ? m.iE : m.sE, cF = ing ? m.iM : m.sM;
+      return `<tr><td class="r">${i + 1}</td>${uno ? "" : `<td>${esc(m.alm)}</td>`}<td class="r">${m.nk}</td><td class="r">${esc(m.inv)}</td><td>${esc(m.tipo)}</td><td>${esc(m.doc)}</td><td>${kmFecha(m.fecha)}</td>
+        <td class="r antes">${a[0]}</td><td class="r antes">${a[1]}</td><td class="r ${ing ? "ing" : "sal"}">${cE}</td><td class="r ${ing ? "ing" : "sal"}">${cF}</td><td class="r">${m.d?.[0] ?? m.stE}</td><td class="r">${m.d?.[1] ?? m.stM}</td><td class="r">${m.cos ? m.cos.toFixed(2) : ""}</td><td>${esc(m.usu)}</td><td>${esc(m.cli)}</td></tr>`; }).join("")
+      : `<tr><td colspan="16" style="padding:16px">${todos.length ? "No hay movimientos con estos filtros." : S.km.err ? "No se pudieron leer los movimientos: " + esc(S.km.err) : "No hay movimientos guardados de este producto."}</td></tr>`) + "</tbody>";
+  const ms = S.km.meses || [];
+  $('kmNota').textContent = `${l.length.toLocaleString("es-PE")} movimientos (de ${todos.length.toLocaleString("es-PE")} guardados de este producto). ` + (ms.length ? `Hay movimientos guardados de ${ms[0]} a ${ms[ms.length - 1]}: se guardan cada vez que se sube el kardex.` : "Todavía no hay movimientos guardados: se guardan desde la próxima vez que se suba el kardex.");
+}
+$('kmQ').addEventListener('input', async () => { await kmCargarMaestro().catch(() => {}); const q = $('kmQ').value.trim().toUpperCase(), box = $('kmSug');
+  if (!q) { box.hidden = true; return; } const w = q.split(/\s+/);
+  const l = kmLista().filter(p => p.c === q || w.every(x => (p.c + " " + p.n).toUpperCase().includes(x))).sort((a, b) => (b.c === q) - (a.c === q) || a.n.localeCompare(b.n)).slice(0, 15);
+  box.innerHTML = l.map(p => `<button type="button" data-kmc="${esc(p.c)}"><b>${esc(p.c)}</b> ${esc(p.n)} <span class="note">${esc(labDe(p.c) || "")}</span></button>`).join("") || '<p class="note" style="padding:8px 10px;margin:0">Sin resultados (también puede escribir el código completo y pulsar Enter).</p>'; box.hidden = false; });
+$('kmQ').addEventListener('keydown', e => { if (e.key === 'Enter') { const q = $('kmQ').value.trim(); const b = $('kmSug').querySelector('[data-kmc]'); const c = /^\d+$/.test(q) ? q.padStart(5, "0") : b?.dataset.kmc; if (c) { $('kmSug').hidden = true; $('kmQ').value = c + " – " + (kmProd(c)?.n || ""); kmBuscar(c); } } });
+$('kmSug').addEventListener('click', e => { const b = e.target.closest('[data-kmc]'); if (!b) return; $('kmSug').hidden = true; $('kmQ').value = b.dataset.kmc + " – " + (kmProd(b.dataset.kmc)?.n || ""); kmBuscar(b.dataset.kmc); });
+document.addEventListener('click', e => { if (!e.target.closest('.km-prod')) $('kmSug').hidden = true; });
+['kmAlm', 'kmDe', 'kmHa', 'kmTipo'].forEach(id => $(id).addEventListener('change', pintarKmov));
+$('kmXls').addEventListener('click', () => { const c = S.km.cod; if (!c || !S.km.movs?.length) return; const fr = kmProd(c)?.fr > 0 ? +kmProd(c).fr : 1;
+  const filas = kmFiltrados().map((m, i) => { const a = kmAntes(m, fr), ing = m.iE + m.iM > 0;
+    return { Item: i + 1, "Almacén": m.alm, Secuencia: m.nk, "S-Movimiento": m.inv, "Ti-Movimiento": m.tipo, Documento: m.doc, Fecha: kmFecha(m.fecha), "StkA-E": a[0], "StkA-F": a[1], "Cant-E": ing ? m.iE : m.sE, "Cant-F": ing ? m.iM : m.sM, "Stk-E": m.d?.[0] ?? m.stE, "Stk-F": m.d?.[1] ?? m.stM, Costo: m.cos, Responsable: m.usu, "Cliente / proveedor": m.cli }; });
+  libEstilo().then(X => { const ws = X.utils.json_to_sheet(filas), wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, "Kardex " + c); X.writeFile(wb, `kardex_${c}.xlsx`); }).catch(e => alert("No se pudo armar el Excel: " + (e.message || e))); });
 function abrirFichaP(c, origen) { S.fpDesde = ''; S.cur = c; S.origen = origen; S.fpFarm = origen === 'rep' ? S.farm : ''; S.vista = 'fichaP'; render(); scrollTo({ top: 0 }); }
 
 /* ---------- filtro por laboratorio (del catálogo de productos de la página) ---------- */
@@ -2813,6 +2906,6 @@ window.iniciarKardex = iniciar;
 <script src="sucursales.js?v=202611201800"></script>
 <script src="estadistica.js?v=202611190300"></script>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="proyeccion.js?v=202611211000"></script>
+<script type="module" src="proyeccion.js?v=202611241800"></script>
 
 </body></html>

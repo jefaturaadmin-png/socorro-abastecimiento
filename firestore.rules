@@ -23,7 +23,7 @@ service cloud.firestore {
     function verProy() { return tieneVista('proyeccion') || tieneVista('kardex') || tieneVista('estadistica') || tieneVista('sucursales') || tieneVista('mapa') || tieneVista('drogueria') || tieneVista('porsucursal') || tieneVista('indicadores'); }
     // Usuario de una sucursal o de droguería: tiene su propio módulo (solo lectura de los datos de la proyección).
     function conSucursal() { return conPerfil() && perfil().get('farmacia', '') != ''; }
-    function leeProy() { return verProy() || conSucursal(); }
+    function leeProy() { return verProy() || conSucursal() || tieneVista('kmov'); }
     // Quién puede publicar las listas para las sucursales (desde Atención a sucursales o al subir el kardex).
     function publica() { return tieneVista('sucursales') || tieneVista('kardex'); }
     // Cierre del ingreso de información que programa el administrador en el usuario:

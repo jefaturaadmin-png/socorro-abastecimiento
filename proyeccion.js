@@ -95,13 +95,14 @@ onAuthStateChanged(auth, async u => {
    KARDEX DE LOLFAR (.TXT) → resumen por mes en Firebase → pronósticos
    Cantidades en cajas: enteras + fracciones ÷ unidades por caja (stkfra).
    ===================================================================== */
-const COL0 = { despro: 0, stkE: 1, stkM: 2, feckar: 8, destka: 10, coscom: 18, fra: 20, numkar: 24, codpro: 25, desalm: 27, iE: 30, iM: 31, sE: 32, sM: 33, n: 34, cus: 15 };
+const COL0 = { despro: 0, stkE: 1, stkM: 2, feckar: 8, destka: 10, coscom: 18, fra: 20, numkar: 24, codpro: 25, desalm: 27, iE: 30, iM: 31, sE: 32, sM: 33, n: 34, cus: 15, tdo: 11, ndoc: 12, inv: 13, usu: 21, ser: 23 };
 let COL = COL0;
 // Columnas según la cabecera de cada archivo (los kardex de otros años pueden traerlas en otro orden o con otras de más).
 function columnasDe(cab) {
   const h = cab.split("\t").map(t => t.trim().toLowerCase()), i = n => h.indexOf(n);
   const c = { despro: i("despro"), stkE: i("stkalm"), stkM: i("stkalm_m"), feckar: i("feckar"), destka: i("destka"), coscom: i("coscom"), fra: i("stkfra"),
-    numkar: i("numkar"), codpro: i("codpro"), desalm: i("desalm"), iE: i("icant_e"), iM: i("icant_m"), sE: i("scant_e"), sM: i("scant_m"), n: h.length, cus: i("cusnam") };
+    numkar: i("numkar"), codpro: i("codpro"), desalm: i("desalm"), iE: i("icant_e"), iM: i("icant_m"), sE: i("scant_e"), sM: i("scant_m"), n: h.length, cus: i("cusnam"),
+    tdo: i("tdofac"), ndoc: i("numdoc"), inv: i("invnum"), usu: i("usenam"), ser: i("serie") };
   return ["despro", "feckar", "destka", "numkar", "codpro", "desalm"].every(k => c[k] >= 0) ? c : COL0;
 }
 const num = v => { const t = String(v ?? "").trim(); return +(/,\d{1,3}$/.test(t) && !t.includes(".") ? t.replace(",", ".") : t.replace(/,/g, "")) || 0; };
@@ -159,6 +160,38 @@ async function guardarMes(mes, m, metaPrev, filas) {
   await setDoc(doc(db, "proy_config", "meses"), { m: { [mes]: { asset: id, movimientos: m.k.size, nuevos: filas, diario: completo, actualizado: new Date().toISOString() } } }, { merge: true });
   if (metaPrev?.asset) assetsShim.delete(metaPrev.asset).catch(() => {});
 }
+// MOVIMIENTOS uno por uno (para el módulo «Kardex por producto»): por mes y en 16 grupos por código de producto,
+// así al buscar un producto solo se lee su grupo de cada mes. proy_config/kmov = { m: { "2026-11": { b: { "0": asset, … }, n } } }
+// Cada grupo: { a: [almacenes], t: [tipos], r: [[numkar, invnum, cod, iAlm, fecha, iTipo, documento, ingE, ingF, salE, salF, stkE, stkF, usuario, cliente, costo], …] }
+const KM_G = 16;
+const kmGrupo = cod => { const n = parseInt(String(cod).replace(/\D/g, ""), 10); return isNaN(n) ? [...String(cod)].reduce((a, c) => a + c.charCodeAt(0), 0) % KM_G : n % KM_G; };
+const kmMeta = async () => { const s = await getDoc(doc(db, "proy_config", "kmov")); return s.exists() ? s.data().m || {} : {}; };
+async function kmLeer(asset) { if (!asset) return { a: [], t: [], r: [] }; const r = await assetsShim.fetch(asset); if (!r.ok) throw new Error("No se pudo leer un grupo de movimientos guardado."); return await r.json(); }
+async function kmGuardar(nuevos) {   // nuevos: Map("mes|grupo" → [[numkar, invnum, cod, almacén, fecha, tipo, documento, …]])
+  if (!nuevos.size) return 0; paso = "guardar los movimientos (proy_config/kmov)";
+  const meta = await kmMeta(); let total = 0, i = 0;
+  for (const [k, filas] of nuevos) {
+    const [mes, g] = k.split("|"); msg(`Guardando movimientos ${mes} (${++i}/${nuevos.size})…`);
+    const prev = meta[mes]?.b?.[g], o = await kmLeer(prev), ya = new Set(o.r.map(x => x[0]));
+    const ix = (arr, v) => { let j = arr.indexOf(v); if (j < 0) { arr.push(v); j = arr.length - 1; } return j; };
+    let n = 0;
+    for (const f of filas) { if (ya.has(f[0])) continue; ya.add(f[0]); n++; f[3] = ix(o.a, f[3]); f[5] = ix(o.t, f[5]); o.r.push(f); }
+    if (!n) continue; total += n;
+    const { id } = await assetsShim.upload(new Blob([JSON.stringify(o)]));
+    const m = (meta[mes] ??= { b: {}, n: 0 }); m.b[g] = id; m.n = (m.n || 0) + n;
+    await setDoc(doc(db, "proy_config", "kmov"), { m: { [mes]: { b: { [g]: id }, n: m.n, actualizado: new Date().toISOString() } } }, { merge: true });
+    if (prev) assetsShim.delete(prev).catch(() => {});
+  }
+  return total;
+}
+// para el módulo: los movimientos de un producto (todos los meses guardados, o desde/hasta «AAAA-MM»)
+window.kardexMovimientos = async (cod, desde = "", hasta = "") => {
+  const meta = await kmMeta(), g = String(kmGrupo(cod)), out = [];
+  const meses = Object.keys(meta).filter(m => (!desde || m >= desde.slice(0, 7)) && (!hasta || m <= hasta.slice(0, 7))).sort();
+  await Promise.all(meses.map(async m => { const a = meta[m]?.b?.[g]; if (!a) return; const o = await kmLeer(a);
+    for (const x of o.r) if (x[2] === cod) out.push({ nk: x[0], inv: x[1], cod: x[2], alm: o.a[x[3]], fecha: x[4], tipo: o.t[x[5]], doc: x[6], iE: x[7], iM: x[8], sE: x[9], sM: x[10], stE: x[11], stM: x[12], usu: x[13], cli: x[14], cos: x[15] }); }));
+  return { movs: out.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.nk - b.nk), meses: Object.keys(meta).sort() };
+};
 async function leerMaestro() {
   paso = "leer productos y stock (proy_config/maestro)";
   const c = await getDoc(doc(db, "proy_config", "maestro"));
@@ -184,7 +217,7 @@ window.subirKardex = async function (files) {
     maestro.uv ??= {};
     maestro.ua ??= {};
     maestro.uc ??= {};   // último ingreso por compra (facturación) de cada producto: {cod: [fecha, cantidad, [numkar…]]}   // último abastecimiento de cada producto en cada sucursal: {cod: {alm: [fecha, cantidad, [numkar…]]}}
-    const malas = [];
+    const malas = [], kmNuevos = new Map();
     for (const f of files) {
       COL = COL0; const ign0 = ignoradas;
       for await (const l of lineas(f, n => { leidosArch = n; pct(n); })) {
@@ -206,6 +239,11 @@ window.subirKardex = async function (files) {
         if (fecha > maestro.corte) { maestro.corte = fecha; stockCambio = true; }
         const tipo = x[COL.destka].trim();
         const ing = num(x[COL.iE]) + num(x[COL.iM]) / fra, sal = num(x[COL.sE]) + num(x[COL.sM]) / fra;
+        // movimiento uno por uno (documento: tipo + serie-número; las guías de envío no traen tipo: GR)
+        { const t = (v => v >= 0 ? String(x[v] ?? "").trim() : ""), ser = t(COL.ser), nd = t(COL.ndoc), td = t(COL.tdo) || (/^T/i.test(ser) ? "GR" : /^F/i.test(ser) ? "FA" : "");
+          const k = mes + "|" + kmGrupo(cod); (kmNuevos.get(k) || kmNuevos.set(k, []).get(k)).push([nk, t(COL.inv), cod, alm, fecha.slice(0, 19).trim(), tipo,
+            [td, [ser, nd].filter(Boolean).join("-")].filter(Boolean).join(" "), num(x[COL.iE]), num(x[COL.iM]), num(x[COL.sE]), num(x[COL.sM]),
+            num(x[COL.stkE]), num(x[COL.stkM]), t(COL.usu), t(COL.cus).replace(/"/g, "").replace(/\s+/g, " ").trim(), Math.round(cos * 100) / 100]); }
         // última venta del producto (para los que dejaron de moverse)
         if (tipo === VENTA && (!maestro.uv[cod] || fecha > maestro.uv[cod])) { maestro.uv[cod] = fecha; stockCambio = true; }
         // último ingreso por compra («CARGO COMPRA…», en droguería o en el almacén principal): fecha y cantidad
@@ -242,6 +280,8 @@ window.subirKardex = async function (files) {
       await guardarMes(mes, M, metas.get(mes), nuevosMes.get(mes));
     }
     if (nuevas || stockCambio || diarias) { msg("Guardando productos y stock…"); await guardarMaestro(maestro); }
+    const kmN = await kmGuardar(kmNuevos);   // movimientos uno por uno (módulo «Kardex por producto»)
+    if (kmN) console.log(`kardex: ${kmN} movimientos guardados para el detalle`);
     msg("Calculando pronósticos…");
     const aviso = await recalcular();
     // si los pronósticos siguen siendo los del archivo de Colab (faltan meses de kardex), se les pone el stock de este kardex
