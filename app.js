@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611241600";
+const VERSION_PROY = "202611241700";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2144,7 +2144,7 @@ async function cargarDrogStk() {
   S.drogStkCargando = false; if (S.vista === "vPed") pintarPedidos(); else if (S.vista === "vRep") pintarRpCmp();
 }
 const puedeMarcarUrg = () => esAdmin() || ["sucursales", "kardex"].some(v => (S.perfil?.vistas || []).includes(v));
-const ESTADO_U = { "": ["🔴 Pedido recién", "rojo"], viendo: ["🟠 Droguería lo está viendo", "amb"], parcial: ["🟡 Atendido parcial", "amb"], atendido: ["🟢 Atendido", "verde"], rechazado: ["⛔ Rechazado", "gris"] };
+const ESTADO_U = { "": ["🔴 Pedido recién", "rojo"], viendo: ["🟠 Droguería lo está viendo", "amb"], gestionado: ["🔵 Listo para entrega en droguería", "azul"], parcial: ["🟡 Atendido parcial", "amb"], atendido: ["🟢 Atendido", "verde"], rechazado: ["⛔ Rechazado", "gris"] };
 // texto del estado sin el ícono; en «Atendido parcial», con la cantidad que se atendió (de lo que pidió)
 const estUTxt = (e, d) => { const b = (ESTADO_U[e?.estado || ""]?.[0] || e?.estado || "").replace(/^\S+ /, "");
   return e?.estado === "parcial" && e.qAt != null ? `${b}: ${nf(e.qAt)}${d?.q ? " de " + nf(d.q) : ""}` : b; };
