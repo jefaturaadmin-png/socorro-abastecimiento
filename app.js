@@ -26,7 +26,7 @@ const deleteDoc = (...a) => S.prev ? Promise.reject(PREVIA) : fsDelete(...a);
 const writeBatch = d => { const b = fsBatch(d); if (S.prev) b.commit = () => Promise.reject(PREVIA); return b; };
 
 // Cambiar al publicar cambios en proyeccion.html / proyeccion.js, para que el navegador no use la copia vieja.
-const VERSION_PROY = "202611241500";
+const VERSION_PROY = "202611241600";
 const VERSION_COMP = "202611031900";
 
 /* ===================== utilidades ===================== */
@@ -2144,11 +2144,16 @@ async function cargarDrogStk() {
   S.drogStkCargando = false; if (S.vista === "vPed") pintarPedidos(); else if (S.vista === "vRep") pintarRpCmp();
 }
 const puedeMarcarUrg = () => esAdmin() || ["sucursales", "kardex"].some(v => (S.perfil?.vistas || []).includes(v));
-const ESTADO_U = { "": ["🔴 Pedido recién", "rojo"], viendo: ["🟠 Droguería lo está viendo", "amb"], atendido: ["🟢 Atendido", "verde"] };
+const ESTADO_U = { "": ["🔴 Pedido recién", "rojo"], viendo: ["🟠 Droguería lo está viendo", "amb"], parcial: ["🟡 Atendido parcial", "amb"], atendido: ["🟢 Atendido", "verde"], rechazado: ["⛔ Rechazado", "gris"] };
+// texto del estado sin el ícono; en «Atendido parcial», con la cantidad que se atendió (de lo que pidió)
+const estUTxt = (e, d) => { const b = (ESTADO_U[e?.estado || ""]?.[0] || e?.estado || "").replace(/^\S+ /, "");
+  return e?.estado === "parcial" && e.qAt != null ? `${b}: ${nf(e.qAt)}${d?.q ? " de " + nf(d.q) : ""}` : b; };
+// grupo del estado para los filtros: atendido (también parcial), rechazado, o no atendido
+const estUGrupo = e => e === "atendido" || e === "parcial" ? "si" : e === "rechazado" ? "rech" : "no";
 const estU = d => S.urgEst.get(d.id) || {};
 // filtros de la lista de urgencias: con / sin stock en droguería, y atendido / no atendido
 const pdPasaFiltros = d => (!S.pdStkL || !S.drogStk || ((S.drogStk[d.cod]?.[0] || 0) > 0) === (S.pdStkL === "con"))
-  && (!S.pdAtL || ((estU(d).estado || "") === "atendido") === (S.pdAtL === "si"));
+  && (!S.pdAtL || estUGrupo(estU(d).estado || "") === S.pdAtL);
 // pedidos REPETIDOS (misma sucursal y mismo producto): con «Quitar repetidos» queda solo el más reciente (no se borra nada)
 const pdClaveRep = d => (d.suc || "") + "|" + (d.cod || d.nom);
 const pdSinRep = l => { if (!S.pdSinRep) return l; const ya = new Set(); return l.filter(d => { const k = pdClaveRep(d); if (ya.has(k)) return false; ya.add(k); return true; }); };
@@ -2189,7 +2194,7 @@ function pintarTarjetasUrg() {
 }
 // lo que respondió Abastecimiento (estado y nota): solo si respondió; si no, en blanco
 const respUrg = d => { const e = S.urgEst?.get(d.id); if (!e || (!e.estado && !e.nota)) return "";
-  return `${e.estado ? `<span class="chip ${ESTADO_U[e.estado]?.[1] || ""}">${esc((ESTADO_U[e.estado]?.[0] || e.estado).replace(/^\S+ /, ""))}</span>` : ""}${e.nota ? `<small class="pd-com">📝 ${esc(e.nota)}</small>` : ""}`; };
+  return `${e.estado ? `<span class="chip ${ESTADO_U[e.estado]?.[1] || ""}">${esc(estUTxt(e, d))}</span>` : ""}${e.nota ? `<small class="pd-com">📝 ${esc(e.nota)}</small>` : ""}`; };
 // stock de la sucursal del usuario (último kardex subido; el mismo que en su módulo)
 const stockMioV = c => { const f = miFarm(); if (!f || !c || !S.karStock) return null; return +(S.karStock[c]?.[f]?.[0] || 0); };
 const stockMio = c => { const v = stockMioV(c); return v == null ? '<span class="muted">–</span>' : v > 0 ? `<b>${nf(Math.round(v * 100) / 100)}</b>` : '<span class="rojo-t">0</span>'; };
@@ -2353,7 +2358,7 @@ function pintarTableroUrg(P) {
     (vis.length ? vis.map(d => { const e = estU(d), k = e.estado || "";
       return `<tr data-uid="${esc(d.id)}"><td class="f">${d.f ? d.f.toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}</td>${P.cS >= 0 ? `<td><b>${esc(d.suc ? corto(d.suc) : "¿" + (d.x[P.cS] || "") + "?")}</b></td>` : ""}
         <td class="p"><b>${esc(nomProd(d))}</b><code>${esc(d.cod)}</code>${repTxt(d)}</td><td class="der">${d.q ? nf(d.q) : ""}</td>${verStkSuc ? `<td class="der">${stkSucTxt(d)}</td><td class="der">${leDuraSuc(d)}</td><td>${ultAbTxt(d)}</td><td>${ultCompTxt(d.cod)}</td><td class="pd-endrog">${stDrog(d.cod, new Set([d.suc]))}</td>` : ""}<td>${esc(d.mot)}</td><td>${d.quien ? esc(d.quien) : '<span class="muted">–</span>'}</td>
-        <td>${marca ? `<select class="pd-est ${ESTADO_U[k][1]}" data-uest>${Object.entries(ESTADO_U).map(([v, [t]]) => `<option value="${v}" ${v === k ? "selected" : ""}>${t}</option>`).join("")}</select>` : `<span class="chip ${ESTADO_U[k][1]}">${ESTADO_U[k][0]}</span>`}</td>
+        <td>${marca ? `<select class="pd-est ${ESTADO_U[k][1]}" data-uest>${Object.entries(ESTADO_U).map(([v, [t]]) => `<option value="${v}" ${v === k ? "selected" : ""}>${t}</option>`).join("")}</select>${k === "parcial" ? `<label class="pd-qat">Se atendió <input type="number" min="0" step="1" data-uqat value="${e.qAt ?? ""}" placeholder="cant."> ${d.q ? "de " + nf(d.q) : ""}</label>` : ""}` : `<span class="chip ${ESTADO_U[k][1]}">${esc(estUTxt(e, d))}</span>`}</td>
         <td>${marca ? `<input class="pd-nota" data-unota maxlength="120" placeholder="Ej. en tránsito, guía GR…" value="${esc(e.nota || "")}">` : esc(e.nota || "")}</td></tr>`; }).join("")
       : `<tr class="vacia"><td colspan="11">No hay pedidos con estos filtros.</td></tr>`) + "</tbody>";
   $("pdMas").innerHTML = lista.length > vis.length ? `<button class="btn" type="button" id="pdMasBtn">Ver más (de ${nf(lista.length)})</button>` : "";
@@ -2365,14 +2370,17 @@ function otrasSucs(c, pidieron) { const l = [];
   return l.sort((a, b) => b.cob - a.cob || b.st - a.st); }
 async function marcarUrg(tr) {
   const d = S.ped?.datos.find(x => x.id === tr.dataset.uid); if (!d) return;
-  const estado = tr.querySelector("[data-uest]").value, nota = tr.querySelector("[data-unota]").value.trim().slice(0, 120);
+  const estado = tr.querySelector("[data-uest]").value, nota = tr.querySelector("[data-unota]").value.trim().slice(0, 120), iq = tr.querySelector("[data-uqat]");
+  // cantidad atendida (solo en «Atendido parcial»): la del cuadro, o la que ya tenía guardada
+  const qAt = estado !== "parcial" ? null : iq && iq.value !== "" ? Math.max(0, Math.round(+iq.value || 0)) : estU(d).qAt ?? null;
   try {
     if (!estado && !nota) await deleteDoc(doc(db, "urgencia_estado", d.id));
-    else await setDoc(doc(db, "urgencia_estado", d.id), { estado, nota, suc: d.suc || "", cod: d.cod || "", porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario, fecha: serverTimestamp() });
-    toast("Pedido actualizado");
+    else await setDoc(doc(db, "urgencia_estado", d.id), { estado, nota, ...(qAt != null ? { qAt } : {}), suc: d.suc || "", cod: d.cod || "", porUid: S.perfil.uid, porNombre: S.perfil.nombre || S.perfil.usuario, fecha: serverTimestamp() });
+    toast(estado === "parcial" && qAt == null ? "Escriba la cantidad que se atendió" : "Pedido actualizado");
+    if (estado === "parcial" && qAt == null) setTimeout(() => document.querySelector(`tr[data-uid="${CSS.escape(d.id)}"] [data-uqat]`)?.focus(), 400);
   } catch (x) { toast(textoError(x)); }
 }
-$("pdTabla").addEventListener("change", e => { const tr = e.target.closest("tr[data-uid]"); if (tr && e.target.matches("[data-uest],[data-unota]")) marcarUrg(tr); });
+$("pdTabla").addEventListener("change", e => { const tr = e.target.closest("tr[data-uid]"); if (tr && e.target.matches("[data-uest],[data-unota],[data-uqat]")) marcarUrg(tr); });
 $("pdAct").addEventListener("click", () => { cargarPedidos(); reintentarPend(true); pintarPedidos(); });
 $("pdImp").addEventListener("click", importarHoja);
 $("pdSuc").addEventListener("change", e => { S.pdSuc = e.target.value; pintarPedidos(); });
@@ -2391,7 +2399,7 @@ $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) {
 ["pdXls", "pdXls2"].forEach(id => $(id).addEventListener("click", () => {
   const P = S.ped; if (!P) return;
   const cols = P.cab.map((h, i) => i).filter(i => P.cab[i]);
-  if (!(esAdmin() || !miFarm())) { const ds = pedidosVisibles().map(d => ({ "Código": d.cod, Medicamento: nomProd(d), "Fecha y hora": d.f || "", "¿Hay en droguería?": S.drogStk?.[d.cod]?.[0] > 0 ? "Sí (" + S.drogStk[d.cod][0] + ")" : "No", "Estado (Abastecimiento)": (() => { const e = S.urgEst?.get(d.id); return e?.estado ? ESTADO_U[e.estado][0].slice(3) : ""; })(), Nota: S.urgEst?.get(d.id)?.nota || "" }));
+  if (!(esAdmin() || !miFarm())) { const ds = pedidosVisibles().map(d => ({ "Código": d.cod, Medicamento: nomProd(d), "Fecha y hora": d.f || "", "¿Hay en droguería?": S.drogStk?.[d.cod]?.[0] > 0 ? "Sí (" + S.drogStk[d.cod][0] + ")" : "No", "Estado (Abastecimiento)": (() => { const e = S.urgEst?.get(d.id); return e?.estado ? estUTxt(e, d) : ""; })(), Nota: S.urgEst?.get(d.id)?.nota || "" }));
     if (!ds.length) return toast("No hay pedidos para descargar."); return excelDe(ds, "Urgencias", "agotados_urgencia_" + corto(miFarm()).replace(/\W+/g, "_").toLowerCase()); }
   const datos = pdSinRep(pedidosVisibles().filter(pdPasaFiltros)).map(d => { const e = estU(d);
     // lo mismo que se ve en la tabla: stock de la sucursal, último abastecimiento, droguería y otras sucursales
@@ -2402,7 +2410,7 @@ $("pdMas").addEventListener("click", e => { if (e.target.closest("#pdMasBtn")) {
       ["Stock de la sucursal", stS ? r2(stS[d.cod]?.[0]) : ""], ["Le dura (días)", stS && stS[d.cod] ? (stS[d.cod][1] > 0 ? Math.round((+stS[d.cod][0] || 0) / stS[d.cod][1]) : (+stS[d.cod][0] > 0 ? "sin venta" : 0)) : ""], ["Último abastecimiento", u ? u[0].slice(0, 10).split("-").reverse().join("/") : ""], ["Cantidad abastecida", u ? r2(u[1]) : ""], ["Días desde el abastecimiento", dias],
       ["Último ingreso (compra)", S.ultCompra?.[d.cod] ? S.ultCompra[d.cod][0].slice(0, 10).split("-").reverse().join("/") : ""], ["Cantidad que ingresó", S.ultCompra?.[d.cod] ? r2(S.ultCompra[d.cod][1]) : ""],
       ["Stock droguería", S.drogStk ? r2(sd) : ""], ["Pedir a otra sucursal", ot.map(x => `${corto(x.f)} ${r2(x.st)} (${x.d > 0 ? "lento, " + Math.round(x.cob) + " d" : "sin movimiento"})`).join(" · ")],
-      ["Estado", ESTADO_U[e.estado || ""][0].slice(3)], ["Nota", e.nota || ""],
+      ["Estado", estUTxt(e, d)], ["Cantidad atendida", e.estado === "atendido" ? d.q || "" : e.estado === "parcial" ? e.qAt ?? "" : e.estado === "rechazado" ? 0 : ""], ["Nota", e.nota || ""],
       ...cols.map(i => [P.cab[i], d.x[i] || ""])]); });
   if (!datos.length) return toast("No hay pedidos para descargar.");
   const suc = esAdmin() || !miFarm() ? S.pdSuc : miFarm();

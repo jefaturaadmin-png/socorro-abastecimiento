@@ -884,3 +884,4 @@ body.nav-abierta .top .nav button { text-align: left; justify-content: flex-star
 .rp-archivado { opacity: .7 } .rp-ant { border-color: #e5a50a; color: #8a5a00; background: #fff8e6 }
 .rp-borrar { color: #b42318; border-color: #f3c9c4 }
 .pd-rep { display: block; margin-top: 3px; font-size: 11px; color: #8a5a00; font-weight: 600 } .pd-rep.viejo { color: #999; font-weight: 500 }
+.pd-qat { display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 12px; white-space: nowrap } .pd-qat input { width: 64px; min-height: 0; height: 28px; padding: 2px 6px }

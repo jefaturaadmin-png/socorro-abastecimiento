@@ -16,7 +16,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 <meta name="application-name" content="Abastecimiento">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800;1,900&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611241500">
+<link rel="stylesheet" href="styles.css?v=202611241600">
 </head>
 <body>
   <!-- instalar la página como app en el celular -->
@@ -596,7 +596,7 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
           <h2 id="pdTit">Pedidos</h2>
           <div class="filtros">
             <div class="seg pd-seg" id="pdStkL"><button type="button" data-pdstkl="" class="act">Todos</button><button type="button" data-pdstkl="con">Con stock</button><button type="button" data-pdstkl="sin">Sin stock</button></div>
-            <div class="seg pd-seg" id="pdAtL"><button type="button" data-pdatl="" class="act">Todos</button><button type="button" data-pdatl="si">Atendidos</button><button type="button" data-pdatl="no">No atendidos</button></div>
+            <div class="seg pd-seg" id="pdAtL"><button type="button" data-pdatl="" class="act">Todos</button><button type="button" data-pdatl="si">Atendidos</button><button type="button" data-pdatl="no">No atendidos</button><button type="button" data-pdatl="rech">Rechazados</button></div>
             <div class="seg pd-seg" id="pdRepL"><button type="button" data-pdrep="0" class="act" title="Todos los pedidos, también los repetidos">Con repetidos</button><button type="button" data-pdrep="1" title="Un solo pedido por sucursal y producto: el más reciente">Quitar repetidos</button></div>
             <label class="filtro">Buscar <input id="pdQ" type="search" placeholder="Producto, código…"></label>
             <button class="btn" id="pdXls" type="button"><svg width="18" height="18"><use href="#i-bajar"/></svg>Descargar Excel</button>
@@ -797,6 +797,6 @@ if (new URLSearchParams(location.search).get("m") === "nuevos") document.querySe
 
 <div class="toast" id="toast" hidden></div>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="app.js?v=202611241500"></script>
+<script type="module" src="app.js?v=202611241600"></script>
 </body>
 </html>
