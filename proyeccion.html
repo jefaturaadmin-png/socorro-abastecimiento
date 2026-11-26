@@ -1467,6 +1467,13 @@ async function rbCargar() {
   } catch (e) { $('rbEst').textContent = 'No se pudieron leer las compras: ' + (e.message || e); S.rb.compras = []; }
   S.rb.cargando = false; pintarReb();
 }
+// % de rebate de DIMEXA por línea (tabla que dio el usuario), llevado a los laboratorios de la plataforma.
+// SIEGFRIED: 2 % (sus líneas BPH 2.5 % y TEVA 3 % no se distinguen por laboratorio: se pone en cada factura).
+const RB_DIMEXA = [[/DEUCH|DEUTSCHE/, 2], [/LUKOLL/, 2], [/HALEON/, 2], [/PHARMED/, 2], [/SANIMED/, 0], [/LAFAGE/, 2], [/BAYER/, 2], [/FERRER/, 2], [/MENARINI/, 2],
+  [/^AC FARMA/, 2], [/WORWAG/, 2], [/IQFARMA|QUIMIOTERAPICO|I\.Q\./, 2.5], [/NESTLE/, 0], [/BONAPHAR/, 2.5], [/GENOM/, 0], [/UNIMED/, 2], [/SIEGFRIED/, 2], [/KEYFARM/, 2.5],
+  [/HERSIL|MEDIFARMA/, 2], [/MEAD J/, 2], [/SCHICK/, 2], [/ITF/, 2.5], [/COLICHON/, 2], [/EUROFARMA/, 2], [/CSP LIFE/, 2], [/FARMINDUSTRIA/, 0], [/GEN-FAR|GENFAR/, 2],
+  [/TECNOFARMA/, 2], [/MAGNESOL/, 0], [/VITAL/, 2]];
+const rbTabla = (lab, dist) => { if (!/DIMEXA/i.test(dist || '')) return null; const L = String(lab).toUpperCase(); for (const [re, v] of RB_DIMEXA) if (re.test(L)) return v; return null; };
 // facturas: una fila por factura y laboratorio (el laboratorio de cada producto)
 function rbFilas() {
   const G = new Map();
@@ -1477,7 +1484,7 @@ function rbFilas() {
     if (c.fecha < g.fecha) g.fecha = c.fecha; g.monto += q * (c.cos || 0); g.prods.push({ cod: c.cod, q, cos: c.cos || 0 }); }
   const P = S.rb.pct;
   return [...G.values()].map(g => { const [td, num] = [g.doc.split(' ')[0], g.doc.split(' ').slice(1).join(' ')], [serie, numero] = (num || g.doc).split('-');
-    const propio = P.fac[g.k], pct = propio ?? P.def[g.lab + '|' + g.dist] ?? 0;
+    const propio = P.fac[g.k], pct = propio ?? P.def[g.lab + '|' + g.dist] ?? rbTabla(g.lab, g.dist) ?? 0;
     return { ...g, td, serie: serie || '', numero: numero || '', pct, propio: propio != null, rebate: g.monto * pct / 100 }; }).sort((a, b) => a.fecha.localeCompare(b.fecha) || a.doc.localeCompare(b.doc));
 }
 async function rbGuardarPct() { try { await S.db.doc('config/rebates').set({ def: S.rb.pct.def, fac: S.rb.pct.fac, actualizado: new Date().toISOString() }); } catch (e) { alert('No se pudo guardar el %: ' + (e.message || e)); } }
@@ -1496,7 +1503,7 @@ function pintarReb() {
   $('rbRes').innerHTML = `<div><span>Facturas:</span> <b>${facs}</b></div><div><span>Monto comprado (con IGV):</span> <b>S/ ${rbS(tM)}</b></div><div><span>Rebate total:</span> <b>S/ ${rbS(tR)}</b></div>`;
   // % por laboratorio y distribuidor (los que aparecen)
   const combos = [...new Map(l.map(f => [f.lab + '|' + f.dist, f])).values()].sort((a, b) => a.dist.localeCompare(b.dist) || a.lab.localeCompare(b.lab));
-  $('rbPct').innerHTML = '<thead><tr><th>Distribuidor</th><th>Laboratorio</th><th>% rebate</th></tr></thead><tbody>' + combos.map(f => `<tr><td>${esc(f.dist)}</td><td>${esc(f.lab)}</td><td><input class="rb-in" type="number" min="0" step="0.01" data-rbdef="${esc(f.lab + '|' + f.dist)}" value="${S.rb.pct.def[f.lab + '|' + f.dist] ?? ''}" placeholder="0"></td></tr>`).join('') + '</tbody>';
+  $('rbPct').innerHTML = '<thead><tr><th>Distribuidor</th><th>Laboratorio</th><th>% rebate</th><th>De dónde sale</th></tr></thead><tbody>' + combos.map(f => `<tr><td>${esc(f.dist)}</td><td>${esc(f.lab)}</td><td><input class="rb-in" type="number" min="0" step="0.01" data-rbdef="${esc(f.lab + '|' + f.dist)}" value="${S.rb.pct.def[f.lab + '|' + f.dist] ?? rbTabla(f.lab, f.dist) ?? ''}" placeholder="0"></td><td class="note">${S.rb.pct.def[f.lab + '|' + f.dist] != null ? 'puesto a mano' : rbTabla(f.lab, f.dist) != null ? 'tabla de DIMEXA' : '<b style="color:#c92a2a">falta</b>'}</td></tr>`).join('') + '</tbody>';
   $('rbTabla').innerHTML = `<thead><tr><th>Fecha</th><th>Tipo</th><th>Serie</th><th>Número</th><th>Distribuidor</th><th>Laboratorio</th><th class="r">Productos</th><th class="r">Monto (con IGV)</th><th class="r">% rebate</th><th class="r">Rebate</th></tr></thead><tbody>` +
     (l.length ? l.map(f => `<tr class="rb-f" data-rbk="${esc(f.k)}"><td>${kmFecha(f.fecha).slice(0, 10)}</td><td>${esc(f.td)}</td><td><b>${esc(f.serie)}</b></td><td><b>${esc(f.numero)}</b></td><td>${esc(f.dist)}</td><td><b>${esc(f.lab)}</b></td><td class="r">${f.prods.length} ${S.rb.abiertas.has(f.k) ? '▾' : '▸'}</td><td class="r"><b>${rbS(f.monto)}</b></td>
         <td class="r"><input class="rb-in${f.propio ? ' propio' : ''}" type="number" min="0" step="0.01" data-rbfac="${esc(f.k)}" value="${f.pct || ''}" placeholder="0" title="${f.propio ? 'Porcentaje propio de esta factura (bórrelo para usar el del laboratorio y distribuidor)' : 'Porcentaje del laboratorio y distribuidor; escriba otro solo para esta factura'}"></td><td class="r"><b>${rbS(f.rebate)}</b></td></tr>` +
