@@ -752,6 +752,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
     <div class="card km-filtros">
       <label class="field"><span>Distribuidor</span><select id="rbDist"><option value="">Todos</option></select></label>
       <label class="field"><span>Laboratorio</span><select id="rbLab"><option value="">Todos</option></select></label>
+      <label class="field"><span>Buscar factura</span><input id="rbQ" type="search" placeholder="Ej. F160-301256 o 301256" autocomplete="off" style="width:200px"></label>
       <label class="field"><span>Desde fecha</span><input id="rbDe" type="date"></label>
       <label class="field"><span>Hasta fecha</span><input id="rbHa" type="date"></label>
       <button type="button" class="btn" id="rbXls">⬇ Excel</button>
@@ -1479,6 +1480,9 @@ function rbFilas() {
     return { ...g, td, serie: serie || '', numero: numero || '', pct, propio: propio != null, rebate: g.monto * pct / 100 }; }).sort((a, b) => a.fecha.localeCompare(b.fecha) || a.doc.localeCompare(b.doc));
 }
 async function rbGuardarPct() { try { await S.db.doc('config/rebates').set({ def: S.rb.pct.def, fac: S.rb.pct.fac, actualizado: new Date().toISOString() }); } catch (e) { alert('No se pudo guardar el %: ' + (e.message || e)); } }
+// buscador de factura: por serie y número («F160-301256»), solo el número («301256») o parte de él
+const rbPasaQ = f => { const q = ($('rbQ')?.value || '').trim().toUpperCase().replace(/\s+/g, ''); if (!q) return true;
+  const n = (f.serie + '-' + f.numero).toUpperCase(); return n.includes(q) || f.numero.replace(/^0+/, '').includes(q.replace(/^0+/, '')) || f.doc.toUpperCase().replace(/\s+/g, '').includes(q); };
 function pintarReb() {
   if (!S.rb.compras && !S.rb.cargando) { rbCargar(); return; }
   if (S.rb.cargando) return;
@@ -1487,7 +1491,7 @@ function pintarReb() {
   const opc = (id, vals, pref) => { const v = $(id).value || (pref && vals.find(x => pref.test(x))) || ''; $(id).innerHTML = '<option value="">Todos</option>' + [...new Set(vals)].sort().map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join(''); };
   opc('rbDist', todas.map(f => f.dist), S.rb.yaDist ? null : /DIMEXA/i); S.rb.yaDist = true;
   const dist = $('rbDist').value; opc('rbLab', todas.filter(f => !dist || f.dist === dist).map(f => f.lab));
-  const lab = $('rbLab').value, l = todas.filter(f => (!dist || f.dist === dist) && (!lab || f.lab === lab));
+  const lab = $('rbLab').value, l = todas.filter(f => (!dist || f.dist === dist) && (!lab || f.lab === lab) && rbPasaQ(f));
   const tM = l.reduce((a, f) => a + f.monto, 0), tR = l.reduce((a, f) => a + f.rebate, 0), facs = new Set(l.map(f => f.doc)).size;
   $('rbRes').innerHTML = `<div><span>Facturas:</span> <b>${facs}</b></div><div><span>Monto comprado (con IGV):</span> <b>S/ ${rbS(tM)}</b></div><div><span>Rebate total:</span> <b>S/ ${rbS(tR)}</b></div>`;
   // % por laboratorio y distribuidor (los que aparecen)
@@ -1508,7 +1512,8 @@ $('rbTabla').addEventListener('change', e => { const i = e.target.closest('[data
 $('rbPct').addEventListener('change', e => { const i = e.target.closest('[data-rbdef]'); if (!i) return; const k = i.dataset.rbdef;
   if (i.value === '') delete S.rb.pct.def[k]; else S.rb.pct.def[k] = Math.max(0, +i.value || 0); pintarReb(); rbGuardarPct(); });
 ['rbDist', 'rbLab', 'rbDe', 'rbHa'].forEach(id => $(id).addEventListener('change', () => { if (id === 'rbDist') $('rbLab').value = ''; pintarReb(); }));
-$('rbXls').addEventListener('click', () => { const dist = $('rbDist').value, lab = $('rbLab').value, l = rbFilas().filter(f => (!dist || f.dist === dist) && (!lab || f.lab === lab)); if (!l.length) return;
+$('rbQ').addEventListener('input', () => pintarReb());
+$('rbXls').addEventListener('click', () => { const dist = $('rbDist').value, lab = $('rbLab').value, l = rbFilas().filter(f => (!dist || f.dist === dist) && (!lab || f.lab === lab) && rbPasaQ(f)); if (!l.length) return;
   const filas = l.map(f => ({ Fecha: kmFecha(f.fecha).slice(0, 10), Tipo: f.td, Serie: f.serie, "Número": f.numero, Distribuidor: f.dist, Laboratorio: f.lab, "Monto (con IGV)": rbNum(f.monto), "% rebate": f.pct, Rebate: rbNum(f.rebate) }));
   libEstilo().then(X => { const ws = X.utils.json_to_sheet(filas), wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Rebates'); X.writeFile(wb, `rebates_${(dist || 'todos').replace(/\W+/g, '_').toLowerCase()}.xlsx`); }).catch(e => alert('No se pudo armar el Excel: ' + (e.message || e))); });
 function abrirFichaP(c, origen) { S.fpDesde = ''; S.cur = c; S.origen = origen; S.fpFarm = origen === 'rep' ? S.farm : ''; S.vista = 'fichaP'; render(); scrollTo({ top: 0 }); }
