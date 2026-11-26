@@ -1462,15 +1462,16 @@ async function rbCargar() {
     if (!window.kardexCompras) { await new Promise(r => setTimeout(r, 800)); }
     await kmCargarMaestro().catch(() => {});   // nombres de los productos (para el detalle de cada factura)
     try { const d = await S.db.doc('config/rebates').get(); if (d.exists) { const x = d.data(); S.rb.pct = { def: x.def || {}, fac: x.fac || {} }; } } catch {}
-    const r = await window.kardexCompras($('rbDe').value, $('rbHa').value, (n, t) => { $('rbEst').textContent = `Leyendo las compras del kardex… ${Math.round(n / t * 100)} %`; });
-    S.rb.compras = r.compras; S.rb.meses = r.meses; S.rb.rango = $('rbDe').value + '|' + $('rbHa').value; $('rbEst').textContent = '';
+    const r = await window.kardexCompras('', '', (n, t) => { $('rbEst').textContent = `Leyendo las compras del kardex… ${Math.round(n / t * 100)} %`; });
+    S.rb.compras = r.compras; S.rb.meses = r.meses; $('rbEst').textContent = '';
   } catch (e) { $('rbEst').textContent = 'No se pudieron leer las compras: ' + (e.message || e); S.rb.compras = []; }
   S.rb.cargando = false; pintarReb();
 }
 // facturas: una fila por factura y laboratorio (el laboratorio de cada producto)
 function rbFilas() {
   const G = new Map();
-  for (const c of S.rb.compras || []) { const lab = labDe(c.cod) || '(sin laboratorio)', k = c.doc + '|' + lab;
+  const de = $('rbDe').value, ha = $('rbHa').value;   // todas las compras se leen una vez; las fechas solo filtran
+  for (const c of S.rb.compras || []) { if ((de && c.fecha.slice(0, 10) < de) || (ha && c.fecha.slice(0, 10) > ha)) continue; const lab = labDe(c.cod) || '(sin laboratorio)', k = c.doc + '|' + lab;
     const fr = (S.idx?.get(c.cod)?.fr > 0 ? +S.idx.get(c.cod).fr : 1), q = c.iE + c.iM / fr;
     const g = G.get(k) || G.set(k, { k, doc: c.doc, lab, dist: c.cli, fecha: c.fecha, monto: 0, prods: [] }).get(k);
     if (c.fecha < g.fecha) g.fecha = c.fecha; g.monto += q * (c.cos || 0); g.prods.push({ cod: c.cod, q, cos: c.cos || 0 }); }
@@ -1486,7 +1487,6 @@ const rbPasaQ = f => { const q = ($('rbQ')?.value || '').trim().toUpperCase().re
 function pintarReb() {
   if (!S.rb.compras && !S.rb.cargando) { rbCargar(); return; }
   if (S.rb.cargando) return;
-  if (S.rb.rango !== $('rbDe').value + '|' + $('rbHa').value) { rbCargar(); return; }
   const todas = rbFilas();
   const opc = (id, vals, pref) => { const v = $(id).value || (pref && vals.find(x => pref.test(x))) || ''; $(id).innerHTML = '<option value="">Todos</option>' + [...new Set(vals)].sort().map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join(''); };
   opc('rbDist', todas.map(f => f.dist), S.rb.yaDist ? null : /DIMEXA/i); S.rb.yaDist = true;
@@ -2997,6 +2997,6 @@ window.iniciarKardex = iniciar;
 <script src="sucursales.js?v=202611201800"></script>
 <script src="estadistica.js?v=202611190300"></script>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="proyeccion.js?v=202611261000"></script>
+<script type="module" src="proyeccion.js?v=202611261200"></script>
 
 </body></html>

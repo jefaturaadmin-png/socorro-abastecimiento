@@ -169,7 +169,7 @@ const kmMeta = async () => { const s = await getDoc(doc(db, "proy_config", "kmov
 async function kmLeer(asset) { if (!asset) return { a: [], t: [], r: [] }; const r = await assetsShim.fetch(asset); if (!r.ok) throw new Error("No se pudo leer un grupo de movimientos guardado."); return await r.json(); }
 async function kmGuardar(nuevos) {   // nuevos: Map("mes|grupo" → [[numkar, invnum, cod, almacén, fecha, tipo, documento, …]])
   if (!nuevos.size) return 0; paso = "guardar los movimientos (proy_config/kmov)";
-  const meta = await kmMeta(); let total = 0, i = 0;
+  const meta = await kmMeta(); let total = 0, i = 0; const enMem = new Map();   // "mes" → Map(grupo → objeto ya guardado)
   for (const [k, filas] of nuevos) {
     const [mes, g] = k.split("|"); msg(`Guardando movimientos ${mes} (${++i}/${nuevos.size})…`);
     const prev = meta[mes]?.b?.[g], o = await kmLeer(prev), ya = new Set(o.r.map(x => x[0]));
@@ -181,8 +181,23 @@ async function kmGuardar(nuevos) {   // nuevos: Map("mes|grupo" → [[numkar, in
     const m = (meta[mes] ??= { b: {}, n: 0 }); m.b[g] = id; m.n = (m.n || 0) + n;
     await setDoc(doc(db, "proy_config", "kmov"), { m: { [mes]: { b: { [g]: id }, n: m.n, actualizado: new Date().toISOString() } } }, { merge: true });
     if (prev) assetsShim.delete(prev).catch(() => {});
+    (enMem.get(mes) || enMem.set(mes, new Map()).get(mes)).set(g, o);
   }
+  // índice de COMPRAS de cada mes que cambió (para «Rebates por factura»: así no se leen todos los movimientos al abrirlo)
+  for (const [mes, gs] of enMem) { msg(`Actualizando las compras de ${mes}…`); try { await kmIndiceCompras(mes, meta, gs); } catch (e) { console.warn("índice de compras", mes, e); } }
   return total;
+}
+const kmFirma = b => Object.keys(b || {}).sort((x, y) => x - y).map(k => b[k]).join(",");
+const kmCompras = o => { const l = []; for (const x of o.r) { const t = o.t[x[5]] || ""; if (/^CARGO COMPRA/i.test(t)) l.push([x[0], x[2], o.a[x[3]], x[4], t, x[6], x[7], x[8], x[14], x[15]]); } return l; };
+// arma y guarda las compras de un mes (de sus 16 grupos; los que ya están en memoria no se vuelven a leer)
+async function kmIndiceCompras(mes, meta, enMem = new Map()) {
+  const m = meta[mes]; if (!m?.b) return [];
+  const l = [];
+  for (const [g, a] of Object.entries(m.b)) l.push(...kmCompras(enMem.get(g) || await kmLeer(a)));
+  const prev = m.c, { id } = await assetsShim.upload(new Blob([JSON.stringify(l)])), cv = kmFirma(m.b);
+  await setDoc(doc(db, "proy_config", "kmov"), { m: { [mes]: { c: id, cv } } }, { merge: true });
+  m.c = id; m.cv = cv; if (prev) assetsShim.delete(prev).catch(() => {});
+  return l;
 }
 // para el módulo: los movimientos de un producto (todos los meses guardados, o desde/hasta «AAAA-MM»)
 window.kardexMovimientos = async (cod, desde = "", hasta = "") => {
@@ -194,14 +209,18 @@ window.kardexMovimientos = async (cod, desde = "", hasta = "") => {
 };
 // COMPRAS (para rebates): todos los «CARGO COMPRA…» guardados entre dos fechas («AAAA-MM-DD»), de los 16 grupos de cada mes
 const kmCacheMes = new Map();   // "mes|asset" → filas de compra de ese grupo
+// Cada mes tiene su índice de compras guardado (m.c); si falta o quedó viejo (los grupos cambiaron), se arma una vez y se guarda.
 window.kardexCompras = async (desde = "", hasta = "", avance = () => {}) => {
   const meta = await kmMeta(), meses = Object.keys(meta).filter(m => (!desde || m >= desde.slice(0, 7)) && (!hasta || m <= hasta.slice(0, 7))).sort();
-  const tareas = []; for (const m of meses) for (const a of Object.values(meta[m]?.b || {})) tareas.push([m, a]);
   let hechas = 0; const out = [];
-  for (let i = 0; i < tareas.length; i += 6) await Promise.all(tareas.slice(i, i + 6).map(async ([m, a]) => {
-    const k = m + "|" + a; let l = kmCacheMes.get(k);
-    if (!l) { const o = await kmLeer(a); l = []; for (const x of o.r) { const t = o.t[x[5]] || ""; if (/^CARGO COMPRA/i.test(t)) l.push({ nk: x[0], cod: x[2], alm: o.a[x[3]], fecha: x[4], tipo: t, doc: x[6], iE: x[7], iM: x[8], cli: x[14], cos: x[15] }); } kmCacheMes.set(k, l); }
-    out.push(...l); avance(++hechas, tareas.length); }));
+  await Promise.all(meses.map(async mes => { const m = meta[mes], k = mes + "|" + kmFirma(m.b);
+    let l = kmCacheMes.get(k);
+    if (!l) {
+      if (m.c && m.cv === kmFirma(m.b)) { const r = await assetsShim.fetch(m.c); l = r.ok ? await r.json() : null; }
+      if (!l) { try { l = await kmIndiceCompras(mes, meta); } catch { l = []; for (const a of Object.values(m.b || {})) l.push(...kmCompras(await kmLeer(a))); } }
+      kmCacheMes.set(k, l); }
+    for (const x of l) out.push({ nk: x[0], cod: x[1], alm: x[2], fecha: x[3], tipo: x[4], doc: x[5], iE: x[6], iM: x[7], cli: x[8], cos: x[9] });
+    avance(++hechas, meses.length); }));
   return { compras: out.filter(c => (!desde || c.fecha.slice(0, 10) >= desde) && (!hasta || c.fecha.slice(0, 10) <= hasta)), meses: Object.keys(meta).sort() };
 };
 async function leerMaestro() {
