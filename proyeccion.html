@@ -358,7 +358,10 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
 .km-sug { position: absolute; z-index: 30; left: 0; right: 0; top: 100%; background: #fff; border: 1px solid #cdd5e0; border-radius: 8px; box-shadow: 0 8px 20px #0002; max-height: 340px; overflow: auto }
 .km-sug button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 7px 10px; font: inherit; font-size: 13px; cursor: pointer } .km-sug button:hover { background: #eef4ff }
 .km-info { display: flex; flex-wrap: wrap; gap: 6px 28px; padding: 12px 16px; margin-bottom: 12px; font-size: 13px } .km-info b { font-weight: 700 } .km-info span { color: #667 }
-.km-scroll { max-height: 70vh } .km-tabla th { position: sticky; top: 0; background: #12b886; color: #fff; z-index: 2; white-space: nowrap }
+.km-scroll { max-height: 70vh }
+.rb-pct { padding: 10px 16px; margin-bottom: 12px } .rb-pct summary { cursor: pointer } .rb-pct .scroll { max-height: 300px; margin-top: 8px }
+.rb-in { width: 70px; padding: 2px 6px; text-align: right; font: inherit } .rb-in.propio { border-color: #e8590c; background: #fff4e6 }
+.km-tabla tr.rb-f { cursor: pointer } .km-tabla tr.rb-f:hover td { background: #f3f7ff } .km-tabla tr.rb-det td { background: #fafbfc; color: #555 } .km-tabla tfoot td { font-weight: 800; border-top: 2px solid #12b886 } .km-tabla th { position: sticky; top: 0; background: #12b886; color: #fff; z-index: 2; white-space: nowrap }
 .km-tabla td, .km-tabla th { white-space: nowrap; font-size: 12.5px; text-align: left } .km-tabla td.r { text-align: right } body.km-solo .bar .seg { display: none } .km-tabla td.antes { color: #d6336c } .km-tabla td.ing { color: #0b7a3e; font-weight: 700 } .km-tabla td.sal { color: #c92a2a; font-weight: 700 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important } }
 </style>
@@ -741,6 +744,23 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
     <div class="card km-info" id="kmInfo"><p class="note" style="margin:0">Busque un producto por código o nombre.</p></div>
     <div class="card"><div class="scroll km-scroll"><table class="cells km-tabla" id="kmTabla"></table></div></div>
     <p class="note" id="kmNota"></p>
+  </section>
+
+  <!-- REBATES: lo comprado por factura y laboratorio (de los «CARGO COMPRA» del kardex) y el rebate de cada uno -->
+  <section id="vReb" hidden>
+    <div class="head"><div><div class="eyebrow">Compras del kardex (costo con IGV; las bonificaciones van con costo 0)</div><h1>Rebates por factura</h1></div></div>
+    <div class="card km-filtros">
+      <label class="field"><span>Distribuidor</span><select id="rbDist"><option value="">Todos</option></select></label>
+      <label class="field"><span>Laboratorio</span><select id="rbLab"><option value="">Todos</option></select></label>
+      <label class="field"><span>Desde fecha</span><input id="rbDe" type="date"></label>
+      <label class="field"><span>Hasta fecha</span><input id="rbHa" type="date"></label>
+      <button type="button" class="btn" id="rbXls">⬇ Excel</button>
+      <span class="note" id="rbEst"></span>
+    </div>
+    <div class="card km-info" id="rbRes"></div>
+    <details class="card rb-pct" id="rbPctBox"><summary><b>% de rebate por laboratorio y distribuidor</b> <span class="note">(se usa en todas sus facturas; en cada factura se puede poner otro)</span></summary><div class="scroll"><table class="cells km-tabla" id="rbPct"></table></div></details>
+    <div class="card"><div class="scroll km-scroll"><table class="cells km-tabla" id="rbTabla"></table></div></div>
+    <p class="note" id="rbNota"></p>
   </section>
 
   <section id="vInd" hidden>
@@ -1340,6 +1360,10 @@ else if (SOLO === 'ind') {
   S.tab = S.vista = 'ind'; document.body.classList.add('solo-kar', 'solo-ind');
   document.querySelector('.bar .brand').innerHTML = '<i></i>Indicadores';
 }
+else if (SOLO === 'reb') {
+  S.tab = S.vista = 'reb'; document.body.classList.add('solo-kar', 'ancho-total', 'km-solo');
+  document.querySelector('.bar .brand').innerHTML = '<i></i>Rebates por factura';
+}
 else if (SOLO === 'kmov') {
   S.tab = S.vista = 'kmov'; document.body.classList.add('solo-kar', 'ancho-total', 'km-solo');
   document.querySelector('.bar .brand').innerHTML = '<i></i>Kardex por producto';
@@ -1356,8 +1380,9 @@ document.querySelectorAll('[data-volver]').forEach(b => b.onclick = () => { S.vi
 function render() {
   const v = S.vista;
   $('vPron').hidden = v !== 'pron'; $('vFichaP').hidden = v !== 'fichaP'; $('vRep').hidden = v !== 'rep';
-  $('vMov').hidden = v !== 'mov'; $('vPed').hidden = v !== 'ped'; $('vFre').hidden = v !== 'fre'; $('vSuc').hidden = v !== 'suc'; $('vKar').hidden = v !== 'kar'; $('vStk').hidden = v !== 'stk'; $('vMapa').hidden = v !== 'mapa'; $('vFichaM').hidden = v !== 'fichaM'; $('vInd').hidden = v !== 'ind'; $('vKmov').hidden = v !== 'kmov';
+  $('vMov').hidden = v !== 'mov'; $('vPed').hidden = v !== 'ped'; $('vFre').hidden = v !== 'fre'; $('vSuc').hidden = v !== 'suc'; $('vKar').hidden = v !== 'kar'; $('vStk').hidden = v !== 'stk'; $('vMapa').hidden = v !== 'mapa'; $('vFichaM').hidden = v !== 'fichaM'; $('vInd').hidden = v !== 'ind'; $('vKmov').hidden = v !== 'kmov'; $('vReb').hidden = v !== 'reb';
   if (v === 'kmov') return pintarKmov();   // no necesita los pronósticos
+  if (v === 'reb') return pintarReb();
   if (!S.P) return;
   if (v === 'pron') pintarPron(); else if (v === 'fichaP') pintarFichaP(); else if (v === 'rep') pintarRep();
   else if (v === 'ped') pintarPed(); else if (v === 'fre') window.pintarEst?.(); else if (v === 'kar') pintarKar(); else if (v === 'stk') pintarStk(); else if (v === 'suc') window.pintarSuc?.(); else if (v === 'mapa') { window.pintarMapa?.(); window.pintarPlanosLab?.(); } else if (v === 'mov') pintarMov(); else if (v === 'fichaM') pintarFichaM(); else if (v === 'ind') pintarInd(); else if (v === 'kmov') pintarKmov();
@@ -1425,6 +1450,67 @@ $('kmXls').addEventListener('click', () => { const c = S.km.cod; if (!c || !S.km
   const filas = kmFiltrados().map((m, i) => { const a = kmAntes(m, fr), ing = m.iE + m.iM > 0;
     return { Item: i + 1, "Almacén": m.alm, Secuencia: m.nk, "S-Movimiento": m.inv, "Ti-Movimiento": m.tipo, Documento: m.doc, Fecha: kmFecha(m.fecha), "StkA-E": a[0], "StkA-F": a[1], "Cant-E": ing ? m.iE : m.sE, "Cant-F": ing ? m.iM : m.sM, "Stk-E": m.d?.[0] ?? m.stE, "Stk-F": m.d?.[1] ?? m.stM, Costo: m.cos, Responsable: m.usu, "Cliente / proveedor": m.cli }; });
   libEstilo().then(X => { const ws = X.utils.json_to_sheet(filas), wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, "Kardex " + c); X.writeFile(wb, `kardex_${c}.xlsx`); }).catch(e => alert("No se pudo armar el Excel: " + (e.message || e))); });
+/* ---------- REBATES POR FACTURA: lo comprado de cada laboratorio en cada factura (CARGO COMPRA del kardex) × su % de rebate ---------- */
+S.rb = { compras: null, cargando: false, pct: { def: {}, fac: {} }, abiertas: new Set() };
+{ const hoy = new Date(), iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  $('rbHa').value = iso(hoy); $('rbDe').value = `${hoy.getFullYear()}-01-01`; }
+const rbNum = v => Math.round(v * 100) / 100, rbS = v => rbNum(v).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+async function rbCargar() {
+  if (S.rb.cargando) return; S.rb.cargando = true; $('rbEst').textContent = 'Leyendo las compras del kardex…';
+  try {
+    if (!window.kardexCompras) { await new Promise(r => setTimeout(r, 800)); }
+    await kmCargarMaestro().catch(() => {});   // nombres de los productos (para el detalle de cada factura)
+    try { const d = await S.db.doc('config/rebates').get(); if (d.exists) { const x = d.data(); S.rb.pct = { def: x.def || {}, fac: x.fac || {} }; } } catch {}
+    const r = await window.kardexCompras($('rbDe').value, $('rbHa').value, (n, t) => { $('rbEst').textContent = `Leyendo las compras del kardex… ${Math.round(n / t * 100)} %`; });
+    S.rb.compras = r.compras; S.rb.meses = r.meses; S.rb.rango = $('rbDe').value + '|' + $('rbHa').value; $('rbEst').textContent = '';
+  } catch (e) { $('rbEst').textContent = 'No se pudieron leer las compras: ' + (e.message || e); S.rb.compras = []; }
+  S.rb.cargando = false; pintarReb();
+}
+// facturas: una fila por factura y laboratorio (el laboratorio de cada producto)
+function rbFilas() {
+  const G = new Map();
+  for (const c of S.rb.compras || []) { const lab = labDe(c.cod) || '(sin laboratorio)', k = c.doc + '|' + lab;
+    const fr = (S.idx?.get(c.cod)?.fr > 0 ? +S.idx.get(c.cod).fr : 1), q = c.iE + c.iM / fr;
+    const g = G.get(k) || G.set(k, { k, doc: c.doc, lab, dist: c.cli, fecha: c.fecha, monto: 0, prods: [] }).get(k);
+    if (c.fecha < g.fecha) g.fecha = c.fecha; g.monto += q * (c.cos || 0); g.prods.push({ cod: c.cod, q, cos: c.cos || 0 }); }
+  const P = S.rb.pct;
+  return [...G.values()].map(g => { const [td, num] = [g.doc.split(' ')[0], g.doc.split(' ').slice(1).join(' ')], [serie, numero] = (num || g.doc).split('-');
+    const propio = P.fac[g.k], pct = propio ?? P.def[g.lab + '|' + g.dist] ?? 0;
+    return { ...g, td, serie: serie || '', numero: numero || '', pct, propio: propio != null, rebate: g.monto * pct / 100 }; }).sort((a, b) => a.fecha.localeCompare(b.fecha) || a.doc.localeCompare(b.doc));
+}
+async function rbGuardarPct() { try { await S.db.doc('config/rebates').set({ def: S.rb.pct.def, fac: S.rb.pct.fac, actualizado: new Date().toISOString() }); } catch (e) { alert('No se pudo guardar el %: ' + (e.message || e)); } }
+function pintarReb() {
+  if (!S.rb.compras && !S.rb.cargando) { rbCargar(); return; }
+  if (S.rb.cargando) return;
+  if (S.rb.rango !== $('rbDe').value + '|' + $('rbHa').value) { rbCargar(); return; }
+  const todas = rbFilas();
+  const opc = (id, vals, pref) => { const v = $(id).value || (pref && vals.find(x => pref.test(x))) || ''; $(id).innerHTML = '<option value="">Todos</option>' + [...new Set(vals)].sort().map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join(''); };
+  opc('rbDist', todas.map(f => f.dist), S.rb.yaDist ? null : /DIMEXA/i); S.rb.yaDist = true;
+  const dist = $('rbDist').value; opc('rbLab', todas.filter(f => !dist || f.dist === dist).map(f => f.lab));
+  const lab = $('rbLab').value, l = todas.filter(f => (!dist || f.dist === dist) && (!lab || f.lab === lab));
+  const tM = l.reduce((a, f) => a + f.monto, 0), tR = l.reduce((a, f) => a + f.rebate, 0), facs = new Set(l.map(f => f.doc)).size;
+  $('rbRes').innerHTML = `<div><span>Facturas:</span> <b>${facs}</b></div><div><span>Monto comprado (con IGV):</span> <b>S/ ${rbS(tM)}</b></div><div><span>Rebate total:</span> <b>S/ ${rbS(tR)}</b></div>`;
+  // % por laboratorio y distribuidor (los que aparecen)
+  const combos = [...new Map(l.map(f => [f.lab + '|' + f.dist, f])).values()].sort((a, b) => a.dist.localeCompare(b.dist) || a.lab.localeCompare(b.lab));
+  $('rbPct').innerHTML = '<thead><tr><th>Distribuidor</th><th>Laboratorio</th><th>% rebate</th></tr></thead><tbody>' + combos.map(f => `<tr><td>${esc(f.dist)}</td><td>${esc(f.lab)}</td><td><input class="rb-in" type="number" min="0" step="0.01" data-rbdef="${esc(f.lab + '|' + f.dist)}" value="${S.rb.pct.def[f.lab + '|' + f.dist] ?? ''}" placeholder="0"></td></tr>`).join('') + '</tbody>';
+  $('rbTabla').innerHTML = `<thead><tr><th>Fecha</th><th>Tipo</th><th>Serie</th><th>Número</th><th>Distribuidor</th><th>Laboratorio</th><th class="r">Productos</th><th class="r">Monto (con IGV)</th><th class="r">% rebate</th><th class="r">Rebate</th></tr></thead><tbody>` +
+    (l.length ? l.map(f => `<tr class="rb-f" data-rbk="${esc(f.k)}"><td>${kmFecha(f.fecha).slice(0, 10)}</td><td>${esc(f.td)}</td><td><b>${esc(f.serie)}</b></td><td><b>${esc(f.numero)}</b></td><td>${esc(f.dist)}</td><td><b>${esc(f.lab)}</b></td><td class="r">${f.prods.length} ${S.rb.abiertas.has(f.k) ? '▾' : '▸'}</td><td class="r"><b>${rbS(f.monto)}</b></td>
+        <td class="r"><input class="rb-in${f.propio ? ' propio' : ''}" type="number" min="0" step="0.01" data-rbfac="${esc(f.k)}" value="${f.pct || ''}" placeholder="0" title="${f.propio ? 'Porcentaje propio de esta factura (bórrelo para usar el del laboratorio y distribuidor)' : 'Porcentaje del laboratorio y distribuidor; escriba otro solo para esta factura'}"></td><td class="r"><b>${rbS(f.rebate)}</b></td></tr>` +
+      (S.rb.abiertas.has(f.k) ? f.prods.map(p => `<tr class="rb-det"><td></td><td colspan="4">${esc(p.cod)} · ${esc(kmProd(p.cod)?.n || '')}</td><td></td><td class="r">${rbNum(p.q)} × ${rbS(p.cos)}</td><td class="r">${rbS(p.q * p.cos)}</td><td></td><td></td></tr>`).join('') : '')).join('')
+      : `<tr><td colspan="10" style="padding:16px">${(S.rb.compras || []).length ? 'No hay facturas con estos filtros.' : 'No hay compras guardadas en esas fechas. Las compras salen del kardex que se sube (módulo Kardex).'}</td></tr>`) +
+    `</tbody>${l.length ? `<tfoot><tr><td colspan="7">Total (${facs} facturas)</td><td class="r">${rbS(tM)}</td><td></td><td class="r">${rbS(tR)}</td></tr></tfoot>` : ''}`;
+  const ms = S.rb.meses || [];
+  $('rbNota').textContent = `Monto = cantidad que ingresó × costo del kardex (con IGV). Clic en una factura para ver sus productos. ${ms.length ? `Hay compras guardadas de ${ms[0]} a ${ms[ms.length - 1]}.` : ''}`;
+}
+$('rbTabla').addEventListener('click', e => { if (e.target.closest('input')) return; const tr = e.target.closest('[data-rbk]'); if (!tr) return; const k = tr.dataset.rbk; S.rb.abiertas.has(k) ? S.rb.abiertas.delete(k) : S.rb.abiertas.add(k); pintarReb(); });
+$('rbTabla').addEventListener('change', e => { const i = e.target.closest('[data-rbfac]'); if (!i) return; const k = i.dataset.rbfac;
+  if (i.value === '') delete S.rb.pct.fac[k]; else S.rb.pct.fac[k] = Math.max(0, +i.value || 0); pintarReb(); rbGuardarPct(); });
+$('rbPct').addEventListener('change', e => { const i = e.target.closest('[data-rbdef]'); if (!i) return; const k = i.dataset.rbdef;
+  if (i.value === '') delete S.rb.pct.def[k]; else S.rb.pct.def[k] = Math.max(0, +i.value || 0); pintarReb(); rbGuardarPct(); });
+['rbDist', 'rbLab', 'rbDe', 'rbHa'].forEach(id => $(id).addEventListener('change', () => { if (id === 'rbDist') $('rbLab').value = ''; pintarReb(); }));
+$('rbXls').addEventListener('click', () => { const dist = $('rbDist').value, lab = $('rbLab').value, l = rbFilas().filter(f => (!dist || f.dist === dist) && (!lab || f.lab === lab)); if (!l.length) return;
+  const filas = l.map(f => ({ Fecha: kmFecha(f.fecha).slice(0, 10), Tipo: f.td, Serie: f.serie, "Número": f.numero, Distribuidor: f.dist, Laboratorio: f.lab, "Monto (con IGV)": rbNum(f.monto), "% rebate": f.pct, Rebate: rbNum(f.rebate) }));
+  libEstilo().then(X => { const ws = X.utils.json_to_sheet(filas), wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Rebates'); X.writeFile(wb, `rebates_${(dist || 'todos').replace(/\W+/g, '_').toLowerCase()}.xlsx`); }).catch(e => alert('No se pudo armar el Excel: ' + (e.message || e))); });
 function abrirFichaP(c, origen) { S.fpDesde = ''; S.cur = c; S.origen = origen; S.fpFarm = origen === 'rep' ? S.farm : ''; S.vista = 'fichaP'; render(); scrollTo({ top: 0 }); }
 
 /* ---------- filtro por laboratorio (del catálogo de productos de la página) ---------- */
@@ -2906,6 +2992,6 @@ window.iniciarKardex = iniciar;
 <script src="sucursales.js?v=202611201800"></script>
 <script src="estadistica.js?v=202611190300"></script>
 <script src="fx.js?v=202611050400"></script>
-<script type="module" src="proyeccion.js?v=202611241800"></script>
+<script type="module" src="proyeccion.js?v=202611261000"></script>
 
 </body></html>

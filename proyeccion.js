@@ -192,6 +192,18 @@ window.kardexMovimientos = async (cod, desde = "", hasta = "") => {
     for (const x of o.r) if (x[2] === cod) out.push({ nk: x[0], inv: x[1], cod: x[2], alm: o.a[x[3]], fecha: x[4], tipo: o.t[x[5]], doc: x[6], iE: x[7], iM: x[8], sE: x[9], sM: x[10], stE: x[11], stM: x[12], usu: x[13], cli: x[14], cos: x[15] }); }));
   return { movs: out.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.nk - b.nk), meses: Object.keys(meta).sort() };
 };
+// COMPRAS (para rebates): todos los «CARGO COMPRA…» guardados entre dos fechas («AAAA-MM-DD»), de los 16 grupos de cada mes
+const kmCacheMes = new Map();   // "mes|asset" → filas de compra de ese grupo
+window.kardexCompras = async (desde = "", hasta = "", avance = () => {}) => {
+  const meta = await kmMeta(), meses = Object.keys(meta).filter(m => (!desde || m >= desde.slice(0, 7)) && (!hasta || m <= hasta.slice(0, 7))).sort();
+  const tareas = []; for (const m of meses) for (const a of Object.values(meta[m]?.b || {})) tareas.push([m, a]);
+  let hechas = 0; const out = [];
+  for (let i = 0; i < tareas.length; i += 6) await Promise.all(tareas.slice(i, i + 6).map(async ([m, a]) => {
+    const k = m + "|" + a; let l = kmCacheMes.get(k);
+    if (!l) { const o = await kmLeer(a); l = []; for (const x of o.r) { const t = o.t[x[5]] || ""; if (/^CARGO COMPRA/i.test(t)) l.push({ nk: x[0], cod: x[2], alm: o.a[x[3]], fecha: x[4], tipo: t, doc: x[6], iE: x[7], iM: x[8], cli: x[14], cos: x[15] }); } kmCacheMes.set(k, l); }
+    out.push(...l); avance(++hechas, tareas.length); }));
+  return { compras: out.filter(c => (!desde || c.fecha.slice(0, 10) >= desde) && (!hasta || c.fecha.slice(0, 10) <= hasta)), meses: Object.keys(meta).sort() };
+};
 async function leerMaestro() {
   paso = "leer productos y stock (proy_config/maestro)";
   const c = await getDoc(doc(db, "proy_config", "maestro"));
