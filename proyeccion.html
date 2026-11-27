@@ -361,6 +361,9 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
 .km-scroll { max-height: 70vh }
 .rb-pct { padding: 10px 16px; margin-bottom: 12px } .rb-pct summary { cursor: pointer } .rb-pct .scroll { max-height: 300px; margin-top: 8px }
 .rb-in { width: 70px; padding: 2px 6px; text-align: right; font: inherit } .rb-in.propio { border-color: #e8590c; background: #fff4e6 }
+.rb-cmp { padding: 12px 16px; margin-top: 16px } .rb-cmph { margin-bottom: 4px }
+.rb-chip { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11.5px; font-weight: 700 } .rb-chip.ok { background: #e6f6ec; color: #1f7a3e } .rb-chip.dif { background: #fff1e0; color: #b45309 } .rb-chip.solo { background: #fde8e8; color: #b42318 }
+.km-tabla td.rb-mal { color: #b42318; font-weight: 700 }
 .km-tabla tr.rb-f { cursor: pointer } .km-tabla tr.rb-f:hover td { background: #f3f7ff } .km-tabla tr.rb-det td { background: #fafbfc; color: #555 } .km-tabla tfoot td { font-weight: 800; border-top: 2px solid #12b886 } .km-tabla th { position: sticky; top: 0; background: #12b886; color: #fff; z-index: 2; white-space: nowrap }
 .km-tabla td, .km-tabla th { white-space: nowrap; font-size: 12.5px; text-align: left } .km-tabla td.r { text-align: right } body.km-solo .bar .seg { display: none } .km-tabla td.antes { color: #d6336c } .km-tabla td.ing { color: #0b7a3e; font-weight: 700 } .km-tabla td.sal { color: #c92a2a; font-weight: 700 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important } }
@@ -762,6 +765,17 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
     <details class="card rb-pct" id="rbPctBox"><summary><b>% de rebate por laboratorio y distribuidor</b> <span class="note">(se usa en todas sus facturas; en cada factura se puede poner otro)</span></summary><div class="scroll"><table class="cells km-tabla" id="rbPct"></table></div></details>
     <div class="card"><div class="scroll km-scroll"><table class="cells km-tabla" id="rbTabla"></table></div></div>
     <p class="note" id="rbNota"></p>
+    <div class="card rb-cmp">
+      <div class="rb-cmph"><b>Comparar con el reporte de DIMEXA</b> <span class="note">(su Excel no se mezcla con lo calculado: solo se ven las diferencias. El Excel viene sin IGV: aquí se le suma el 18 %)</span></div>
+      <div class="km-filtros" style="padding:8px 0;margin:0">
+        <label class="btn" for="rbCmpF">⬆ Subir Excel de DIMEXA</label><input type="file" id="rbCmpF" accept=".xlsx,.xls" hidden>
+        <label class="field"><span>Ver</span><select id="rbCmpVer"><option value="dif">Solo con diferencias</option><option value="">Todo</option><option value="monto">Monto distinto</option><option value="pct">% de rebate distinto</option><option value="exc">Solo en el Excel</option><option value="sis">Solo en el sistema</option><option value="ok">Iguales</option></select></label>
+        <button type="button" class="btn" id="rbCmpXls">⬇ Excel de la comparación</button>
+        <span class="note" id="rbCmpEst"></span>
+      </div>
+      <div class="km-info" id="rbCmpRes" style="margin:0 0 8px"></div>
+      <div class="scroll km-scroll"><table class="cells km-tabla" id="rbCmpT"></table></div>
+    </div>
   </section>
 
   <section id="vInd" hidden>
@@ -1455,7 +1469,7 @@ $('kmXls').addEventListener('click', () => { const c = S.km.cod; if (!c || !S.km
 S.rb = { compras: null, cargando: false, pct: { def: {}, fac: {} }, abiertas: new Set() };
 { const hoy = new Date(), iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   $('rbHa').value = iso(hoy); $('rbDe').value = `${hoy.getFullYear()}-01-01`; }
-const rbNum = v => Math.round(v * 100) / 100, rbS = v => rbNum(v).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const rbNum = v => Math.round(v * 100) / 100 || 0, rbS = v => rbNum(v).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 async function rbCargar() {
   if (S.rb.cargando) return; S.rb.cargando = true; $('rbEst').textContent = 'Leyendo las compras del kardex…';
   try {
@@ -1510,9 +1524,74 @@ function pintarReb() {
       (S.rb.abiertas.has(f.k) ? f.prods.map(p => `<tr class="rb-det"><td></td><td colspan="4">${esc(p.cod)} · ${esc(kmProd(p.cod)?.n || '')}</td><td></td><td class="r">${rbNum(p.q)} × ${rbS(p.cos)}</td><td class="r">${rbS(p.q * p.cos)}</td><td></td><td></td></tr>`).join('') : '')).join('')
       : `<tr><td colspan="10" style="padding:16px">${(S.rb.compras || []).length ? 'No hay facturas con estos filtros.' : 'No hay compras guardadas en esas fechas. Las compras salen del kardex que se sube (módulo Kardex).'}</td></tr>`) +
     `</tbody>${l.length ? `<tfoot><tr><td colspan="7">Total (${facs} facturas)</td><td class="r">${rbS(tM)}</td><td></td><td class="r">${rbS(tR)}</td></tr></tfoot>` : ''}`;
+  pintarRebCmp();
   const ms = S.rb.meses || [];
   $('rbNota').textContent = `Monto = cantidad que ingresó × costo del kardex (con IGV). Clic en una factura para ver sus productos. ${ms.length ? `Hay compras guardadas de ${ms[0]} a ${ms[ms.length - 1]}.` : ''}`;
 }
+/* ---------- COMPARAR con el reporte de DIMEXA (LINEA, SERIE, NUMERO, DESCUENTO FIN, DESCUENTO DIM, VALOR NETO, REBATE (%), MONTO NC, TIPO) ---------- */
+// Se guarda en proy_config/rebcmp_dimexa. No cambia lo calculado: solo compara (el Excel viene sin IGV: × 1.18).
+const RB_IGV = 1.18;
+// línea del reporte → laboratorio de la plataforma (la misma idea que la tabla de %): palabra clave de la línea
+const RB_LINEA = [[/HERSIL|MEDIFARMA/, 'MEDIFARMA'], [/QUIMIOTERAPICO|I\.Q\.|IQFARMA/, 'IQFARMA'], [/DEUTSCHE|DEUCH/, 'DEUCH'], [/BONAPHAR/, 'BONAPHAR'], [/MEAD J/, 'MEAD J'], [/COLICHON/, 'COLICHON'], [/GEN-?FAR/, 'GEN-FAR']];
+const rbClaveLab = t => { const L = String(t || '').toUpperCase().replace(/^(A\.|LAB\.?|LABORATORIOS?)\s+/, '').trim(); for (const [re, k] of RB_LINEA) if (re.test(L)) return k; return (L.match(/[A-Z][A-Z-]{3,}/) || [L])[0]; };
+const rbMismaLab = (linea, lab) => { const k = rbClaveLab(linea); return String(lab).toUpperCase().includes(k); };
+const rbNumX = v => { const t = String(v ?? '').trim(); if (!t || /^[–-]+$/.test(t)) return 0; return +t.replace(/,/g, '') || 0; };
+async function rbLeerExcel(a) {
+  const X = await libEstilo(), wb = X.read(await a.arrayBuffer()), filas = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '', raw: false });
+  const iC = filas.findIndex(f => f.some(v => /^SERIE$/i.test(String(v).trim())) && f.some(v => /^NUMERO$/i.test(String(v).trim()))); if (iC < 0) throw new Error('no tiene las columnas SERIE y NUMERO');
+  const cab = filas[iC].map(v => String(v).trim().toUpperCase()), col = re => cab.findIndex(h => re.test(h));
+  const C = { lin: col(/^LINEA/), ser: col(/^SERIE/), num: col(/^NUMERO/), dF: col(/DESCUENTO FIN/), dD: col(/DESCUENTO DIM/), neto: col(/VALOR NETO/), pct: col(/^REBATE/), nc: col(/MONTO NC/), tipo: col(/^TIPO/) };
+  const out = [];
+  for (const f of filas.slice(iC + 1)) { const ser = String(f[C.ser] ?? '').trim(), num = String(f[C.num] ?? '').trim().replace(/\.0$/, ''); if (!ser || !num) continue;
+    out.push({ lin: String(f[C.lin] ?? '').trim(), ser, num, dF: rbNumX(f[C.dF]), dD: rbNumX(f[C.dD]), neto: rbNumX(f[C.neto]), pct: rbNumX(f[C.pct]), nc: rbNumX(f[C.nc]), tipo: String(f[C.tipo] ?? '').trim() }); }
+  return out;
+}
+S.rbCmp = null;
+async function rbCmpCargarGuardado() { if (S.rbCmpLeido) return; S.rbCmpLeido = true;
+  try { const d = await S.db.doc('config/rebcmp_dimexa').get(); if (d.exists) { const x = d.data(); S.rbCmp = { archivo: x.archivo, subido: x.subido, filas: JSON.parse(x.filas || '[]') }; pintarRebCmp(); } } catch {} }
+$('rbCmpF').addEventListener('change', async e => { const a = e.target.files[0]; e.target.value = ''; if (!a) return;
+  try { const filas = await rbLeerExcel(a); if (!filas.length) throw new Error('no se encontraron filas');
+    S.rbCmp = { archivo: a.name, subido: new Date().toISOString(), filas }; pintarRebCmp();
+    try { await S.db.doc('config/rebcmp_dimexa').set({ archivo: a.name, subido: S.rbCmp.subido, filas: JSON.stringify(filas) }); $('rbCmpEst').textContent = `«${a.name}» guardado (${filas.length} filas).`; }
+    catch (x) { $('rbCmpEst').textContent = `«${a.name}» leído (${filas.length} filas), pero no se pudo guardar: ${x.message || x}`; }
+  } catch (x) { $('rbCmpEst').textContent = `«${a.name}»: ${x.message || x}`; } });
+// filas de la comparación: por factura y laboratorio (varias líneas del Excel que son del mismo laboratorio se suman)
+function rbCmpFilas() {
+  if (!S.rbCmp) return [];
+  const sis = rbFilas().filter(f => /DIMEXA/i.test(f.dist)), porFac = new Map();
+  for (const f of sis) { const k = (f.serie + '-' + String(+f.numero || f.numero)).toUpperCase(); (porFac.get(k) || porFac.set(k, []).get(k)).push(f); }
+  const G = new Map(), usados = new Set();
+  for (const e of S.rbCmp.filas) { const fk = (e.ser + '-' + String(+e.num || e.num)).toUpperCase(), cands = porFac.get(fk) || [], s = cands.find(f => rbMismaLab(e.lin, f.lab));
+    const k = fk + '|' + (s ? s.k : 'L:' + rbClaveLab(e.lin));
+    const g = G.get(k) || G.set(k, { fac: fk, ser: e.ser, num: e.num, lineas: [], neto: 0, nc: 0, pcts: new Set(), dF: 0, dD: 0, tipos: new Set(), sis: s || null, hayFac: cands.length > 0 }).get(k);
+    g.lineas.push(e.lin); g.neto += e.neto; g.nc += e.nc; g.pcts.add(e.pct); g.dF = Math.max(g.dF, e.dF); g.dD = Math.max(g.dD, e.dD); if (e.tipo) g.tipos.add(e.tipo); if (s) usados.add(s.k); }
+  const out = [...G.values()].map(g => { const s = g.sis, pctE = g.pcts.size === 1 ? [...g.pcts][0] : null, netoI = g.neto * RB_IGV, ncI = g.nc * RB_IGV;
+    const dM = s ? s.monto - netoI : null, dR = s ? s.rebate - ncI : null, mOk = s && Math.abs(dM) <= Math.max(1, Math.abs(netoI) * 0.005), pOk = s && pctE != null && Math.abs(pctE - s.pct) < 0.001;
+    return { ...g, pctE, netoI, ncI, dM, dR, est: !s ? 'exc' : !mOk ? 'monto' : !pOk ? 'pct' : Math.abs(dR) > 1 ? 'reb' : 'ok', mOk, pOk }; });
+  // facturas de DIMEXA del sistema (en las fechas elegidas) que no están en el Excel
+  const facsExc = new Set(S.rbCmp.filas.map(e => (e.ser + '-' + String(+e.num || e.num)).toUpperCase()));
+  for (const f of sis) if (!usados.has(f.k)) { const fk = (f.serie + '-' + String(+f.numero || f.numero)).toUpperCase();
+    out.push({ fac: fk, ser: f.serie, num: f.numero, lineas: [], neto: 0, nc: 0, pctE: null, netoI: 0, ncI: 0, sis: f, dM: f.monto, dR: f.rebate, est: facsExc.has(fk) ? 'sisL' : 'sis', tipos: new Set(), dF: 0, dD: 0 }); }
+  return out.sort((a, b) => a.fac.localeCompare(b.fac) || (a.sis?.lab || '').localeCompare(b.sis?.lab || ''));
+}
+const RB_EST = { ok: ['Igual', 'ok'], monto: ['Monto distinto', 'dif'], pct: ['% de rebate distinto', 'dif'], reb: ['Rebate distinto', 'dif'], exc: ['Solo en el Excel', 'solo'], sis: ['Solo en el sistema', 'solo'], sisL: ['Laboratorio solo en el sistema', 'solo'] };
+const rbCmpPasa = (x, v) => !v ? true : v === 'dif' ? x.est !== 'ok' : v === 'monto' ? x.est === 'monto' : v === 'pct' ? x.est === 'pct' || x.est === 'reb' : v === 'exc' ? x.est === 'exc' : v === 'sis' ? x.est === 'sis' || x.est === 'sisL' : x.est === v;
+function pintarRebCmp() {
+  rbCmpCargarGuardado();
+  if (!S.rbCmp) { $('rbCmpRes').innerHTML = '<span class="note">Suba el Excel de DIMEXA para compararlo con lo que calcula la plataforma.</span>'; $('rbCmpT').innerHTML = ''; return; }
+  const todas = rbCmpFilas(), v = $('rbCmpVer').value, l = todas.filter(x => rbCmpPasa(x, v)), n = k => todas.filter(x => rbCmpPasa(x, k)).length;
+  const tE = todas.reduce((a, x) => a + x.ncI, 0), tS = todas.reduce((a, x) => a + (x.sis?.rebate || 0), 0);
+  $('rbCmpRes').innerHTML = `<div><span>Excel:</span> <b>${esc(S.rbCmp.archivo)}</b> (${S.rbCmp.filas.length} filas)</div><div><span>Iguales:</span> <b>${n('ok')}</b></div><div><span>Monto distinto:</span> <b>${n('monto')}</b></div><div><span>% distinto:</span> <b>${n('pct')}</b></div><div><span>Solo en el Excel:</span> <b>${n('exc')}</b></div><div><span>Solo en el sistema:</span> <b>${n('sis')}</b></div><div><span>Rebate Excel (con IGV):</span> <b>S/ ${rbS(tE)}</b></div><div><span>Rebate sistema:</span> <b>S/ ${rbS(tS)}</b></div><div><span>Diferencia:</span> <b>S/ ${rbS(tS - tE)}</b></div>`;
+  $('rbCmpT').innerHTML = `<thead><tr><th>Factura</th><th>Línea (Excel)</th><th>Laboratorio (sistema)</th><th class="r">Desc. fin</th><th class="r">Desc. DIM</th><th class="r">Valor neto Excel (sin IGV)</th><th class="r">Excel con IGV</th><th class="r">Monto sistema (con IGV)</th><th class="r">Dif. monto</th><th class="r">% Excel</th><th class="r">% sistema</th><th class="r">NC Excel con IGV</th><th class="r">Rebate sistema</th><th class="r">Dif. rebate</th><th>Tipo</th><th>Resultado</th></tr></thead><tbody>` +
+    (l.length ? l.map(x => { const s = x.sis, e = RB_EST[x.est];
+      return `<tr><td><b>${esc(x.fac)}</b></td><td>${esc([...new Set(x.lineas)].join(' + ') || '–')}</td><td>${esc(s?.lab || '–')}</td><td class="r">${x.dF ? rbS(x.dF) : ''}</td><td class="r">${x.dD ? rbS(x.dD) : ''}</td><td class="r">${x.lineas.length ? rbS(x.neto) : ''}</td><td class="r">${x.lineas.length ? rbS(x.netoI) : ''}</td><td class="r">${s ? rbS(s.monto) : ''}</td><td class="r ${s && x.lineas.length && !x.mOk ? 'rb-mal' : ''}">${s && x.lineas.length ? rbS(x.dM) : ''}</td>
+        <td class="r">${x.pctE != null ? x.pctE : x.lineas.length ? [...x.pcts].join(' / ') : ''}</td><td class="r ${s && x.lineas.length && !x.pOk ? 'rb-mal' : ''}">${s ? s.pct : ''}</td><td class="r">${x.lineas.length ? rbS(x.ncI) : ''}</td><td class="r">${s ? rbS(s.rebate) : ''}</td><td class="r ${s && x.lineas.length && Math.abs(x.dR) > 1 ? 'rb-mal' : ''}">${s && x.lineas.length ? rbS(x.dR) : ''}</td><td>${esc([...x.tipos].join(' / '))}</td><td><span class="rb-chip ${e[1]}">${e[0]}</span></td></tr>`; }).join('')
+      : '<tr><td colspan="16" style="padding:14px">Nada con este filtro.</td></tr>') + '</tbody>';
+}
+$('rbCmpVer').addEventListener('change', pintarRebCmp);
+$('rbCmpXls').addEventListener('click', () => { const v = $('rbCmpVer').value, l = rbCmpFilas().filter(x => rbCmpPasa(x, v)); if (!l.length) return;
+  const filas = l.map(x => ({ Factura: x.fac, "Línea (Excel)": [...new Set(x.lineas)].join(' + '), "Laboratorio (sistema)": x.sis?.lab || '', "Desc. fin": x.dF || '', "Desc. DIM": x.dD || '', "Valor neto Excel (sin IGV)": x.lineas.length ? rbNum(x.neto) : '', "Excel con IGV": x.lineas.length ? rbNum(x.netoI) : '', "Monto sistema (con IGV)": x.sis ? rbNum(x.sis.monto) : '', "Dif. monto": x.sis && x.lineas.length ? rbNum(x.dM) : '', "% Excel": x.pctE ?? '', "% sistema": x.sis?.pct ?? '', "NC Excel con IGV": x.lineas.length ? rbNum(x.ncI) : '', "Rebate sistema": x.sis ? rbNum(x.sis.rebate) : '', "Dif. rebate": x.sis && x.lineas.length ? rbNum(x.dR) : '', Tipo: [...x.tipos].join(' / '), Resultado: RB_EST[x.est][0] }));
+  libEstilo().then(X => { const ws = X.utils.json_to_sheet(filas), wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Comparación DIMEXA'); X.writeFile(wb, 'comparacion_rebates_dimexa.xlsx'); }); });
 $('rbTabla').addEventListener('click', e => { if (e.target.closest('input')) return; const tr = e.target.closest('[data-rbk]'); if (!tr) return; const k = tr.dataset.rbk; S.rb.abiertas.has(k) ? S.rb.abiertas.delete(k) : S.rb.abiertas.add(k); pintarReb(); });
 $('rbTabla').addEventListener('change', e => { const i = e.target.closest('[data-rbfac]'); if (!i) return; const k = i.dataset.rbfac;
   if (i.value === '') delete S.rb.pct.fac[k]; else S.rb.pct.fac[k] = Math.max(0, +i.value || 0); pintarReb(); rbGuardarPct(); });
