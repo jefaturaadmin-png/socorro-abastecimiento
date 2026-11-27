@@ -770,6 +770,7 @@ body.solo-mapa .bar .tabs, body.solo-mapa .bar .seg, body.solo-kar .bar .tabs { 
       <div class="km-filtros" style="padding:8px 0;margin:0">
         <label class="btn" for="rbCmpF">⬆ Subir Excel de DIMEXA</label><input type="file" id="rbCmpF" accept=".xlsx,.xls" hidden>
         <label class="field"><span>Ver</span><select id="rbCmpVer"><option value="dif">Solo con diferencias</option><option value="">Todo</option><option value="monto">Monto distinto</option><option value="pct">% de rebate distinto</option><option value="exc">Solo en el Excel</option><option value="sis">Solo en el sistema</option><option value="ok">Iguales</option></select></label>
+        <label class="field" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="rbCmpSin0"> <span style="text-transform:none;letter-spacing:0">Ocultar los que tienen 0 % en el sistema</span></label>
         <button type="button" class="btn" id="rbCmpXls">⬇ Excel de la comparación</button>
         <span class="note" id="rbCmpEst"></span>
       </div>
@@ -1579,7 +1580,7 @@ const rbCmpPasa = (x, v) => !v ? true : v === 'dif' ? x.est !== 'ok' : v === 'mo
 function pintarRebCmp() {
   rbCmpCargarGuardado();
   if (!S.rbCmp) { $('rbCmpRes').innerHTML = '<span class="note">Suba el Excel de DIMEXA para compararlo con lo que calcula la plataforma.</span>'; $('rbCmpT').innerHTML = ''; return; }
-  const todas = rbCmpFilas(), v = $('rbCmpVer').value, l = todas.filter(x => rbCmpPasa(x, v)), n = k => todas.filter(x => rbCmpPasa(x, k)).length;
+  const todas = rbCmpFilas().filter(rbCmpSin0), v = $('rbCmpVer').value, l = todas.filter(x => rbCmpPasa(x, v)), n = k => todas.filter(x => rbCmpPasa(x, k)).length;
   const tE = todas.reduce((a, x) => a + x.ncI, 0), tS = todas.reduce((a, x) => a + (x.sis?.rebate || 0), 0);
   $('rbCmpRes').innerHTML = `<div><span>Excel:</span> <b>${esc(S.rbCmp.archivo)}</b> (${S.rbCmp.filas.length} filas)</div><div><span>Iguales:</span> <b>${n('ok')}</b></div><div><span>Monto distinto:</span> <b>${n('monto')}</b></div><div><span>% distinto:</span> <b>${n('pct')}</b></div><div><span>Solo en el Excel:</span> <b>${n('exc')}</b></div><div><span>Solo en el sistema:</span> <b>${n('sis')}</b></div><div><span>Rebate Excel (con IGV):</span> <b>S/ ${rbS(tE)}</b></div><div><span>Rebate sistema:</span> <b>S/ ${rbS(tS)}</b></div><div><span>Diferencia:</span> <b>S/ ${rbS(tS - tE)}</b></div>`;
   $('rbCmpT').innerHTML = `<thead><tr><th>Factura</th><th>Línea (Excel)</th><th>Laboratorio (sistema)</th><th class="r">Desc. fin</th><th class="r">Desc. DIM</th><th class="r">Valor neto Excel (sin IGV)</th><th class="r">Excel con IGV</th><th class="r">Monto sistema (con IGV)</th><th class="r">Dif. monto</th><th class="r">% Excel</th><th class="r">% sistema</th><th class="r">NC Excel con IGV</th><th class="r">Rebate sistema</th><th class="r">Dif. rebate</th><th>Tipo</th><th>Resultado</th></tr></thead><tbody>` +
@@ -1589,7 +1590,11 @@ function pintarRebCmp() {
       : '<tr><td colspan="16" style="padding:14px">Nada con este filtro.</td></tr>') + '</tbody>';
 }
 $('rbCmpVer').addEventListener('change', pintarRebCmp);
-$('rbCmpXls').addEventListener('click', () => { const v = $('rbCmpVer').value, l = rbCmpFilas().filter(x => rbCmpPasa(x, v)); if (!l.length) return;
+// ocultar las filas cuyo % de rebate en el sistema es 0 (se recuerda en este equipo)
+try { $('rbCmpSin0').checked = localStorage.getItem('rbCmpSin0') !== '0'; } catch { $('rbCmpSin0').checked = true; }
+const rbCmpSin0 = x => !$('rbCmpSin0').checked || !(x.sis && !(x.sis.pct > 0));
+$('rbCmpSin0').addEventListener('change', () => { try { localStorage.setItem('rbCmpSin0', $('rbCmpSin0').checked ? '1' : '0'); } catch {} pintarRebCmp(); });
+$('rbCmpXls').addEventListener('click', () => { const v = $('rbCmpVer').value, l = rbCmpFilas().filter(rbCmpSin0).filter(x => rbCmpPasa(x, v)); if (!l.length) return;
   const filas = l.map(x => ({ Factura: x.fac, "Línea (Excel)": [...new Set(x.lineas)].join(' + '), "Laboratorio (sistema)": x.sis?.lab || '', "Desc. fin": x.dF || '', "Desc. DIM": x.dD || '', "Valor neto Excel (sin IGV)": x.lineas.length ? rbNum(x.neto) : '', "Excel con IGV": x.lineas.length ? rbNum(x.netoI) : '', "Monto sistema (con IGV)": x.sis ? rbNum(x.sis.monto) : '', "Dif. monto": x.sis && x.lineas.length ? rbNum(x.dM) : '', "% Excel": x.pctE ?? '', "% sistema": x.sis?.pct ?? '', "NC Excel con IGV": x.lineas.length ? rbNum(x.ncI) : '', "Rebate sistema": x.sis ? rbNum(x.sis.rebate) : '', "Dif. rebate": x.sis && x.lineas.length ? rbNum(x.dR) : '', Tipo: [...x.tipos].join(' / '), Resultado: RB_EST[x.est][0] }));
   libEstilo().then(X => { const ws = X.utils.json_to_sheet(filas), wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Comparación DIMEXA'); X.writeFile(wb, 'comparacion_rebates_dimexa.xlsx'); }); });
 $('rbTabla').addEventListener('click', e => { if (e.target.closest('input')) return; const tr = e.target.closest('[data-rbk]'); if (!tr) return; const k = tr.dataset.rbk; S.rb.abiertas.has(k) ? S.rb.abiertas.delete(k) : S.rb.abiertas.add(k); pintarReb(); });
