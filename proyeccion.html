@@ -1485,7 +1485,7 @@ async function rbCargar() {
 // % de rebate de DIMEXA por línea (tabla que dio el usuario), llevado a los laboratorios de la plataforma.
 // SIEGFRIED: 2 % (sus líneas BPH 2.5 % y TEVA 3 % no se distinguen por laboratorio: se pone en cada factura).
 const RB_DIMEXA = [[/DEUCH|DEUTSCHE/, 2], [/LUKOLL/, 2], [/HALEON/, 2], [/PHARMED/, 2], [/SANIMED/, 0], [/LAFAGE/, 2], [/BAYER/, 2], [/FERRER/, 2], [/MENARINI/, 2],
-  [/^AC FARMA/, 2], [/WORWAG/, 2], [/IQFARMA|QUIMIOTERAPICO|I\.Q\./, 2.5], [/NESTLE/, 0], [/BONAPHAR/, 2.5], [/GENOM/, 0], [/UNIMED/, 2], [/SIEGFRIED/, 2], [/KEYFARM/, 2.5],
+  [/^AC FARMA/, 2], [/WORWAG/, 2], [/IQFARMA|QUIMIOTERAPICO|I\.Q\./, 2.5], [/NESTLE/, 0], [/BONAPHAR/, 2.5], [/GENOM/, 0], [/UNIMED/, 2], [/SIEGFRIED/, 2], [/KEYFARM|LABOFAR/, 2.5],
   [/HERSIL|MEDIFARMA/, 2], [/MEAD J/, 2], [/SCHICK/, 2], [/^ITF\b|ITF FARMACEUTICA|ITALFARMA/, 2.5], [/COLICHON/, 2], [/EUROFARMA/, 2], [/CSP LIFE/, 2], [/FARMINDUSTRIA/, 0], [/GEN-FAR|GENFAR/, 2],
   [/TECNOFARMA|ADIUM/, 2], [/MAGNESOL/, 0], [/VITAL/, 2]];   // TECNOFARMA (línea de DIMEXA) = ADIUM PERU en la plataforma
 const rbTabla = (lab, dist) => { if (!/DIMEXA/i.test(dist || '')) return null; const L = String(lab).toUpperCase(); for (const [re, v] of RB_DIMEXA) if (re.test(L)) return v; return null; };
@@ -1533,7 +1533,7 @@ function pintarReb() {
 // Se guarda en proy_config/rebcmp_dimexa. No cambia lo calculado: solo compara (el Excel viene sin IGV: × 1.18).
 const RB_IGV = 1.18;
 // línea del reporte → laboratorio de la plataforma (la misma idea que la tabla de %): palabra clave de la línea
-const RB_LINEA = [[/TECNOFARMA/, 'ADIUM'], [/^ITF\b|ITF FARMACEUTICA|ITALFARMA/, 'ITALFARMA'], [/HERSIL|MEDIFARMA/, 'MEDIFARMA'], [/QUIMIOTERAPICO|I\.Q\.|IQFARMA/, 'IQFARMA'], [/DEUTSCHE|DEUCH/, 'DEUCH'], [/BONAPHAR/, 'BONAPHAR'], [/MEAD J/, 'MEAD J'], [/COLICHON/, 'COLICHON'], [/GEN-?FAR/, 'GEN-FAR']];
+const RB_LINEA = [[/TECNOFARMA/, 'ADIUM'], [/KEYFARM/, 'LABOFAR'], [/^ITF\b|ITF FARMACEUTICA|ITALFARMA/, 'ITALFARMA'], [/HERSIL|MEDIFARMA/, 'MEDIFARMA'], [/QUIMIOTERAPICO|I\.Q\.|IQFARMA/, 'IQFARMA'], [/DEUTSCHE|DEUCH/, 'DEUCH'], [/BONAPHAR/, 'BONAPHAR'], [/MEAD J/, 'MEAD J'], [/COLICHON/, 'COLICHON'], [/GEN-?FAR/, 'GEN-FAR']];
 const rbClaveLab = t => { const L = String(t || '').toUpperCase().replace(/^(A\.|LAB\.?|LABORATORIOS?)\s+/, '').trim(); for (const [re, k] of RB_LINEA) if (re.test(L)) return k; return (L.match(/[A-Z][A-Z-]{3,}/) || [L])[0]; };
 const rbMismaLab = (linea, lab) => { const k = rbClaveLab(linea); return String(lab).toUpperCase().includes(k); };
 const rbNumX = v => { const t = String(v ?? '').trim(); if (!t || /^[–-]+$/.test(t)) return 0; return +t.replace(/,/g, '') || 0; };
